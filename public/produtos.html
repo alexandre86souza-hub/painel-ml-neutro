@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Produtos</title>
+<style>
+  :root{--bg:#f4f7fb;--card:#fff;--ink:#16213a;--muted:#5f6b7f;--line:#e3e8f0;--brand:#2563eb;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1240px;margin:0 auto;padding:24px 16px 72px;width:100%}
+  h2{font-size:16px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  a{color:var(--brand)}
+  section.bloco{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:20px}
+  #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px}
+  #msg.erro{display:block;background:#fce8e6;color:#8c1d18;border:1px solid #f0b3ad}
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .cartoes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+  .cartao{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .cartao .rotulo{font-size:13px;color:var(--muted);margin:0 0 6px}
+  .cartao .valor{font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .filtros input[type=search]{font:inherit;font-size:14px;padding:8px 12px;border:1px solid #d5dbe5;border-radius:9px;flex:1 1 260px}
+  .seg{display:inline-flex;border:1px solid #d5dbe5;border-radius:9px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid #d5dbe5}
+  .seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+  button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;
+    border:1px solid #d5dbe5;background:#fff;color:var(--ink);white-space:nowrap}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .tabela-rolagem{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 7px;text-align:left;border-top:1px solid var(--line);vertical-align:middle}
+  th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
+  td.num{text-align:right;white-space:nowrap}
+  td input,td select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid transparent;border-radius:7px;background:transparent;width:100%;min-width:0}
+  td input:hover,td select:hover{border-color:#d5dbe5}
+  td input:focus,td select:focus{border-color:var(--brand);background:#fff;outline:none}
+  td input.custo{text-align:right;width:100px}
+  tr.sujo td{background:#f3f7ff}
+  .sku{font-weight:700;white-space:nowrap}
+  .chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11px;background:#eef1f6;color:#3c4659;white-space:nowrap}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}
+  .chip.cinza{background:#eef1f6;color:#6b7589}
+  .salvo{font-size:11px;color:#0b6b33;white-space:nowrap}
+  .novo{display:grid;grid-template-columns:140px minmax(0,1fr) 120px 150px 150px auto;gap:8px;align-items:end}
+  .novo label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .novo input,.novo select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px}
+  .mais{margin-top:12px;text-align:center}
+  .troca{display:grid;grid-template-columns:200px 200px auto;gap:8px;align-items:end;justify-content:start;margin-bottom:12px}
+  .troca label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .troca input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;text-transform:uppercase}
+  .troca-barra{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:13px;position:sticky;top:0;background:var(--card);padding:6px 0;z-index:1}
+  .troca-barra label{display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer}
+  .troca-barra .bt{margin-left:auto}
+  #trocaLista input[type=checkbox]{width:16px;height:16px}
+  .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
+  @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Produtos</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+    <a href="/auth" id="addConta">+ conectar outra</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <div class="cartoes">
+    <div class="cartao"><p class="rotulo">Produtos na tabela</p><div class="valor" id="vTotal">—</div></div>
+    <div class="cartao"><p class="rotulo">Em uso nos anúncios</p><div class="valor" id="vUso">—</div></div>
+    <div class="cartao"><p class="rotulo">Sem custo</p><div class="valor" id="vSem">—</div></div>
+    <div class="cartao"><p class="rotulo">Usados sem custo</p><div class="valor" id="vUsoSem">—</div></div>
+  </div>
+
+  <section class="bloco">
+    <h2>Tabela de produtos</h2>
+    <p class="sub">Edite o custo (preço de compra), o nome, a situação ou o fornecedor direto na linha e clique em <b>Salvar</b>.
+      O custo de todos os anúncios que usam o produto no SKU é recalculado na hora.</p>
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por SKU, nome ou fornecedor" aria-label="Buscar produto">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-f="uso">Em uso</button>
+        <button type="button" data-f="sem">Sem custo</button>
+        <button type="button" data-f="ativos">Situação ativa</button>
+      </div>
+    </div>
+    <div class="tabela-rolagem" id="tabela"><p class="sub">Carregando… (conta os anúncios de cada produto no Mercado Livre)</p></div>
+    <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
+  </section>
+
+  <section class="bloco" id="blocoTroca">
+    <h2>Trocar um produto no SKU dos anúncios</h2>
+    <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
+      <b>só esse número</b> dentro do SKU de cada um no Mercado Livre (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.</p>
+    <form class="troca" id="formTroca">
+      <label>Produto atual<input id="tDe" placeholder="DD-795" list="listaProdutosTroca" autocomplete="off" required></label>
+      <label>Produto novo<input id="tPara" placeholder="DD-854" list="listaProdutosTroca" autocomplete="off" required></label>
+      <datalist id="listaProdutosTroca"></datalist>
+      <button class="bt primario">Buscar anúncios</button>
+    </form>
+    <div id="trocaLista"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Cadastrar produto</h2>
+    <p class="sub">O número do SKU é a chave usada nos anúncios: DQ-943 vira o "943" do SKU KIT-943.408.</p>
+    <form class="novo" id="formNovo">
+      <label>SKU<input id="nSku" placeholder="DQ-943" required></label>
+      <label>Produto<input id="nNome" placeholder="Descrição"></label>
+      <label>Custo (R$)<input id="nCusto" type="number" step="0.01" min="0"></label>
+      <label>Situação<select id="nSit"><option value="">—</option><option>Ativo</option><option>Descontinuado</option><option>Amostra</option></select></label>
+      <label>Fornecedor<input id="nForn"></label>
+      <button class="bt primario">Cadastrar</button>
+    </form>
+  </section>
+</main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+const numero = (n) => (n || 0).toLocaleString('pt-BR');
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+async function api(caminho, opts){
+  const r = await fetch(caminho, opts);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
+  return j;
+}
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) });
+function aviso(t, tipo = 'erro'){ const m = $('msg'); m.className = tipo; m.textContent = t; m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+
+const selConta = $('selConta');
+(async () => {
+  try{
+    const { ativa, contas } = await api('/api/accounts');
+    selConta.innerHTML = '';
+    if(!contas.length){ selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —'; return; }
+    for(const c of contas){ const o = el('option', null, `${c.nickname} · ${c.site_id}`); o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa; selConta.appendChild(o); }
+  }catch{ selConta.hidden = true; }
+})();
+selConta.onchange = async () => { await enviar('POST', '/api/accounts/active', { ml_user_id: Number(selConta.value) }); location.reload(); };
+
+let produtos = [], filtro = 'todos', mostrar = 150;
+$('segFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; mostrar = 150;
+  for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintar();
+};
+$('busca').oninput = () => { mostrar = 150; pintar(); };
+$('btMais').onclick = () => { mostrar += 300; pintar(); };
+
+async function carregar(){
+  try{
+    const r = await api('/api/produtos');
+    produtos = r.produtos;
+    $('vTotal').textContent = numero(produtos.length);
+    $('vUso').textContent = numero(produtos.filter((p) => p.uso.anuncios).length);
+    $('vSem').textContent = numero(produtos.filter((p) => p.custo == null).length);
+    $('vUsoSem').textContent = numero(produtos.filter((p) => p.custo == null && p.uso.anuncios).length);
+    const dl = $('listaProdutosTroca'); dl.innerHTML = '';
+    for(const p of produtos){ const o = el('option'); o.value = p.sku; o.label = p.nome || ''; dl.appendChild(o); }
+    pintar();
+  }catch(e){ $('tabela').innerHTML = ''; $('tabela').appendChild(el('p', 'sub', 'Não foi possível carregar: ' + e.message)); }
+}
+
+function pintar(){
+  const box = $('tabela'); box.innerHTML = '';
+  const q = $('busca').value.trim().toLowerCase();
+  const lista = produtos.filter((p) => {
+    if(filtro === 'uso' && !p.uso.anuncios) return false;
+    if(filtro === 'sem' && p.custo != null) return false;
+    if(filtro === 'ativos' && !/ativo/i.test(p.situacao || '')) return false;
+    if(q && ![p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => (t || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  if(!lista.length){ box.appendChild(el('p', 'sub', 'Nenhum produto com esse filtro.')); $('btMais').hidden = true; return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['SKU', 'Produto', 'Custo (R$)', 'Situação', 'Fornecedor', 'Anúncios', 'Estoque no ML', ''])
+    cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const p of lista.slice(0, mostrar)) tb.appendChild(linha(p));
+  t.appendChild(tb); box.appendChild(t);
+  $('btMais').hidden = lista.length <= mostrar;
+  $('btMais').textContent = `Mostrar mais (${numero(lista.length - mostrar)} restantes)`;
+}
+
+function linha(p){
+  const tr = el('tr');
+  const campo = (valor, attrs = {}) => {
+    const i = el('input'); i.value = valor ?? '';
+    for(const [k, v] of Object.entries(attrs)) k.includes('-') ? i.setAttribute(k, v) : (i[k] = v);
+    i.oninput = () => tr.classList.add('sujo'); return i;
+  };
+  const nome = campo(p.nome, { 'aria-label': 'Nome de ' + p.sku });
+  const custo = campo(p.custo ?? '', { type:'number', step:'0.01', min:'0', className:'custo', 'aria-label': 'Custo de ' + p.sku });
+  const sit = el('select'); sit.setAttribute('aria-label', 'Situação de ' + p.sku);
+  for(const s of ['', 'Ativo', 'Descontinuado', 'Amostra']){ const o = el('option', null, s || '—'); o.value = s; sit.appendChild(o); }
+  if(p.situacao && ![...sit.options].some((o) => o.value === p.situacao)){ const o = el('option', null, p.situacao); o.value = p.situacao; sit.appendChild(o); }
+  sit.value = p.situacao || ''; sit.onchange = () => tr.classList.add('sujo');
+  const forn = campo(p.fornecedor, { 'aria-label': 'Fornecedor de ' + p.sku });
+
+  const tdSku = el('td', 'sku', p.sku);
+  if(p.custo == null && p.uso.anuncios) tdSku.appendChild(el('span', 'chip amarelo', ' sem custo'));
+  const tdC = el('td', 'num'); tdC.appendChild(custo);
+  const tdUso = el('td', 'num');
+  if(p.uso.anuncios){
+    const a = el('a', null, `${numero(p.uso.anuncios)} anúncio(s)`); a.href = '/anuncios.html?produto=' + encodeURIComponent(p.sku);
+    tdUso.appendChild(a);
+  }else tdUso.appendChild(el('span', 'chip cinza', 'nenhum'));
+  const tdAc = el('td', 'num');
+  const salvo = el('span', 'salvo');
+  const bt = el('button', 'bt', 'Salvar'); bt.type = 'button';
+  bt.onclick = async () => {
+    bt.disabled = true;
+    try{
+      const r = await enviar('PUT', `/api/produtos/${p.numero}`, { nome: nome.value, custo: custo.value, situacao: sit.value, fornecedor: forn.value });
+      Object.assign(p, r.produto);
+      tr.classList.remove('sujo');
+      salvo.textContent = r.anuncios_recalculados ? `salvo · ${r.anuncios_recalculados} anúncio(s) recalculados` : 'salvo';
+      setTimeout(() => { salvo.textContent = ''; }, 4000);
+    }catch(e){ aviso(e.message); }
+    finally{ bt.disabled = false; }
+  };
+  tdAc.append(bt);
+  if(p.uso.anuncios){
+    const tr2 = el('button', 'bt', 'Trocar SKU'); tr2.type = 'button'; tr2.title = 'Trocar este produto por outro no SKU dos anúncios';
+    tr2.onclick = () => { $('tDe').value = p.sku; $('tPara').value = ''; $('trocaLista').innerHTML = ''; $('blocoTroca').scrollIntoView({ behavior:'smooth', block:'start' }); $('tPara').focus(); };
+    tdAc.append(' ', tr2);
+  }
+  tdAc.append(el('br'), salvo);
+  const td = (x) => { const c = el('td'); c.appendChild(x); return c; };
+  tr.append(tdSku, td(nome), tdC, td(sit), td(forn), tdUso,
+    el('td', 'num', p.uso.ativos ? `${numero(p.uso.estoque)} un.` : '—'), tdAc);
+  return tr;
+}
+
+// ---------- trocar um produto no SKU dos anúncios ----------
+const numeroDo = (txt) => { const m = /(\d+)\s*$/.exec(String(txt || '').trim()); return m ? Number(m[1]) : null; };
+// a mesma troca do servidor (custos.js#trocarComponente), para mostrar o SKU novo antes de gravar
+function trocarNoSku(sku, de, para){
+  const s = String(sku || ''); const i = s.indexOf('-');
+  const prefixo = i >= 0 ? s.slice(0, i + 1) : '', resto = i >= 0 ? s.slice(i + 1) : s;
+  const novo = String(para).padStart(3, '0');
+  return prefixo + resto.replace(/(^|[.\s+/])(\d+)(?=$|[.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
+}
+const SITUACAO = { active: 'ativo', paused: 'pausado', closed: 'encerrado', under_review: 'em revisão' };
+$('formTroca').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const de = numeroDo($('tDe').value), para = numeroDo($('tPara').value);
+  const box = $('trocaLista'); box.innerHTML = '';
+  if(de == null || para == null) return aviso('Informe os dois produtos pelo SKU (ex.: DD-795 e DD-854).');
+  if(de === para) return aviso('O produto novo é igual ao atual.');
+  box.appendChild(el('p', 'sub', 'Buscando os anúncios com esse produto…'));
+  try{
+    const r = await api(`/api/produtos/${de}/anuncios`);
+    box.innerHTML = '';
+    const novoProd = produtos.find((p) => p.numero === para);
+    if(!novoProd) box.appendChild(el('p', 'alerta-troca', `O produto ${$('tPara').value.trim().toUpperCase()} ainda não está na tabela: cadastre-o abaixo com o custo, senão os anúncios trocados ficam sem custo.`));
+    else if(novoProd.custo == null) box.appendChild(el('p', 'alerta-troca', `O produto ${novoProd.sku} está na tabela sem custo: os anúncios trocados ficam sem custo até você informar.`));
+    if(!r.anuncios.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio usa esse produto no SKU.')); return; }
+    const barra = el('div', 'troca-barra');
+    const todos = el('label'); const ckTodos = el('input'); ckTodos.type = 'checkbox';
+    todos.append(ckTodos, document.createTextNode(` Selecionar todos (${numero(r.anuncios.length)})`));
+    const cont = el('span', 'sub'); cont.style.margin = '0';
+    const ok = el('button', 'bt primario', 'Trocar SKU nos selecionados'); ok.type = 'button'; ok.disabled = true;
+    barra.append(todos, cont, ok);
+    const t = el('table'); const cab = el('tr');
+    for(const h of ['', 'Anúncio', 'Situação', 'SKU atual', 'SKU novo', '']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    const linhas = r.anuncios.map((a) => {
+      const tr = el('tr');
+      const ck = el('input'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Trocar em ' + a.id);
+      const c0 = el('td'); c0.appendChild(ck);
+      const c1 = el('td'); const lk = el('a', null, a.titulo || a.id); lk.href = a.link || '#'; lk.target = '_blank'; lk.rel = 'noopener';
+      c1.append(lk, el('br'), el('span', 'chip cinza', a.id));
+      const skus = [...new Set(a.skus.map((s) => s.sku))];
+      const res = el('td', 'salvo');
+      tr.append(c0, c1, el('td', null, SITUACAO[a.status] || a.status), el('td', 'sku', skus.join(', ')),
+        el('td', 'sku', skus.map((s) => trocarNoSku(s, de, para)).join(', ')), res);
+      tb.appendChild(tr);
+      return { a, ck, tr, res };
+    });
+    t.appendChild(tb);
+    const contar = () => {
+      const n = linhas.filter((l) => l.ck.checked && !l.ck.disabled).length;
+      cont.textContent = `${numero(n)} selecionado(s)`; ok.disabled = !n;
+      ok.textContent = n ? `Trocar SKU em ${numero(n)} anúncio(s)` : 'Trocar SKU nos selecionados';
+    };
+    for(const l of linhas) l.ck.onchange = contar;
+    ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled) l.ck.checked = ckTodos.checked; contar(); };
+    contar();
+    ok.onclick = async () => {
+      const escolhidos = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
+      const nomeDe = $('tDe').value.trim().toUpperCase(), nomePara = $('tPara').value.trim().toUpperCase();
+      if(!confirm(`Trocar ${nomeDe} por ${nomePara} no SKU de ${escolhidos.length} anúncio(s)?\n\nMuda o SKU no Mercado Livre. O preço, o estoque e o resto do SKU não mudam.`)) return;
+      ok.disabled = true; ok.textContent = 'Trocando…';
+      let feitos = 0, falhas = 0;
+      // de 50 em 50, para mostrar o andamento
+      for(let i = 0; i < escolhidos.length; i += 50){
+        const lote = escolhidos.slice(i, i + 50);
+        try{
+          const x = await enviar('POST', `/api/produtos/${de}/trocar-sku`, { novo: para, ids: lote.map((l) => l.a.id) });
+          for(const rr of x.resultado){
+            const l = lote.find((q) => q.a.id === rr.id); if(!l) continue;
+            if(rr.ok){ feitos++; l.res.textContent = 'trocado'; l.ck.checked = false; l.ck.disabled = true; l.tr.classList.remove('sujo'); }
+            else{ falhas++; l.res.textContent = 'não trocou: ' + rr.erro; l.res.style.color = '#8c1d18'; }
+          }
+        }catch(e){ falhas += lote.length; for(const l of lote){ l.res.textContent = 'não trocou: ' + e.message; l.res.style.color = '#8c1d18'; } }
+        ok.textContent = `Trocando… ${Math.min(i + 50, escolhidos.length)} de ${escolhidos.length}`;
+      }
+      aviso(`${feitos} anúncio(s) com o SKU trocado de ${nomeDe} para ${nomePara}.` + (falhas ? ` ${falhas} não trocaram (veja o motivo na lista).` : ''), falhas && !feitos ? 'erro' : 'ok');
+      contar();
+      carregar();
+    };
+    box.append(barra, t);
+  }catch(e){ box.innerHTML = ''; aviso(e.message); }
+};
+
+$('formNovo').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    const p = await enviar('POST', '/api/produtos', { sku: $('nSku').value, nome: $('nNome').value, custo: $('nCusto').value,
+      situacao: $('nSit').value, fornecedor: $('nForn').value });
+    aviso(`Produto ${p.sku} cadastrado.`, 'ok');
+    $('formNovo').reset();
+    carregar();
+  }catch(e){ aviso(e.message); }
+};
+
+carregar();
+</script>
+<script src="/aviso.js" defer></script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

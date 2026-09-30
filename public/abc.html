@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Análise ABC</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .classe{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;font-weight:800;font-size:13px}
+  .classe.SEM{background:#eef1f6;color:#5f6b7f;width:auto;padding:0 8px}
+  .classe.A{background:#dcfce7;color:#15803d}.classe.B{background:#fff4d6;color:#7a5600}.classe.C{background:#fee2e2;color:#b91c1c}
+  .barra-abc{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0 4px}
+  .barra-abc i{display:block;height:100%}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .filtros input{font:inherit;font-size:14px;padding:7px 12px;border:1px solid var(--line);border-radius:9px;min-width:240px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Análise ABC</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Curva ABC pelo faturamento: <b>A</b> = os anúncios que somam os primeiros 80%, <b>B</b> os próximos 15%, <b>C</b> os últimos 5%.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes" id="cartoes"></div>
+  <section class="bloco">
+    <h2>Participação no faturamento</h2>
+    <div class="barra-abc" id="barra"></div>
+    <p class="sub" id="barraTxt"></p>
+  </section>
+
+  <section class="bloco">
+    <h2>Anúncios na curva</h2>
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por título ou MLB" aria-label="Buscar anúncio">
+      <div class="seg" role="group" aria-label="Classe" id="segClasse">
+        <button type="button" data-c="" aria-pressed="true">Todos</button>
+        <button type="button" data-c="A">A</button>
+        <button type="button" data-c="B">B</button>
+        <button type="button" data-c="C">C</button>
+        <button type="button" data-c="SEM">Sem vendas</button>
+      </div>
+    </div>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando…</p></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=1"></script>
+<script>
+let dias = 30, dados = null, classe = '';
+const COR = { A: '#16a34a', B: '#f59e0b', C: '#dc2626' };
+$('segClasse').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; classe = b.dataset.c;
+  for(const x of $('segClasse').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintarLista();
+};
+$('busca').oninput = () => pintarLista();
+
+// Anúncios ativos sem nenhuma venda no período (fora da curva).
+function pintarSemVenda(q){
+  const box = $('lista');
+  const itens = dados.sem_venda.itens.filter((l) => !q || l.id.toLowerCase().includes(q) || (l.titulo || '').toLowerCase().includes(q));
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhum anúncio ativo sem venda.')); return; }
+  box.appendChild(el('p', 'sub', `${numero(dados.sem_venda.total)} anúncios ativos sem venda no período: ${numero(dados.sem_venda.ja_venderam)} já venderam antes e pararam, `
+    + `${numero(dados.sem_venda.nunca)} nunca venderam. Primeiro os que mais venderam na vida (mais a recuperar).`));
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'Preço', 'Estoque', 'Vendidos na vida', 'Última venda', 'Criado em']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const l of itens.slice(0, 400)){
+    const tr = el('tr');
+    const dt = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+    tr.append(celulaProduto(l.foto, l.titulo || l.id, l.id, l.link), el('td', null, real(l.preco)), el('td', null, numero(l.estoque)),
+      el('td', null, numero(l.vendidos_total)), el('td', null, l.ultima_venda ? dt(l.ultima_venda) : 'no histórico do painel, nenhuma'),
+      el('td', null, dt(l.criado_em)));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  if(itens.length > 400) box.appendChild(el('p', 'sub', `Mostrando 400 de ${numero(itens.length)}. Use a busca para achar um anúncio.`));
+}
+
+function pintarLista(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  if(classe === 'SEM'){ pintarSemVenda(q); return; }
+  const itens = dados.linhas.filter((l) => (!classe || l.classe === classe)
+    && (!q || l.id.toLowerCase().includes(q) || (l.titulo || '').toLowerCase().includes(q)));
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['#', 'Classe', 'Anúncio', 'Faturamento', 'Part.', 'Acumulado', 'Unidades', 'Lucro', 'Margem', 'Estoque']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const l of itens.slice(0, 400)){
+    const tr = el('tr');
+    const tdC = el('td'); tdC.appendChild(el('span', 'classe ' + l.classe, l.classe));
+    tr.append(el('td', 'esq', String(l.ranking)), tdC,
+      celulaProduto(l.foto, l.titulo || l.id, `${l.id}${l.status && l.status !== 'active' ? ' · ' + l.status : ''}`),
+      el('td', null, real(l.faturamento)), el('td', null, pct(l.participacao)), el('td', null, pct(l.acumulado, 0)),
+      el('td', null, numero(l.unidades)),
+      el('td', l.lucro == null ? null : l.lucro < 0 ? 'neg' : 'pos', l.lucro == null ? (l.falta.includes('custo') ? 'sem custo' : 'sem frete') : real(l.lucro)),
+      el('td', null, pct(l.margem)), el('td', null, numero(l.estoque)));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+async function carregar(){
+  erroTela('');
+  $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Carregando…'));
+  try{
+    dados = await api(`/api/abc?dias=${dias}`);
+    const box = $('cartoes'); box.innerHTML = '';
+    const tot = el('div', 'cartao');
+    tot.append(el('p', 'rotulo', 'Faturamento do período'), el('div', 'valor', real(dados.total)),
+      el('p', 'nota', `${numero(dados.linhas.length)} anúncios venderam`));
+    box.appendChild(tot);
+    for(const c of dados.classes){
+      const k = el('div', 'cartao');
+      const v = el('div', 'valor'); v.appendChild(el('span', 'classe ' + c.classe, c.classe)); v.appendChild(document.createTextNode(' ' + numero(c.anuncios) + ' anúncios'));
+      k.append(el('p', 'rotulo', `Classe ${c.classe}`), v,
+        el('p', 'nota', `${real(c.faturamento)} (${pct(c.participacao, 0)}) · lucro ${real(c.lucro)}`));
+      box.appendChild(k);
+    }
+    const sv = dados.sem_venda;
+    const k = el('div', 'cartao');
+    const vv = el('div', 'valor'); vv.appendChild(el('span', 'classe SEM', 'sem venda')); vv.appendChild(document.createTextNode(' ' + numero(sv.total)));
+    k.append(el('p', 'rotulo', 'Anúncios ativos sem vendas'), vv,
+      el('p', 'nota', `de ${numero(sv.ativos)} ativos · ${numero(sv.ja_venderam)} já venderam antes e pararam`));
+    k.style.cursor = 'pointer'; k.title = 'Ver a lista';
+    k.onclick = () => $('segClasse').querySelector('[data-c="SEM"]').click();
+    box.appendChild(k);
+    const barra = $('barra'); barra.innerHTML = '';
+    for(const c of dados.classes){ const i = el('i'); i.style.width = (c.participacao * 100) + '%'; i.style.background = COR[c.classe]; i.title = `${c.classe}: ${pct(c.participacao)}`; barra.appendChild(i); }
+    const pa = dados.classes[0];
+    $('barraTxt').textContent = `${numero(pa.anuncios)} anúncios (classe A) fazem ${pct(pa.participacao, 0)} do faturamento de ${data(dados.de)} a ${data(dados.ate)}.`;
+    pintarLista();
+  }catch(e){ erroTela(e.message); $('lista').innerHTML = ''; }
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

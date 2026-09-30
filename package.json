@@ -1,0 +1,23 @@
+{
+  "name": "aula-mercado-livre-henrique-niada",
+  "version": "1.0.0",
+  "description": "Aula Mercado Livre - Henrique Niada: painel da API oficial do Mercado Livre + scraper com navegador logado, rodando local com túnel HTTPS automático.",
+  "private": true,
+  "license": "MIT",
+  "main": "iniciar.js",
+  "scripts": {
+    "setup": "node --disable-warning=ExperimentalWarning instalar.js",
+    "start": "node --disable-warning=ExperimentalWarning iniciar.js",
+    "parar": "node parar.js",
+    "mcp": "node --disable-warning=ExperimentalWarning mcp.js",
+    "atualizar": "node atualizar.js",
+    "painel": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning test.js && node --disable-warning=ExperimentalWarning test-db.js && node --disable-warning=ExperimentalWarning test-analise.js && node --disable-warning=ExperimentalWarning test-config.js && node --disable-warning=ExperimentalWarning test-servidor.js && node --disable-warning=ExperimentalWarning test-mcp.js && node test-promocoes.js && node test-custos.js && node test-precos.js && node test-painel.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "cloudflared": "0.7.3"
+  }
+}

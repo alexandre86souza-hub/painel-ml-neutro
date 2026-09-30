@@ -1,0 +1,56 @@
+/* Menu lateral e barra de título, iguais em todas as telas do painel.
+   Carregado DEPOIS do <style> de cada página: o que estiver aqui vence o que sobrou lá. */
+
+body{margin:0}
+.app{display:flex;align-items:stretch;min-height:100vh}
+
+/* ---- coluna da esquerda ---- */
+.lateral{position:sticky;top:0;align-self:flex-start;height:100vh;width:236px;flex:0 0 236px;
+  background:#17181a;color:#e8e9ea;display:flex;flex-direction:column;padding:18px 12px;
+  overflow-y:auto;
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.marca{display:flex;align-items:center;gap:10px;padding:2px 10px 16px;font-size:15px;font-weight:700;color:#fff}
+.marca b{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;
+  background:#ffe600;color:#1a1a1a;font-size:12px;letter-spacing:.02em}
+.lateral nav{display:flex;flex-direction:column;gap:2px}
+.lateral nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;
+  color:#c7cacf;text-decoration:none;font-size:14px;font-weight:500;line-height:1.25;
+  transition:background .15s ease,color .15s ease}
+.lateral nav a svg{width:18px;height:18px;flex:0 0 18px;stroke:currentColor;fill:none;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.lateral nav a:hover{background:#26282c;color:#fff}
+.lateral nav a[aria-current]{background:#ffe600;color:#1a1a1a;font-weight:700}
+.lateral nav a:focus-visible{outline:2px solid #ffe600;outline-offset:2px}
+.lateral-pe{margin-top:auto;padding:14px 12px 2px;font-size:12px;line-height:1.45;color:#878b91;
+  border-top:1px solid #2a2c30}
+
+/* ---- barra de título da página ---- */
+.conteudo{flex:1;min-width:0;display:flex;flex-direction:column}
+header{background:#fff;border-bottom:1px solid #e0e2e6;padding:14px 24px;position:sticky;top:0;z-index:30;
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px 16px;box-shadow:none}
+header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.01em;color:#1a1a1a}
+header form{margin:0}
+header form button{background:#1a1a1a;color:#fff;border:0;border-radius:8px;
+  padding:8px 16px;font-size:13px;font-weight:600}
+.cabecaNota{font-size:13px;margin:0;color:#5f6368;background:none;padding:0;border-radius:0}
+
+#barraContas{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap}
+#barraContas label{color:#5f6368}
+#barraContas select{width:auto;padding:7px 10px;font-size:13px;border:1px solid #d5d7db;
+  border-radius:8px;background:#fff;font-family:inherit;box-shadow:none}
+#barraContas a{color:#1a1a1a;text-decoration:none;font-weight:600;line-height:1.3;
+  padding:7px 12px;border:1px solid #d5d7db;border-radius:8px;transition:background .15s ease}
+#barraContas a:hover{background:#f2f3f5}
+
+/* ---- celular: a coluna vira uma faixa no topo ---- */
+@media (max-width:900px){
+  .app{flex-direction:column}
+  .lateral{position:static;height:auto;width:auto;flex:none;flex-direction:row;align-items:center;
+    gap:8px;padding:10px 12px;overflow-x:auto}
+  .marca{padding:0 4px 0 2px;white-space:nowrap}
+  .marca span{display:none}
+  .lateral nav{flex-direction:row;gap:4px}
+  .lateral nav a{white-space:nowrap;padding:9px 12px}
+  .lateral-pe{display:none}
+  header{position:static;padding:12px 16px}
+}

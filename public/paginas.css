@@ -1,0 +1,52 @@
+/* Componentes das telas Performance, Análise ABC, Histórico ADS e Full.
+   Carregar ANTES de layout.css/tema-hn.css/tema-painel.css (o tema vence nas cores). */
+:root{--bg:#f4f7fb;--card:#fff;--ink:#16213a;--muted:#5f6b7f;--line:#e3e8f0;--brand:#2563eb;--radius:8px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif}
+main{max-width:1320px;margin:0 auto;padding:24px 16px 72px;width:100%}
+h2{font-size:16px;margin:0 0 4px;font-weight:700}
+.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+a{color:var(--brand)}
+section.bloco{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:20px}
+.topo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.topo p{margin:0;font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:10px;padding:7px 14px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink)}
+#msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.vazio,.carregando{color:var(--muted);font-size:14px;margin:0;padding:8px 0}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+.cartao{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.cartao .rotulo{font-size:13px;color:var(--muted);margin:0 0 6px}
+.cartao .valor{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+.cartao .nota{font-size:12px;color:var(--muted);margin:6px 0 0}
+.chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;background:#eef1f6;color:#3c4659;white-space:nowrap}
+.chip.sobe,.chip.verde{background:#dcfce7;color:#15803d}
+.chip.desce,.chip.vermelho{background:#fee2e2;color:#b91c1c}
+.chip.amarelo{background:#fff4d6;color:#7a5600}
+.chip.azul{background:#e8efff;color:#1d4ed8}
+.pos{color:#15803d}.neg{color:#b91c1c}
+.tabela-rolagem{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 8px;text-align:right;border-top:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td.esq,th.esq{text-align:left}
+.prod{display:flex;align-items:center;gap:10px;min-width:200px}
+.prod img{width:36px;height:36px;object-fit:contain;background:#f2f3f5;border-radius:6px;flex:0 0 36px}
+.prod span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pequeno{display:block;font-size:11px;color:var(--muted)}
+.duas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.grafico{display:flex;align-items:flex-end;gap:3px;height:170px;margin-top:8px;border-bottom:1px solid var(--line)}
+.grafico .col{flex:1;display:flex;align-items:flex-end;gap:1px;height:100%;min-width:0;position:relative}
+.grafico .b{flex:1;border-radius:3px 3px 0 0;min-height:2px}
+.grafico .b.atual{background:var(--brand)}
+.grafico .b.antes{background:#c9d8fb}
+.grafico .b.inv{background:#f59e0b}
+.eixo{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
+.legenda{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legenda i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+@media (max-width:900px){.cartoes{grid-template-columns:repeat(2,minmax(0,1fr))}.duas{grid-template-columns:1fr}}
+@media (max-width:560px){.cartoes{grid-template-columns:1fr}}

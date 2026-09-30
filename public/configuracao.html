@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurações</title>
+<style>
+  :root{
+    --bg:#f2f3f5; --card:#fff; --ink:#1a1a1a; --muted:#5f6368; --line:#e0e2e6;
+    --brand:#2968c8; --link:#1a5fc4; --ok:#0b6b3a; --ok-bg:#e6f4ea; --ok-line:#a6dcb6;
+    --warn:#7a4a00; --warn-bg:#fff4e0; --warn-line:#f0c46b;
+    --err:#8c1d18; --err-bg:#fce8e6; --err-line:#f0b3ad; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:780px;margin:0 auto;padding:24px 16px 72px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 22px 22px;margin:0 0 20px}
+  h2{font-size:19px;line-height:1.3;margin:0 0 6px}
+  h2 .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;
+    background:var(--brand);color:#fff;font-size:13px;margin-right:8px;vertical-align:1px}
+  h2 .num.feito{background:var(--ok)}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;margin:14px 0 4px;font-size:13px;font-weight:600}
+  input{width:100%;padding:10px 12px;border:1px solid #c4c7cc;border-radius:var(--radius);
+    font:inherit;background:#fff;color:inherit}
+  input[readonly]{background:#f7f8fa;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  input:focus,button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+  button,.botao{background:var(--brand);color:#fff;border:0;border-radius:var(--radius);
+    padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+  button:hover,.botao:hover{filter:brightness(.94)}
+  button.ghost{background:#eef3fd;color:#1a5fc4}
+  button[disabled],.botao[aria-disabled="true"]{opacity:.5;cursor:not-allowed;pointer-events:none}
+  .linha{display:flex;gap:8px;align-items:stretch}
+  .linha input{flex:1;min-width:0}
+  .acoes{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+  .passos{display:flex;gap:6px;list-style:none;padding:0;margin:0 0 20px;font-size:13px;color:var(--muted)}
+  .passos li{flex:1;border-top:3px solid var(--line);padding-top:6px}
+  .passos li.feito{border-color:var(--ok);color:var(--ok)}
+  .passos li[aria-current]{border-color:var(--brand);color:var(--ink);font-weight:600}
+  .caixa{border-radius:var(--radius);padding:12px 14px;font-size:15px;margin:14px 0 0;border:1px solid}
+  .caixa.ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok)}
+  .caixa.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
+  .caixa.err{background:var(--err-bg);border-color:var(--err-line);color:var(--err)}
+  .caixa p{margin:4px 0 0}
+  .caixa code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;word-break:break-all}
+  .status{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0}
+  .status dt{color:var(--muted)}
+  .status dd{margin:0;word-break:break-word}
+  .pilula{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid}
+  .pilula.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line)}
+  .pilula.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+  .pilula.err{background:var(--err-bg);color:var(--err);border-color:var(--err-line)}
+  details{margin-top:14px}
+  summary{cursor:pointer;color:var(--link);font-weight:600}
+  ol.guia{padding-left:20px;margin:10px 0 0}
+  ol.guia li{margin:6px 0}
+  ul.lista{list-style:none;padding:0;margin:10px 0 0}
+  ul.lista li{padding:8px 0;border-top:1px solid var(--line)}
+  ul.lista li:first-child{border-top:0}
+  a{color:var(--link)}
+  #aviso:empty{display:none}
+  #aviso .caixa:last-child{margin-bottom:20px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  @media (max-width:560px){
+    .linha{flex-wrap:wrap} .linha input{flex:1 1 100%}
+    .passos{flex-direction:column} .status{grid-template-columns:1fr} .status dt{margin-top:6px}
+  }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+/* ===== Configurações — Workspace redesign ===== */
+.cfg-shell{max-width:none!important;margin:0!important;padding:30px clamp(24px,3vw,46px) 70px!important;background:transparent}
+.cfg-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:28px;min-height:168px;padding:30px 34px;margin-bottom:24px;border:1px solid rgba(24,183,246,.22);border-radius:24px;background:linear-gradient(120deg,#071923 0%,#0b2636 55%,#0c3551 100%);box-shadow:0 18px 60px rgba(11,34,48,.12)}
+.cfg-hero:before{content:"";position:absolute;width:420px;height:420px;right:-90px;top:-230px;border:1px solid rgba(117,245,240,.22);border-radius:50%;box-shadow:0 0 0 54px rgba(43,211,244,.035),0 0 0 108px rgba(19,125,249,.025)}
+.cfg-hero:after{content:"";position:absolute;inset:0;background:radial-gradient(500px 220px at 88% 35%,rgba(43,211,244,.18),transparent 65%);pointer-events:none}
+.cfg-hero-copy,.cfg-hero-health{position:relative;z-index:1}.cfg-eyebrow,.cfg-kicker{display:block;font-size:10px;line-height:1.2;font-weight:800;letter-spacing:.16em;color:#37d7ee;margin-bottom:9px}.cfg-hero h2{margin:0 0 8px;font-size:clamp(24px,2.2vw,34px);line-height:1.05;letter-spacing:-.035em;color:#fff}.cfg-hero p{max-width:720px;margin:0;color:#a9c3d0;font-size:14px}.cfg-hero-health{display:flex;align-items:center;gap:14px;min-width:270px;padding:14px 16px;border:1px solid rgba(117,245,240,.18);border-radius:16px;background:rgba(255,255,255,.045);backdrop-filter:blur(8px)}
+.cfg-health-ring{width:62px;height:62px;flex:0 0 62px;border-radius:50%;display:grid;place-items:center;align-content:center;background:radial-gradient(circle at center,#0b2534 56%,transparent 57%),conic-gradient(#2bd3f4 50%,rgba(255,255,255,.09) 0);box-shadow:0 0 24px rgba(43,211,244,.18)}.cfg-health-ring strong{font-size:15px;color:#fff;line-height:1}.cfg-health-ring span{font-size:9px;color:#8fb4c5;margin-top:3px}.cfg-hero-health>div:last-child{display:grid;gap:3px}.cfg-hero-health b{color:#f4fbfd;font-size:13px}.cfg-hero-health span{color:#8faeba;font-size:11px;line-height:1.35}
+.cfg-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;align-items:start}.cfg-rail{position:sticky;top:78px;padding:14px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.72);backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(11,34,48,.05)}.cfg-rail-title{padding:6px 8px 11px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}.cfg-rail-link{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;padding:11px 10px;margin:2px 0;border:1px solid transparent;border-radius:12px;text-decoration:none;color:var(--muted);transition:.18s ease}.cfg-rail-link:hover{background:#f4f9fc;color:var(--ink)}.cfg-rail-link.active{background:linear-gradient(110deg,rgba(43,211,244,.12),rgba(19,125,249,.08));border-color:rgba(24,183,246,.2);color:var(--ink)}.cfg-rail-link>span{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:#edf6fb;color:#638194;font-size:10px;font-weight:800}.cfg-rail-link.active>span{background:var(--grad);color:#052534}.cfg-rail-link div{display:grid;gap:1px}.cfg-rail-link b{font-size:12px}.cfg-rail-link small{font-size:10px;color:var(--faint)}.cfg-rail-note{display:grid;grid-template-columns:8px 1fr;gap:9px;margin-top:12px;padding:12px 10px;border-top:1px solid var(--softline)}.cfg-dot{width:7px;height:7px;border-radius:50%;background:#18b7f6;box-shadow:0 0 0 4px rgba(24,183,246,.1);margin-top:4px}.cfg-rail-note div{display:grid;gap:2px}.cfg-rail-note b{font-size:11px;color:var(--ink)}.cfg-rail-note small{font-size:9px;line-height:1.45;color:var(--faint)}
+.cfg-workspace{min-width:0;display:grid;gap:22px}.cfg-section{scroll-margin-top:90px;background:#fff;border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 10px 34px rgba(11,34,48,.05)}.cfg-section-primary{background:linear-gradient(180deg,rgba(248,252,254,.96),#fff 30%)}.cfg-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:20px}.cfg-section-head h3{margin:0 0 4px;font-size:22px;letter-spacing:-.025em;color:var(--ink)}.cfg-section-head p{margin:0;color:var(--muted);font-size:12.5px}.cfg-status-chip{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:7px 10px;border:1px solid #b9dcf2;border-radius:999px;background:#eff8fe;color:#0a6fa9;font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase}.cfg-status-chip i{width:7px;height:7px;border-radius:50%;background:#18b7f6;box-shadow:0 0 0 4px rgba(24,183,246,.12)}.cfg-status-safe{background:#eefaf8;border-color:#b9e8e1;color:#08756f}.cfg-status-safe i{background:#0f9c96}
+.cfg-steps{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px!important;margin:0 0 20px!important;padding:0!important;color:inherit!important}.cfg-steps li{position:relative!important;display:grid!important;grid-template-columns:34px 1fr!important;gap:10px!important;align-items:center!important;min-height:70px!important;padding:12px!important;border:1px solid var(--line)!important;border-radius:14px!important;background:#fff!important}.cfg-steps li:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:4px;background:#dbe8ef}.cfg-steps li.feito:before{background:#0f9c96}.cfg-steps li[aria-current]:before{background:var(--grad-vertical)}.cfg-step-num{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#edf4f8;color:#5b7788;font-size:11px;font-weight:800}.cfg-steps li.feito .cfg-step-num{background:#e3f7f3;color:#08756f}.cfg-steps li div{display:grid;gap:2px}.cfg-steps li b{font-size:11.5px;color:var(--ink)}.cfg-steps li small{font-size:9.5px;color:var(--faint)}.cfg-steps li em{grid-column:2;font-style:normal;font-size:9px;color:var(--faint);text-transform:uppercase;font-weight:800;letter-spacing:.05em}.cfg-steps li.feito em{color:#0f9c96}
+.cfg-flow{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}.cfg-flow-card{position:relative;display:grid;grid-template-columns:42px 1fr;gap:14px;padding:18px;border:1px solid var(--line);border-radius:17px;background:#fff}.cfg-flow-wide{grid-column:1/-1}.cfg-flow-index .num{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#e3fbfb,#e4f0ff);color:#0b6fa7;font-size:12px;font-weight:900}.cfg-flow-title{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}.cfg-flow-title span{display:block;margin-bottom:3px;font-size:9px;font-weight:800;letter-spacing:.13em;color:#7d9aaa}.cfg-flow-title h4,.cfg-service-title h4,.cfg-security-row h4{margin:0;color:var(--ink);font-size:15px;letter-spacing:-.015em}.cfg-desc{margin:6px 0 15px;color:var(--muted);font-size:12px;line-height:1.5}.cfg-mini-status{font-size:11px;color:var(--muted)}.cfg-inline-info{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--softline);border-radius:11px;background:var(--overlay)}.cfg-inline-info span{font-size:10px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.06em}.cfg-inline-info strong{font-size:11px;color:var(--ink);overflow-wrap:anywhere}.cfg-url-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cfg-fieldbox{padding:12px;border:1px solid var(--softline);border-radius:12px;background:#fbfdfe}.cfg-fieldbox label{margin:0 0 6px}.cfg-actions-row{padding-top:2px}.cfg-link-arrow{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;text-decoration:none}.cfg-details{margin-top:13px;border-top:1px solid var(--softline);padding-top:12px}.cfg-details summary{display:inline-flex;align-items:center;gap:6px;font-size:11px}.cfg-history{display:grid;grid-template-columns:120px 1fr;gap:10px;margin-top:13px;padding-top:12px;border-top:1px dashed var(--line);font-size:10px}.cfg-history span{color:var(--faint);font-weight:700;text-transform:uppercase}.cfg-history div{color:var(--muted);overflow-wrap:anywhere}.cfg-form-stack{display:grid;gap:0}.cfg-flow-card label,.cfg-service-card label{font-size:11px;color:var(--muted)}
+.cfg-service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.cfg-service-card{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:18px;border:1px solid var(--line);border-radius:17px;background:#fff}.cfg-service-featured{background:linear-gradient(145deg,#fff 0%,#f7fcff 100%);border-color:#c7e5f4}.cfg-service-icon{width:42px;height:42px;display:grid;place-items:center;border:1px solid #d7e8f2;border-radius:12px;background:#f3f9fc;color:#0f8fd4;font-size:18px}.cfg-service-title{display:flex;justify-content:space-between;gap:14px}.cfg-service-title p{margin:4px 0 0;font-size:11px;line-height:1.45;color:var(--muted)}.cfg-service-badge{height:max-content;padding:4px 7px;border:1px solid #cce5f3;border-radius:999px;background:#f0f9fe;color:#0b73ac;font-size:8px;font-weight:900;letter-spacing:.08em}.cfg-status-list{grid-template-columns:100px 1fr!important;margin:14px 0!important;padding:11px 12px;border:1px solid var(--softline);border-radius:12px;background:#fbfdfe;font-size:11px!important}.cfg-status-list dt{font-size:10px}.cfg-status-list dd{font-size:10px}.cfg-service-card .acoes{gap:7px}.cfg-service-card .acoes>*{font-size:11px;padding:8px 10px}
+.cfg-security-row{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fbfdfe}.cfg-security-row>div:first-child{display:flex;align-items:flex-start;gap:12px}.cfg-security-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#e8f8f5;color:#0f9c96;font-size:11px}.cfg-security-row p{margin:4px 0 0;font-size:11px;color:var(--muted)}.cfg-security-row details{margin:0;min-width:150px}.cfg-security-action{list-style:none;display:inline-flex!important;justify-content:center;width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:11px!important}.cfg-security-action::-webkit-details-marker{display:none}.cfg-password-form{min-width:300px;margin-top:12px;padding:14px;border:1px solid var(--softline);border-radius:12px;background:#fff}.cfg-password-form label{font-size:11px}.cfg-password-form .sub{font-size:10px}
+.cfg-shell input{min-height:38px;border-radius:10px}.cfg-shell button,.cfg-shell .botao{border-radius:10px;font-size:12px}.cfg-shell .caixa{font-size:11px;border-radius:11px}.cfg-shell .caixa p{font-size:10px}.cfg-shell .lista li{font-size:11px}.cfg-shell code{font-size:10px}.cfg-shell .hn-credito{margin-top:0;max-width:none;border-radius:16px}
+@media(max-width:1180px){.cfg-layout{grid-template-columns:190px minmax(0,1fr)}.cfg-flow{grid-template-columns:1fr}.cfg-flow-wide{grid-column:auto}.cfg-service-grid{grid-template-columns:1fr}.cfg-url-grid{grid-template-columns:1fr}}
+@media(max-width:900px){.cfg-shell{padding:18px 14px 50px!important}.cfg-hero{padding:24px;align-items:flex-start}.cfg-hero-health{display:none}.cfg-layout{grid-template-columns:1fr}.cfg-rail{position:static;display:flex;gap:7px;overflow-x:auto;padding:8px}.cfg-rail-title,.cfg-rail-note{display:none}.cfg-rail-link{min-width:160px}.cfg-workspace{gap:14px}.cfg-section{padding:18px}.cfg-steps{grid-template-columns:1fr!important}.cfg-flow-card,.cfg-service-card{grid-template-columns:36px 1fr}.cfg-url-grid{grid-template-columns:1fr}.cfg-security-row{flex-direction:column}.cfg-security-row details{width:100%}.cfg-password-form{min-width:0}.cfg-section-head{flex-direction:column}}
+@media(max-width:560px){.cfg-hero{min-height:auto}.cfg-hero h2{font-size:25px}.cfg-flow-card{grid-template-columns:1fr}.cfg-flow-index{display:none}.cfg-service-card{grid-template-columns:1fr}.cfg-service-icon{display:none}.cfg-inline-info{align-items:flex-start;flex-direction:column}.cfg-link-arrow{margin-left:0}.cfg-history{grid-template-columns:1fr}.cfg-status-list{grid-template-columns:1fr!important}.cfg-rail-link{min-width:145px}.cfg-rail-link small{display:none}}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const links=[...document.querySelectorAll('[data-cfg-nav]')];
+  const secs=links.map(a=>document.getElementById(a.dataset.cfgNav)).filter(Boolean);
+  if('IntersectionObserver' in window){
+    const io=new IntersectionObserver(entries=>{const hit=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(!hit)return;links.forEach(a=>a.classList.toggle('active',a.dataset.cfgNav===hit.target.id));},{rootMargin:'-20% 0px -65% 0px',threshold:[0,.2,.5]});
+    secs.forEach(s=>io.observe(s));
+  }
+});
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Configurações — Mercado Livre</h1>
+  <form method="POST" action="/sair"><button type="submit">Sair</button></form>
+</header>
+
+
+<main class="cfg-shell">
+  <div class="cfg-hero">
+    <div class="cfg-hero-copy">
+      <span class="cfg-eyebrow">CENTRAL DE CONFIGURAÇÃO</span>
+      <h2>Deixe sua operação pronta para trabalhar</h2>
+      <p>Conecte o Mercado Livre, valide os serviços locais e ajuste o acesso da plataforma em uma única visão.</p>
+    </div>
+    <div class="cfg-hero-health" aria-label="Resumo da configuração">
+      <div class="cfg-health-ring" id="cfgAnel"><strong id="cfgScore">—</strong><span>módulos</span></div>
+      <div><b id="cfgResumo">Lendo a configuração…</b><span id="cfgResumoSub">Um instante.</span></div>
+    </div>
+  </div>
+
+  <div id="aviso" role="status" aria-live="polite"></div>
+
+  <div class="cfg-layout">
+    <aside class="cfg-rail" aria-label="Navegação das configurações">
+      <div class="cfg-rail-title">Configurações</div>
+      <a href="#integracao" class="cfg-rail-link active" data-cfg-nav="integracao"><span>01</span><div><b>Mercado Livre</b><small>Conexão e credenciais</small></div></a>
+      <a href="#servicos" class="cfg-rail-link" data-cfg-nav="servicos"><span>02</span><div><b>Serviços locais</b><small>Scraper e Claude Code</small></div></a>
+      <a href="#seguranca" class="cfg-rail-link" data-cfg-nav="seguranca"><span>03</span><div><b>Segurança</b><small>Acesso ao painel</small></div></a>
+      <div class="cfg-rail-note"><span class="cfg-dot"></span><div><b>Dados locais</b><small>Credenciais e dados ficam neste computador.</small></div></div>
+    </aside>
+
+    <div class="cfg-workspace">
+      <section class="cfg-section cfg-section-primary" id="integracao" aria-labelledby="cfg-int-title">
+        <div class="cfg-section-head">
+          <div><span class="cfg-kicker">01 · INTEGRAÇÃO PRINCIPAL</span><h3 id="cfg-int-title">Mercado Livre</h3><p>Três etapas para liberar leitura, edição e sincronização dos seus anúncios.</p></div>
+          <div class="cfg-status-chip" id="cfgChip"><i></i> Em configuração</div>
+        </div>
+
+        <ol class="cfg-steps" id="passos" aria-label="Etapas da configuração">
+          <li class="feito"><span class="cfg-step-num">1</span><div><b>Senha criada</b><small>Acesso local protegido</small></div><em>Concluído</em></li>
+          <li id="passo2"><span class="cfg-step-num">2</span><div><b>Aplicativo no ML</b><small>URLs + credenciais</small></div><em>Pendente</em></li>
+          <li id="passo3"><span class="cfg-step-num">3</span><div><b>Conta conectada</b><small>Autorização OAuth</small></div><em>Pendente</em></li>
+        </ol>
+
+        <div class="cfg-flow">
+          <article class="cfg-flow-card cfg-flow-wide" aria-labelledby="t1">
+            <div class="cfg-flow-index"><span class="num" id="n1">1</span></div>
+            <div class="cfg-flow-body">
+              <div class="cfg-flow-title"><div><span>PASSO 1</span><h4 id="t1">Conectar o endereço público</h4></div><div class="cfg-mini-status" id="tunelEstado">—</div></div>
+              <p class="cfg-desc">O Mercado Livre precisa de um endereço HTTPS público para devolver login e notificações. O painel abre esse túnel automaticamente.</p>
+
+              <div class="cfg-inline-info"><span>Endereço público</span><strong id="tunelUrl" class="mono">—</strong></div>
+              <p class="caixa ok" id="dicaOnline" hidden></p>
+
+              <div class="cfg-url-grid">
+                <div class="cfg-fieldbox"><label for="uCallback">URI de redirect</label><div class="linha"><input id="uCallback" readonly value="aguardando o túnel…"><button type="button" class="ghost" data-copiar="uCallback">Copiar</button></div></div>
+                <div class="cfg-fieldbox"><label for="uWebhook">URL de notificação</label><div class="linha"><input id="uWebhook" readonly value="aguardando o túnel…"><button type="button" class="ghost" data-copiar="uWebhook">Copiar</button></div></div>
+              </div>
+
+              <div id="situacao"></div>
+              <div class="acoes cfg-actions-row">
+                <button type="button" class="ghost" id="btnVerificar">Verificar novamente</button>
+                <button type="button" class="ghost" id="btnConfirmar" hidden>Já atualizei no ML</button>
+                <a class="cfg-link-arrow" href="https://developers.mercadolivre.com.br/devcenter" target="_blank" rel="noopener noreferrer">Abrir DevCenter <span aria-hidden="true">↗</span><span class="sr"> (abre em nova aba)</span></a>
+              </div>
+
+              <details id="guia" class="cfg-details"><summary>Ver passo a passo para criar o aplicativo</summary><ol class="guia"><li>Entre em <a href="https://developers.mercadolivre.com.br/devcenter" target="_blank" rel="noopener noreferrer">developers.mercadolivre.com.br/devcenter</a> com a sua conta e clique em <strong>Criar aplicação</strong>.</li><li>Em <strong>URIs de redirect</strong>, cole a URI de redirect acima — exatamente como está, sem barra no final.</li><li>Em <strong>URL de retornos de chamada de notificação</strong>, cole a URL de notificação acima.</li><li>Em <strong>Fluxos OAuth</strong>, marque <strong>Authorization Code</strong>, <strong>Client Credentials</strong> e <strong>Refresh Token</strong>.</li><li>Em <strong>Permissões</strong>, dê leitura e escrita pelo menos em <em>Publicação e sincronização</em>.</li><li>Aceite os termos, resolva o reCAPTCHA e <strong>salve</strong>.</li><li>Copie o <strong>App ID</strong> e a <strong>Chave secreta</strong> para o passo 2.</li></ol></details>
+              <div class="cfg-history"><span>URLs anteriores</span><div id="historico">—</div></div>
+            </div>
+          </article>
+
+          <article class="cfg-flow-card" aria-labelledby="t2">
+            <div class="cfg-flow-index"><span class="num" id="n2">2</span></div>
+            <div class="cfg-flow-body">
+              <div class="cfg-flow-title"><div><span>PASSO 2</span><h4 id="t2">Credenciais do aplicativo</h4></div></div>
+              <p class="cfg-desc">Salvas somente neste computador. A chave é cifrada no banco antes de ser armazenada.</p>
+              <form id="formCred" novalidate class="cfg-form-stack"><label for="appId">App ID</label><input id="appId" name="app_id" autocomplete="off" spellcheck="false" placeholder="Ex.: 1234567890123456" required data-mascara="digitos" maxlength="25"><label for="secret">Chave secreta</label><div class="linha"><input id="secret" name="secret" type="password" autocomplete="off" spellcheck="false" required data-mascara="sem-espacos" maxlength="128"><button type="button" class="ghost" id="btnVerSecret" aria-pressed="false" aria-controls="secret">Mostrar</button></div><div class="acoes"><button type="submit" id="btnSalvarCred">Salvar e validar</button></div></form>
+              <div id="credStatus"></div>
+            </div>
+          </article>
+
+          <article class="cfg-flow-card" aria-labelledby="t3">
+            <div class="cfg-flow-index"><span class="num" id="n3">3</span></div>
+            <div class="cfg-flow-body">
+              <div class="cfg-flow-title"><div><span>PASSO 3</span><h4 id="t3">Autorizar a conta</h4></div></div>
+              <p class="cfg-desc">Autorize o acesso no Mercado Livre para começar a ler e gerenciar os dados da sua conta.</p>
+              <ul class="lista cfg-account-list" id="contas"></ul>
+              <div class="acoes"><a class="botao" id="btnConectar" href="/auth" aria-disabled="true">Conectar conta</a><span class="sub" id="conectarDica" style="margin:0"></span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="cfg-section" id="servicos" aria-labelledby="cfg-serv-title">
+        <div class="cfg-section-head"><div><span class="cfg-kicker">02 · SERVIÇOS LOCAIS</span><h3 id="cfg-serv-title">Ferramentas auxiliares</h3><p>Recursos que ampliam leitura, análise e automação dos dados.</p></div></div>
+        <div class="cfg-service-grid">
+          <article class="cfg-service-card" aria-labelledby="t4"><div class="cfg-service-icon">◎</div><div class="cfg-service-main"><div class="cfg-service-title"><div><h4 id="t4">Scraper</h4><p>Navegador autenticado para dados que a API oficial não entrega.</p></div><span class="cfg-service-badge">LOCAL</span></div><dl class="status cfg-status-list"><dt>Estado</dt><dd id="scrEstado">—</dd><dt>Endereço</dt><dd id="scrUrl" class="mono">—</dd><dt>Sessão no ML</dt><dd id="scrSessao">não testada</dd></dl><div class="acoes"><button type="button" class="ghost" id="btnTestarSessao">Testar sessão</button><a class="botao" href="/navegador.html">Fazer login</a><button type="button" class="ghost" id="btnReiniciar">Reiniciar</button></div></div></article>
+
+          <article class="cfg-service-card cfg-service-featured" aria-labelledby="t6"><div class="cfg-service-icon">⌘</div><div class="cfg-service-main"><div class="cfg-service-title"><div><h4 id="t6">Claude Code</h4><p>Pergunte em linguagem natural e consulte seus dados sem procurar tela por tela.</p></div><span class="cfg-service-badge">MCP</span></div><dl class="status cfg-status-list"><dt>Estado</dt><dd id="mcpEstado">—</dd><dt>Pasta do projeto</dt><dd id="mcpPasta" class="mono">—</dd></dl><label for="mcpComando">Comando para o Terminal</label><div class="linha"><input id="mcpComando" readonly value="—"><button type="button" class="ghost" data-copiar="mcpComando">Copiar</button></div><details class="cfg-details"><summary>Como ligar o Claude Code aos seus dados</summary><ol class="guia"><li>Conecte a sua conta do Mercado Livre no <strong>passo 3</strong>.</li><li>Abra o <strong>Terminal</strong> e cole a linha acima.</li><li>Na primeira vez, permita o servidor <strong>HN-Gestor-ML</strong>.</li><li>Digite <code>/mcp</code> e confirme que <code>HN-Gestor-ML</code> aparece como <em>connected</em>.</li><li>Pronto — é só perguntar em português.</li></ol><p class="sub"><strong>Exemplos:</strong> “quais foram meus 10 melhores produtos nos últimos 30 dias?” · “quem está na curva A?” · “o MLB123… está perdendo visitas?”</p><p class="sub">Para deixar a ponte somente em consulta, escreva <code>ML_MCP_ESCRITA=0</code> no arquivo <code>.env</code> e reinicie.</p></details></div></article>
+        </div>
+      </section>
+
+      <section class="cfg-section" id="seguranca" aria-labelledby="cfg-sec-title">
+        <div class="cfg-section-head"><div><span class="cfg-kicker">03 · SEGURANÇA</span><h3 id="cfg-sec-title">Acesso ao painel</h3><p>Controle a senha utilizada para acessar esta instalação.</p></div><div class="cfg-status-chip cfg-status-safe"><i></i> Protegido</div></div>
+        <article class="cfg-security-row" aria-labelledby="t5"><div><span class="cfg-security-icon">●</span><div><h4 id="t5">Senha do painel</h4><p>Trocar a senha encerra as sessões abertas. Mínimo de 8 caracteres.</p></div></div><details><summary class="cfg-security-action">Trocar senha</summary><form id="formSenha" novalidate class="cfg-password-form"><label for="senhaAtual">Senha atual</label><input id="senhaAtual" type="password" autocomplete="current-password" required><label for="senhaNova">Senha nova</label><input id="senhaNova" type="password" minlength="8" autocomplete="new-password" required aria-describedby="senhaDica"><p class="sub" id="senhaDica">Mínimo de 8 caracteres.</p><div class="acoes"><button type="submit">Atualizar senha</button></div></form><div id="senhaStatus"></div></details></article>
+      </section>
+
+      
+
+    </div>
+  </div>
+</main>
+  </div>
+</div>
+
+<script src="/mascaras.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401 && !path.includes('/senha')){ location.href = '/login'; throw new Error('sessão expirada'); }
+  if(!r.ok) throw new Error(j.error || `erro ${r.status}`);
+  return j;
+}
+const post = (path, body) => api(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {}) });
+
+// Caixa de mensagem montada só com textContent: tudo que vem do servidor ou do ML é dado.
+function caixa(tipo, titulo, linhas = []){
+  const d = document.createElement('div');
+  d.className = 'caixa ' + tipo;
+  const s = document.createElement('strong'); s.textContent = titulo; d.appendChild(s);
+  for(const l of linhas){
+    const p = document.createElement('p');
+    for(const parte of [].concat(l)){
+      if(parte && typeof parte === 'object'){ const c = document.createElement('code'); c.textContent = parte.code; p.appendChild(c); }
+      else p.appendChild(document.createTextNode(parte));
+    }
+    d.appendChild(p);
+  }
+  return d;
+}
+const pilula = (tipo, texto) => { const s = document.createElement('span'); s.className = 'pilula ' + tipo; s.textContent = texto; return s; };
+const dataHora = (v) => v ? new Date(v).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }) : '';
+
+// ---------- mensagens que chegam pela URL ----------
+const qs = new URLSearchParams(location.search);
+const MSG = {
+  credenciais: ['warn', 'Antes de conectar a conta, salve o App ID e a chave secreta (passo 2).'],
+  tunel: ['err', 'O túnel HTTPS está fora do ar, então o Mercado Livre não tem para onde devolver o login. Aguarde ele voltar (esta tela atualiza sozinha).'],
+  url: ['err', 'O seu aplicativo no Mercado Livre não tem a URI de redirect atual. Atualize no DevCenter (passo 1) e tente de novo.'],
+};
+if(qs.get('conectado')) $('aviso').replaceChildren(caixa('ok', 'Conta conectada. Pode publicar e editar anúncios.'));
+else if(MSG[qs.get('erro')]) $('aviso').replaceChildren(caixa(...MSG[qs.get('erro')]));
+if(qs.toString()) history.replaceState(null, '', location.pathname);
+
+// ---------- desenho ----------
+let ultimo = null;
+function pintar(c){
+  ultimo = c;
+  const t = c.tunel || {};
+  const url = t.estado === 'online' ? t.url : null;
+  // O endereço público é também o jeito de abrir o painel de qualquer lugar.
+  const destUrl = $('tunelUrl'); destUrl.replaceChildren();
+  if(url && c.painel_online){
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = url;
+    destUrl.append(a);
+  } else destUrl.textContent = url || 'aguardando o túnel…';
+  const dica = $('dicaOnline');
+  dica.hidden = !(url && c.painel_online);
+  if(!dica.hidden){
+    dica.replaceChildren(
+      Object.assign(document.createElement('strong'), { textContent: 'Use o painel de qualquer lugar. ' }),
+      document.createTextNode('Abra o endereço público no celular ou em outro computador e entre com a mesma senha. '
+        + 'Ele se mantém quando você reinicia o painel; só muda depois de npm run parar ou de reiniciar o computador. No computador onde o painel está instalado, '
+        + `http://localhost:${c.porta_painel} funciona sempre.`));
+  }
+  $('uCallback').value = url ? url + '/callback' : 'aguardando o túnel…';
+  $('uWebhook').value = url ? url + '/webhook' : 'aguardando o túnel…';
+  // Só os dois campos do túnel dependem dele: o comando do Claude Code funciona sem túnel.
+  document.querySelectorAll('[data-copiar="uCallback"],[data-copiar="uWebhook"]').forEach((b) => b.disabled = !url);
+
+  // túnel
+  const nomes = { cloudflared:'Cloudflare', localtunnel:'localtunnel', fixa:'domínio próprio' };
+  const est = $('tunelEstado'); est.replaceChildren();
+  if(t.estado === 'online'){
+    est.append(pilula(t.verificado === false ? 'warn' : 'ok', t.verificado === false ? 'no ar, ainda sem resposta de fora' : 'no ar'),
+      document.createTextNode(` via ${nomes[t.provedor] || t.provedor} desde ${dataHora(t.desde)}`));
+  } else if(t.estado === 'iniciando') est.append(pilula('warn', 'abrindo…'));
+  else if(t.estado === 'verificando') est.append(pilula('warn', 'confirmando o endereço…'),
+    document.createTextNode(' — a URL aparece assim que existir na internet (uns segundos)'));
+  else if(t.estado === 'desligado') est.append(pilula('err', 'desligado'), document.createTextNode(' — rode "npm start" (ele abre o túnel)'));
+  else est.append(pilula('err', t.estado || 'desconhecido'), document.createTextNode(t.erro ? ' — ' + t.erro : ''));
+  const hist = (c.historico_urls || []).filter((h) => h.url !== url).slice(0, 3);
+  $('historico').textContent = hist.length ? hist.map((h) => `${h.url} (${dataHora(h.iniciada_em)})`).join(' · ') : 'nenhuma';
+
+  // situação da URL x cadastro no ML
+  const s = c.situacao || {};
+  const box = $('situacao'); box.replaceChildren();
+  $('btnConfirmar').hidden = true;
+  if(!url){
+    box.append(caixa('warn', 'Aguardando o túnel HTTPS abrir.', ['Leva uns 10 segundos depois do "npm start".']));
+  } else if(!c.tem_credenciais){
+    box.append(caixa('warn', 'Cadastre as duas URLs no DevCenter e depois faça o passo 2.',
+      ['Assim que o App ID e a chave estiverem salvos, o painel confere sozinho se o cadastro está certo.']));
+  } else if(s.estado === 'confere'){
+    box.append(caixa('ok', s.fonte === 'ml' ? 'Conferido no Mercado Livre: o seu aplicativo está com estas URLs.'
+      : 'Você confirmou que o aplicativo está com estas URLs.'));
+  } else if(s.estado === 'divergente'){
+    const linhas = [];
+    if(s.anterior) linhas.push(['A URL do túnel mudou. Antes era ', { code: s.anterior }, '.']);
+    if(s.fonte === 'ml'){
+      if(!s.callbackOk) linhas.push(['URI de redirect cadastrada hoje: ', { code: (s.cadastrado?.callback_urls || []).join(', ') || '(nenhuma)' }]);
+      if(!s.webhookOk) linhas.push(['URL de notificação cadastrada hoje: ', { code: s.cadastrado?.webhook || '(nenhuma)' }]);
+    }
+    linhas.push('Abra o DevCenter, troque pelas URLs acima e salve. Depois clique em "Verificar de novo".');
+    box.append(caixa('err', 'O aplicativo no Mercado Livre está com outra URL.', linhas));
+  } else {
+    box.append(caixa('warn', 'Ainda não sei se o aplicativo está com estas URLs.',
+      [c.situacao?.erro_ml ? 'Não consegui ler o cadastro no Mercado Livre: ' + c.situacao.erro_ml : 'Cadastre-as no DevCenter.']));
+  }
+  for(const d of (s.dicas || [])) box.append(caixa('warn', d));
+  // Sem leitura do cadastro no ML, o aluno pode confirmar por conta própria.
+  if(url && c.tem_credenciais && s.fonte !== 'ml' && s.estado !== 'confere') $('btnConfirmar').hidden = false;
+
+  // credenciais
+  const cred = $('credStatus'); cred.replaceChildren();
+  if(c.app_id){
+    if(!$('appId').value) $('appId').placeholder = c.app_id;
+    const linhas = [['App ID salvo: ', { code: c.app_id }]];
+    if(c.app){
+      if(c.app.nome) linhas.push(['Aplicativo: ', c.app.nome]);
+      const faltam = ['authorization_code','client_credentials','refresh_token'].filter((f) => !c.app.fluxos.includes(f));
+      if(faltam.length) linhas.push('Fluxos OAuth que faltam marcar: ' + faltam.join(', '));
+      if(c.app.bloqueado) linhas.push('O Mercado Livre marcou este aplicativo como BLOQUEADO.');
+    }
+    cred.append(caixa(c.app && !c.app.bloqueado ? 'ok' : 'warn',
+      c.app ? 'Credenciais válidas.' : 'Credenciais salvas.', linhas));
+  }
+
+  // contas
+  const ul = $('contas'); ul.replaceChildren();
+  for(const k of (c.lista_contas || [])){
+    const li = document.createElement('li');
+    li.textContent = `${k.nickname} · ${k.site_id} · conectada em ${dataHora(k.conectada_em)}`;
+    ul.appendChild(li);
+  }
+  const pode = !!(url && c.tem_credenciais && !(s.fonte === 'ml' && s.callbackOk === false));
+  const btn = $('btnConectar');
+  btn.setAttribute('aria-disabled', String(!pode));
+  btn.textContent = c.contas ? 'Conectar outra conta' : 'Conectar conta';
+  // Logado no ML com uma conta que já autorizou o app, o ML pula a tela de autorização e
+  // reconecta a MESMA conta na hora (medido em 19/09/2026). Para outra conta, é preciso trocar lá.
+  $('conectarDica').textContent = pode ? (c.contas ? 'Para conectar OUTRA conta: antes, saia do Mercado Livre neste '
+    + 'navegador (ou use uma janela anônima) e entre com a outra conta. Logado na mesma, o ML reconecta ela direto, '
+    + 'sem mostrar a tela de autorização.' : '') : !c.tem_credenciais ? 'Faça o passo 2 primeiro.'
+    : !url ? 'Aguardando o túnel.' : 'Atualize a URI de redirect no DevCenter primeiro.';
+
+  // passos
+  const passo2 = c.tem_credenciais && s.estado === 'confere';
+  $('passo2').className = passo2 ? 'feito' : ''; $('n1').classList.toggle('feito', s.estado === 'confere');
+  $('n2').classList.toggle('feito', !!c.app_id);
+  $('passo3').className = c.contas ? 'feito' : ''; $('n3').classList.toggle('feito', !!c.contas);
+  const atual = !passo2 ? $('passo2') : !c.contas ? $('passo3') : null;
+  document.querySelectorAll('#passos li').forEach((li) => li.removeAttribute('aria-current'));
+  if(atual) atual.setAttribute('aria-current', 'step');
+
+  // scraper
+  const sc = c.scraper;
+  const se = $('scrEstado'); se.replaceChildren();
+  if(!sc){ se.append(pilula('warn', 'não gerenciado'), document.createTextNode(' — suba com "npm start" para ele vir junto')); $('scrUrl').textContent = '—'; }
+  else {
+    const tipo = sc.estado === 'rodando' ? 'ok' : (sc.estado === 'iniciando' || sc.estado === 'reiniciando') ? 'warn' : 'err';
+    const nome = { rodando:'rodando', iniciando:'subindo…', reiniciando:'reiniciando…', indisponivel:'indisponível', parado:'parado' }[sc.estado] || sc.estado;
+    se.append(pilula(tipo, nome));
+    if(sc.reinicios) se.append(document.createTextNode(` · reiniciado ${sc.reinicios}x`));
+    if(sc.erro && sc.estado !== 'rodando') se.append(document.createTextNode(' — ' + sc.erro));
+    $('scrUrl').textContent = sc.url;
+  }
+  $('btnReiniciar').disabled = !c.scraper_gerenciado;
+
+  // Claude Code (MCP). Sem conta conectada ele até liga, mas não tem o que responder —
+  // por isso o estado aqui espelha o passo 3, e não "o servidor está de pé".
+  const m = c.mcp || {};
+  const me = $('mcpEstado'); me.replaceChildren();
+  if(!c.contas){
+    me.append(pilula('warn', 'falta conectar a conta'), document.createTextNode(' — faça o passo 3 acima'));
+  } else {
+    me.append(pilula('ok', 'pronto para usar'));
+    me.append(document.createTextNode(m.escrita === false
+      ? ' — só consulta (ML_MCP_ESCRITA=0 no .env)'
+      : ' — consulta, publica e edita'));
+  }
+  $('mcpPasta').textContent = m.pasta || '—';
+  $('mcpComando').value = m.pasta ? `cd "${m.pasta}" && claude` : '—';
+  document.querySelector('[data-copiar="mcpComando"]').disabled = !m.pasta;
+
+  // Resumo do topo: seis sinais reais, não um número fixo.
+  // Senha entra como pronta porque só se chega aqui depois de entrar com ela.
+  const modulos = [
+    true,
+    t.estado === 'online',
+    !!c.app_id,
+    s.estado === 'confere',
+    !!c.contas,
+    c.scraper?.estado === 'rodando',
+  ];
+  const feitos = modulos.filter(Boolean).length;
+  const total = modulos.length;
+  $('cfgScore').textContent = `${feitos}/${total}`;
+  $('cfgAnel').style.background =
+    'radial-gradient(circle at center,#0b2534 56%,transparent 57%),'
+    + `conic-gradient(#2bd3f4 ${Math.round((feitos / total) * 100)}%,rgba(255,255,255,.09) 0)`;
+
+  const completo = feitos === total;
+  $('cfgResumo').textContent = completo ? 'Tudo configurado' : 'Configuração em andamento';
+  $('cfgResumoSub').textContent = completo
+    ? 'Os seis módulos estão no ar.'
+    : `Faltam ${total - feitos} de ${total}. Conclua os itens essenciais primeiro.`;
+
+  const chip = $('cfgChip');
+  chip.classList.toggle('cfg-status-safe', completo);
+  chip.replaceChildren(document.createElement('i'),
+    document.createTextNode(completo ? ' Pronto' : ' Em configuração'));
+}
+
+async function carregar(forcar){
+  try{
+    const [c, k] = await Promise.all([api('/api/config' + (forcar ? '?forcar=1' : '')), api('/api/accounts')]);
+    c.lista_contas = k.contas || [];
+    pintar(c);
+    return c;
+  }catch(e){
+    $('aviso').replaceChildren(caixa('err', 'Não consegui falar com o painel.', [e.message]));
+  }
+}
+
+// Atualiza sozinho: rápido enquanto algo está subindo, devagar quando está tudo de pé.
+async function ciclo(){
+  const c = await carregar(false);
+  const subindo = !c || c.tunel?.estado !== 'online' || ['iniciando','reiniciando'].includes(c.scraper?.estado);
+  setTimeout(ciclo, subindo ? 4000 : 20000);
+}
+ciclo();
+
+// ---------- ações ----------
+document.querySelectorAll('[data-copiar]').forEach((b) => b.onclick = async () => {
+  const campo = $(b.dataset.copiar);
+  try{ await navigator.clipboard.writeText(campo.value); }
+  catch{ campo.select(); document.execCommand('copy'); }
+  const antes = b.textContent; b.textContent = 'Copiado'; setTimeout(() => b.textContent = antes, 1500);
+});
+
+$('btnVerificar').onclick = async () => {
+  const b = $('btnVerificar'); b.disabled = true; b.textContent = 'Verificando…';
+  await carregar(true);
+  b.disabled = false; b.textContent = 'Verificar de novo no Mercado Livre';
+};
+
+$('btnConfirmar').onclick = async () => {
+  try{ await post('/api/config/confirmar-url'); await carregar(false); }
+  catch(e){ $('aviso').replaceChildren(caixa('err', 'Não confirmou.', [e.message])); }
+};
+
+$('btnVerSecret').onclick = () => {
+  const i = $('secret'), mostrar = i.type === 'password';
+  i.type = mostrar ? 'text' : 'password';
+  $('btnVerSecret').textContent = mostrar ? 'Ocultar' : 'Mostrar';
+  $('btnVerSecret').setAttribute('aria-pressed', String(mostrar));
+};
+
+$('formCred').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const b = $('btnSalvarCred'); b.disabled = true; b.textContent = 'Validando no Mercado Livre…';
+  const st = $('credStatus');
+  try{
+    const r = await post('/api/config/credenciais', { app_id: $('appId').value, secret: $('secret').value });
+    $('secret').value = ''; $('appId').value = '';
+    await carregar(false);
+    if(r.avisos?.length) st.append(...r.avisos.map((a) => caixa('warn', a)));
+  }catch(e){
+    st.replaceChildren(caixa('err', 'Não salvei.', [e.message]));
+  }finally{ b.disabled = false; b.textContent = 'Salvar e validar'; }
+};
+
+$('btnTestarSessao').onclick = async () => {
+  const b = $('btnTestarSessao'), d = $('scrSessao');
+  b.disabled = true; d.textContent = 'testando (abre uma busca no Mercado Livre, leva uns segundos)…';
+  try{
+    const r = await api('/api/scraper?forcar=1');
+    d.replaceChildren();
+    if(!r.ligado) d.append(pilula('err', 'scraper fora do ar'), document.createTextNode(' ' + (r.motivo || '')));
+    else if(r.sessao === 'valida') d.append(pilula('ok', 'válida'));
+    else if(r.sessao === 'em_uso') d.append(pilula('warn', 'em uso'), document.createTextNode(' — ' + (r.acao || '')));
+    else d.append(pilula('err', 'bloqueada'), document.createTextNode(' — faça o login ou resolva o reCAPTCHA na aba Navegador'));
+  }catch(e){ d.textContent = e.message; }
+  finally{ b.disabled = false; }
+};
+
+$('btnReiniciar').onclick = async () => {
+  try{ await post('/api/scraper/reiniciar'); await carregar(false); }
+  catch(e){ $('aviso').replaceChildren(caixa('err', 'Não reiniciou.', [e.message])); }
+};
+
+$('formSenha').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    await post('/api/config/senha', { atual: $('senhaAtual').value, nova: $('senhaNova').value });
+    location.href = '/login';
+  }catch(e){ $('senhaStatus').replaceChildren(caixa('err', 'Não trocou.', [e.message])); }
+};
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

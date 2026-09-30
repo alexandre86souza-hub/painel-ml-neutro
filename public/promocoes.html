@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campanhas</title>
+<style>
+  :root{--bg:#f2f3f5;--card:#fff;--ink:#1a1a1a;--muted:#5f6368;--line:#e0e2e6;
+    --brand:#2968c8;--ok:#00a650;--err:#d93025;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1100px;margin:0 auto;padding:24px 16px 72px;width:100%}
+  h2{font-size:16px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  a{color:var(--brand)}
+  section.bloco{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+  .topo-bloco{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:9px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid #d5d7db}
+  .seg button[aria-pressed="true"]{background:#1a1a1a;color:#fff}
+  button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;
+    border:1px solid #d5d7db;background:#fff;color:var(--ink);white-space:nowrap}
+  button.bt:hover{background:#f2f3f5}
+  button.bt.primario{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+  button.bt.primario:hover{background:#333}
+  button.bt.perigo{color:#8c1d18;border-color:#f0b3ad}
+  button.bt.perigo:hover{background:#fce8e6}
+  button.bt:disabled{opacity:.5;cursor:default}
+  #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px}
+  #msg.erro{display:block;background:#fce8e6;color:#8c1d18;border:1px solid #f0b3ad}
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .vazio{color:var(--muted);font-size:14px;margin:0;padding:8px 0}
+  .carregando{color:var(--muted);font-size:14px;padding:8px 0}
+
+  /* resultado */
+  .tabela-rolagem{overflow-x:auto;margin:0 -4px}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:9px 8px;text-align:right;border-top:1px solid var(--line);vertical-align:middle}
+  th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td.nome b{display:block;font-size:14px}
+  td.nome span{color:var(--muted);font-size:12px}
+  tr.linha{cursor:pointer}
+  tr.linha:hover td{background:#f8f9fa}
+  tr.sem td{background:#fafafa}
+  .barra-part{height:6px;border-radius:3px;background:#eef0f3;margin-top:5px;min-width:60px}
+  .barra-part i{display:block;height:100%;border-radius:3px;background:#2968c8}
+  tr.detalhe td{background:#fbfbfc;padding:6px 8px 14px}
+  .mini{list-style:none;margin:0;padding:0}
+  .mini li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);text-align:left}
+  .mini li:first-child{border-top:0}
+  .mini img{width:34px;height:34px;object-fit:contain;background:#f2f3f5;border-radius:6px}
+  .mini .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mini .v{font-weight:700;white-space:nowrap}
+  .destaques{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+  .destaque{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .destaque p{margin:0;font-size:12px;color:var(--muted)}
+  .destaque b{display:block;font-size:15px;margin-top:2px}
+  .destaque span{font-size:12px;color:var(--muted)}
+
+  /* disponíveis */
+  .promos{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .promo{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;
+    background:#fff;text-align:left;font:inherit;color:inherit;cursor:pointer}
+  .promo:hover{border-color:#b9bcc2}
+  .promo[aria-pressed="true"]{border-color:#1a1a1a;box-shadow:0 0 0 1px #1a1a1a}
+  .promo .tipo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .promo .nome{font-size:15px;font-weight:700;line-height:1.3}
+  .promo .datas{font-size:12px;color:var(--muted)}
+  .contagens{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;
+    background:#eef0f3;color:#3c4043;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}
+  .chip.azul{background:#e8f0fe;color:#1a4fa0}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}
+  .chip.vermelho{background:#fce8e6;color:#8c1d18}
+
+  /* itens de uma promoção / de um anúncio */
+  .itens{list-style:none;margin:0;padding:0}
+  .itens li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;
+    padding:12px 0;border-top:1px solid var(--line)}
+  .itens li:first-child{border-top:0}
+  .itens img{width:48px;height:48px;object-fit:contain;background:#f2f3f5;border-radius:8px}
+  .itens .t{font-size:14px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .itens .s{font-size:12px;color:var(--muted);margin:2px 0 0}
+  .itens .precos{font-size:13px;margin:3px 0 0;font-variant-numeric:tabular-nums}
+  .itens .precos s{color:var(--muted)}
+  .acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .form-adesao{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
+    background:#f8f9fa;border:1px solid var(--line);border-radius:10px;padding:12px}
+  .form-adesao label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+  .form-adesao input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:8px;width:150px}
+  .form-adesao .dica{font-size:12px;color:var(--muted);flex-basis:100%;margin:0}
+  .busca{display:flex;gap:8px;flex-wrap:wrap}
+  .busca input{font:inherit;font-size:14px;padding:8px 12px;border:1px solid #d5d7db;border-radius:8px;flex:1;min-width:200px}
+  .cab-item{display:flex;gap:12px;align-items:center;margin:14px 0 6px}
+  .cab-item img{width:56px;height:56px;object-fit:contain;background:#f2f3f5;border-radius:8px}
+  .cab-item b{display:block}
+  .cab-item span{font-size:13px;color:var(--muted)}
+  .mais{margin-top:12px;text-align:center}
+  .lote{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;background:#f8f9fa;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;margin:0 0 8px;font-size:13px}
+  .lote select,.lote input[type=number]{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px}
+  .lote input[type=number]{width:80px}
+  .lote-qtd{color:var(--muted)}
+  .lote .bt{margin-left:auto}
+  .itens li.com-check{grid-template-columns:22px 48px minmax(0,1fr) auto}
+  .itens li.com-check input[type=checkbox]{width:18px;height:18px}
+  .res-lote{font-size:12px;font-weight:600}
+  .res-lote.ok{color:#0b6b33}.res-lote.falha{color:#8c1d18}
+  .filtros-promo{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .sel-venda{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+  .sel-venda select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px}
+  .ultimas{font-size:12px;color:var(--muted);margin:3px 0 0}
+  .ultimas b{color:var(--ink);font-weight:600}
+  .ultimas.parado{color:#9a5b00}
+  .cab-item .ultimas{display:block;margin-top:2px}
+  .lucro{font-size:12.5px;margin:3px 0 0;color:var(--muted)}
+  .lucro b.pos{color:#15803d}.lucro b.neg{color:#b91c1c}
+  .lucro.sem{color:#9a5b00}
+  .lucro .dif{font-weight:600;color:var(--ink)}
+  .lucro .ml-banca{color:#1d4ed8}
+  .carregando-lucro{font-style:italic}
+  .form-adesao .lucro{flex-basis:100%;margin:0}
+  /* promoções por anúncio */
+  .pa-filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .pa-filtros input,.pa-filtros select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .pa-filtros input{flex:1 1 240px}
+  .pa-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .pa-card .cab-item{margin:0 0 6px;position:relative}
+  .pa-card .cab-item > div{flex:1;min-width:0}
+  .criar-promo{align-self:flex-start;white-space:nowrap}
+  .form-adesao.propria{margin:4px 0 10px}
+  .pa-nav{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
+  .itens.por-anuncio li{grid-template-columns:96px minmax(0,1fr) auto}
+  .nova-campanha{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:#f8f9fa;border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 14px}
+  .nova-campanha label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .nova-campanha input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:8px}
+  .excluir-campanha{align-self:flex-start;margin-top:6px;font-size:12px;color:#b91c1c;text-decoration:underline;cursor:pointer}
+  .itens.por-anuncio .chip{justify-self:start}
+  @media (max-width:700px){
+    .destaques{grid-template-columns:1fr}
+    .itens li{grid-template-columns:40px minmax(0,1fr)}
+    .itens img{width:40px;height:40px}
+    .acoes{grid-column:1/-1;justify-content:flex-start}
+  }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Campanhas</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+    <a href="/auth" id="addConta">+ conectar outra</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <section class="bloco">
+    <div class="topo-bloco">
+      <div>
+        <h2>Quais promoções venderam mais</h2>
+        <p class="sub">Cada venda é ligada à promoção que deu o desconto, pelo próprio pedido no Mercado Livre.
+          <b>Retorno</b> = quanto faturou para cada R$ 1 de desconto que saiu do seu bolso.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Período" id="segDias">
+        <button type="button" data-dias="7">7 dias</button>
+        <button type="button" data-dias="15">15 dias</button>
+        <button type="button" data-dias="30" aria-pressed="true">30 dias</button>
+        <button type="button" data-dias="60">60 dias</button>
+        <button type="button" data-dias="90">90 dias</button>
+      </div>
+    </div>
+    <div class="destaques" id="destaques" hidden></div>
+    <div id="resultado"><p class="carregando">Lendo as vendas e os descontos de cada pedido… Na primeira vez pode levar até um minuto.</p></div>
+  </section>
+
+  <section class="bloco">
+    <div class="topo-bloco">
+      <div>
+        <h2>Campanhas disponíveis agora</h2>
+        <p class="sub">Clique numa campanha para ver os anúncios, entrar ou sair com cada um.</p>
+      </div>
+      <button type="button" class="bt primario" id="btNovaCampanha">+ Criar campanha</button>
+    </div>
+    <form class="nova-campanha" id="formCampanha" hidden>
+      <p class="sub" style="flex-basis:100%;margin:0">Campanha de desconto do vendedor: você escolhe o nome e as datas (até 14 dias) e depois
+        coloca os anúncios, cada um com o seu desconto. O Mercado Livre exige reputação verde e anúncios novos e ativos.</p>
+      <label>Nome<input id="cNome" maxlength="60" required placeholder="Ex.: Semana de Ofertas"></label>
+      <label>Começa em<input id="cInicio" type="date" required></label>
+      <label>Termina em<input id="cFim" type="date" required></label>
+      <button class="bt primario">Criar no Mercado Livre</button>
+      <button type="button" class="bt" id="cCancelar">Cancelar</button>
+    </form>
+    <div class="promos" id="promos"><p class="carregando">Carregando…</p></div>
+  </section>
+
+  <section class="bloco" id="blocoItens" hidden>
+    <div class="topo-bloco">
+      <div>
+        <h2 id="tItens">Anúncios</h2>
+        <p class="sub" id="subItens"></p>
+      </div>
+      <div class="filtros-promo">
+        <div class="seg" role="group" aria-label="Situação do anúncio na promoção" id="segStatus">
+          <button type="button" data-status="candidate" aria-pressed="true">Podem entrar</button>
+          <button type="button" data-status="started">Participando</button>
+          <button type="button" data-status="pending">Programados</button>
+        </div>
+        <label class="sel-venda">Vendas
+          <select id="selSemVenda">
+            <option value="">todos os anúncios</option>
+            <option value="30">sem venda há 30 dias</option>
+            <option value="60">sem venda há 60 dias</option>
+            <option value="90">sem venda há 90 dias</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="lote" id="lote" hidden>
+      <label class="marcar-todos"><input type="checkbox" id="ckTodos"> Selecionar todos da lista</label>
+      <span id="loteQtd" class="lote-qtd">0 selecionado(s)</span>
+      <span id="lotePreco" hidden>
+        <label for="selModo">Preço:</label>
+        <select id="selModo">
+          <option value="sugerido">o sugerido pelo Mercado Livre</option>
+          <option value="maximo">o maior aceito (menor desconto)</option>
+          <option value="pct">desconto de % sobre o preço atual</option>
+        </select>
+        <input id="inPct" type="number" min="1" max="80" step="0.5" value="5" aria-label="Percentual de desconto" hidden>
+      </span>
+      <button type="button" class="bt primario" id="btLote" disabled>Aderir selecionados</button>
+    </div>
+    <ul class="itens" id="itens"></ul>
+    <div class="mais"><button type="button" class="bt" id="btMais" hidden>Carregar mais</button></div>
+  </section>
+
+  <section class="bloco" id="blocoPorAnuncio">
+    <h2>Promoções por anúncio</h2>
+    <p class="sub">Todos os anúncios que estão ou podem entrar em alguma promoção, cada um com todas as promoções dele, o lucro em cada uma
+      e os botões de entrar e sair. Ordenados pelos que mais venderam em 90 dias. Na primeira abertura o painel percorre todas as promoções (leva uns 30 segundos).</p>
+    <form class="pa-filtros" id="formPA">
+      <input id="paBusca" aria-label="Buscar anúncio" placeholder="Título ou código MLB…" autocomplete="off" spellcheck="false">
+      <select id="paFiltro" aria-label="Situação">
+        <option value="">Todos com promoção</option>
+        <option value="participando">Participando de alguma</option>
+        <option value="podem_entrar">Podem entrar em alguma</option>
+        <option value="fora">Fora de todas (só candidatos)</option>
+        <option value="sem_ativa">Sem campanha ativa agora (inclui os não candidatos)</option>
+        <option value="sem_nenhuma">Sem campanha ativa nem programada</option>
+      </select>
+      <select id="paPromo" aria-label="Promoção"><option value="">Qualquer promoção</option></select>
+      <button class="bt primario">Filtrar</button>
+      <button type="button" class="bt" id="paRecarregar">Atualizar do Mercado Livre</button>
+    </form>
+    <div id="paLista"><p class="carregando">Clique em Filtrar para carregar.</p></div>
+    <div class="pa-nav" id="paNav" hidden>
+      <button type="button" class="bt" id="paAnt">← anteriores</button><span id="paPag"></span>
+      <button type="button" class="bt" id="paProx">próximos →</button>
+    </div>
+    <div id="anuncio"></div>
+  </section>
+
+  
+</main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+const numero = (n) => (n || 0).toLocaleString('pt-BR');
+const pct = (n, casas = 1) => (n == null ? '—' : (n * 100).toLocaleString('pt-BR', { maximumFractionDigits: casas }) + '%');
+const data = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '');
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+async function api(caminho, opts){
+  const r = await fetch(caminho, opts);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
+  return j;
+}
+const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) });
+
+function aviso(texto, tipo = 'erro'){
+  const m = $('msg');
+  m.className = tipo; m.textContent = texto;
+  m.scrollIntoView({ block:'nearest', behavior:'smooth' });
+}
+const limparAviso = () => { $('msg').className = ''; $('msg').textContent = ''; };
+
+// ---------- contas (igual às outras telas) ----------
+const selConta = $('selConta');
+async function carregarContas(){
+  try{
+    const { ativa, contas } = await api('/api/accounts');
+    selConta.innerHTML = '';
+    if(!contas.length){
+      selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —';
+      $('addConta').textContent = 'conectar Mercado Livre →'; return;
+    }
+    for(const c of contas){
+      const o = el('option', null, `${c.nickname} · ${c.site_id}`);
+      o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa;
+      selConta.appendChild(o);
+    }
+  }catch{ selConta.hidden = true; }
+}
+selConta.onchange = async () => {
+  await post('/api/accounts/active', { ml_user_id: Number(selConta.value) });
+  location.reload();
+};
+
+// ---------- resultado por promoção ----------
+let dias = 30;
+function marcar(seg, attr, valor){
+  for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(valor)));
+}
+$('segDias').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return;
+  dias = Number(b.dataset.dias); marcar($('segDias'), 'dias', dias); carregarResultado();
+};
+
+function nomeLinha(l){
+  if(!l.tipo) return 'Sem promoção';
+  return l.nome || l.tipo_nome;
+}
+
+function pintarDestaques(linhas){
+  const box = $('destaques'); box.innerHTML = '';
+  const promos = linhas.filter((l) => l.tipo);
+  if(!promos.length){ box.hidden = true; return; }
+  const maisFat = promos[0];
+  const comRet = promos.filter((l) => l.retorno != null && l.pedidos >= 3).sort((a, b) => b.retorno - a.retorno);
+  const semProm = linhas.find((l) => !l.tipo);
+  const totalFat = linhas.reduce((s, l) => s + l.faturamento, 0);
+  const fatProm = promos.reduce((s, l) => s + l.faturamento, 0);
+  const cards = [
+    ['Mais vendeu', nomeLinha(maisFat), `${real(maisFat.faturamento)} · ${numero(maisFat.pedidos)} pedidos`],
+    comRet.length ? ['Melhor retorno (3+ pedidos)', nomeLinha(comRet[0]),
+      `R$ ${comRet[0].retorno.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} faturados por R$ 1 de desconto`] : null,
+    ['Vendas com promoção', pct(totalFat ? fatProm / totalFat : 0, 0) + ' do faturamento',
+      semProm ? `${real(semProm.faturamento)} vendidos sem promoção` : 'todas as vendas tiveram promoção'],
+  ].filter(Boolean);
+  for(const [r, b, s] of cards){
+    const d = el('div', 'destaque');
+    d.append(el('p', null, r), el('b', null, b), el('span', null, s));
+    box.appendChild(d);
+  }
+  box.hidden = false;
+}
+
+function pintarResultado(r){
+  const box = $('resultado'); box.innerHTML = '';
+  if(!r.linhas.length){ box.appendChild(el('p', 'vazio', `Nenhuma venda nos últimos ${r.dias} dias.`)); return; }
+  pintarDestaques(r.linhas);
+  const rol = el('div', 'tabela-rolagem');
+  const t = el('table');
+  const cab = el('tr');
+  for(const h of ['Promoção', 'Pedidos', 'Unid.', 'Faturamento', 'Seu desconto', 'Desconto do ML', 'Retorno'])
+    cab.appendChild(el('th', null, h));
+  const thead = el('thead'); thead.appendChild(cab); t.appendChild(thead);
+  const tb = el('tbody');
+  for(const l of r.linhas){
+    const tr = el('tr', 'linha' + (l.tipo ? '' : ' sem'));
+    const tdN = el('td', 'nome');
+    tdN.appendChild(el('b', null, nomeLinha(l)));
+    const det = [l.tipo ? l.tipo_nome : 'vendas sem nenhum desconto', l.inicio ? `${data(l.inicio)} a ${data(l.fim)}` : '']
+      .filter(Boolean).join(' · ');
+    tdN.appendChild(el('span', null, det));
+    const bar = el('div', 'barra-part'); const i = el('i'); i.style.width = Math.max(1, l.participacao * 100) + '%';
+    bar.title = pct(l.participacao) + ' do faturamento do período';
+    bar.appendChild(i); tdN.appendChild(bar);
+    tr.append(tdN, el('td', null, numero(l.pedidos)), el('td', null, numero(l.unidades)),
+      el('td', null, real(l.faturamento)),
+      el('td', null, l.tipo ? `${real(l.desconto_vendedor)} (${pct(l.desconto_pct)})` : '—'),
+      el('td', null, l.tipo ? real(l.desconto_ml) : '—'),
+      el('td', null, l.retorno != null ? `R$ ${l.retorno.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}` : '—'));
+    tb.appendChild(tr);
+    const chave = l.promocao_id || (l.tipo ? null : 'SEM');
+    const top = chave ? r.top[chave] : null;
+    if(top && top.length){
+      const trD = el('tr', 'detalhe'); trD.hidden = true;
+      const td = el('td'); td.colSpan = 7;
+      td.appendChild(el('p', 'sub', 'Anúncios que mais venderam aqui'));
+      const ul = el('ul', 'mini');
+      for(const x of top){
+        const li = el('li');
+        if(x.foto){ const im = el('img'); im.src = x.foto; im.alt = ''; im.loading = 'lazy'; li.appendChild(im); }
+        li.append(el('span', 't', x.titulo || x.item_id), el('span', null, `${numero(x.unidades)} un.`), el('span', 'v', real(x.faturamento)));
+        ul.appendChild(li);
+      }
+      td.appendChild(ul); trD.appendChild(td); tb.appendChild(trD);
+      tr.title = 'Clique para ver os anúncios';
+      tr.onclick = () => { trD.hidden = !trD.hidden; };
+    }
+  }
+  t.appendChild(tb); rol.appendChild(t); box.appendChild(rol);
+  box.appendChild(el('p', 'sub', `Período: ${r.de.split('-').reverse().join('/')} a ${r.ate.split('-').reverse().join('/')}. `
+    + 'Cancelamentos não entram. Cupom = desconto de cupom do comprador.'));
+}
+
+async function carregarResultado(){
+  $('resultado').innerHTML = '';
+  $('resultado').appendChild(el('p', 'carregando', 'Lendo as vendas e os descontos de cada pedido… Na primeira vez pode levar até um minuto.'));
+  $('destaques').hidden = true;
+  try{ pintarResultado(await api(`/api/promocoes/resultado?dias=${dias}`)); }
+  catch(e){ $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'vazio', 'Não foi possível calcular: ' + e.message)); }
+}
+
+// ---------- promoções disponíveis ----------
+let promoAtual = null, statusAtual = 'candidate', depois = null;
+
+async function carregarPromos(){
+  const box = $('promos');
+  try{
+    const { promocoes } = await api('/api/promocoes');
+    box.innerHTML = '';
+    if(!promocoes.length){ box.appendChild(el('p', 'vazio', 'Nenhuma promoção aberta para a conta agora.')); return; }
+    for(const p of promocoes){
+      const b = el('button', 'promo'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+      b.append(el('span', 'tipo', p.tipo_nome + (p.meio_pagamento ? ` · ${p.meio_pagamento}` : '')), el('span', 'nome', p.nome));
+      if(p.inicio || p.fim){
+        b.appendChild(el('span', 'datas', `${data(p.inicio)} a ${data(p.fim)}`
+          + (p.prazo && p.prazo !== p.fim ? ` · entrar até ${data(p.prazo)}` : '')));
+      }
+      const c = el('div', 'contagens');
+      if(p.ativos != null) c.appendChild(el('span', 'chip verde', `${numero(p.ativos)} participando`));
+      if(p.pendentes) c.appendChild(el('span', 'chip azul', `${numero(p.pendentes)} programados`));
+      if(p.candidatos != null) c.appendChild(el('span', 'chip amarelo', `${numero(p.candidatos)} podem entrar`));
+      b.appendChild(c);
+      b.onclick = () => {
+        for(const x of box.querySelectorAll('.promo')) x.setAttribute('aria-pressed', 'false');
+        b.setAttribute('aria-pressed', 'true');
+        abrirPromo(p);
+      };
+      // campanha criada por você: dá para excluir
+      if(p.tipo === 'SELLER_CAMPAIGN'){
+        const ex = el('span', 'excluir-campanha', 'Excluir campanha');
+        ex.setAttribute('role', 'button'); ex.tabIndex = 0;
+        ex.onclick = async (ev) => {
+          ev.stopPropagation();
+          if(!confirm(`Excluir a campanha "${p.nome}"?\n\nOs anúncios dela voltam ao preço normal.`)) return;
+          try{ await post(`/api/promocoes/campanha/${p.id}/excluir`, {}); aviso(`Campanha "${p.nome}" excluída.`, 'ok'); carregarPromos(); }
+          catch(e){ aviso('O Mercado Livre recusou: ' + e.message); }
+        };
+        b.appendChild(ex);
+      }
+      box.appendChild(b);
+    }
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
+}
+
+// ---------- criar campanha do vendedor ----------
+{
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const mais = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
+  $('btNovaCampanha').onclick = () => {
+    const f = $('formCampanha'); f.hidden = !f.hidden;
+    if(!f.hidden){ $('cInicio').value = $('cInicio').value || hoje; $('cFim').value = $('cFim').value || mais(hoje, 6); $('cNome').focus(); }
+  };
+  $('cCancelar').onclick = () => { $('formCampanha').hidden = true; };
+  $('cInicio').min = hoje;
+  $('cInicio').onchange = () => { $('cFim').min = $('cInicio').value; $('cFim').max = mais($('cInicio').value, 13); };
+  $('formCampanha').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const corpo = { nome: $('cNome').value, inicio: $('cInicio').value, fim: $('cFim').value };
+    if(!confirm(`Criar a campanha "${corpo.nome}" de ${corpo.inicio.split('-').reverse().join('/')} a ${corpo.fim.split('-').reverse().join('/')} no Mercado Livre?`)) return;
+    try{
+      const r = await post('/api/promocoes/campanha', corpo);
+      aviso(`Campanha "${r.nome}" criada. Agora abra a campanha abaixo e coloque os anúncios (em "Podem entrar"), com o desconto de cada um.`, 'ok');
+      $('formCampanha').hidden = true; $('formCampanha').reset();
+      carregarPromos();
+    }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); }
+  };
+}
+
+function abrirPromo(p){
+  promoAtual = p;
+  $('blocoItens').hidden = false;
+  $('tItens').textContent = p.nome;
+  $('subItens').textContent = p.tipo_nome + (p.precisa_preco ? ' · você escolhe o preço promocional' : ' · o preço vem pronto do Mercado Livre');
+  statusAtual = p.candidatos ? 'candidate' : 'started';
+  marcar($('segStatus'), 'status', statusAtual);
+  carregarItens(true);
+  $('blocoItens').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+$('segStatus').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b || !promoAtual) return;
+  statusAtual = b.dataset.status; marcar($('segStatus'), 'status', statusAtual); carregarItens(true);
+};
+$('btMais').onclick = () => carregarItens(false);
+
+let vendasDesde = null;   // início do histórico de vendas do painel (para "sem vendas desde")
+$('selSemVenda').onchange = () => { if(promoAtual) carregarItens(true); };
+
+// ---------- adesão em lote ----------
+// Anúncios marcados na lista "Podem entrar": item_id -> { p (dados para aderir), li }.
+const selecionados = new Map();
+function atualizarLote(){
+  const n = selecionados.size;
+  $('loteQtd').textContent = `${numero(n)} selecionado(s)`;
+  $('btLote').disabled = !n;
+  $('btLote').textContent = n ? `Aderir ${numero(n)} selecionado(s)` : 'Aderir selecionados';
+  const caixas = [...$('itens').querySelectorAll('input.ck-item:not(:disabled)')];
+  $('ckTodos').checked = caixas.length > 0 && caixas.every((c) => c.checked);
+}
+$('ckTodos').onchange = () => {
+  for(const c of $('itens').querySelectorAll('input.ck-item:not(:disabled)')){
+    if(c.checked !== $('ckTodos').checked){ c.checked = $('ckTodos').checked; c.onchange(); }
+  }
+};
+$('selModo').onchange = () => { $('inPct').hidden = $('selModo').value !== 'pct'; };
+
+// Preço de cada anúncio no lote, dentro dos limites que o ML informou para ele.
+function precoDoLote(p){
+  const orig = p.preco_original;
+  let v;
+  if($('selModo').value === 'pct'){
+    const pct = Number($('inPct').value);
+    if(!(pct > 0 && pct < 90) || !orig) return null;
+    v = orig * (1 - pct / 100);
+  }else if($('selModo').value === 'maximo'){
+    v = p.preco_max || p.preco_sugerido || p.preco;
+  }else{
+    v = p.preco_sugerido || p.preco || p.preco_max;
+  }
+  if(!v) return null;
+  if(p.preco_max && v > p.preco_max) v = p.preco_max;
+  if(p.preco_min && v < p.preco_min) v = p.preco_min;
+  return Math.floor(v * 100) / 100;
+}
+
+$('btLote').onclick = async () => {
+  const lista = [...selecionados.entries()];
+  if(!lista.length) return;
+  const precisaPreco = promoAtual.precisa_preco;
+  const planos = lista.map(([id, s]) => ({ id, s, preco: precisaPreco ? precoDoLote(s.p) : null }));
+  const semPreco = planos.filter((x) => precisaPreco && x.preco == null);
+  const modoTxt = !precisaPreco ? 'com as condições definidas pelo Mercado Livre'
+    : { sugerido: 'com o preço sugerido pelo ML', maximo: 'com o maior preço aceito',
+        pct: `com ${$('inPct').value}% de desconto` }[$('selModo').value];
+  if(!confirm(`Colocar ${planos.length} anúncio(s) na promoção "${promoAtual.nome}" ${modoTxt}?`
+    + (semPreco.length ? `\n\n${semPreco.length} ficarão de fora por não ter preço definido.` : '')
+    + '\n\nIsso muda o preço de venda no Mercado Livre.')) return;
+  $('btLote').disabled = true; limparAviso();
+  let ok = 0, falhas = 0;
+  for(const pl of planos){
+    const alvo = pl.s.li.querySelector('.acoes');
+    const marca = el('span', 'res-lote', 'enviando…');
+    alvo.replaceChildren(marca);
+    if(precisaPreco && pl.preco == null){ marca.className = 'res-lote falha'; marca.textContent = 'sem preço'; falhas++; continue; }
+    const p = pl.s.p;
+    const corpo = { promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id, preco_original: p.preco_original };
+    if(pl.preco != null) corpo.preco = pl.preco;
+    if(p.precisa_estoque) corpo.estoque = p.estoque_min || 1;
+    try{
+      await post(`/api/promocoes/anuncio/${pl.id}/aderir`, corpo);
+      marca.className = 'res-lote ok'; marca.textContent = '✓ aderiu' + (pl.preco ? ` por ${real(pl.preco)}` : '');
+      ok++;
+      const ck = pl.s.li.querySelector('input.ck-item'); if(ck){ ck.checked = false; ck.disabled = true; }
+    }catch(e){
+      marca.className = 'res-lote falha'; marca.textContent = 'recusado: ' + e.message; falhas++;
+    }
+    selecionados.delete(pl.id);
+  }
+  atualizarLote();
+  aviso(`Lote concluído: ${ok} anúncio(s) entraram em "${promoAtual.nome}"` + (falhas ? `, ${falhas} recusado(s) (veja na lista).` : '.'),
+    falhas && !ok ? 'erro' : 'ok');
+  carregarPromos();
+};
+
+async function carregarItens(doZero){
+  const ul = $('itens');
+  if(doZero){ ul.innerHTML = ''; depois = null; ul.appendChild(el('li', 'carregando', 'Carregando…')); selecionados.clear(); }
+  $('btMais').hidden = true;
+  $('lote').hidden = statusAtual !== 'candidate';
+  $('lotePreco').hidden = !promoAtual.precisa_preco;
+  atualizarLote();
+  const q = new URLSearchParams({ promocao: promoAtual.id, tipo: promoAtual.tipo, status: statusAtual });
+  if(depois) q.set('depois', depois);
+  const semVenda = $('selSemVenda').value;
+  if(semVenda) q.set('sem_venda', semVenda);
+  if(semVenda && doZero){ ul.innerHTML = ''; ul.appendChild(el('li', 'carregando', 'Percorrendo todos os anúncios da promoção e cruzando com as vendas…')); }
+  try{
+    const r = await api('/api/promocoes/itens?' + q);
+    vendasDesde = r.vendas_desde || vendasDesde;
+    if(r.cortado) aviso('A promoção tem anúncios demais: o filtro de vendas olhou os primeiros 2.000.', 'erro');
+    if(doZero) ul.innerHTML = '';
+    if(!r.itens.length && doZero) ul.appendChild(el('li', 'vazio', 'Nenhum anúncio nesta situação.'));
+    for(const x of r.itens){
+      const p = { ...x, id: promoAtual.id, tipo: promoAtual.tipo, nome: promoAtual.nome,
+        precisa_preco: promoAtual.precisa_preco, precisa_estoque: promoAtual.tipo === 'LIGHTNING', precisa_datas: false };
+      const li = linhaItem(x, p, x.id);
+      if(x.status === 'candidate'){
+        const ck = el('input', 'ck-item'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Selecionar ' + (x.titulo || x.id));
+        ck.onchange = () => { if(ck.checked) selecionados.set(x.id, { p, li }); else selecionados.delete(x.id); atualizarLote(); };
+        li.classList.add('com-check'); li.prepend(ck);
+      }
+      ul.appendChild(li);
+    }
+    atualizarLote();
+    depois = r.depois;
+    $('btMais').hidden = !depois || !r.itens.length;
+    $('subItens').textContent = `${numero(r.total)} anúncio(s) · ` + promoAtual.tipo_nome;
+  }catch(e){ ul.innerHTML = ''; ul.appendChild(el('li', 'vazio', 'Não foi possível carregar: ' + e.message)); }
+}
+
+// Uma linha de anúncio dentro de uma promoção, com os botões de entrar e sair.
+// `it` = dados do anúncio (foto, título); `p` = a promoção e o status do anúncio nela.
+function linhaItem(it, p, itemId){
+  const li = el('li');
+  const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(it.foto) im.src = it.foto;
+  const meio = el('div');
+  meio.appendChild(el('p', 't', it.titulo || itemId));
+  const st = { candidate:'Pode entrar', started:'Participando', pending:'Programado', finished:'Encerrada' }[p.status] || p.status;
+  meio.appendChild(el('p', 's', `${itemId} · ${st}` + (p.vendedor_pct != null ? ` · você paga ${p.vendedor_pct}%, o ML ${p.ml_pct}%` : '')
+    + (it.estoque_anuncio != null ? ` · estoque ${it.estoque_anuncio}` : '')));
+  const pr = el('p', 'precos');
+  const orig = p.preco_original;
+  if(p.preco && orig && p.preco < orig){
+    pr.append(el('s', null, real(orig)), document.createTextNode(' → '), el('b', null, real(p.preco)),
+      document.createTextNode(` (−${pct(1 - p.preco / orig, 0)})`));
+  }else if(orig){
+    pr.appendChild(document.createTextNode('Preço atual ' + real(orig)));
+    if(p.preco_sugerido) pr.appendChild(document.createTextNode(' · sugerido ' + real(p.preco_sugerido)));
+  }
+  meio.appendChild(pr);
+  // Últimos preços pelos quais o anúncio vendeu (da cópia local dos pedidos).
+  const uv = it.ultimas_vendas || p.ultimas_vendas;
+  if(uv){
+    const u = el('p', 'ultimas' + (uv.length ? '' : ' parado'));
+    if(uv.length){
+      u.appendChild(document.createTextNode('Últimas vendas: '));
+      uv.forEach((v, i) => {
+        if(i) u.appendChild(document.createTextNode(' · '));
+        u.appendChild(el('b', null, real(v.preco)));
+        u.appendChild(document.createTextNode(` em ${data(v.data)}` + (v.quantidade > 1 ? ` (${v.quantidade} un.)` : '')));
+      });
+      const dias = Math.floor((Date.now() - new Date(uv[0].data)) / 864e5);
+      if(dias >= 30) u.appendChild(document.createTextNode(` — parado há ${dias} dias`));
+    }else{
+      u.textContent = vendasDesde ? `Sem vendas desde ${data(vendasDesde)} (início do histórico do painel)` : 'Sem vendas no histórico do painel';
+    }
+    meio.appendChild(u);
+  }
+  // Lucro no preço da promoção: preenchido depois, em lote (POST /api/promocoes/lucro).
+  const lucro = el('p', 'lucro carregando-lucro', 'calculando o lucro…');
+  meio.appendChild(lucro);
+  pedirLucro({ id: itemId, preco: p.preco || p.preco_sugerido || p.preco_max || null, meli_pct: p.ml_pct, alvo: lucro, li });
+  const acoes = el('div', 'acoes');
+  if(p.status === 'candidate'){
+    const b = el('button', 'bt primario', 'Aderir'); b.type = 'button';
+    b.onclick = () => formAdesao(li, p, itemId, b);
+    acoes.appendChild(b);
+  }
+  if(p.status === 'started' || p.status === 'pending'){
+    const b = el('button', 'bt perigo', 'Sair da promoção'); b.type = 'button';
+    b.onclick = () => sair(p, itemId, b, li);
+    acoes.appendChild(b);
+  }
+  li.append(im, meio, acoes);
+  return li;
+}
+
+// ---------- lucro na promoção ----------
+// Pedidos de lucro juntados num lote por vez (até 40 anúncios por chamada).
+let filaLucro = [], timerLucro = null;
+function pedirLucro(pedido){
+  if(!pedido.preco){ pedido.alvo.className = 'lucro'; pedido.alvo.textContent = 'Lucro: defina o preço promocional para calcular.'; return; }
+  filaLucro.push(pedido);
+  clearTimeout(timerLucro);
+  timerLucro = setTimeout(esvaziarLucro, 60);
+}
+async function esvaziarLucro(){
+  while(filaLucro.length){
+    const lote = filaLucro.splice(0, 40);
+    try{
+      const r = await post('/api/promocoes/lucro', { itens: lote.map((x, i) => ({ id: x.id, preco: x.preco, meli_pct: x.meli_pct, chave: i })) });
+      for(const x of r.itens){ const ped = lote[x.chave]; if(ped){ ped.li._lucro = x; pintarLucro(ped.alvo, x); } }
+    }catch(e){ for(const ped of lote){ ped.alvo.className = 'lucro'; ped.alvo.textContent = 'Lucro: não calculado (' + e.message + ')'; } }
+  }
+}
+const FALTA = { custo: 'sem custo do produto (cadastre em Produtos)', frete: 'sem frete medido', tarifa: 'sem tarifa do ML' };
+function pintarLucro(alvo, x, precoOutro){
+  alvo.className = 'lucro'; alvo.innerHTML = '';
+  if(x.erro){ alvo.textContent = 'Lucro: ' + x.erro; return; }
+  const promo = precoOutro != null ? lucroLocal(x, precoOutro) : x.promo;
+  if(promo.lucro == null){ alvo.classList.add('sem'); alvo.textContent = 'Lucro: ' + promo.falta.map((f) => FALTA[f] || f).join(', '); return; }
+  alvo.appendChild(document.createTextNode(precoOutro != null ? `Lucro em ${real(precoOutro)}: ` : 'Lucro na promoção: '));
+  alvo.appendChild(el('b', promo.lucro < 0 ? 'neg' : 'pos', `${real(promo.lucro)} (${pct(promo.margem)})`));
+  if(x.atual?.lucro != null){
+    alvo.appendChild(document.createTextNode(` · hoje ${real(x.atual.lucro)} (${pct(x.atual.margem)})`));
+    const dif = promo.lucro - x.atual.lucro;
+    if(Math.abs(dif) >= 0.01) alvo.appendChild(el('span', 'dif', ` ${dif < 0 ? '−' : '+'}${real(Math.abs(dif))} por venda`));
+  }
+  if(promo.parte_ml > 0) alvo.appendChild(el('span', 'ml-banca', ` · o ML banca ${real(promo.parte_ml)}`));
+  alvo.title = `Preço ${real(precoOutro ?? x.preco)} − tarifa ${real(promo.tarifa)} − imposto ${real(promo.imposto)} − frete ${real(x.frete)}`
+    + ` − custo ${real(x.custo)} − embalagem ${real(x.embalagem)}`;
+}
+// A mesma conta do servidor (promocoes.js#lucroNoPreco), para o preço digitado no formulário.
+function lucroLocal(c, preco){
+  const falta = [];
+  if(c.custo == null) falta.push('custo'); if(c.frete == null) falta.push('frete'); if(c.tarifa_pct == null) falta.push('tarifa');
+  if(falta.length || !(preco > 0)) return { lucro: null, margem: null, falta };
+  const tarifa = Math.max(0, preco * c.tarifa_pct / 100 + (c.tarifa_fixa || 0) - (c.preco_atual || 0) * (c.meli_pct || 0) / 100);
+  const imposto = preco * (c.imposto_pct || 0) / 100;
+  const lucro = preco - tarifa - imposto - c.frete - c.custo - (c.embalagem || 0);
+  return { lucro, margem: lucro / preco, tarifa, imposto, parte_ml: (c.preco_atual || 0) * (c.meli_pct || 0) / 100, falta: [] };
+}
+
+function formAdesao(li, p, itemId, botao){
+  const velho = li.querySelector('.form-adesao');
+  if(velho){ velho.remove(); return; }
+  const f = el('form', 'form-adesao');
+  const campos = {};
+  const campo = (nome, rot, attrs) => {
+    const l = el('label', null, rot); const i = el('input');
+    Object.assign(i, attrs); l.appendChild(i); f.appendChild(l); campos[nome] = i;
+  };
+  if(p.precisa_preco){
+    campo('preco', 'Preço promocional (R$)', { type:'number', step:'0.01', min:'0.01', required:true,
+      value: p.preco_sugerido || p.preco || p.preco_max || '' });
+    const lim = [p.preco_min ? `mínimo ${real(p.preco_min)}` : '', p.preco_max ? `máximo ${real(p.preco_max)}` : '']
+      .filter(Boolean).join(' · ');
+    if(lim) f.appendChild(el('p', 'dica', `O Mercado Livre aceita: ${lim}.`));
+    // lucro ao vivo no preço digitado (a tarifa é a da faixa do preço sugerido: aproximação)
+    const vivo = el('p', 'lucro dica');
+    f.appendChild(vivo);
+    const recalcular = () => { if(li._lucro) pintarLucro(vivo, li._lucro, Number(campos.preco.value) || 0); else vivo.textContent = ''; };
+    campos.preco.addEventListener('input', recalcular);
+    recalcular();
+  }
+  if(p.precisa_estoque){
+    campo('estoque', 'Unidades na oferta', { type:'number', step:'1', min: p.estoque_min || 1, max: p.estoque_max || '',
+      required:true, value: p.estoque_min || '' });
+  }
+  if(p.precisa_datas){
+    const hoje = new Date(); const d = (x) => x.toISOString().slice(0, 10);
+    campo('inicio', 'Começa em', { type:'date', required:true, value: d(hoje) });
+    campo('fim', 'Termina em', { type:'date', required:true, value: d(new Date(hoje.getTime() + 14 * 864e5)) });
+  }
+  if(!p.precisa_preco && !p.precisa_estoque && !p.precisa_datas){
+    f.appendChild(el('p', 'dica', p.preco
+      ? `O anúncio entra com o preço ${real(p.preco)} definido pelo Mercado Livre.`
+      : 'O anúncio entra com as condições definidas pelo Mercado Livre.'));
+  }
+  const ok = el('button', 'bt primario', 'Confirmar adesão');
+  const cancelar = el('button', 'bt', 'Cancelar'); cancelar.type = 'button';
+  cancelar.onclick = () => f.remove();
+  f.append(ok, cancelar);
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const corpo = { promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id, preco_original: p.preco_original };
+    if(campos.preco) corpo.preco = Number(campos.preco.value);
+    if(campos.estoque) corpo.estoque = Number(campos.estoque.value);
+    if(campos.inicio){ corpo.inicio = campos.inicio.value + 'T00:00:00-03:00'; corpo.fim = campos.fim.value + 'T23:59:00-03:00'; }
+    const precoTxt = corpo.preco ? ` por ${real(corpo.preco)}` : '';
+    if(!confirm(`Colocar o anúncio ${itemId} na promoção "${p.nome}"${precoTxt}?\n\nIsso muda o preço de venda no Mercado Livre.`)) return;
+    ok.disabled = true; limparAviso();
+    try{
+      await post(`/api/promocoes/anuncio/${itemId}/aderir`, corpo);
+      aviso(`Pronto: ${itemId} entrou em "${p.nome}". O Mercado Livre pode levar alguns minutos para mostrar o novo preço.`, 'ok');
+      f.remove(); botao.remove();
+      depoisDeMudar(itemId);
+    }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); ok.disabled = false; }
+  };
+  li.appendChild(f);
+  (campos.preco || ok).focus();
+}
+
+async function sair(p, itemId, botao, li){
+  if(!confirm(`Tirar o anúncio ${itemId} da promoção "${p.nome}"?\n\nO preço volta ao original.`)) return;
+  botao.disabled = true; limparAviso();
+  try{
+    await post(`/api/promocoes/anuncio/${itemId}/sair`, { promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id });
+    aviso(`Pronto: ${itemId} saiu de "${p.nome}".`, 'ok');
+    botao.remove();
+    li.style.opacity = '.55';
+    depoisDeMudar(itemId);
+  }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); botao.disabled = false; }
+}
+
+// Depois de entrar ou sair, atualiza as contagens e o anúncio aberto na busca.
+function depoisDeMudar(itemId){
+  carregarPromos();
+  if(anuncioAberto === itemId) verAnuncio(itemId);
+}
+
+// ---------- por anúncio ----------
+let anuncioAberto = null, paPagina = 0, paPromosCarregadas = false;
+
+// Cartão de um anúncio com todas as promoções dele (usado na lista e na busca por MLB).
+function cartaoAnuncio(a, promocoes){
+  const card = el('div', 'pa-card');
+  const cab = el('div', 'cab-item');
+  if(a.foto){ const im = el('img'); im.src = a.foto; im.alt = ''; im.loading = 'lazy'; cab.appendChild(im); }
+  const t = el('div');
+  const nome = el('b'); const ln = el('a', null, a.titulo || a.id); ln.href = a.link || '#'; ln.target = '_blank'; ln.rel = 'noopener';
+  nome.appendChild(ln);
+  t.append(nome, el('span', null, `${a.id} · ${real(a.preco)} · estoque ${a.estoque ?? '—'}`
+    + (a.vendas_90 != null ? ` · ${numero(a.vendas_90)} vendido(s) em 90 dias` : '')));
+  const uv = a.ultimas_vendas || (a.ultima_venda ? [a.ultima_venda] : []);
+  t.appendChild(el('span', 'ultimas' + (uv.length ? '' : ' parado'), uv.length
+    ? 'Última venda: ' + uv.map((v) => `${real(v.preco)} em ${data(v.data)}`).join(' · ')
+    : 'Sem vendas no histórico do painel'));
+  cab.appendChild(t); card.appendChild(cab);
+  // Criar promoção própria (desconto individual) para este anúncio
+  if(!promocoes.some((p) => p.tipo === 'PRICE_DISCOUNT' && (p.status === 'started' || p.status === 'pending'))){
+    const bt = el('button', 'bt criar-promo', '+ Criar promoção'); bt.type = 'button';
+    bt.onclick = () => formPromocaoPropria(card, a, bt);
+    cab.appendChild(bt);
+  }
+  if(!promocoes.length){ card.appendChild(el('p', 'vazio', 'Não está em nenhuma promoção e não é candidato a nenhuma.')); return card; }
+  const ul = el('ul', 'itens por-anuncio');
+  for(const p of promocoes){
+    const li = linhaItem({ titulo: p.nome, foto: null }, { ...p, preco_original: p.preco_original ?? a.preco }, a.id);
+    li.querySelector('.t').textContent = p.nome;
+    li.querySelector('.s').textContent = [p.tipo_nome,
+      { candidate:'Pode entrar', started:'Participando', pending:'Programado' }[p.status] || p.status,
+      p.inicio ? `${data(p.inicio)} a ${data(p.fim)}` : '',
+      p.vendedor_pct != null ? `você paga ${p.vendedor_pct}%, o ML ${p.ml_pct}%` : ''].filter(Boolean).join(' · ');
+    li.querySelector('img').replaceWith(el('span', 'chip ' + ({ started:'verde', pending:'azul', candidate:'amarelo' }[p.status] || ''),
+      { started:'Ativa', pending:'Agendada', candidate:'Pode entrar' }[p.status] || p.status));
+    ul.appendChild(li);
+  }
+  card.appendChild(ul);
+  return card;
+}
+
+// Formulário "Criar promoção": desconto próprio do anúncio (PRICE_DISCOUNT), em % ou preço,
+// com datas (até 14 dias) e o lucro no preço digitado, calculado pelo servidor.
+function formPromocaoPropria(card, a, botao){
+  const velho = card.querySelector('.form-adesao.propria');
+  if(velho){ velho.remove(); return; }
+  const f = el('form', 'form-adesao propria');
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const mais = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
+  const campo = (rot, attrs) => { const l = el('label', null, rot); const i = el('input'); Object.assign(i, attrs); l.appendChild(i); f.appendChild(l); return i; };
+  f.appendChild(el('p', 'dica', `Desconto próprio no anúncio (preço atual ${real(a.preco)}). O Mercado Livre aceita de 5% a 80%, por até 14 dias. `
+    + 'Se o anúncio estiver numa campanha do ML, o desconto só começa quando ela terminar.'));
+  const pctIn = campo('Desconto (%)', { type:'number', step:'0.5', min:'5', max:'79', value:'10' });
+  const precoIn = campo('Preço promocional (R$)', { type:'number', step:'0.01', min:'0.01' });
+  const ini = campo('Começa em', { type:'date', required:true, value: hoje, min: hoje });
+  const fim = campo('Termina em', { type:'date', required:true, value: mais(hoje, 6) });
+  const vivo = el('p', 'lucro dica', 'calculando o lucro…');
+  f.appendChild(vivo);
+  const r2 = (v) => Math.round(v * 100) / 100;
+  let comp = null, timer = null;
+  const recalcular = () => {
+    const p = Number(precoIn.value);
+    if(comp) pintarLucro(vivo, comp, p || 0); else vivo.textContent = '';
+  };
+  // componentes do lucro (custo, frete, tarifa) uma vez; depois a conta é local
+  post('/api/promocoes/lucro', { itens: [{ id: a.id, preco: r2(a.preco * 0.9), chave: 0 }] })
+    .then((r) => { comp = r.itens[0]; recalcular(); }).catch(() => { vivo.textContent = ''; });
+  pctIn.oninput = () => { const p = Number(pctIn.value); if(p > 0 && a.preco) precoIn.value = r2(a.preco * (1 - p / 100)); clearTimeout(timer); timer = setTimeout(recalcular, 150); };
+  precoIn.oninput = () => { const v = Number(precoIn.value); if(v > 0 && a.preco) pctIn.value = r2((1 - v / a.preco) * 100); clearTimeout(timer); timer = setTimeout(recalcular, 150); };
+  ini.onchange = () => { fim.min = ini.value; fim.max = mais(ini.value, 13); if(fim.value < ini.value) fim.value = mais(ini.value, 6); };
+  precoIn.value = r2(a.preco * 0.9);
+  fim.max = mais(hoje, 13);
+  const ok = el('button', 'bt primario', 'Criar promoção no Mercado Livre');
+  const cancelar = el('button', 'bt', 'Cancelar'); cancelar.type = 'button'; cancelar.onclick = () => f.remove();
+  f.append(ok, cancelar);
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const preco = Number(precoIn.value);
+    if(!confirm(`Criar desconto próprio em ${a.id}: de ${real(a.preco)} por ${real(preco)} (−${pctIn.value}%), `
+      + `de ${ini.value.split('-').reverse().join('/')} a ${fim.value.split('-').reverse().join('/')}?\n\nMuda o preço de venda no Mercado Livre.`)) return;
+    ok.disabled = true; limparAviso();
+    try{
+      await post(`/api/promocoes/anuncio/${a.id}/aderir`, { tipo: 'PRICE_DISCOUNT', preco, preco_original: a.preco, inicio: ini.value, fim: fim.value });
+      aviso(`Promoção criada em ${a.id}: ${real(preco)} de ${ini.value.split('-').reverse().join('/')} a ${fim.value.split('-').reverse().join('/')}.`, 'ok');
+      f.remove(); botao.remove();
+    }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); ok.disabled = false; }
+  };
+  card.insertBefore(f, card.children[1] || null);
+  precoIn.focus();
+}
+
+async function carregarPorAnuncio(recarregar){
+  const box = $('paLista');
+  $('anuncio').innerHTML = '';
+  box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Juntando os anúncios de todas as promoções… (na primeira vez leva uns 30 segundos)'));
+  $('paNav').hidden = true;
+  const q = new URLSearchParams({ pagina: paPagina });
+  if($('paBusca').value.trim()) q.set('q', $('paBusca').value.trim());
+  if($('paFiltro').value) q.set('filtro', $('paFiltro').value);
+  if($('paPromo').value) q.set('promocao', $('paPromo').value);
+  if(recarregar) q.set('recarregar', '1');
+  try{
+    const r = await api('/api/promocoes/por-anuncio?' + q);
+    if(!paPromosCarregadas){
+      for(const p of r.promocoes){ const o = el('option', null, `${p.nome} (${p.tipo_nome})`); o.value = p.id; $('paPromo').appendChild(o); }
+      paPromosCarregadas = true;
+    }
+    box.innerHTML = '';
+    if(!r.itens.length){
+      box.appendChild(el('p', 'vazio', 'Nenhum anúncio com esse filtro.'));
+      return;
+    }
+    for(const a of r.itens) box.appendChild(cartaoAnuncio(a, a.promocoes));
+    const paginas = Math.ceil(r.total / r.por_pagina);
+    $('paNav').hidden = paginas <= 1;
+    $('paPag').textContent = `${numero(r.pagina * r.por_pagina + 1)}–${numero(Math.min((r.pagina + 1) * r.por_pagina, r.total))} de ${numero(r.total)} anúncios`;
+    $('paAnt').disabled = r.pagina === 0;
+    $('paProx').disabled = r.pagina + 1 >= paginas;
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
+}
+$('formPA').onsubmit = (ev) => {
+  ev.preventDefault();
+  // código MLB exato: busca direto no ML (pega também promoções que não aparecem nas listas, como o desconto próprio)
+  const m = /^\s*MLB-?\d+\s*$/i.exec($('paBusca').value);
+  if(m){ verAnuncio(m[0].trim().toUpperCase().replace('-', '')); return; }
+  paPagina = 0; carregarPorAnuncio();
+};
+$('paRecarregar').onclick = () => { paPagina = 0; carregarPorAnuncio(true); };
+$('paAnt').onclick = () => { paPagina = Math.max(0, paPagina - 1); carregarPorAnuncio(); $('blocoPorAnuncio').scrollIntoView({ behavior:'smooth' }); };
+$('paProx').onclick = () => { paPagina++; carregarPorAnuncio(); $('blocoPorAnuncio').scrollIntoView({ behavior:'smooth' }); };
+
+async function verAnuncio(id){
+  anuncioAberto = id;
+  const box = $('anuncio');
+  $('paLista').innerHTML = ''; $('paNav').hidden = true;
+  box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Carregando…'));
+  try{
+    const r = await api(`/api/promocoes/anuncio/${id}`);
+    box.innerHTML = '';
+    const ordem = { started: 0, pending: 1, candidate: 2 };
+    box.appendChild(cartaoAnuncio({ ...r.item }, r.promocoes.sort((a, b) => (ordem[a.status] ?? 3) - (ordem[b.status] ?? 3))));
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
+}
+
+carregarContas();
+carregarResultado();
+carregarPromos();
+carregarPorAnuncio();
+</script>
+<script src="/aviso.js" defer></script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

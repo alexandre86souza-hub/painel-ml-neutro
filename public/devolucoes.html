@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devoluções</title>
+<style>
+  :root{--bg:#f2f3f5;--card:#fff;--ink:#1a1a1a;--muted:#5f6368;--line:#e0e2e6;
+    --brand:#2968c8;--ok:#00a650;--err:#d93025;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1320px;margin:0 auto;padding:24px 16px 72px;width:100%}
+  h2{font-size:16px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  a{color:var(--brand)}
+  section.bloco{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+  .topo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .topo p{margin:0;font-size:13px;color:var(--muted)}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:9px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid #d5d7db}
+  .seg button[aria-pressed="true"]{background:#1a1a1a;color:#fff}
+  #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px;
+    background:#fce8e6;color:#8c1d18;border:1px solid #f0b3ad}
+  .vazio,.carregando{color:var(--muted);font-size:14px;margin:0;padding:8px 0}
+
+  .cartoes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+  .cartao{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .cartao .rotulo{font-size:13px;color:var(--muted);margin:0 0 6px}
+  .cartao .valor{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+  .cartao .nota{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .cartao.destaque{background:#17181a;border-color:#17181a;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#b9bcc2}
+  .cartao.alerta{border-color:#f0b3ad;background:#fff8f7}
+
+  .valor.neg,.neg{color:#b91c1c}
+  .valor.pos,.pos{color:#15803d}
+  .cartao.destaque .valor{color:#fff}
+  .faixa-status{display:flex;gap:8px;flex-wrap:wrap;margin:-6px 0 18px}
+  .extrato{display:flex;flex-direction:column}
+  .ext{display:grid;grid-template-columns:minmax(0,1fr) 140px;gap:12px;align-items:baseline;padding:10px 0;
+    border-top:1px solid var(--line);font-size:14px}
+  .ext:first-child{border-top:0}
+  .ext b{text-align:right;font-variant-numeric:tabular-nums;font-size:15px}
+  .ext small{display:block;color:var(--muted);font-size:12px}
+  .ext.sub1 span{padding-left:18px}
+  .ext.total{border-top:2px solid var(--ink);font-weight:700}
+  .ext.total b{font-size:17px}
+  .ext.info b{color:var(--muted);font-weight:600}
+  .msg-ml{display:block;font-size:12px;color:#1d4ed8;margin-top:3px;max-width:260px;white-space:normal}
+  /* reclamações em cartões: três blocos lado a lado, sem rolagem lateral */
+  .rec-lista{display:flex;flex-direction:column;gap:12px}
+  .rec{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.8fr);gap:18px;
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+  .rec .prod{min-width:0;align-items:flex-start}
+  .rec-titulo{display:block;font-size:14px;line-height:1.35}
+  .rec-motivo{margin:8px 0 6px;font-size:13px}
+  .rec-chips{display:flex;flex-wrap:wrap;gap:4px}
+  .rec-chips .chip{margin:0}
+  .rec .msg-ml{max-width:none;margin:6px 0 0}
+  .rec-din{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:13px;align-content:start}
+  .rec-din dt{color:var(--muted)}
+  .rec-din dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .rec-din dd small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+  .rec-din dt:nth-last-of-type(1),.rec-din dd.rec-res{border-top:1px solid var(--line);padding-top:5px;margin-top:2px}
+  .rec-din dd.rec-res{font-size:15px}
+  .rec-nf{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+  .rec-nf .chip{margin:0;white-space:normal}
+  .rec-nf .chave{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--brand);cursor:pointer;text-decoration:underline}
+  .rec-link{margin-top:auto;font-size:13px;font-weight:600}
+  .rec-nf .defeito{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:13px;font-weight:600;cursor:pointer;
+    background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:6px 9px}
+  .rec-nf .defeito input{width:16px;height:16px}
+  .rec-nf .defeito small{flex-basis:100%;font-weight:400;font-size:11px;color:var(--muted)}
+  .defeito-kit{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0;min-width:0;display:grid;gap:5px;font-size:13px}
+  .defeito-kit legend{font-weight:700;font-size:12px;padding:0 4px}
+  .defeito-kit label{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
+  .defeito-kit label input{width:16px;height:16px;flex:0 0 16px}
+  .defeito-kit label b{white-space:nowrap}
+  .defeito-kit label .custo,.defeito-kit label .sem-custo{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:8px}
+  .defeito-kit label .sem-custo{color:#b91c1c}
+  .defeito-kit small{font-size:11px;color:var(--muted)}
+  @media (max-width:1000px){ .rec{grid-template-columns:1fr 1fr} .rec-nf{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center} .rec-link{margin:0 0 0 auto} }
+  @media (max-width:640px){ .rec{grid-template-columns:1fr} }
+  .composicao{display:flex;flex-direction:column;gap:8px}
+  .comp{display:grid;grid-template-columns:200px minmax(0,1fr) 110px;gap:12px;align-items:center;font-size:13px}
+  .comp .barra{height:10px;border-radius:5px;background:#eef0f3}
+  .comp .barra i{display:block;height:100%;border-radius:5px;background:#d93025}
+  .comp .barra.info i{background:#b9bcc2}
+  .comp b{text-align:right;font-variant-numeric:tabular-nums}
+
+  .duas{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px}
+  .tabela-rolagem{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:9px 8px;text-align:right;border-top:1px solid var(--line);vertical-align:middle}
+  th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  .prod{display:flex;align-items:center;gap:10px;min-width:220px}
+  .prod img{width:36px;height:36px;object-fit:contain;background:#f2f3f5;border-radius:6px;flex:0 0 36px}
+  .prod span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .taxa-alta{color:#8c1d18;font-weight:700}
+  .motivos{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .motivos li{font-size:13px}
+  .motivos .barra{height:8px;border-radius:4px;background:#eef0f3;margin-top:4px}
+  .motivos .barra i{display:block;height:100%;border-radius:4px;background:#2968c8}
+
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;
+    background:#eef0f3;color:#3c4043;white-space:nowrap;margin:2px 4px 2px 0}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}
+  .chip.azul{background:#e8f0fe;color:#1a4fa0}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}
+  .chip.vermelho{background:#fce8e6;color:#8c1d18}
+  td.esq{text-align:left}
+  td .pequeno{display:block;font-size:12px;color:var(--muted)}
+  @media (max-width:900px){
+    .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .duas{grid-template-columns:1fr}
+  }
+  @media (max-width:560px){
+    .cartoes{grid-template-columns:1fr}
+    .comp{grid-template-columns:1fr 90px}
+    .comp .barra{grid-column:1/-1;order:3}
+  }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Devoluções e reclamações</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+    <a href="/auth" id="addConta">+ conectar outra</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <div class="topo">
+    <p id="periodoTxt">Reclamações abertas no período, com o custo de cada uma.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="30" aria-pressed="true">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+      <button type="button" data-dias="180">180 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes">
+    <div class="cartao"><p class="rotulo">Devolvido aos compradores</p>
+      <div class="valor" id="vDevolvido">—</div><p class="nota" id="nDevolvido">&nbsp;</p></div>
+    <div class="cartao"><p class="rotulo">Custo das peças com defeito</p>
+      <div class="valor neg" id="vCusto">—</div><p class="nota" id="nCusto">&nbsp;</p></div>
+    <div class="cartao"><p class="rotulo">Crédito do Mercado Livre</p>
+      <div class="valor pos" id="vCredito">—</div><p class="nota" id="nCredito">&nbsp;</p></div>
+    <div class="cartao destaque" id="cResultado"><p class="rotulo">Resultado das devoluções</p>
+      <div class="valor" id="vResultado">—</div><p class="nota">crédito do ML − peças com defeito − fretes e tarifas</p></div>
+  </div>
+
+  <div class="faixa-status" id="faixaStatus"></div>
+
+  <section class="bloco">
+    <h2>Para onde foi o dinheiro</h2>
+    <p class="sub">Cada valor com a sua origem. O dinheiro devolvido ao comprador sai da própria venda (a venda é desfeita);
+      o que custa de verdade é o frete, as tarifas que não voltam e o produto que volta avariado ou não volta.</p>
+    <div class="extrato" id="extrato"><p class="carregando">Carregando… Na primeira vez pode levar alguns minutos (cada reclamação é consultada uma vez).</p></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Créditos do Mercado Livre por reclamação</h2>
+    <p class="sub">Depósitos no Mercado Pago com a descrição "Entrada de dinheiro correspondente a sua reclamação" — quando o produto
+      volta avariado e o ML decide a seu favor. O ML não informa de qual reclamação é cada crédito: a devolução aparece quando o valor bate exato.</p>
+    <div class="tabela-rolagem" id="creditos"></div>
+  </section>
+
+  <div class="duas">
+    <section class="bloco">
+      <h2>Anúncios que mais devolvem</h2>
+      <p class="sub">Taxa = reclamações ÷ vendas do anúncio no mesmo período.</p>
+      <div class="tabela-rolagem" id="anuncios"></div>
+    </section>
+    <section class="bloco">
+      <h2>Motivos</h2>
+      <p class="sub">O que os compradores alegaram.</p>
+      <ul class="motivos" id="motivos"></ul>
+    </section>
+  </div>
+
+  <section class="bloco">
+    <h2>Todas as reclamações do período</h2>
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="todas" aria-pressed="true">Todas</button>
+        <button type="button" data-f="abertas">Abertas</button>
+        <button type="button" data-f="returns">Devoluções</button>
+        <button type="button" data-f="mediations">Reclamações</button>
+      </div>
+    </div>
+    <div class="tabela-rolagem" id="lista"></div>
+  </section>
+
+  
+</main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+const numero = (n) => (n || 0).toLocaleString('pt-BR');
+const pct = (n) => (n == null ? '—' : (n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+const data = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '');
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+async function api(caminho, opts){
+  const r = await fetch(caminho, opts);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
+  return j;
+}
+
+// ---------- contas (igual às outras telas) ----------
+const selConta = $('selConta');
+async function carregarContas(){
+  try{
+    const { ativa, contas } = await api('/api/accounts');
+    selConta.innerHTML = '';
+    if(!contas.length){
+      selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —';
+      $('addConta').textContent = 'conectar Mercado Livre →'; return;
+    }
+    for(const c of contas){
+      const o = el('option', null, `${c.nickname} · ${c.site_id}`);
+      o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa;
+      selConta.appendChild(o);
+    }
+  }catch{ selConta.hidden = true; }
+}
+selConta.onchange = async () => {
+  await api('/api/accounts/active', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ ml_user_id: Number(selConta.value) }) });
+  location.reload();
+};
+
+let dias = 30, dados = null, filtro = 'todas';
+const marcar = (seg, attr, v) => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(v))); };
+$('segDias').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; dias = Number(b.dataset.dias); marcar($('segDias'), 'dias', dias); carregar(); };
+$('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; marcar($('segFiltro'), 'f', filtro); pintarLista(); };
+
+function sinal(v){ return (v > 0 ? '+ ' : v < 0 ? '− ' : '') + real(Math.abs(v || 0)); }
+
+function pintarCartoes(r){
+  const s = r.resumo;
+  $('vDevolvido').textContent = real(s.devolvido_comprador);
+  $('nDevolvido').textContent = `saiu das próprias vendas · ${numero(s.devolucoes)} devoluções, ${numero(s.reclamacoes)} reclamações`;
+  $('vCusto').textContent = '− ' + real(s.custo_total);
+  $('nCusto').textContent = `${numero(s.qtd_defeito)} peça(s) com defeito` + (s.nao_voltou ? ` + ${real(s.nao_voltou)} de produto que não voltou` : '')
+    + ` · ${numero(s.voltaram_bons)} voltaram bons (não somam)`;
+  $('vCredito').textContent = '+ ' + real(s.credito_ml);
+  $('nCredito').textContent = r.erro_creditos ? 'não consegui ler o Mercado Pago: ' + r.erro_creditos
+    : `${numero(r.creditos.length)} crédito(s) por reclamação no Mercado Pago`;
+  $('vResultado').textContent = sinal(s.resultado);
+  const f = $('faixaStatus'); f.innerHTML = '';
+  if(s.abertas) f.appendChild(el('span', 'chip ' + (s.com_acao ? 'vermelho' : 'amarelo'),
+    `${numero(s.abertas)} aberta(s)` + (s.com_acao ? ` · ${numero(s.com_acao)} esperando ação sua` : '')));
+  if(s.avariados) f.appendChild(el('span', 'chip amarelo', `${numero(s.avariados)} produto(s) o ML indicou como avariados/incompletos`));
+}
+
+function pintarExtrato(s){
+  const box = $('extrato'); box.innerHTML = '';
+  const linha = (rot, dica, v, cls, texto) => {
+    const l = el('div', 'ext' + (cls ? ' ' + cls : ''));
+    const r = el('span'); r.appendChild(document.createTextNode(rot)); if(dica) r.appendChild(el('small', null, dica));
+    l.append(r, el('b', v == null ? null : v < 0 ? 'neg' : v > 0 ? 'pos' : null, texto ?? sinal(v)));
+    box.appendChild(l);
+  };
+  linha('Devolvido aos compradores', 'dinheiro das próprias vendas que voltou ao comprador — a venda é desfeita, não é custo', null, 'info', real(s.devolvido_comprador));
+  linha('Estornado a você', 'frete de ida e tarifas do ML que voltaram para você nas vendas desfeitas', null, 'info', real(s.estornado_a_voce));
+  linha('Peças com defeito', `custo das ${numero(s.qtd_defeito)} peça(s) marcadas com defeito — não voltam à venda (tabela Produtos)`, -s.pecas_defeito);
+  linha('Produto que não voltou', 'dinheiro devolvido sem o produto voltar', -s.nao_voltou, 'sub1');
+  linha('Custo das devoluções', `produtos que voltaram em bom estado (${numero(s.voltaram_bons)}) voltam ao estoque e não somam`, -s.custo_total, 'total');
+  linha('Frete de volta cobrado', `o que o ML cobrou pelas etiquetas de devolução (sem desconto seriam ${real(s.frete_volta_cheio)})`, -s.frete_volta_cobrado);
+  linha('Frete de ida que não voltou', 'frete pago na venda e não estornado', -s.frete_ida_perdido, 'sub1');
+  linha('Tarifas que não voltaram', 'tarifa de venda e de recebimento não estornadas', -s.tarifas_perdidas, 'sub1');
+  linha('Crédito do Mercado Livre', 'depósitos "Entrada de dinheiro correspondente a sua reclamação"', s.credito_ml);
+  linha('Resultado', 'crédito do ML − peças com defeito − fretes e tarifas', s.resultado, 'total');
+}
+
+function pintarCreditos(r){
+  const box = $('creditos'); box.innerHTML = '';
+  if(r.erro_creditos){ box.appendChild(el('p', 'vazio', 'Não consegui ler os créditos no Mercado Pago: ' + r.erro_creditos)); return; }
+  if(!r.creditos.length){ box.appendChild(el('p', 'vazio', 'Nenhum crédito do Mercado Livre por reclamação no período.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Data', 'Valor', 'Descrição', 'Devolução']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const c of r.creditos){
+    const tr = el('tr');
+    const dev = el('td', 'esq');
+    if(c.reclamacao){
+      dev.appendChild(document.createTextNode(c.titulo || `pedido ${c.pedido}`));
+      dev.appendChild(el('span', 'pequeno', `reclamação ${c.reclamacao} · valor igual ao da venda`));
+    }else dev.appendChild(el('span', 'pequeno', 'não identificada (o ML não informa)'));
+    tr.append(el('td', null, data(c.data)), el('td', 'pos', '+ ' + real(c.valor)), el('td', 'esq', c.descricao), dev);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+function pintarAnuncios(r){
+  const box = $('anuncios'); box.innerHTML = '';
+  if(!r.anuncios.length){ box.appendChild(el('p', 'vazio', 'Nenhuma reclamação no período.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'Recl.', 'Vendas', 'Taxa', 'Custo']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const a of r.anuncios.slice(0, 15)){
+    const tr = el('tr');
+    const td = el('td'); const p = el('div', 'prod');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(a.foto) im.src = a.foto;
+    p.append(im, el('span', null, a.titulo || a.item_id)); td.appendChild(p);
+    const taxa = el('td', a.taxa != null && a.taxa >= 0.1 ? 'taxa-alta' : null, pct(a.taxa));
+    tr.append(td, el('td', null, numero(a.devolucoes + a.reclamacoes)), el('td', null, a.vendas == null ? '—' : numero(a.vendas)),
+      taxa, el('td', 'neg', '− ' + real(a.custo)));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+function pintarMotivos(r){
+  const ul = $('motivos'); ul.innerHTML = '';
+  if(!r.motivos.length){ ul.appendChild(el('li', 'vazio', 'Nenhuma reclamação no período.')); return; }
+  const teto = r.motivos[0].n;
+  for(const m of r.motivos.slice(0, 8)){
+    const li = el('li');
+    li.append(el('span', null, `${m.motivo} · ${m.n}`));
+    const b = el('div', 'barra'); const i = el('i'); i.style.width = (m.n / teto * 100) + '%'; b.appendChild(i);
+    li.appendChild(b); ul.appendChild(li);
+  }
+}
+
+// Uma reclamação por cartão, em três blocos (produto e situação · dinheiro · nota fiscal):
+// cabe na largura da tela sem rolagem lateral; em tela estreita os blocos empilham.
+function pintarLista(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const itens = dados.itens.filter((x) => filtro === 'todas' || (filtro === 'abertas' ? x.aberta : x.tipo === filtro));
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
+  const lista = el('div', 'rec-lista');
+  for(const x of itens){
+    const card = el('article', 'rec');
+
+    // --- bloco 1: produto, motivo e situação ---
+    const b1 = el('div', 'rec-prod');
+    const topo = el('div', 'prod');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(x.foto) im.src = x.foto;
+    const nome = el('div');
+    nome.appendChild(el('b', 'rec-titulo', x.titulo || x.item_id || `pedido ${x.pedido}`));
+    nome.appendChild(el('span', 'pequeno', `${data(x.criada_em)} · pedido ${x.pedido || '—'}` + (x.quantidade > 1 ? ` · ${x.quantidade} un.` : '')));
+    topo.append(im, nome);
+    b1.appendChild(topo);
+    b1.appendChild(el('p', 'rec-motivo', x.motivo || '—'));
+    const chips = el('div', 'rec-chips');
+    chips.appendChild(el('span', 'chip ' + (x.tipo === 'returns' ? 'azul' : 'amarelo'), x.tipo_nome));
+    if(x.aberta) chips.appendChild(el('span', 'chip vermelho', x.acoes_pendentes.length ? 'Aberta · ação sua' : 'Aberta'));
+    else chips.appendChild(el('span', 'chip', x.a_favor_do_vendedor ? 'Encerrada a seu favor' : 'Encerrada'));
+    if(x.status_devolucao) chips.appendChild(el('span', 'chip', x.status_devolucao));
+    if(x.revisao?.motivo) chips.appendChild(el('span', 'chip ' + (x.revisao.a_favor ? 'verde' : 'amarelo'),
+      `${x.revisao.motivo}${x.revisao.a_favor ? ' · revisão a seu favor' : ''}`));
+    b1.appendChild(chips);
+    if(x.mensagem_ml?.titulo){
+      const m = el('p', 'msg-ml', 'ML: ' + x.mensagem_ml.titulo);
+      if(x.mensagem_ml.descricao) m.title = x.mensagem_ml.descricao;
+      b1.appendChild(m);
+    }
+
+    // --- bloco 2: dinheiro, uma linha por valor ---
+    const b2 = el('dl', 'rec-din');
+    const par = (rot, valor, cls, nota) => {
+      const dt = el('dt', null, rot);
+      const dd = el('dd', cls || null, valor);
+      if(nota) dd.appendChild(el('small', null, nota));
+      b2.append(dt, dd);
+    };
+    par('Venda', real(x.valor_venda));
+    par('Devolvido ao comprador', real(x.devolvido_comprador));
+    par('Frete de volta', x.frete_volta_cobrado ? '− ' + real(x.frete_volta_cobrado) : real(0), x.frete_volta_cobrado ? 'neg' : null,
+      x.frete_volta_cheio ? `sem desconto ${real(x.frete_volta_cheio)}` : null);
+    const fretesTxt = [
+      x.custo.frete_ida_perdido && `frete de ida ${real(x.custo.frete_ida_perdido)}`,
+      x.custo.tarifas_perdidas && `tarifas ${real(x.custo.tarifas_perdidas)}`,
+    ].filter(Boolean);
+    if(fretesTxt.length) par('Frete e tarifas perdidos', '− ' + real(x.custo.frete_ida_perdido + x.custo.tarifas_perdidas), 'neg', fretesTxt.join(' · '));
+    const comDefeito = (x.custo.produtos_defeito || []).map((i) => x.componentes[i]?.sku).filter(Boolean);
+    par('Peça com defeito', x.custo.total ? '− ' + real(x.custo.total) : real(0), x.custo.total ? 'neg' : null,
+      x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
+        : x.custo.defeito ? 'não volta à venda' : null);
+    par('Crédito do ML', x.credito_ml ? '+ ' + real(x.credito_ml.valor) : '—', x.credito_ml ? 'pos' : null,
+      x.credito_ml ? `em ${data(x.credito_ml.data)}` : null);
+    const res = x.custo.resultado;
+    par('Resultado', (res > 0 ? '+ ' : res < 0 ? '− ' : '') + real(Math.abs(res || 0)), 'rec-res ' + (res < 0 ? 'neg' : res > 0 ? 'pos' : ''));
+
+    // --- bloco 3: notas fiscais e link ---
+    const b3 = el('div', 'rec-nf');
+    const v = x.nf_venda, d = x.nf_devolucao;
+    if(v && v.encontrada){
+      b3.appendChild(el('span', 'chip ' + (v.status === 'authorized' ? 'verde' : 'vermelho'),
+        `NF venda nº ${v.numero}` + (v.status === 'authorized' ? '' : ` (${v.status === 'canceled' ? 'cancelada' : v.status})`)));
+      if(v.chave){
+        const ch = el('button', 'chave', 'copiar chave'); ch.type = 'button'; ch.title = v.chave;
+        ch.onclick = async () => { try{ await navigator.clipboard.writeText(v.chave); ch.textContent = 'chave copiada'; }catch{ prompt('Chave da nota:', v.chave); } };
+        b3.appendChild(ch);
+      }
+    }else if(v){
+      b3.appendChild(el('span', 'chip', 'Venda: sem nota no ML'));
+    }
+    // Em TODA reclamação (qualquer motivo, tenha o produto voltado ou não) o vendedor marca se
+    // o produto está com defeito (não volta à venda). Só a peça marcada entra no custo. Sem
+    // marcação, vale a sugestão da revisão do ML quando o produto já voltou.
+    const voltou = ['Entregue ao vendedor', 'A caminho', 'Encerrada'].includes(x.status_devolucao);
+    const pecas = x.componentes || [];
+    if(pecas.length > 1){
+      // Kit: cada produto do anúncio tem a sua caixa; só os marcados somam no prejuízo.
+      const marcadas = new Set(x.custo.produtos_defeito || (x.custo.defeito ? pecas.map((_, i) => i) : []));
+      const grupo = el('fieldset', 'defeito-kit');
+      grupo.appendChild(el('legend', null, 'Quais produtos voltaram com defeito?'));
+      if(x.defeito_marcado == null && x.defeito_sugerido && voltou) grupo.appendChild(el('small', null, 'a revisão do ML apontou defeito: confira quais peças'));
+      if(x.defeito_marcado == null && x.custo.nao_voltou) grupo.appendChild(el('small', null, 'o produto não voltou: hoje conta o kit inteiro como perdido. Marque as peças para contar só elas.'));
+      const caixas = pecas.map((p, i) => {
+        const lab = el('label');
+        const ck = el('input'); ck.type = 'checkbox'; ck.checked = marcadas.has(i);
+        lab.append(ck, el('b', null, p.sku), document.createTextNode(' ' + (p.nome || 'fora da tabela de produtos')),
+          el('span', p.custo == null ? 'sem-custo' : 'custo', p.custo == null ? 'sem custo' : real(p.custo)));
+        grupo.appendChild(lab);
+        return ck;
+      });
+      if(x.quantidade > 1) grupo.appendChild(el('small', null, `${x.quantidade} unidades devolvidas: o custo de cada peça marcada conta ${x.quantidade}×.`));
+      for(const ck of caixas) ck.onchange = async () => {
+        caixas.forEach((c) => { c.disabled = true; });
+        try{
+          await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ produtos: caixas.map((c, i) => (c.checked ? i : -1)).filter((i) => i >= 0) }) });
+          carregar(true);
+        }catch(e){ ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; caixas.forEach((c) => { c.disabled = false; }); }
+      };
+      b3.appendChild(grupo);
+    }else{
+      const lab = el('label', 'defeito');
+      const ck = el('input'); ck.type = 'checkbox'; ck.checked = !!x.custo.defeito;
+      lab.append(ck, document.createTextNode(' Produto com defeito (não volta à venda)'));
+      if(x.defeito_marcado == null && x.defeito_sugerido && voltou) lab.appendChild(el('small', null, 'sugerido pela revisão do ML'));
+      ck.onchange = async () => {
+        ck.disabled = true;
+        try{
+          await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ defeito: ck.checked }) });
+          carregar(true);
+        }catch(e){ ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; ck.disabled = false; }
+      };
+      b3.appendChild(lab);
+    }
+    const a = el('a', 'rec-link', 'Abrir no Mercado Livre ↗'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener';
+    b3.appendChild(a);
+
+    card.append(b1, b2, b3);
+    lista.appendChild(card);
+  }
+  box.appendChild(lista);
+}
+
+// silencioso: recarrega depois de marcar um defeito, sem apagar a tela nem perder a rolagem
+async function carregar(silencioso){
+  $('msg').style.display = 'none';
+  if(!silencioso){
+    $('extrato').innerHTML = '';
+    $('extrato').appendChild(el('p', 'carregando', 'Carregando… Na primeira vez pode levar alguns minutos (cada reclamação é consultada uma vez).'));
+  }
+  const rolagem = window.scrollY;
+  try{
+    const r = await api(`/api/devolucoes?dias=${dias}`);
+    dados = r;
+    $('periodoTxt').textContent = `Reclamações abertas de ${data(r.de)} a ${data(r.ate)}.`;
+    pintarCartoes(r); pintarExtrato(r.resumo); pintarCreditos(r); pintarAnuncios(r); pintarMotivos(r); pintarLista();
+    if(silencioso) window.scrollTo(0, rolagem);
+  }catch(e){
+    $('msg').textContent = e.message; $('msg').style.display = 'block';
+    $('extrato').innerHTML = '';
+  }
+}
+
+carregarContas();
+carregar();
+</script>
+<script src="/aviso.js" defer></script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

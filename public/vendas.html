@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vendas</title>
+<style>
+  :root{--bg:#f2f3f5;--card:#fff;--ink:#1a1a1a;--muted:#5f6368;--line:#e0e2e6;
+    --brand:#2968c8;--ok:#00a650;--err:#d93025;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1240px;margin:0 auto;padding:24px 16px 72px;width:100%}
+  h2{font-size:16px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+  a{color:var(--brand)}
+  section.bloco{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+  .topo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .topo p{margin:0;font-size:13px;color:var(--muted)}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:9px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid #d5d7db}
+  .seg button[aria-pressed="true"]{background:#1a1a1a;color:#fff}
+  #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px;
+    background:#fce8e6;color:#8c1d18;border:1px solid #f0b3ad}
+  .vazio,.carregando{color:var(--muted);font-size:14px;margin:0;padding:8px 0}
+
+  .cartoes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+  .cartao{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .cartao .rotulo{font-size:13px;color:var(--muted);margin:0 0 6px}
+  .cartao .valor{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+  .cartao .nota{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .cartao.destaque{background:#17181a;border-color:#17181a;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#b9bcc2}
+
+  .alerta{background:#fff8e1;border:1px solid #f3d27a;border-radius:12px;padding:14px 18px;margin-bottom:20px}
+  .alerta h2{color:#7a5600}
+  .alerta ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+  .alerta li{margin:3px 0}
+
+  .composicao{display:flex;flex-direction:column;gap:8px}
+  .comp{display:grid;grid-template-columns:170px minmax(0,1fr) 120px 60px;gap:12px;align-items:center;font-size:13px}
+  .comp .barra{height:10px;border-radius:5px;background:#eef0f3}
+  .comp .barra i{display:block;height:100%;border-radius:5px;background:#2968c8}
+  .comp.lucro .barra i{background:#00a650}
+  .comp b,.comp span.p{text-align:right;font-variant-numeric:tabular-nums}
+  .comp span.p{color:var(--muted)}
+
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .filtros input{font:inherit;font-size:14px;padding:7px 12px;border:1px solid #d5d7db;border-radius:8px;min-width:240px}
+  .tabela-rolagem{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 7px;text-align:right;border-top:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+  th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;position:sticky;top:0;background:#fff}
+  th:first-child,td:first-child{text-align:left}
+  td.esq{text-align:left}
+  .prod{display:flex;align-items:center;gap:10px;min-width:240px;max-width:340px;white-space:normal}
+  .prod img{width:36px;height:36px;object-fit:contain;background:#f2f3f5;border-radius:6px;flex:0 0 36px}
+  .prod span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .pequeno{display:block;font-size:11px;color:var(--muted)}
+  .neg{color:#b3261e;font-weight:700}
+  .pos{color:#0b6b33;font-weight:700}
+  tr.cancelada td{opacity:.5}
+  .chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11px;
+    background:#eef0f3;color:#3c4043;white-space:nowrap}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}
+  .mais{margin-top:12px;text-align:center}
+  button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;
+    border:1px solid #d5d7db;background:#fff;color:var(--ink)}
+  @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media (max-width:560px){
+    .cartoes{grid-template-columns:1fr}
+    .comp{grid-template-columns:1fr 100px 50px}
+    .comp .barra{grid-column:1/-1;order:4}
+  }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1 id="tituloPagina">Pedidos</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+    <a href="/auth" id="addConta">+ conectar outra</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <div class="topo">
+    <p id="periodoTxt">Cada venda com frete, tarifa, imposto, custo do produto, embalagem e margem.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="1">Hoje</button>
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30" aria-pressed="true">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes">
+    <div class="cartao destaque"><p class="rotulo">Lucro</p>
+      <div class="valor" id="vLucro">—</div><p class="nota" id="nLucro">&nbsp;</p></div>
+    <div class="cartao"><p class="rotulo">Faturamento</p>
+      <div class="valor" id="vFat">—</div><p class="nota" id="nFat">&nbsp;</p></div>
+    <div class="cartao"><p class="rotulo">Margem</p>
+      <div class="valor" id="vMargem">—</div><p class="nota" id="nMargem">&nbsp;</p></div>
+    <div class="cartao"><p class="rotulo">Ticket médio</p>
+      <div class="valor" id="vTicket">—</div><p class="nota" id="nTicket">&nbsp;</p></div>
+  </div>
+
+  <div class="alerta" id="alerta" hidden>
+    <h2 id="tAlerta">Anúncios vendidos sem custo do produto</h2>
+    <p class="sub">Essas vendas ficam sem lucro calculado. Cadastre o custo dos componentes na tabela de produtos, ou o SKU no anúncio, em <a href="/empresa.html">Empresa e custos</a>.</p>
+    <ul id="listaAlerta"></ul>
+  </div>
+
+  <section class="bloco">
+    <h2>Para onde vai o dinheiro</h2>
+    <p class="sub" id="subComp">Somando as vendas do período (cancelamentos fora).</p>
+    <div class="composicao" id="composicao"><p class="carregando">Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.</p></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Todas as vendas</h2>
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por título, SKU, MLB ou nº do pedido" aria-label="Buscar venda">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="todas" aria-pressed="true">Todas</button>
+        <button type="button" data-f="prejuizo">Com prejuízo</button>
+        <button type="button" data-f="semcusto">Sem custo</button>
+        <button type="button" data-f="full">Full</button>
+        <button type="button" data-f="canceladas">Canceladas</button>
+      </div>
+    </div>
+    <div class="tabela-rolagem" id="lista"></div>
+    <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
+  </section>
+
+  
+</main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+const numero = (n) => (n || 0).toLocaleString('pt-BR');
+const pct = (n) => (n == null ? '—' : (n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+const dataHora = (iso) => new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+async function api(caminho, opts){
+  const r = await fetch(caminho, opts);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
+  return j;
+}
+
+const selConta = $('selConta');
+async function carregarContas(){
+  try{
+    const { ativa, contas } = await api('/api/accounts');
+    selConta.innerHTML = '';
+    if(!contas.length){ selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —';
+      $('addConta').textContent = 'conectar Mercado Livre →'; return; }
+    for(const c of contas){
+      const o = el('option', null, `${c.nickname} · ${c.site_id}`);
+      o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa; selConta.appendChild(o);
+    }
+  }catch{ selConta.hidden = true; }
+}
+selConta.onchange = async () => {
+  await api('/api/accounts/active', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ ml_user_id: Number(selConta.value) }) });
+  location.reload();
+};
+
+// Vendas Hoje = esta tela com ?dias=1 (menu); Pedidos = a mesma tela no período.
+const diasUrl = Number(new URLSearchParams(location.search).get('dias'));
+let dias = [1, 7, 15, 30, 60, 90].includes(diasUrl) ? diasUrl : 30, dados = null, filtro = 'todas', mostrar = 100;
+if(dias === 1){ document.title = 'Vendas Hoje'; }
+function tituloTela(){ $('tituloPagina').textContent = dias === 1 ? 'Vendas de hoje' : 'Pedidos'; }
+tituloTela();
+for(const b of document.querySelectorAll('#segDias button')) b.setAttribute('aria-pressed', String(b.dataset.dias === String(dias)));
+const marcar = (seg, attr, v) => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(v))); };
+$('segDias').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; dias = Number(b.dataset.dias); marcar($('segDias'), 'dias', dias); tituloTela(); carregar(); };
+$('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; marcar($('segFiltro'), 'f', filtro); mostrar = 100; pintarLista(); };
+$('busca').oninput = () => { mostrar = 100; pintarLista(); };
+$('btMais').onclick = () => { mostrar += 200; pintarLista(); };
+
+function pintarResumo(r){
+  const s = r.resumo;
+  $('vLucro').textContent = real(s.lucro);
+  $('nLucro').textContent = s.cobertura != null && s.cobertura < 0.999
+    ? `sobre ${pct(s.cobertura)} do faturamento (o resto está sem custo)` : 'depois de todos os custos';
+  $('vFat').textContent = real(s.faturamento);
+  $('nFat').textContent = `${numero(s.pedidos)} pedidos · ${numero(s.unidades)} unidades`;
+  $('vMargem').textContent = pct(s.margem);
+  $('nMargem').textContent = `imposto de ${String(r.imposto_pct).replace('.', ',')}% aplicado`;
+  $('vTicket').textContent = real(s.pedidos ? s.faturamento / s.pedidos : 0);
+  $('nTicket').textContent = s.cancelados ? `${numero(s.cancelados)} linha(s) cancelada(s) fora da conta` : 'nenhum cancelamento';
+
+  const box = $('composicao'); box.innerHTML = '';
+  const partes = [
+    ['Tarifa do Mercado Livre', s.tarifa], ['Frete pago por você', s.frete], ['Imposto', s.imposto],
+    ['Custo do produto', s.produto], ['Embalagem e outros', s.embalagem], ['Lucro', s.lucro, true],
+  ];
+  const teto = Math.max(...partes.map((p) => Math.abs(p[1] || 0)), 1);
+  for(const [rot, v, ehLucro] of partes){
+    const l = el('div', 'comp' + (ehLucro ? ' lucro' : ''));
+    const b = el('div', 'barra'); const i = el('i'); i.style.width = (Math.abs(v || 0) / teto * 100) + '%'; b.appendChild(i);
+    l.append(el('span', null, rot), b, el('b', ehLucro && v < 0 ? 'neg' : null, real(v)),
+      el('span', 'p', s.faturamento ? pct((v || 0) / s.faturamento) : '—'));
+    box.appendChild(l);
+  }
+  if(r.fretes_pendentes){
+    box.appendChild(el('p', 'sub', `Ainda faltam ${numero(r.fretes_pendentes)} envios com frete a consultar. Atualize a página para continuar (o que já foi lido fica guardado).`));
+  }
+
+  const al = $('alerta');
+  $('listaAlerta').innerHTML = '';
+  if(r.sem_custo.length){
+    $('tAlerta').textContent = `${numero(r.sem_custo.length)} anúncio(s) vendidos sem custo do produto`;
+    for(const x of r.sem_custo.slice(0, 15)){
+      const motivo = !x.sku ? 'anúncio sem SKU' : x.faltando.length ? `sem custo na tabela: ${x.faltando.join(', ')}` : `SKU ${x.sku} sem os números dos produtos`;
+      $('listaAlerta').appendChild(el('li', null, `${x.titulo || x.item_id} (${x.item_id}) · ${numero(x.vendas)} venda(s) · ${motivo}`));
+    }
+    if(r.sem_custo.length > 15) $('listaAlerta').appendChild(el('li', null, `e mais ${r.sem_custo.length - 15}…`));
+    al.hidden = false;
+  }else al.hidden = true;
+}
+
+function pintarLista(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  const itens = dados.vendas.filter((v) => {
+    if(filtro === 'canceladas' && v.valida) return false;
+    if(filtro !== 'canceladas' && filtro !== 'todas' && !v.valida) return false;
+    if(filtro === 'prejuizo' && !(v.lucro < 0)) return false;
+    if(filtro === 'semcusto' && v.custo_unit != null) return false;
+    if(filtro === 'full' && !v.full) return false;
+    if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido)].some((t) => (t || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'Data', 'Qtd', 'Faturamento', 'Tarifa', 'Frete', 'Imposto', 'Custo produto', 'Embalagem', 'Lucro', 'Margem', ''])
+    cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const v of itens.slice(0, mostrar)){
+    const tr = el('tr', v.valida ? null : 'cancelada');
+    const td = el('td'); const p = el('div', 'prod');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(v.foto) im.src = v.foto;
+    const nome = el('span'); nome.appendChild(document.createTextNode(v.titulo || v.item_id));
+    const info = el('span', 'pequeno', `${v.full ? 'FULL · ' : ''}${v.sku || 'sem SKU'} · pedido ${v.pedido}` + (v.valida ? '' : ` · ${v.status === 'cancelled' ? 'cancelada' : v.status}`));
+    const caixa = el('div'); caixa.append(nome, info);
+    p.append(im, caixa); td.appendChild(p);
+
+    const prodTd = el('td');
+    if(v.custo_unit == null) prodTd.appendChild(el('span', 'chip amarelo', 'sem custo'));
+    else{
+      prodTd.appendChild(document.createTextNode(real(v.produto)));
+      if(v.componentes.length > 1) prodTd.title = v.componentes.map((c) => `${c.sku}: ${real(c.custo)}`).join('\n');
+      prodTd.appendChild(el('span', 'pequeno', `${real(v.custo_unit)}/un.`));
+    }
+    const freteTd = el('td', null, v.frete == null ? '…' : real(v.frete));
+    if(v.frete == null) freteTd.title = 'Frete ainda não consultado';
+    const lucroTd = el('td', v.lucro == null ? null : v.lucro < 0 ? 'neg' : 'pos', v.lucro == null ? '—' : real(v.lucro));
+    const link = el('td'); const a = el('a', null, 'Ver'); a.href = v.link; a.target = '_blank'; a.rel = 'noopener'; link.appendChild(a);
+    const fat = el('td'); fat.appendChild(document.createTextNode(real(v.faturamento)));
+    if(v.quantidade > 1) fat.appendChild(el('span', 'pequeno', `${real(v.preco_unit)}/un.`));
+    tr.append(td, el('td', null, dataHora(v.data)), el('td', null, numero(v.quantidade)), fat,
+      el('td', null, real(v.tarifa)), freteTd, el('td', null, real(v.imposto)), prodTd,
+      el('td', null, real(v.embalagem)), lucroTd, el('td', v.margem != null && v.margem < 0 ? 'neg' : null, pct(v.margem)), link);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  $('btMais').hidden = itens.length <= mostrar;
+  $('btMais').textContent = `Mostrar mais (${numero(itens.length - mostrar)} restantes)`;
+}
+
+async function carregar(){
+  $('msg').style.display = 'none';
+  $('composicao').innerHTML = '';
+  $('composicao').appendChild(el('p', 'carregando', 'Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.'));
+  $('lista').innerHTML = '';
+  try{
+    const r = await api(`/api/vendas?dias=${dias}`);
+    dados = r;
+    const d = (iso) => new Date(iso).toLocaleDateString('pt-BR');
+    $('periodoTxt').textContent = dias === 1 ? 'Vendas de hoje, com todos os custos.'
+      : `Vendas de ${d(r.de)} até agora, com todos os custos.`;
+    pintarResumo(r); pintarLista();
+  }catch(e){
+    $('msg').textContent = e.message; $('msg').style.display = 'block'; $('composicao').innerHTML = '';
+  }
+}
+
+carregarContas();
+carregar();
+</script>
+<script src="/aviso.js" defer></script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

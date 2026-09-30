@@ -1,0 +1,171 @@
+/* ============================================================
+   TEMA DO PAINEL — lateral branca, azul da marca, cartões claros
+   Carregado DEPOIS de layout.css e tema-hn.css: o que está aqui vence.
+   Referência: dashboard com menu claro, item ativo em pílula azul-clara,
+   cartões brancos de canto 14px e botões azuis sólidos.
+   ============================================================ */
+
+:root{
+  --marca-azul:#2563eb;
+  --marca-azul-escuro:#1d4ed8;
+  --marca-azul-claro:#e8efff;
+  --marca-agua:#0ea5e9;
+
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --overlay:#f7f9fc;
+  --ink:#16213a;
+  --muted:#5f6b7f;
+  --faint:#8a94a6;
+  --line:#e3e8f0;
+  --softline:#eef2f7;
+  --brand:#2563eb;
+  --ok:#16a34a;
+  --err:#dc2626;
+  --warn:#d97706;
+
+  --grad:linear-gradient(135deg,#3b82f6 0%,#2563eb 60%,#1d4ed8 100%);
+  --radius:12px;
+  --panel:16px;
+}
+
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Arial,sans-serif;
+}
+body::before{display:none}
+
+/* ---------------- lateral ---------------- */
+.lateral{
+  background:#fff;
+  color:var(--ink);
+  border-right:1px solid var(--line);
+  padding:18px 14px;
+  width:244px;flex-basis:244px;
+}
+.marca{padding:4px 6px 18px;justify-content:center}
+.marca-logo-painel{display:block;width:100%;max-width:190px;height:auto;max-height:110px;object-fit:contain}
+.marca-nome{display:block;font-size:17px;font-weight:800;line-height:1.2;color:var(--marca-azul-escuro);text-align:center;letter-spacing:-.01em}
+.marca-logo,.marca-texto,.lateral-pe{display:none}
+
+.lateral nav{gap:3px}
+.lateral nav a{
+  color:#3a4459;border:0;border-radius:10px;
+  padding:10px 12px;font-weight:500;
+}
+.lateral nav a svg{color:#56627a}
+.lateral nav a:hover{background:#f2f5fa;color:var(--ink);border:0}
+.lateral nav a[aria-current]{
+  background:var(--marca-azul-claro);
+  color:var(--marca-azul);
+  font-weight:600;border:0;
+}
+.lateral nav a[aria-current] svg{color:var(--marca-azul)}
+.lateral nav a[aria-current]::before{display:none}
+.lateral nav a:focus-visible{outline:2px solid var(--marca-azul);outline-offset:2px}
+.lateral .nav-sep{border:0;border-top:1px solid var(--line);margin:10px 4px}
+
+/* ---------------- cabeçalho ---------------- */
+header{
+  background:var(--bg);
+  backdrop-filter:none;
+  border-bottom:0;
+  padding:18px 28px 6px;
+}
+header h1{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+#barraContas select{border-radius:10px;border-color:var(--line);background:#fff}
+#barraContas a{border-radius:999px;border-color:transparent;background:#fff;color:var(--ink);
+  box-shadow:0 1px 3px rgba(16,24,40,.08)}
+#barraContas a:hover{background:#f2f5fa;border-color:transparent}
+
+main{padding-top:14px}
+
+/* ---------------- controles ---------------- */
+input,select,textarea{border-color:#d9e0ea}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid rgba(37,99,235,.45);outline-offset:1px}
+
+button{background:var(--marca-azul);color:#fff;font-weight:600;border-radius:10px}
+button:hover{background:var(--marca-azul-escuro);filter:none}
+button.ghost{background:#fff;color:var(--marca-azul);border:1px solid var(--line)}
+button.ghost:hover{background:var(--marca-azul-claro);border-color:#c9d8fb}
+button.perigo{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+
+/* botões e segmentos das telas novas (Vendas, Promoções, Devoluções, Empresa, Produtos) */
+button.bt{border-radius:10px;border-color:var(--line);background:#fff;color:var(--ink)}
+button.bt:hover{background:#f2f5fa}
+button.bt.primario{background:var(--marca-azul);border-color:var(--marca-azul);color:#fff}
+button.bt.primario:hover{background:var(--marca-azul-escuro)}
+button.bt.perigo{background:#fff;color:#b91c1c;border-color:#fecaca}
+button.bt.perigo:hover{background:#fef2f2}
+.seg{border-color:var(--line);border-radius:10px}
+.seg button{background:#fff;color:var(--ink)}
+.seg button:hover{background:#f2f5fa}
+.seg button+button{border-left-color:var(--line)}
+.seg button[aria-pressed="true"]{background:var(--marca-azul);color:#fff}
+button.recarregar{border-radius:10px}
+
+/* ---------------- cartões ---------------- */
+section.bloco,.painel,.item,#ads,.cartao,.kpi,.det-bloco{
+  border-color:var(--line);
+  border-radius:14px;
+  box-shadow:0 1px 3px rgba(16,24,40,.06);
+}
+.painel{border-radius:16px}
+.item:hover{border-color:#c9d8fb;box-shadow:0 6px 20px rgba(37,99,235,.10)}
+.item.aberto{border-color:#c9d8fb}
+.item.aberto::before{background:var(--marca-azul)}
+.vazio{border-radius:14px}
+
+/* indicador principal: azul da marca em vez do preto */
+.cartao.destaque{
+  background:linear-gradient(135deg,#3b82f6,#1d4ed8);
+  border-color:transparent;color:#fff;
+}
+.cartao.destaque .rotulo,.cartao.destaque .nota{color:#dbe7ff}
+.cartao.destaque .chip{background:rgba(255,255,255,.18);color:#fff}
+.cartao .valor{letter-spacing:-.02em}
+.kpi.destaque{border-color:#c9d8fb;background:linear-gradient(180deg,#eef4ff,#fff)}
+.kpi.destaque .val{color:var(--marca-azul-escuro)}
+
+/* chips de variação (verde/vermelho), como no print */
+.chip.sobe{background:#dcfce7;color:#15803d}
+.chip.desce{background:#fee2e2;color:#b91c1c}
+
+/* gráficos das telas novas */
+.barra .haste{background:#bfd3fb}
+.barra.hoje .haste{background:var(--marca-azul)}
+.comp .barra i{background:var(--marca-azul)}
+.comp.lucro .barra i{background:var(--ok)}
+.barra-part i,.motivos .barra i{background:var(--marca-azul)}
+.sc-nota b{background:var(--grad);-webkit-background-clip:text;background-clip:text}
+.saude i,.sc-barra i{background:var(--grad)}
+
+/* estados */
+.statusTexto.active{color:var(--ok)}
+.statusTexto.paused{color:var(--warn)}
+.selo.active{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+.selo.paused{background:#fef3c7;color:#b45309;border-color:#fde68a}
+#msg.ok{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+#msg.err,#msg.erro{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+
+/* modais */
+dialog{border-radius:16px;border-color:var(--line);box-shadow:0 24px 60px rgba(16,24,40,.25)}
+.btnAnalise[aria-expanded="true"]{background:var(--marca-azul-claro);border-color:#c9d8fb;color:var(--marca-azul)}
+.tabPos tr.este td{background:var(--marca-azul-claro);color:var(--marca-azul-escuro)}
+.tabPos .marca.este{background:var(--marca-azul);color:#fff}
+
+/* crédito do painel original: substituído pela identidade da empresa (menu.js) */
+.hn-credito{display:none}
+
+/* ---------------- celular ---------------- */
+@media (max-width:900px){
+  /* faixa no topo: ocupa a largura da tela e rola por dentro (align-self:flex-start do
+     layout.css fazia a faixa crescer até caber todos os itens e empurrava a página) */
+  .lateral{width:auto;flex-basis:auto;border-right:0;border-bottom:1px solid var(--line);padding:10px 12px;
+    align-self:stretch;max-width:100vw;overflow-x:auto}
+  .marca{padding:0 8px 0 0}
+  .marca-logo-painel{width:96px}
+  .lateral .nav-sep{display:none}
+  header{padding:14px 16px 4px}
+}

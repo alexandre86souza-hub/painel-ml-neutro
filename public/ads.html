@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Histórico ADS</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  table.comp td b{display:block;font-weight:700}
+  table.comp td .chip{margin-top:3px}
+  table.comp td{vertical-align:top}
+  .filtro-campanha{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-left:auto}
+  .filtro-campanha select{font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;max-width:280px}
+  .kpi-campanha .valor{font-size:17px;line-height:1.25}
+  .grafico .col.mudou::after{content:'';position:absolute;top:-2px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#dc2626}
+  button.link-campanha{font:inherit;background:none;border:0;padding:0;color:var(--brand);cursor:pointer;text-align:left;font-weight:600}
+  button.link-campanha:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Histórico ADS</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="periodoTxt">Mercado Ads (Product Ads), dia a dia. O ML fecha os dados do dia anterior às 10h.</p>
+    <label class="filtro-campanha">Campanha
+      <select id="selCampanha" aria-label="Filtrar por campanha"><option value="">Todas as campanhas</option></select>
+    </label>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes" id="cartoes"></div>
+
+  <section class="bloco">
+    <h2>Comparativo: o ADS está crescendo ou diminuindo?</h2>
+    <p class="sub" id="compSub">Os últimos 7, 15, 30, 60 e 90 dias, cada um com a média por dia e a comparação com o período de mesmo tamanho logo antes.</p>
+    <div class="tabela-rolagem" id="comparativo"><p class="carregando">Carregando…</p></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Investimento e receita por dia</h2>
+    <p class="sub">Laranja: investimento. Azul: receita com ADS. Passe o mouse para ver o dia.</p>
+    <div class="grafico" id="grafico"><p class="carregando">Carregando…</p></div>
+    <div class="eixo" id="eixo"></div>
+    <div class="legenda"><span><i style="background:#f59e0b"></i>Investimento</span><span><i style="background:#2563eb"></i>Receita</span><span><i style="background:#dc2626;border-radius:50%"></i>Dia com mudança em campanha</span></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Mudanças nas campanhas no período</h2>
+    <p class="sub" id="mudSub">ROAS objetivo, orçamento diário, situação e estratégia: o que mudou e quando.</p>
+    <div class="tabela-rolagem" id="mudancas"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Dia a dia</h2>
+    <div class="tabela-rolagem" id="dias"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Campanhas no período</h2>
+    <div class="tabela-rolagem" id="campanhas"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=1"></script>
+<script>
+let dias = 30, campanha = '', campanhasCarregadas = false;
+const SITUACAO_ADS = { active: 'ativa', paused: 'pausada', hold: 'em espera', idle: 'parada' };
+const ESTRATEGIA_ADS = { PROFITABILITY: 'Rentabilidade', INCREASE: 'Crescimento', VISIBILITY: 'Visibilidade' };
+// valor de uma mudança, legível: R$ no orçamento, "x" no ROAS, nomes na situação/estratégia
+function valorMudanca(campo, v){
+  if(v == null || v === '') return '—';
+  if(campo === 'orcamento') return real(Number(v));
+  if(campo === 'roas_alvo') return Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x';
+  if(campo === 'status') return SITUACAO_ADS[v] || v;
+  if(campo === 'estrategia') return ESTRATEGIA_ADS[v] || v;
+  return v;
+}
+const diaHora = (iso) => new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+const razao = (v) => (v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }));
+function kpi(rot, valor, nota){ const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); return c; }
+function tabela(alvo, cols, linhas){
+  const box = $(alvo); box.innerHTML = '';
+  if(!linhas.length){ box.appendChild(el('p', 'vazio', 'Nada no período.')); return; }
+  const t = el('table'); const cab = el('tr'); for(const h of cols) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody'); for(const l of linhas){ const tr = el('tr'); for(const c of l) tr.appendChild(c instanceof Node ? c : el('td', null, c)); tb.appendChild(tr); }
+  t.appendChild(tb); box.appendChild(t);
+}
+// Seta de variação contra o período anterior. No custo, subir não é "bom": fica neutra (azul).
+function seta(v, tipo){
+  if(v == null) return el('span', 'chip', 'sem base');
+  const sobe = v > 0.005, desce = v < -0.005;
+  const cls = tipo === 'custo' ? (sobe || desce ? 'azul' : '') : sobe ? 'sobe' : desce ? 'desce' : '';
+  return el('span', 'chip ' + cls, `${sobe ? '▲' : desce ? '▼' : '='} ${pct(Math.abs(v), 0)}`);
+}
+function celComp(valor, porDia, v, tipo){
+  const td = el('td');
+  td.append(el('b', null, valor), el('span', 'pequeno', porDia));
+  if(v !== undefined) td.appendChild(seta(v, tipo));
+  return td;
+}
+async function carregarComparativo(){
+  const box = $('comparativo');
+  try{
+    const r = await api('/api/ads/comparativo' + (campanha ? `?campanha=${campanha}` : ''));
+    box.innerHTML = '';
+    if(!r.habilitado){ box.appendChild(el('p', 'vazio', r.motivo || 'Conta sem Mercado Ads.')); return; }
+    const t = el('table', 'comp'); const cab = el('tr');
+    for(const h of ['Período', 'Investimento', 'Vendas com ADS', 'Unidades', 'ROAS', 'ACOS', 'Cliques']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    for(const p of r.periodos){
+      const a = p.atual, b = p.antes, v = p.variacao;
+      const tr = el('tr');
+      const tdP = el('td'); tdP.append(el('b', null, `Últimos ${p.dias} dias`), el('span', 'pequeno', `${data(p.de)} a ${data(p.ate)}`));
+      const razaoTd = (atual, antes, fmt) => { const td = el('td'); td.append(el('b', null, fmt(atual)), el('span', 'pequeno', b ? 'antes ' + fmt(antes) : 'sem período anterior')); return td; };
+      tr.append(tdP,
+        celComp(real(a.investimento), `${real(p.por_dia.investimento)} por dia`, v ? v.investimento : null, 'custo'),
+        celComp(real(a.receita), `${real(p.por_dia.receita)} por dia`, v ? v.receita : null),
+        celComp(numero(a.unidades), `${p.por_dia.unidades.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} por dia`, v ? v.unidades : null),
+        razaoTd(a.roas, b?.roas, razao), razaoTd(a.acos, b?.acos, (x) => pct(x)),
+        celComp(numero(a.cliques), `CPC ${real(a.cpc)}`, v ? v.cliques : null));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); box.appendChild(t);
+    // a leitura em uma frase: o ritmo dos últimos 7 dias contra a média dos 90
+    const p7 = r.periodos.find((p) => p.dias === 7), p90 = r.periodos.find((p) => p.dias === 90);
+    const ritmo = (k) => (p90.por_dia[k] > 0 ? p7.por_dia[k] / p90.por_dia[k] - 1 : null);
+    const fala = (v) => (v == null ? 'sem base' : Math.abs(v) < 0.03 ? 'no mesmo ritmo' : `${pct(Math.abs(v), 0)} ${v > 0 ? 'acima' : 'abaixo'}`);
+    const ri = ritmo('investimento'), rr = ritmo('receita');
+    let leitura = '';
+    if(ri != null && rr != null){
+      leitura = rr > 0.03 && rr >= ri ? ' As vendas crescem mais que o custo: o ADS está rendendo mais.'
+        : ri > 0.03 && rr < ri ? ' O custo cresce mais que as vendas: o ADS está ficando mais caro.'
+          : rr < -0.03 && ri < -0.03 ? ' Custo e vendas diminuíram juntos.' : '';
+    }
+    $('compSub').textContent = (campanha ? 'Só esta campanha. ' : '') + `Nos últimos 7 dias, por dia: investimento ${fala(ri)} e vendas com ADS ${fala(rr)} da média dos 90 dias.${leitura} `
+      + 'As setas comparam com o período de mesmo tamanho logo antes.';
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui montar o comparativo: ' + e.message)); }
+}
+
+async function carregar(){
+  erroTela('');
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Carregando…'));
+  try{
+    const r = await api(`/api/ads/historico?dias=${dias}` + (campanha ? `&campanha=${campanha}` : ''));
+    if(!r.habilitado){ $('cartoes').innerHTML = ''; erroTela(r.motivo || 'Conta sem Mercado Ads.'); return; }
+    const t = r.total;
+    $('periodoTxt').textContent = `De ${data(r.date_from)} a ${data(r.date_to)}. ${r.nota}`;
+    if(!campanhasCarregadas){   // a lista de campanhas do seletor (uma vez)
+      campanhasCarregadas = true;
+      for(const c of [...r.campanhas].sort((a, b) => String(a.nome).localeCompare(String(b.nome)))){
+        const o = el('option', null, c.nome + (c.status === 'active' ? '' : ` (${SITUACAO_ADS[c.status] || c.status})`)); o.value = c.id; $('selCampanha').appendChild(o);
+      }
+    }
+    const box = $('cartoes'); box.innerHTML = '';
+    if(r.campanha){
+      const c = r.campanha;
+      box.appendChild(kpi('Campanha', c.nome, `${SITUACAO_ADS[c.status] || c.status} · ROAS objetivo ${razao(c.roas_alvo)} · orçamento ${real(c.orcamento_diario)}/dia`
+        + (c.limite_hoje != null && c.limite_hoje !== c.orcamento_diario ? ` (hoje até ${real(c.limite_hoje)})` : '')));
+      box.lastChild.classList.add('kpi-campanha');
+    }
+    box.append(
+      kpi('Investimento', real(t.investimento), `${real(t.investimento / Math.max(1, r.serie.length))} por dia`),
+      kpi('Receita com ADS', real(t.receita), `direta ${real(t.direta)} · indireta ${real(t.indireta)}`),
+      kpi('ROAS', razao(t.roas), `ACOS ${pct(t.acos)} · TACOS ${pct(t.tacos)}`),
+      kpi('Cliques', numero(t.cliques), `CTR ${pct(t.ctr, 2)} · CPC ${real(t.cpc)} · ${numero(t.unidades)} un. vendidas`),
+    );
+    const g = $('grafico'); g.innerHTML = '';
+    const teto = Math.max(1, ...r.serie.map((d) => Math.max(d.investimento, d.receita)));
+    // dias em que alguma campanha mudou ganham uma marca no gráfico
+    const mudouNoDia = {};
+    for(const m of r.mudancas){
+      const dLocal = new Date(Date.parse(m.em) - 3 * 3600e3).toISOString().slice(0, 10);
+      (mudouNoDia[dLocal] ||= []).push(`${m.campanha || m.campanha_id}: ${m.rotulo}` + (m.campo === 'criada' ? '' : ` ${valorMudanca(m.campo, m.de)} → ${valorMudanca(m.campo, m.para)}`));
+    }
+    for(const d of r.serie){
+      const col = el('div', 'col');
+      col.title = `${data(d.data)}: investimento ${real(d.investimento)} · receita ${real(d.receita)} · ROAS ${razao(d.roas)}`;
+      if(mudouNoDia[d.data]){ col.classList.add('mudou'); col.title += '\nMudança: ' + mudouNoDia[d.data].join('; '); }
+      const a = el('div', 'b inv'); a.style.height = (d.investimento / teto * 100) + '%';
+      const b = el('div', 'b atual'); b.style.height = (d.receita / teto * 100) + '%';
+      col.append(a, b); g.appendChild(col);
+    }
+    $('eixo').innerHTML = ''; $('eixo').append(el('span', null, data(r.serie[0]?.data)), el('span', null, data(r.serie.at(-1)?.data)));
+    // mudanças registradas pelo painel
+    const desde = r.mudancas_desde ? data(r.mudancas_desde) : null;
+    $('mudSub').textContent = 'ROAS objetivo, orçamento diário, situação e estratégia: o que mudou e quando. '
+      + (desde ? `O Mercado Livre não guarda esse histórico: o painel registra as mudanças desde ${desde} (confere a cada 30 min com o painel aberto).` : '');
+    const mbox = $('mudancas'); mbox.innerHTML = '';
+    if(!r.mudancas.length){
+      mbox.appendChild(el('p', 'vazio', `Nenhuma mudança registrada ${r.campanha ? 'nesta campanha ' : ''}no período` + (desde ? ` (acompanhando desde ${desde}).` : '.')));
+    }else{
+      tabela('mudancas', ['Quando', 'Campanha', 'O que mudou', 'Antes', 'Depois'], r.mudancas.map((m) => {
+        const sobe = m.de != null && m.para != null && Number(m.para) > Number(m.de), desce = m.de != null && m.para != null && Number(m.para) < Number(m.de);
+        const depois = el('td'); depois.appendChild(el('b', null, valorMudanca(m.campo, m.para)));
+        if((m.campo === 'roas_alvo' || m.campo === 'orcamento') && (sobe || desce)) depois.appendChild(el('span', 'chip azul', sobe ? ' ▲ aumentou' : ' ▼ diminuiu'));
+        return [diaHora(m.em), el('td', 'esq', m.campanha || String(m.campanha_id)), el('td', 'esq', m.rotulo),
+          m.campo === 'criada' ? '—' : valorMudanca(m.campo, m.de), m.campo === 'criada' ? el('td', null, 'nova') : depois];
+      }));
+    }
+    // últimas alterações que o próprio ML registra (sem dizer o que mudou)
+    const alteradas = r.campanhas.filter((c) => c.alterada_em && c.alterada_em.slice(0, 10) >= r.date_from && (!r.campanha || c.id === r.campanha.id))
+      .sort((a, b) => b.alterada_em.localeCompare(a.alterada_em));
+    if(alteradas.length){
+      mbox.appendChild(el('p', 'sub', 'Última alteração de cada campanha segundo o Mercado Livre (ele informa a data, não o que mudou): '
+        + alteradas.slice(0, 12).map((c) => `${c.nome} em ${diaHora(c.alterada_em)}`).join(' · ') + (alteradas.length > 12 ? ' …' : '')));
+      mbox.lastChild.style.margin = '10px 0 0';
+    }
+    tabela('dias', ['Dia', 'Investimento', 'Receita', 'ROAS', 'ACOS', 'Cliques', 'Impressões', 'Unidades'],
+      [...r.serie].reverse().map((d) => [data(d.data), real(d.investimento), real(d.receita), razao(d.roas), pct(d.acos),
+        numero(d.cliques), numero(d.impressoes), numero(d.unidades)]));
+    tabela('campanhas', ['Campanha', 'Status', 'Orçamento/dia', 'ROAS objetivo', 'Investimento', 'Receita', 'ROAS', 'ACOS', 'Cliques', 'Unidades'],
+      r.campanhas.map((c) => [(() => {   // clicar no nome filtra a tela pela campanha
+        const td = el('td', 'esq'); const b = el('button', 'link-campanha', c.nome); b.type = 'button';
+        b.onclick = () => { $('selCampanha').value = String(c.id); $('selCampanha').onchange(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        td.appendChild(b); if(r.campanha && r.campanha.id === c.id) td.appendChild(el('span', 'chip azul', ' selecionada'));
+        return td;
+      })(), SITUACAO_ADS[c.status] || c.status,
+        real(c.orcamento_diario), razao(c.roas_alvo), real(c.investimento), real(c.receita), razao(c.roas), pct(c.acos),
+        numero(c.cliques), numero(c.unidades)]));
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+$('selCampanha').onchange = () => {
+  campanha = $('selCampanha').value;
+  $('comparativo').innerHTML = ''; $('comparativo').appendChild(el('p', 'carregando', 'Carregando…'));
+  carregar(); carregarComparativo();
+};
+carregar();
+carregarComparativo();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .canais{margin-bottom:10px}
+  .canais .bola{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+  .barra-canais{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef1f6}
+  .barra-canais i{display:block;height:100%}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Performance</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="periodoTxt">Período escolhido comparado com o período anterior do mesmo tamanho.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes" id="cartoes"></div>
+
+  <section class="bloco">
+    <h2>Vendas por tipo de envio</h2>
+    <p class="sub" id="canaisSub">Quantas vendas saíram pelo Full, pelo Flex e pelo Mercado Envios (coleta ou agência) no período, e quanto cada um faturou.</p>
+    <div class="cartoes canais" id="canais"><p class="carregando">Lendo os envios…</p></div>
+    <div class="barra-canais" id="canaisBarra"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Faturamento por dia</h2>
+    <p class="sub">Azul: período atual. Claro: o mesmo dia do período anterior.</p>
+    <div class="grafico" id="grafico"><p class="carregando">Carregando…</p></div>
+    <div class="eixo" id="eixo"></div>
+    <div class="legenda"><span><i style="background:#2563eb"></i>Atual</span><span><i style="background:#c9d8fb"></i>Anterior</span></div>
+  </section>
+
+  <div class="duas">
+    <section class="bloco"><h2>Mais cresceram</h2><p class="sub">Faturamento contra o período anterior.</p><div class="tabela-rolagem" id="sobe"></div></section>
+    <section class="bloco"><h2>Mais caíram</h2><p class="sub">Faturamento contra o período anterior.</p><div class="tabela-rolagem" id="cai"></div></section>
+  </div>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=1"></script>
+<script>
+let dias = 30;
+function cartao(rot, valor, atual, antes, invertido, nota){
+  const c = el('div', 'cartao');
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor));
+  const n = el('div', 'nota'); n.appendChild(variacao(atual, antes, invertido));
+  if(nota) n.appendChild(document.createTextNode(' ' + nota));
+  c.appendChild(n); return c;
+}
+function tabela(alvo, lista){
+  const box = $(alvo); box.innerHTML = '';
+  if(!lista.length){ box.appendChild(el('p', 'vazio', 'Nada no período.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'Antes', 'Agora', 'Diferença']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const x of lista){
+    const tr = el('tr');
+    tr.append(celulaProduto(x.foto, x.titulo || x.id, `${x.id} · ${numero(x.unidades_antes)} → ${numero(x.unidades)} un.`),
+      el('td', null, real(x.antes)), el('td', null, real(x.atual)),
+      el('td', x.delta >= 0 ? 'pos' : 'neg', (x.delta >= 0 ? '+ ' : '− ') + real(Math.abs(x.delta))));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+// Vendas por tipo de envio. O tipo (Flex x Mercado Envios) é uma consulta por envio: a
+// primeira abertura de um período lê até 500 e a tela pede de novo sozinha até acabar.
+const COR_CANAL = { full: '#16a34a', flex: '#f59e0b', envios: '#2563eb', outros: '#64748b', pendente: '#cbd5e1' };
+let geracaoCanais = 0;
+async function carregarCanais(){
+  const minha = ++geracaoCanais;
+  const box = $('canais'), barra = $('canaisBarra');
+  box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo os envios…')); barra.innerHTML = '';
+  try{
+    for(let volta = 0; volta < 12; volta++){
+      const r = await api(`/api/performance/logistica?dias=${dias}`);
+      if(minha !== geracaoCanais) return;
+      box.innerHTML = ''; barra.innerHTML = '';
+      for(const c of r.canais){
+        const k = el('div', 'cartao');
+        const rot = el('p', 'rotulo'); const bola = el('i', 'bola'); bola.style.background = COR_CANAL[c.canal];
+        rot.append(bola, document.createTextNode(c.nome));
+        k.append(rot, el('div', 'valor', real(c.faturamento)),
+          el('p', 'nota', `${numero(c.pedidos)} venda(s) · ${numero(c.unidades)} un. · ${pct(c.participacao, 0)} do faturamento`
+            + (c.ticket != null ? ` · ticket ${real(c.ticket)}` : '')));
+        box.appendChild(k);
+        if(c.participacao > 0){ const i = el('i'); i.style.width = (c.participacao * 100) + '%'; i.style.background = COR_CANAL[c.canal]; i.title = `${c.nome}: ${pct(c.participacao)}`; barra.appendChild(i); }
+      }
+      $('canaisSub').textContent = r.envios_pendentes
+        ? `Lendo o tipo de envio das vendas: faltam ${numero(r.envios_pendentes)} envio(s). Os números vão se completando sozinhos.`
+        : `${numero(r.total.pedidos)} venda(s) de ${data(r.de)} a ${data(new Date(Date.parse(r.ate) - 864e5).toISOString())}: Full (armazém do ML), Flex (entrega sua no mesmo dia) e Mercado Envios (coleta ou agência).`;
+      if(!r.envios_pendentes) return;
+    }
+  }catch(e){ if(minha === geracaoCanais){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui ler os envios: ' + e.message)); } }
+}
+
+async function carregar(){
+  erroTela('');
+  carregarCanais();
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Carregando…'));
+  try{
+    const r = await api(`/api/performance?dias=${dias}`);
+    const a = r.atual, b = r.anterior;
+    const box = $('cartoes'); box.innerHTML = '';
+    box.append(
+      cartao('Faturamento', real(a.faturamento), a.faturamento, b.faturamento, false, `(antes ${real(b.faturamento)})`),
+      cartao('Pedidos', numero(a.pedidos), a.pedidos, b.pedidos, false, `${numero(a.unidades)} un.`),
+      cartao('Ticket médio', real(a.ticket), a.ticket, b.ticket),
+      cartao('Conversão', pct(a.conversao, 2), a.conversao, b.conversao, false, `${numero(a.visitas)} visitas`),
+      cartao('Visitas', numero(a.visitas), a.visitas, b.visitas),
+      cartao('Tarifas do ML', real(a.tarifas), a.tarifas, b.tarifas, true, a.faturamento ? pct(a.tarifas / a.faturamento) + ' do faturamento' : ''),
+      cartao('Cancelamentos', numero(a.cancelados), a.cancelados, b.cancelados, true),
+    );
+    const g = $('grafico'); g.innerHTML = '';
+    const teto = Math.max(1, ...r.serie.map((d) => Math.max(d.faturamento, d.anterior)));
+    for(const d of r.serie){
+      const col = el('div', 'col');
+      col.title = `${data(d.dia)}: ${real(d.faturamento)} (anterior ${real(d.anterior)})`;
+      const b1 = el('div', 'b antes'); b1.style.height = (d.anterior / teto * 100) + '%';
+      const b2 = el('div', 'b atual'); b2.style.height = (d.faturamento / teto * 100) + '%';
+      col.append(b1, b2); g.appendChild(col);
+    }
+    $('eixo').innerHTML = '';
+    $('eixo').append(el('span', null, data(r.serie[0]?.dia)), el('span', null, data(r.serie.at(-1)?.dia)));
+    tabela('sobe', r.sobe); tabela('cai', r.cai);
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

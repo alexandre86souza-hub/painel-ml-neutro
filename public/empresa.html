@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Empresa e custos</title>
+<style>
+  :root{--bg:#f2f3f5;--card:#fff;--ink:#1a1a1a;--muted:#5f6368;--line:#e0e2e6;
+    --brand:#2968c8;--ok:#00a650;--err:#d93025;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1180px;margin:0 auto;padding:24px 16px 72px;width:100%}
+  h2{font-size:16px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  a{color:var(--brand)}
+  section.bloco{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+  #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;font-size:14px}
+  #msg.erro{display:block;background:#fce8e6;color:#8c1d18;border:1px solid #f0b3ad}
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+  input,select,textarea{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:8px;background:#fff;color:var(--ink)}
+  textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .grade{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+  button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;
+    border:1px solid #d5d7db;background:#fff;color:var(--ink);white-space:nowrap}
+  button.bt:hover{background:#f2f3f5}
+  button.bt.primario{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .impostos{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+  .imposto{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:8px;align-items:center}
+  .total{font-size:14px;margin:6px 0 14px}
+  .total b{font-size:18px}
+  .linha-botoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .marca-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}
+  .marca-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .marca-form input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff}
+  .marca-form .marca-previa,.marca-form .linha-botoes{grid-column:1 / -1}
+  .marca-previa img{max-width:190px;max-height:110px;object-fit:contain;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff}
+  @media (max-width:760px){ .marca-form{grid-template-columns:1fr} }
+  .resumo-cat{font-size:13px;color:var(--muted);margin:8px 0 0}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:9px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;font-weight:600;border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid #d5d7db}
+  .seg button[aria-pressed="true"]{background:#1a1a1a;color:#fff}
+  .tabela-rolagem{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 7px;text-align:right;border-top:1px solid var(--line);vertical-align:middle}
+  th{font-size:12px;color:var(--muted);font-weight:600;border-top:0;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td.esq{text-align:left}
+  .prod{display:flex;align-items:center;gap:10px;min-width:240px}
+  .prod img{width:36px;height:36px;object-fit:contain;background:#f2f3f5;border-radius:6px;flex:0 0 36px}
+  .pequeno{display:block;font-size:11px;color:var(--muted)}
+  td input{width:90px;padding:5px 8px;font-size:13px;text-align:right}
+  .chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11px;
+    background:#eef0f3;color:#3c4043;white-space:nowrap;margin:1px 3px 1px 0}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}
+  .chip.azul{background:#e8f0fe;color:#1a4fa0}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}
+  .alerta{background:#fff8e1;border:1px solid #f3d27a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#7a5600}
+  .salvo{font-size:11px;color:#0b6b33}
+  @media (max-width:760px){ .grade{grid-template-columns:1fr} }
+</style>
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=2"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Empresa e custos</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+    <a href="/auth" id="addConta">+ conectar outra</a>
+  </div>
+</header>
+
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <section class="bloco">
+    <h2>Identidade do painel</h2>
+    <p class="sub">O nome e o logo da sua empresa aparecem no menu e no título de todas as telas. Ficam só neste painel.</p>
+    <form id="formMarca" class="marca-form">
+      <label>Nome da empresa<input id="mNome" maxlength="40" placeholder="Painel Mercado Livre" autocomplete="organization"></label>
+      <label>Logo (PNG, JPG ou WebP, até 300 KB)<input id="mLogo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <div class="marca-previa" id="mPrevia"></div>
+      <div class="linha-botoes">
+        <button class="bt primario">Salvar identidade</button>
+        <button type="button" class="bt" id="mRemover" hidden>Remover logo</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2>Dados da empresa e impostos</h2>
+    <p class="sub">Os impostos entram como % do faturamento em todas as contas de lucro do painel (Vendas e Meus anúncios). Mudou a alíquota? É só alterar aqui.</p>
+    <form id="formEmpresa">
+      <div class="grade">
+        <label>Razão social<input id="inRazao" autocomplete="organization"></label>
+        <label>CNPJ<input id="inCnpj" inputmode="numeric"></label>
+        <label>Regime tributário
+          <select id="inRegime">
+            <option value="">—</option><option>Simples Nacional</option><option>Lucro Presumido</option>
+            <option>Lucro Real</option><option>MEI</option>
+          </select></label>
+      </div>
+      <p style="margin:0;font-size:13px;font-weight:600">Impostos sobre a venda</p>
+      <div class="impostos" id="impostos"></div>
+      <div class="linha-botoes" style="margin-bottom:10px">
+        <button type="button" class="bt" id="btAddImposto">+ adicionar imposto</button>
+      </div>
+      <p class="total">Total aplicado sobre o faturamento: <b id="totalImposto">0%</b></p>
+      <div class="grade">
+        <label>Embalagem padrão por unidade (R$)
+          <input id="inEmbPadrao" type="number" step="0.01" min="0" placeholder="usada quando o anúncio não tem uma própria"></label>
+      </div>
+      <button class="bt primario">Salvar dados da empresa</button>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2>Tabela de produtos (custo por SKU)</h2>
+    <p class="sub">Cole aqui a planilha de produtos, com o cabeçalho. Precisa das colunas <b>SKU</b> e <b>Custo</b>; Produto, Situação e Fornecedor são opcionais.
+      O custo de cada anúncio sai do SKU dele: <b>KIT-407.408</b> = produto 407 (DQ-407) + produto 408 (BP-408).</p>
+    <textarea id="txtCatalogo" placeholder="Base&#9;SKU&#9;Custo&#9;Produto&#10;407&#9;DQ-407&#9; R$ 23,31&#9;DUCHA QUADRADO 201 20CM"></textarea>
+    <div class="linha-botoes" style="margin-top:10px">
+      <button type="button" class="bt primario" id="btImportar">Importar e recalcular custos</button>
+      <span class="resumo-cat" id="resumoCat"></span>
+    </div>
+  </section>
+
+  <section class="bloco">
+    <h2>Custo de cada anúncio</h2>
+    <p class="sub">Custo do produto vindo do SKU, a embalagem por unidade (editável) e os anúncios que ficaram sem custo.
+      Se precisar, dá para digitar um custo manual, que passa a valer no lugar do SKU.</p>
+    <div class="alerta" id="alertaCustos" hidden></div>
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-f="sem">Sem custo</button>
+        <button type="button" data-f="manual">Custo manual</button>
+      </div>
+      <button type="button" class="bt" id="btRecarregar">Recarregar do Mercado Livre</button>
+    </div>
+    <div class="tabela-rolagem" id="anuncios"><p class="sub">Carregando…</p></div>
+  </section>
+
+  
+</main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+const numero = (n) => (n || 0).toLocaleString('pt-BR');
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+async function api(caminho, opts){
+  const r = await fetch(caminho, opts);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
+  return j;
+}
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) });
+function aviso(t, tipo = 'erro'){ const m = $('msg'); m.className = tipo; m.textContent = t; m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+
+const selConta = $('selConta');
+async function carregarContas(){
+  try{
+    const { ativa, contas } = await api('/api/accounts');
+    selConta.innerHTML = '';
+    if(!contas.length){ selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —';
+      $('addConta').textContent = 'conectar Mercado Livre →'; return; }
+    for(const c of contas){
+      const o = el('option', null, `${c.nickname} · ${c.site_id}`);
+      o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa; selConta.appendChild(o);
+    }
+  }catch{ selConta.hidden = true; }
+}
+selConta.onchange = async () => { await enviar('POST', '/api/accounts/active', { ml_user_id: Number(selConta.value) }); location.reload(); };
+
+// ---------- empresa ----------
+function linhaImposto(nome = '', pctV = ''){
+  const l = el('div', 'imposto');
+  const n = el('input'); n.placeholder = 'Ex.: Simples Nacional, DIFAL'; n.value = nome; n.className = 'imp-nome';
+  n.setAttribute('aria-label', 'Nome do imposto');
+  const p = el('input'); p.type = 'number'; p.step = '0.01'; p.min = '0'; p.max = '100'; p.placeholder = '%';
+  p.value = pctV; p.className = 'imp-pct'; p.setAttribute('aria-label', 'Percentual');
+  p.oninput = somar;
+  const x = el('button', 'bt', 'Remover'); x.type = 'button'; x.onclick = () => { l.remove(); somar(); };
+  l.append(n, p, x);
+  $('impostos').appendChild(l);
+}
+function somar(){
+  const t = [...document.querySelectorAll('.imp-pct')].reduce((s, i) => s + (Number(i.value) || 0), 0);
+  $('totalImposto').textContent = t.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%';
+}
+$('btAddImposto').onclick = () => linhaImposto();
+
+async function carregarEmpresa(){
+  try{
+    const e = await api('/api/empresa');
+    $('inRazao').value = e.razao_social; $('inCnpj').value = e.cnpj; $('inRegime').value = e.regime;
+    $('inEmbPadrao').value = e.embalagem_padrao ?? '';
+    $('impostos').innerHTML = '';
+    if(e.impostos.length) for(const i of e.impostos) linhaImposto(i.nome, i.pct);
+    else linhaImposto('Simples Nacional', '');
+    somar();
+    pintarResumoCat(e.catalogo);
+  }catch(err){ aviso(err.message); }
+}
+$('formEmpresa').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const impostos = [...document.querySelectorAll('.imposto')].map((l) => ({
+    nome: l.querySelector('.imp-nome').value, pct: l.querySelector('.imp-pct').value }))
+    .filter((i) => i.nome.trim() || i.pct !== '');
+  try{
+    const e = await enviar('PUT', '/api/empresa', { razao_social: $('inRazao').value, cnpj: $('inCnpj').value,
+      regime: $('inRegime').value, impostos, embalagem_padrao: $('inEmbPadrao').value });
+    aviso(`Dados salvos. Imposto total: ${String(e.imposto_total).replace('.', ',')}% sobre o faturamento.`, 'ok');
+  }catch(err){ aviso(err.message); }
+};
+
+// ---------- tabela de produtos ----------
+function pintarResumoCat(c){
+  if(!c || !c.produtos){ $('resumoCat').textContent = 'Nenhuma tabela importada ainda.'; return; }
+  $('resumoCat').textContent = `Tabela atual: ${numero(c.produtos)} produtos` + (c.sem_custo ? `, ${numero(c.sem_custo)} sem custo` : '')
+    + ` · importada em ${new Date(c.atualizado_em).toLocaleString('pt-BR')}`;
+}
+$('btImportar').onclick = async () => {
+  const texto = $('txtCatalogo').value;
+  if(!texto.trim()){ aviso('Cole a tabela de produtos primeiro.'); return; }
+  $('btImportar').disabled = true; $('btImportar').textContent = 'Importando…';
+  try{
+    const r = await enviar('POST', '/api/produtos-custo', { texto });
+    aviso(`${numero(r.importados)} produtos importados (${numero(r.sem_custo)} sem custo). `
+      + `${numero(r.anuncios_com_custo)} anúncios com custo; ${numero(r.anuncios_sem_custo)} sem custo.`, 'ok');
+    $('txtCatalogo').value = '';
+    carregarEmpresa(); carregarAnuncios();
+  }catch(err){ aviso(err.message); }
+  finally{ $('btImportar').disabled = false; $('btImportar').textContent = 'Importar e recalcular custos'; }
+};
+
+// ---------- custo por anúncio ----------
+let anuncios = [], filtro = 'todos';
+$('segFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f;
+  for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintarAnuncios();
+};
+$('btRecarregar').onclick = () => carregarAnuncios(true);
+
+async function carregarAnuncios(recarregar){
+  $('anuncios').innerHTML = ''; $('anuncios').appendChild(el('p', 'sub', 'Carregando os anúncios…'));
+  try{
+    const r = await api('/api/custos-anuncios' + (recarregar ? '?recarregar=1' : ''));
+    anuncios = r.anuncios;
+    const al = $('alertaCustos');
+    if(r.sem_custo){
+      al.textContent = `⚠ ${numero(r.sem_custo)} anúncio(s) sem custo do produto: as vendas deles ficam sem lucro. Veja em "Sem custo".`;
+      al.hidden = false;
+    }else al.hidden = true;
+    pintarAnuncios();
+  }catch(err){ $('anuncios').innerHTML = ''; $('anuncios').appendChild(el('p', 'sub', 'Não foi possível carregar: ' + err.message)); }
+}
+
+async function salvarCampo(a, campo, input, marca){
+  const v = input.value.trim();
+  try{
+    await enviar('PUT', `/api/custos-anuncios/${a.id}`, { [campo]: v });
+    marca.textContent = 'salvo'; setTimeout(() => { marca.textContent = ''; }, 1800);
+    if(campo === 'custo_manual') carregarAnuncios();
+  }catch(err){ aviso(err.message); }
+}
+
+function pintarAnuncios(){
+  const box = $('anuncios'); box.innerHTML = '';
+  const lista = anuncios.filter((a) => filtro === 'todos' || (filtro === 'sem' ? a.alerta : a.origem === 'manual'));
+  if(!lista.length){ box.appendChild(el('p', 'sub', 'Nada por aqui.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'SKU e componentes', 'Custo pelo SKU', 'Custo manual', 'Embalagem/un.', 'Custo total/un.', 'Preço'])
+    cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const a of lista){
+    const tr = el('tr');
+    const td = el('td'); const p = el('div', 'prod');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(a.foto) im.src = a.foto;
+    const caixa = el('div'); caixa.append(el('span', null, a.titulo || a.id), el('span', 'pequeno', `${a.id} · ${a.status}`));
+    p.append(im, caixa); td.appendChild(p);
+
+    const sk = el('td', 'esq');
+    const vistos = new Set();
+    for(const s of a.skus){
+      if(vistos.has(s.sku)) continue; vistos.add(s.sku);
+      sk.appendChild(el('span', 'chip azul', s.sku || 'sem SKU'));
+      if(s.componentes.length){
+        sk.appendChild(el('span', 'pequeno', s.componentes.map((c) => `${c.sku || c.numero}: ${c.custo == null ? 'sem custo' : real(c.custo)}`).join(' + ')));
+      }
+    }
+    if(a.alerta) sk.appendChild(el('span', 'chip amarelo', a.alerta));
+    if(a.custo_variavel) sk.appendChild(el('span', 'pequeno', 'variações com custos diferentes: aqui aparece a média; em Vendas vale o de cada venda'));
+
+    const cm = el('td');
+    const inM = el('input'); inM.type = 'number'; inM.step = '0.01'; inM.min = '0'; inM.placeholder = '—';
+    inM.value = a.origem === 'manual' ? a.custo ?? '' : ''; inM.setAttribute('aria-label', 'Custo manual de ' + a.id);
+    const mkM = el('span', 'salvo'); inM.onchange = () => salvarCampo(a, 'custo_manual', inM, mkM);
+    cm.append(inM, mkM);
+
+    const ce = el('td');
+    const inE = el('input'); inE.type = 'number'; inE.step = '0.01'; inE.min = '0';
+    inE.placeholder = a.embalagem_padrao != null ? String(a.embalagem_padrao) : '0,00';
+    inE.value = a.embalagem ?? ''; inE.setAttribute('aria-label', 'Embalagem de ' + a.id);
+    const mkE = el('span', 'salvo'); inE.onchange = () => salvarCampo(a, 'embalagem', inE, mkE);
+    ce.append(inE, mkE);
+
+    const emb = a.embalagem ?? a.embalagem_padrao ?? 0;
+    const total = a.custo == null ? null : a.custo + emb;
+    const cSku = el('td', null, real(a.custo_sku));
+    if(a.origem === 'manual') cSku.appendChild(el('span', 'pequeno', 'não usado (vale o manual)'));
+    tr.append(td, sk, cSku, cm, ce, el('td', null, total == null ? '—' : real(total)), el('td', null, real(a.preco)));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+// ---------- identidade do painel: nome e logo ----------
+let logoNovo;   // undefined = não mexe; data URL = trocar
+function pintarPrevia(src){
+  const box = $('mPrevia'); box.innerHTML = '';
+  if(!src){ box.appendChild(el('span', 'sub', 'Sem logo: o menu mostra o nome da empresa.')); return; }
+  const img = el('img'); img.alt = 'Logo atual'; img.src = src; box.appendChild(img);
+}
+async function carregarMarca(){
+  try{
+    const m = await api('/api/marca');
+    $('mNome').value = m.personalizado ? m.nome : '';
+    $('mRemover').hidden = !m.tem_logo;
+    pintarPrevia(m.tem_logo ? '/api/marca/logo?v=' + encodeURIComponent(m.v) : null);
+  }catch{ /* a tela segue sem o bloco preenchido */ }
+}
+$('mLogo').onchange = () => {
+  const arq = $('mLogo').files[0];
+  logoNovo = undefined;
+  if(!arq) return;
+  if(!['image/png', 'image/jpeg', 'image/webp'].includes(arq.type)){ $('mLogo').value = ''; return aviso('Use um logo em PNG, JPG ou WebP.'); }
+  if(arq.size > 300 * 1024){ $('mLogo').value = ''; return aviso(`Este arquivo tem ${Math.round(arq.size / 1024)} KB. O logo precisa ter até 300 KB.`); }
+  const leitor = new FileReader();
+  leitor.onload = () => { logoNovo = leitor.result; pintarPrevia(logoNovo); };
+  leitor.readAsDataURL(arq);
+};
+$('formMarca').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    const corpo = { nome: $('mNome').value };
+    if(logoNovo !== undefined) corpo.logo = logoNovo;
+    await enviar('PUT', '/api/marca', corpo);
+    logoNovo = undefined; $('mLogo').value = '';
+    aviso('Identidade do painel salva.', 'ok');
+    carregarMarca();
+    if(window.atualizarMarca) window.atualizarMarca();
+  }catch(e){ aviso(e.message); }
+};
+$('mRemover').onclick = async () => {
+  if(!confirm('Remover o logo? O menu volta a mostrar o nome da empresa.')) return;
+  try{
+    await enviar('PUT', '/api/marca', { logo: null });
+    aviso('Logo removido.', 'ok');
+    carregarMarca();
+    if(window.atualizarMarca) window.atualizarMarca();
+  }catch(e){ aviso(e.message); }
+};
+
+carregarContas();
+carregarMarca();
+carregarEmpresa();
+carregarAnuncios();
+</script>
+<script src="/aviso.js" defer></script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>
