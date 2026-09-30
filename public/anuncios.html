@@ -1399,7 +1399,12 @@ async function pintarPeriodo(itens, dias, minha){
     faixa.textContent = '';
     faixa.append(miniGrafico('Vendas', x.serie, x.tendencia, dias, 'un.'));
     if(vis[it.id]) faixa.append(miniGrafico('Visitas', vis[it.id].serie, vis[it.id].tendencia, dias, 'visitas'));
-    faixa.append(numPer(`${num(x.unidades)} un. · ${dinheiro(x.faturamento)}`, `vendidos em ${dias} dias · ${num(vis[it.id]?.total)} visitas`));
+    // Visualizações do anúncio no período escolhido, com a conversão (pedidos ÷ visitas).
+    const visitas = vis[it.id]?.total ?? null;
+    faixa.append(numPer(visitas == null ? '—' : `${num(visitas)} visualizações`,
+      visitas == null ? 'o Mercado Livre não informou as visitas'
+        : `em ${dias} dias` + (visitas > 0 ? ` · conversão ${pct(x.pedidos / visitas)}` : '')));
+    faixa.append(numPer(`${num(x.unidades)} un. · ${dinheiro(x.faturamento)}`, `vendidos em ${dias} dias`));
 
     const selo = document.createElement('span');
     const classe = x.abc?.classe || 'C';
