@@ -730,6 +730,7 @@ const linhasDoPedido = (o, contaId) => (o.order_items || []).filter((oi) => oi.i
   preco_unit: oi.unit_price ?? 0, tarifa_unit: oi.sale_fee ?? null, envio_id: o.shipping?.id ?? null,
   sku: oi.item.seller_sku || oi.item.seller_custom_field || '',   // '' = pedido sem SKU (não baixa de novo)
   origem: oi.stock?.node_id || '',   // estoque de onde saiu (Full = armazém do ML); '' = sem informação
+  comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '',   // '' = sem cliente (não baixa de novo)
 }));
 
 // Baixa os pedidos com `campo` (date_created ou date_last_updated) entre de e ate.
@@ -1971,6 +1972,15 @@ const shopeeMod = require('./shopee.js').criar({ D, urlPublica, novoEstadoOAuth,
 Object.assign(routes, shopeeMod.rotas);
 rotasParam.push(...shopeeMod.rotasParam);
 
+// ---------- Amazon Ads: conexão da conta de anúncios (amazon-ads.js) ----------
+// Retorno da autorização em /amazon-ads/callback, pela porta pública (ver tratarPublico).
+// Nada da Amazon vai para o MCP.
+const amazonAdsMod = require('./amazon-ads.js').criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth,
+  portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
+  pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
+Object.assign(routes, amazonAdsMod.rotas);
+rotasParam.push(...amazonAdsMod.rotasParam);
+
 // ---------- concorrentes no Mercado Livre (concorrentes.js) ----------
 const concMod = require('./concorrentes.js').criar({ D, ml, scraper, contaOuErro, exigeItemId, classificarBusca, lembrarSessao });
 Object.assign(routes, concMod.rotas);
@@ -2117,6 +2127,30 @@ function falhaInterna(res, e) {
 
 // ---------- servidor PÚBLICO: o que o túnel expõe na internet ----------
 // Só estes caminhos. Qualquer outro dá 404: tela, API e scraper não saem daqui.
+// Nome que aparece no aviso: razão social da tela Empresa (qualquer conta) ou o nome do painel.
+function paginaPrivacidade() {
+  const razao = D.contasListar().map((c) => require('./custos.js').lerEmpresa(D.configLer(`empresa:${c.ml_user_id}`)).razao_social).find(Boolean);
+  const nome = esc(razao || marcaAtual().nome);
+  return pagina('Aviso de privacidade', `<h1>Aviso de privacidade — ${nome}</h1>
+<p>Este é um sistema interno de gestão de ${nome}, usado somente pela própria empresa para acompanhar as vendas,
+os anúncios e as campanhas das suas contas de vendedor nos marketplaces (Mercado Livre, Amazon e outros). Ele não é
+oferecido ao público e só pessoas da empresa, com senha e verificação em duas etapas, têm acesso.</p>
+<h2>Quais dados usamos</h2>
+<p>Somente dados das contas de vendedor da própria empresa, obtidos pelas APIs oficiais de cada marketplace com a
+autorização da empresa: pedidos (números, produtos, quantidades e valores), anúncios, estoque, tarifas, repasses e
+resultados de campanhas de anúncios. Não coletamos dados pessoais de compradores (nome, endereço, telefone, e-mail ou
+documentos).</p>
+<h2>Para que usamos</h2>
+<p>Para calcular custos, lucro e margem, acompanhar o estoque e o desempenho de anúncios e campanhas, e ajustar preços e
+orçamentos das nossas próprias ofertas.</p>
+<h2>Compartilhamento e guarda</h2>
+<p>Os dados não são vendidos nem compartilhados com terceiros. Ficam armazenados em computador da empresa; senhas,
+chaves e tokens de acesso são guardados criptografados. A empresa mantém um plano de resposta a incidentes de
+segurança.</p>
+<h2>Contato</h2>
+<p>Dúvidas sobre este aviso: pelos canais de atendimento de ${nome} nos marketplaces em que vendemos.</p>`);
+}
+
 async function tratarPublico(req, res) {
   const url = new URL(req.url, 'http://publico');
   const send = (code, obj) => enviarJson(res, code, obj);
@@ -2138,9 +2172,14 @@ async function tratarPublico(req, res) {
     return send(200, { ok: true }); // erro faz a ML reenviar e acabar desativando a URL
   }
 
+  // Aviso de privacidade (pedido pela Amazon no perfil de segurança do Login with Amazon).
+  // Página fixa e pública: só texto e o nome da empresa, nenhum dado do painel.
+  if (url.pathname === '/privacidade' && req.method === 'GET') return enviarHtml(res, paginaPrivacidade());
   if (url.pathname === '/callback' && req.method === 'GET') return callbackOAuth(req, res, url);
   // Retorno da autorização da Shopee: o state (uso único) vai no caminho.
   if (req.method === 'GET' && /^\/shopee\/callback\/[0-9a-f]{32}$/.test(url.pathname)) return shopeeMod.callback(res, url);
+  // Retorno da autorização do Amazon Ads (endereço fixo: tem de estar em "Allowed Return URLs").
+  if (req.method === 'GET' && url.pathname === '/amazon-ads/callback') return amazonAdsMod.callback(res, url);
 
   // O painel inteiro, pela internet, com as regras de "online" (ver tratarPainel).
   if (painelOnline()) return tratarPainel(req, res, true);

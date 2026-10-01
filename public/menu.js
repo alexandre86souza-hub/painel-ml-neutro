@@ -46,7 +46,7 @@
   // navegador para a marca aparecer junto com a página; o servidor confirma em seguida.
   const PADRAO = 'Painel Mercado Livre';
   // Telas da Amazon (a própria e a Empresa com ?conta=amazon) mostram a identidade da Amazon.
-  const NA_AMAZON = ['/amazon.html', '/amazon-anuncios.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
+  const NA_AMAZON = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
   const QM = NA_AMAZON ? 'conta=amazon&' : '';
   const GUARDA = NA_AMAZON ? 'painel.marca.amazon' : 'painel.marca';
   function pintarMarca(m) {
@@ -84,6 +84,7 @@
     const u = new URL(href, location.origin);
     if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
     if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
+    if (u.pathname === '/ads.html') return '/amazon-ads.html';
     if (!COM_AMAZON.includes(u.pathname)) return href;
     u.searchParams.set('conta', 'amazon');
     return u.pathname + u.search;
@@ -91,6 +92,7 @@
   const semConta = () => {
     if (location.pathname === '/amazon.html') return '/';
     if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
+    if (location.pathname === '/amazon-ads.html') return '/ads.html';
     const u = new URL(location.href); u.searchParams.delete('conta');
     return u.pathname + u.search;
   };
@@ -100,7 +102,7 @@
     if (!ev.target || ev.target.id !== 'selConta') return;
     if (ev.target.value === 'amazon') {
       ev.stopImmediatePropagation();
-      location.href = COM_AMAZON.includes(location.pathname) || location.pathname === '/anuncios.html' ? comConta(location.pathname + location.search) : '/amazon.html';
+      location.href = COM_AMAZON.includes(location.pathname) || ['/anuncios.html', '/ads.html'].includes(location.pathname) ? comConta(location.pathname + location.search) : '/amazon.html';
       return;
     }
     try { localStorage.removeItem('painel.marca'); } catch {}
@@ -145,7 +147,7 @@
     a.href = NA_AMAZON ? comConta(href) : href;
     const [caminho, query] = href.split('?');
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
-      || (caminho === '/anuncios.html' && aqui === '/amazon-anuncios.html'))
+      || (caminho === '/anuncios.html' && aqui === '/amazon-anuncios.html') || (caminho === '/ads.html' && aqui === '/amazon-ads.html'))
       && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;

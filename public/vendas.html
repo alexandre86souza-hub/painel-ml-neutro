@@ -83,7 +83,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=8"></script>
+    <script src="/menu.js?v=9"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -136,7 +136,7 @@
   <section class="bloco">
     <h2>Todas as vendas</h2>
     <div class="filtros">
-      <input id="busca" type="search" placeholder="Buscar por título, SKU, MLB ou nº do pedido" aria-label="Buscar venda">
+      <input id="busca" type="search" placeholder="Buscar por nº da venda, produto (título, SKU, MLB) ou cliente" aria-label="Buscar venda">
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
         <button type="button" data-f="todas" aria-pressed="true">Todas</button>
         <button type="button" data-f="prejuizo">Com prejuízo</button>
@@ -267,7 +267,7 @@ function pintarLista(){
     if(filtro === 'prejuizo' && !(v.lucro < 0)) return false;
     if(filtro === 'semcusto' && v.custo_unit != null) return false;
     if(filtro === 'full' && !v.full) return false;
-    if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido)].some((t) => (t || '').toLowerCase().includes(q))) return false;
+    if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
@@ -281,7 +281,8 @@ function pintarLista(){
     const td = el('td'); const p = el('div', 'prod');
     const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(v.foto) im.src = v.foto;
     const nome = el('span'); nome.appendChild(document.createTextNode(v.titulo || v.item_id));
-    const info = el('span', 'pequeno', `${v.full ? (NA_AMAZON ? 'FBA · ' : 'FULL · ') : ''}${v.sku || (NA_AMAZON && !v.itens_lidos ? 'itens ainda não lidos' : 'sem SKU')} · pedido ${v.pedido}` + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_AMAZON && v.devolvido ? ' · reembolsada' : ''));
+    const info = el('span', 'pequeno', `${v.full ? (NA_AMAZON ? 'FBA · ' : 'FULL · ') : ''}${v.sku || (NA_AMAZON && !v.itens_lidos ? 'itens ainda não lidos' : 'sem SKU')} · pedido ${v.pedido}`
+      + (v.comprador_nome || v.comprador ? ` · cliente ${v.comprador_nome || v.comprador}${v.comprador_nome && v.comprador ? ' (' + v.comprador + ')' : ''}` : '') + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_AMAZON && v.devolvido ? ' · reembolsada' : ''));
     const caixa = el('div'); caixa.append(nome, info);
     p.append(im, caixa); td.appendChild(p);
 

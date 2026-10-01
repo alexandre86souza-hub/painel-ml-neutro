@@ -393,8 +393,13 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           data: new Date(o.date_created).toISOString(), status: o.status, quantidade: oi.quantity || 0,
           preco_unit: oi.unit_price ?? 0, tarifa_unit: oi.sale_fee ?? null, envio_id: o.shipping?.id ?? null,
           sku: oi.item.seller_sku || oi.item.seller_custom_field || '', origem: oi.stock?.node_id || '',
+          comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '',
         }))));
       }
+
+      // Nome do cliente (busca da tela): uma chamada por pedido, em segundo plano, os mais novos
+      // primeiro; a próxima abertura já mostra.
+      nomesDosClientes(conta).catch(() => null);
 
       // Frete: até 300 envios novos por abertura; o resto vem nas próximas (fica guardado).
       const faltam = D.enviosSemFreteConta(conta.ml_user_id, j.de, j.ate, 300);
@@ -438,6 +443,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         }
         vendas.push({
           pedido: l.order_id, data: l.data, status: l.status, valida, item_id: l.item_id,
+          comprador: l.comprador || null, comprador_nome: l.comprador_nome || null,
           titulo: info[l.item_id]?.title || null, foto: info[l.item_id]?.thumbnail || null,
           sku: l.sku || null, quantidade: l.quantidade, preco_unit: l.preco_unit,
           full: !!l.origem && !/^BRP\d+$/.test(l.origem),   // saiu do armazém do ML
@@ -472,6 +478,19 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   // Uma conta de cada vez (o ML limita chamadas por conta, e a primeira abertura de uma conta
   // nova baixa os pedidos dela). Conta que falhar — token vencido, sem permissão — aparece
   // com o erro, sem derrubar as outras.
+  // Lê o nome do cliente de até 200 pedidos por vez (um de cada vez por conta).
+  const lendoNomes = new Set();
+  async function nomesDosClientes(conta) {
+    if (lendoNomes.has(conta.ml_user_id)) return;
+    lendoNomes.add(conta.ml_user_id);
+    try {
+      await emLotes(D.pedidosSemNome(conta.ml_user_id, 200), 3, async (id) => {
+        const o = await ml(`/orders/${id}`, {}, conta.ml_user_id).catch(() => null);
+        if (o) D.compradorNomeGravar(id, [o.buyer?.first_name, o.buyer?.last_name].filter(Boolean).join(' '));
+      });
+    } finally { lendoNomes.delete(conta.ml_user_id); }
+  }
+
   async function resumoDasContas(dias = 30) {
     const linhas = [], vendidas = [];
     for (const c of D.contasListar()) {

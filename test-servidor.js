@@ -61,6 +61,14 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     r = await pedir(PUB, '/saude');
     assert.strictEqual(r.status, 200);
     assert.strictEqual(JSON.parse(r.corpo).app, 'aula-ml');
+    // aviso de privacidade (Login with Amazon): público, sem login, só texto
+    r = await pedir(PUB, '/privacidade', { headers: { Host: 'teste-da-aula.trycloudflare.com' } });
+    assert.strictEqual(r.status, 200);
+    assert.ok(r.corpo.includes('Aviso de privacidade') && r.corpo.includes('Não coletamos dados pessoais de compradores'));
+    // retorno do Amazon Ads com state que o painel não emitiu: recusado, nada é gravado
+    r = await pedir(PUB, '/amazon-ads/callback?code=forjado&state=0123456789abcdef0123456789abcdef', { headers: { Host: 'teste-da-aula.trycloudflare.com' } });
+    assert.strictEqual(r.status, 400, 'retorno sem state válido não conecta');
+    assert.strictEqual(D.configLer('amzads_refresh_token'), null);
     // Pela internet, ANTES de existir senha: nada de primeiro acesso por ali.
     const DE_FORA = { Host: 'teste-da-aula.trycloudflare.com', 'Cf-Connecting-Ip': '203.0.113.10' };
     const ORIGEM_TUNEL = { Origin: TUNEL };

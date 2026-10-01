@@ -160,6 +160,23 @@ assert.strictEqual(of.ofertas[0].vendedor_id, 'OUTRO1', 'o código do concorrent
 assert.strictEqual(of.ofertas.find((o) => o.voce).vendedor_id, null, 'o nosso não precisa de link');
 assert.strictEqual(A.ofertasDe(null, 'EU').ofertas.length, 0);
 
+// ---------- Amazon Ads: credenciais, autorização e perfis ----------
+const AD = require('./amazon-ads.js');
+assert.deepStrictEqual(AD.validarConfig({ client_id: ` ${ID} `, client_secret: SEG }), { client_id: ID, client_secret: SEG });
+assert.deepStrictEqual(AD.validarConfig({ client_id: ID }), { client_id: ID }, 'sem segredo: mantém o gravado');
+assert.throws(() => AD.validarConfig({ client_id: 'amzn1.sp.solution.x' }), /Client ID/);
+assert.throws(() => AD.validarConfig({ client_id: ID, client_secret: 'x' }), /Client Secret/);
+const ua = new URL(AD.urlAutorizacao({ clientId: ID, redirect: 'https://exemplo.trycloudflare.com/amazon-ads/callback', state: 'abc' }));
+assert.strictEqual(ua.origin + ua.pathname, 'https://www.amazon.com/ap/oa');
+assert.strictEqual(ua.searchParams.get('scope'), 'advertising::campaign_management');
+assert.strictEqual(ua.searchParams.get('response_type'), 'code');
+assert.strictEqual(ua.searchParams.get('redirect_uri'), 'https://exemplo.trycloudflare.com/amazon-ads/callback');
+assert.ok(!ua.href.includes(SEG), 'o segredo nunca vai no endereço');
+const pf = AD.perfisDe([{ profileId: 1, countryCode: 'US', accountInfo: { type: 'seller' } },
+  { profileId: 2, countryCode: 'BR', currencyCode: 'BRL', accountInfo: { type: 'seller', name: 'Loja' } }]);
+assert.deepStrictEqual(pf.map((p) => p.id), ['2', '1'], 'o perfil do Brasil vem primeiro');
+assert.strictEqual(pf[0].moeda, 'BRL');
+
 // ---------- nenhuma ferramenta MCP chega à Amazon ----------
 // (lido como texto: carregar o mcp.js abriria o banco real)
 const fonteMcp = require('node:fs').readFileSync(require.resolve('./mcp.js'), 'utf8');

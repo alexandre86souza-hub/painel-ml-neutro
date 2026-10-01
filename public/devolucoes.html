@@ -51,6 +51,7 @@
   .msg-ml{display:block;font-size:12px;color:#1d4ed8;margin-top:3px;max-width:260px;white-space:normal}
   /* reclamações em cartões: três blocos lado a lado, sem rolagem lateral */
   .rec-lista{display:flex;flex-direction:column;gap:12px}
+  .link-credito{display:block;border:0;background:none;padding:0;margin-top:2px;font-size:12px;color:var(--brand);cursor:pointer;text-decoration:underline}
   .rec{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.8fr);gap:18px;
     border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
   .rec .prod{min-width:0;align-items:flex-start}
@@ -133,7 +134,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=8"></script>
+    <script src="/menu.js?v=9"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -208,6 +209,7 @@
         <button type="button" data-f="returns">Devoluções</button>
         <button type="button" data-f="mediations">Reclamações</button>
       </div>
+      <input id="busca" type="search" placeholder="Buscar por nº da venda, produto (título, SKU, MLB) ou cliente" aria-label="Buscar reclamação" style="flex:1 1 280px;min-width:220px">
     </div>
     <div class="tabela-rolagem" id="lista"></div>
   </section>
@@ -259,6 +261,7 @@ let dias = 30, dados = null, filtro = 'todas';
 const marcar = (seg, attr, v) => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(v))); };
 $('segDias').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; dias = Number(b.dataset.dias); marcar($('segDias'), 'dias', dias); carregar(); };
 $('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; marcar($('segFiltro'), 'f', filtro); pintarLista(); };
+$('busca').oninput = () => pintarLista();
 
 function sinal(v){ return (v > 0 ? '+ ' : v < 0 ? '− ' : '') + real(Math.abs(v || 0)); }
 
@@ -357,7 +360,9 @@ function pintarMotivos(r){
 function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
-  const itens = dados.itens.filter((x) => filtro === 'todas' || (filtro === 'abertas' ? x.aberta : x.tipo === filtro));
+  const q = ($('busca').value || '').trim().toLowerCase();
+  const itens = dados.itens.filter((x) => (filtro === 'todas' || (filtro === 'abertas' ? x.aberta : x.tipo === filtro))
+    && (!q || [x.titulo, x.sku, x.item_id, String(x.pedido || ''), String(x.id), x.comprador, x.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))));
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
   const lista = el('div', 'rec-lista');
   for(const x of itens){
@@ -369,7 +374,8 @@ function pintarLista(){
     const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(x.foto) im.src = x.foto;
     const nome = el('div');
     nome.appendChild(el('b', 'rec-titulo', x.titulo || x.item_id || `pedido ${x.pedido}`));
-    nome.appendChild(el('span', 'pequeno', `${data(x.criada_em)} · pedido ${x.pedido || '—'}` + (x.quantidade > 1 ? ` · ${x.quantidade} un.` : '')));
+    nome.appendChild(el('span', 'pequeno', `${data(x.criada_em)} · pedido ${x.pedido || '—'}` + (x.quantidade > 1 ? ` · ${x.quantidade} un.` : '')
+      + (x.comprador_nome || x.comprador ? ` · cliente ${x.comprador_nome || x.comprador}` : '')));
     topo.append(im, nome);
     b1.appendChild(topo);
     b1.appendChild(el('p', 'rec-motivo', x.motivo || '—'));
@@ -409,7 +415,20 @@ function pintarLista(){
       x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
         : x.custo.defeito ? 'não volta à venda' : null);
     par('Crédito do ML', x.credito_ml ? '+ ' + real(x.credito_ml.valor) : '—', x.credito_ml ? 'pos' : null,
-      x.credito_ml ? `em ${data(x.credito_ml.data)}` : null);
+      x.credito_ml ? (x.credito_ml.manual ? 'informado por você' + (x.credito_ml.automatico != null ? ` (no lugar de ${real(x.credito_ml.automatico)})` : '')
+        : `em ${data(x.credito_ml.data)}`) : null);
+    // O vendedor informa o crédito que o ML pagou nesta reclamação (entra no resultado)
+    const btCred = el('button', 'link-credito', x.credito_ml?.manual ? 'editar crédito' : 'informar crédito'); btCred.type = 'button';
+    btCred.onclick = async () => {
+      const v = prompt(`Crédito do Mercado Livre para a reclamação do pedido ${x.pedido || x.id} (R$).\nEx.: 97,83. Vazio apaga.`,
+        x.credito_ml?.manual ? String(x.credito_ml.valor).replace('.', ',') : '');
+      if(v === null) return;
+      try{
+        await api(`/api/devolucoes/${x.id}/credito`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ valor: v }) });
+        carregar(true);
+      }catch(e){ $('msg').textContent = e.message; $('msg').style.display = 'block'; }
+    };
+    b2.lastElementChild.appendChild(btCred);   // dentro do valor do crédito
     const res = x.custo.resultado;
     par('Resultado', (res > 0 ? '+ ' : res < 0 ? '− ' : '') + real(Math.abs(res || 0)), 'rec-res ' + (res < 0 ? 'neg' : res > 0 ? 'pos' : ''));
 

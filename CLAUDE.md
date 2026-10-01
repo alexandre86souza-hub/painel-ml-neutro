@@ -42,6 +42,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   avisos em `public/sino.js` (os dois carregados em todas as telas).
   Tipo de envio (Performance): Full pela origem do estoque; Flex = `logistic_type`
   `self_service` de `/shipments/{id}`, uma consulta por envio guardada em `envio_logistica`.
+- Cliente da venda (busca em Pedidos e Devoluções): `vendas.comprador` (apelido, vem na lista
+  de pedidos) e `comprador_nome` (só em `/orders/{id}`: 200 por abertura em segundo plano,
+  `custos.js#nomesDosClientes`; Devoluções lê o pedido direto quando falta). Dado pessoal: o
+  `mcp.js#semCliente` tira esses campos de toda resposta ao Claude. Amazon não tem cliente.
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
 - Custo por anúncio: `custos.outros` = embalagem (NULL = padrão da empresa) e `custos.extra` =
@@ -98,7 +102,14 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Concorrentes: `getItemOffers` (um ASIN) e `getItemOffersBatch` (todos, em segundo plano,
   `amazon_concorrencia`). A API só dá o código do vendedor: o nome NÃO é raspado do site
   (declaramos à Amazon que os dados vêm só da SP-API) — a tela tem o link da loja pública e o
-  vendedor digita o nome (`amazon_vendedores`). Venda de concorrente não existe; só o BSR. Em "Todas as contas" a Amazon é
+  vendedor digita o nome (`amazon_vendedores`). Venda de concorrente não existe; só o BSR.
+- Amazon Ads (`amazon-ads.js`, tela `public/amazon-ads.html`; no modo Amazon o menu troca
+  `/ads.html` por ela): por enquanto só a conexão. Perfil de segurança do Login with Amazon
+  (Client ID/Secret na tela, segredo e refresh cifrados), autorização em amazon.com/ap/oa com
+  retorno FIXO em `/amazon-ads/callback` na porta pública (cadastrar em "Allowed Return URLs";
+  state de uso único), perfil do Brasil em `amzads_perfil`. Aviso de privacidade público em
+  `/privacidade` (exigido no perfil de segurança). Campanhas/histórico: construir a partir do
+  diagnóstico com a conta real. Nada do Ads no MCP. Em "Todas as contas" a Amazon é
   somada NO NAVEGADOR (`geral.html#comAmazon`): `/api/contas/resumo` é usada pelo MCP.
 - Concorrentes no ML (`concorrentes.js`, bloco em Anúncios → Detalhes): a API do ML dá 403
   para busca e anúncio de terceiros, então vêm do scraper (`/posicao`, a mesma busca da

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon Ads</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .passo{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;margin-right:8px}
+  .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:12px;align-items:end}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .form input,.form select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;width:100%}
+  .form input.segredo:not(:placeholder-shown){-webkit-text-security:disc}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .dominio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .dominio code{font-size:14px;font-weight:700;word-break:break-all}
+  .aviso-amarelo{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0 0}
+  .diag{margin-top:12px;font-size:13px}
+  .diag dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 16px;margin:0 0 10px}
+  .diag dt{font-size:12px;color:var(--muted)}
+  .diag dd{margin:0;font-weight:700}
+  .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-word}
+  .diag summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
+  ol.como li{margin-bottom:4px}
+  .linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  @media (max-width:900px){ .form{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=9"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Amazon Ads</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Conexão da sua conta de anúncios patrocinados da Amazon com o painel. Por enquanto esta tela só conecta e testa; campanhas e histórico do Ads da Amazon entram na próxima etapa. Precisa do acesso à Amazon Ads API aprovado.</p>
+  </div>
+
+  <section class="bloco">
+    <h2><span class="passo">1</span>Endereço de retorno</h2>
+    <p class="sub">No developer.amazon.com → Login with Amazon → engrenagem do seu perfil de segurança → <b>Web Settings</b> → <b>Allowed Return URLs</b>, cole este endereço e salve:</p>
+    <div class="dominio"><code id="retorno">—</code><button type="button" class="bt" id="btCopiar">Copiar</button></div>
+    <p class="aviso-amarelo">É o endereço do túnel do painel. Ele só muda se o painel for encerrado com "npm run parar"; se mudar, atualize lá também (e a URL do aviso de privacidade).</p>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">2</span>Perfil de segurança</h2>
+    <ol class="como">
+      <li>No mesmo lugar, clique em <b>Exibir ID do cliente e segredo do cliente</b>.</li>
+      <li>Cole aqui o <b>ID do cliente</b> e o <b>Segredo do cliente</b>. Ficam só neste computador; o segredo é guardado cifrado.</li>
+    </ol>
+    <form class="form" id="formConfig">
+      <!-- Segredo em campo de texto mascarado (não type=password): com senha, o Chrome preencheria com a senha do painel. -->
+      <label>Client ID<input id="cId" name="amzads-client-id" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="amzn1.application-oa2-client…" required></label>
+      <label>Client Secret<input id="cSeg" name="amzads-client-secret" type="text" class="segredo" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="amzn1.oa2-cs…"></label>
+      <button class="bt primario">Salvar</button>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">3</span>Conta de anúncios</h2>
+    <p class="sub">Clique em conectar, entre com o mesmo e-mail da Amazon e autorize. O painel volta para esta tela sozinho.</p>
+    <button type="button" class="bt primario" id="btConectar">Conectar conta de anúncios</button>
+    <div id="conta"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=5"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—');
+
+let cfg = null;
+async function carregar(){
+  try{
+    cfg = await api('/api/amazon-ads/config');
+    $('cId').value = cfg.client_id || '';
+    $('cSeg').placeholder = cfg.tem_segredo ? 'já gravado — preencha só para trocar' : 'amzn1.oa2-cs…';
+    $('cSeg').required = !cfg.tem_segredo;
+    $('retorno').textContent = cfg.retorno || 'o endereço público do painel está fora do ar (confira em Configurações)';
+    $('btCopiar').disabled = !cfg.retorno;
+    $('btConectar').disabled = !(cfg.client_id && cfg.tem_segredo);
+    $('btConectar').textContent = cfg.conectada ? 'Conectar de novo' : 'Conectar conta de anúncios';
+    pintarConta();
+  }catch(e){ aviso(e.message); }
+}
+
+async function pintarConta(){
+  const box = $('conta'); box.innerHTML = '';
+  if(!cfg.conectada){ box.appendChild(el('p', 'vazio', 'Nenhuma conta de anúncios conectada ainda.')); return; }
+  box.appendChild(el('p', 'sub', `Conectada em ${quando(cfg.conectada_em)}.`));
+  const linha = el('div', 'linha');
+  const sel = el('select'); sel.setAttribute('aria-label', 'Perfil de anúncios');
+  const testar = el('button', 'bt primario', 'Testar conexão'); testar.type = 'button';
+  const remover = el('button', 'bt', 'Remover'); remover.type = 'button';
+  linha.append(el('span', 'sub', 'Perfil (país):'), sel, testar, remover);
+  box.appendChild(linha);
+  const diag = el('div', 'diag'); box.appendChild(diag);
+  try{
+    const perfis = await api('/api/amazon-ads/perfis');
+    if(!perfis.length) sel.appendChild(el('option', null, 'nenhum perfil nesta conta'));
+    for(const p of perfis){ const o = el('option', null, `${p.pais || '?'} · ${p.tipo === 'seller' ? 'vendedor' : p.tipo || '?'}${p.nome ? ' · ' + p.nome : ''}`); o.value = p.id; o.selected = p.id === cfg.perfil; sel.appendChild(o); }
+    if(!cfg.perfil){ const o = el('option', null, 'escolha o perfil'); o.value = ''; o.selected = true; sel.prepend(o); }
+  }catch(e){ sel.appendChild(el('option', null, 'não consegui ler os perfis')); aviso(e.message); }
+  sel.onchange = async () => { if(!sel.value) return; try{ await enviar('PUT', '/api/amazon-ads/perfil', { perfil: sel.value }); cfg.perfil = sel.value; aviso('Perfil escolhido.', 'ok'); }catch(e){ aviso(e.message); } };
+  testar.onclick = () => diagnostico(diag, testar);
+  remover.onclick = async () => {
+    if(!confirm('Desconectar a conta de anúncios da Amazon?\n\nO painel esquece a autorização. Para voltar, é só conectar de novo.')) return;
+    try{ await enviar('POST', '/api/amazon-ads/remover'); aviso('Conta de anúncios desconectada.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
+  };
+}
+
+// O que a Ads API devolve: quantidades e a FORMA das respostas (campos e tipos, sem valores).
+async function diagnostico(box, bt){
+  bt.disabled = true; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Perguntando à Amazon Ads…'));
+  try{
+    const r = await api('/api/amazon-ads/diagnostico');
+    box.innerHTML = '';
+    const dl = el('dl');
+    const par = (rot, valor) => { const d = el('div'); d.append(el('dt', null, rot), el('dd', null, valor)); dl.appendChild(d); };
+    par('Perfis', r.perfis.erro ? 'erro: ' + r.perfis.erro : r.perfis.map((p) => `${p.pais} (${p.tipo})${p.escolhido ? ' ✓' : ''}`).join(' · ') || 'nenhum');
+    const c = r.campanhas;
+    par('Campanhas de Produtos Patrocinados', c.erro ? 'erro: ' + c.erro : numero(c.quantidade) + (c.tem_mais ? ' ou mais' : ''));
+    if(!c.erro){
+      par('Por situação', Object.entries(c.situacoes).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—');
+      par('Por segmentação', Object.entries(c.segmentacao).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—');
+    }
+    box.appendChild(dl);
+    const det = el('details'); det.appendChild(el('summary', null, 'Ver a forma das respostas'));
+    det.appendChild(el('pre', null, JSON.stringify(r.forma, null, 2)));
+    box.appendChild(det);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui testar: ' + e.message)); }
+  bt.disabled = false;
+}
+
+$('formConfig').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    const corpo = { client_id: $('cId').value };
+    if($('cSeg').value.trim()) corpo.client_secret = $('cSeg').value;
+    await enviar('PUT', '/api/amazon-ads/config', corpo);
+    $('cSeg').value = '';
+    aviso('Perfil de segurança salvo. Agora conecte a conta de anúncios.', 'ok');
+    carregar();
+  }catch(e){ aviso(e.message); }
+};
+$('btCopiar').onclick = async () => {
+  try{ await navigator.clipboard.writeText(cfg.retorno); $('btCopiar').textContent = 'Copiado'; setTimeout(() => { $('btCopiar').textContent = 'Copiar'; }, 2000); }
+  catch{ prompt('Copie o endereço:', cfg.retorno); }
+};
+$('btConectar').onclick = async () => {
+  $('btConectar').disabled = true;
+  try{ const r = await enviar('POST', '/api/amazon-ads/conectar'); location.href = r.url; }
+  catch(e){ aviso(e.message); $('btConectar').disabled = false; }
+};
+
+if(new URLSearchParams(location.search).get('conectado')) aviso('Conta de anúncios conectada. Escolha o perfil do Brasil (se não veio escolhido) e clique em "Testar conexão".', 'ok');
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

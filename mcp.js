@@ -486,7 +486,20 @@ const BASE = 'http://painel.local';
 async function chamarFerramenta(f, args) {
   if (f.direta) return repasseML(args);
   const [metodo, caminho, corpo] = f.rota(args);
-  return S.despachar(metodo, new URL(BASE + caminho), corpo || {});
+  return semCliente(await S.despachar(metodo, new URL(BASE + caminho), corpo || {}));
+}
+
+// Apelido e nome do cliente servem à busca das telas Pedidos e Devoluções; ao Claude não
+// vão (dado pessoal do comprador, sem uso para as análises).
+const CAMPOS_CLIENTE = new Set(['comprador', 'comprador_nome']);
+function semCliente(v) {
+  if (Array.isArray(v)) return v.map(semCliente);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) if (!CAMPOS_CLIENTE.has(k)) o[k] = semCliente(x);
+    return o;
+  }
+  return v;
 }
 
 // O repasse NÃO é uma rota do painel: chama a API do ML direto, com o token da conta ativa
@@ -624,4 +637,4 @@ function iniciar() {
 }
 
 if (require.main === module) iniciar();
-module.exports = { FERRAMENTAS, tratar, chamarFerramenta };
+module.exports = { FERRAMENTAS, tratar, chamarFerramenta, semCliente };

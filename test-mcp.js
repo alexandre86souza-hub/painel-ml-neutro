@@ -245,7 +245,11 @@ function servidor(env = {}) {
   assert.ok(!r3.result.isError, 'a última chamada tem de ser respondida antes de o servidor sair');
   await new Promise((ok) => s3.processo.on('exit', ok));
 
-  console.log('OK — MCP: rotas existem, protocolo, stdout limpo, notificação sem resposta, modo só leitura, saída sem engolir resposta');
+  // cliente (apelido e nome) não sai pelo MCP, em nenhum nível da resposta
+  assert.deepStrictEqual(M.semCliente({ vendas: [{ pedido: 1, comprador: 'APELIDO', comprador_nome: 'Fulano', sku: 'X' }], resumo: { n: 1 } }),
+    { vendas: [{ pedido: 1, sku: 'X' }], resumo: { n: 1 } });
+
+  console.log('OK — MCP: rotas existem, protocolo, stdout limpo, notificação sem resposta, modo só leitura, saída sem engolir resposta, sem dados do cliente');
   require('./db.js').db.close();
   for (const f of [BANCO, `${BANCO}-wal`, `${BANCO}-shm`]) {
     try { require('node:fs').unlinkSync(f); } catch {}

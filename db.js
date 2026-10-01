@@ -329,6 +329,11 @@ colunaNova('vendas', 'sku TEXT');
 // vendas.origem: de qual estoque a unidade saiu (order_items[].stock.node_id). Medido em
 // 29/09/2026: "BRP1234567891" = depósito do vendedor; "BRSP04", "BRSP02"… = armazém do ML (Full).
 colunaNova('vendas', 'origem TEXT');
+// Cliente da venda (busca nas telas Pedidos e Devoluções): apelido vem na lista de pedidos;
+// o nome só no pedido aberto (/orders/{id}), lido aos poucos. '' = o ML não mandou.
+colunaNova('vendas', 'comprador_id INTEGER');
+colunaNova('vendas', 'comprador TEXT');
+colunaNova('vendas', 'comprador_nome TEXT');
 
 function custoGravar(mlUserId, itemId, { custo, outros }) {
   db.prepare(`INSERT INTO custos (item_id, ml_user_id, custo, outros, atualizado_em, origem) VALUES (?,?,?,?,?,'manual')
@@ -409,18 +414,21 @@ const EM_VENDA = `status IN (${STATUS_VENDA.map((s) => `'${s}'`).join(',')})`;
 
 function vendasGravar(linhas) {
   const st = db.prepare(`INSERT INTO vendas (order_id, item_id, variacao, ml_user_id, data, status,
-                                             quantidade, preco_unit, tarifa_unit, envio_id, sku, origem)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                             quantidade, preco_unit, tarifa_unit, envio_id, sku, origem, comprador_id, comprador)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                          ON CONFLICT(order_id, item_id, variacao) DO UPDATE SET
                            status=excluded.status, quantidade=excluded.quantidade,
                            preco_unit=excluded.preco_unit, tarifa_unit=excluded.tarifa_unit,
                            envio_id=excluded.envio_id, sku=COALESCE(excluded.sku, vendas.sku),
-                           origem=COALESCE(excluded.origem, vendas.origem)`);
+                           origem=COALESCE(excluded.origem, vendas.origem),
+                           comprador_id=COALESCE(excluded.comprador_id, vendas.comprador_id),
+                           comprador=COALESCE(excluded.comprador, vendas.comprador)`);
   db.exec('BEGIN');
   try {
     for (const l of linhas) {
       st.run(l.order_id, l.item_id, l.variacao || 0, l.ml_user_id, l.data, l.status ?? null,
-        l.quantidade, l.preco_unit, l.tarifa_unit ?? null, l.envio_id ?? null, l.sku ?? null, l.origem ?? null);
+        l.quantidade, l.preco_unit, l.tarifa_unit ?? null, l.envio_id ?? null, l.sku ?? null, l.origem ?? null,
+        l.comprador_id ?? null, l.comprador ?? null);
     }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -710,7 +718,7 @@ const vendasDesde = (mlUserId) => db.prepare('SELECT MIN(data) AS d FROM vendas 
 // linhas dividem o mesmo envio, para ratear o frete de um pacote entre os anúncios dele.
 const vendasLinhas = (mlUserId, de, ate) =>
   db.prepare(`SELECT v.order_id, v.item_id, v.variacao, v.data, v.status, v.quantidade, v.preco_unit,
-                     v.tarifa_unit, v.envio_id, v.sku, v.origem, f.custo AS frete_envio,
+                     v.tarifa_unit, v.envio_id, v.sku, v.origem, v.comprador, v.comprador_nome, f.custo AS frete_envio,
                      (SELECT SUM(x.quantidade * x.preco_unit) FROM vendas x
                        WHERE x.envio_id = v.envio_id AND x.ml_user_id = v.ml_user_id) AS total_envio
               FROM vendas v LEFT JOIN fretes f ON f.envio_id = v.envio_id
@@ -718,8 +726,25 @@ const vendasLinhas = (mlUserId, de, ate) =>
               ORDER BY v.data DESC`).all(mlUserId, de, ate);
 // Linhas baixadas antes de o painel guardar SKU ou origem do estoque: a janela é baixada de novo.
 const vendasSemSku = (mlUserId, de, ate) =>
-  db.prepare('SELECT COUNT(*) AS n FROM vendas WHERE ml_user_id=? AND data >= ? AND data < ? AND (sku IS NULL OR origem IS NULL)')
+  db.prepare('SELECT COUNT(*) AS n FROM vendas WHERE ml_user_id=? AND data >= ? AND data < ? AND (sku IS NULL OR origem IS NULL OR comprador IS NULL)')
     .get(mlUserId, de, ate).n;
+// Pedidos com cliente conhecido e sem o nome ainda (os mais novos primeiro).
+const pedidosSemNome = (mlUserId, limite) => db.prepare(`SELECT DISTINCT order_id FROM vendas WHERE ml_user_id=?
+  AND comprador_id IS NOT NULL AND comprador_nome IS NULL ORDER BY data DESC LIMIT ?`).all(mlUserId, limite).map((r) => r.order_id);
+// Cliente de um pedido lido direto (/orders/{id}): grava nas linhas que existirem.
+const compradorGravarPedido = (orderId, c) => db.prepare('UPDATE vendas SET comprador_id=?, comprador=?, comprador_nome=? WHERE order_id=?')
+  .run(c.id ?? null, c.apelido ?? '', c.nome ?? '', orderId).changes;
+const compradorNomeGravar = (orderId, nome) => db.prepare('UPDATE vendas SET comprador_nome=? WHERE order_id=?').run(nome ?? '', orderId);
+// { order_id: { apelido, nome } } — para a tela Devoluções achar o cliente pelo pedido.
+const compradoresDosPedidos = (orderIds) => {
+  const out = {};
+  for (let i = 0; i < orderIds.length; i += 400) {
+    const lote = orderIds.slice(i, i + 400);
+    for (const r of db.prepare(`SELECT order_id, MAX(comprador) AS apelido, MAX(comprador_nome) AS nome FROM vendas
+      WHERE order_id IN (${lote.map(() => '?').join(',')}) GROUP BY order_id`).all(...lote)) out[r.order_id] = { apelido: r.apelido || null, nome: r.nome || null };
+  }
+  return out;
+};
 
 // ---------- avisos (vendas novas, mensagens, anúncio pausado) ----------
 db.exec(`
@@ -763,6 +788,14 @@ colunaNova('devolucao_defeito', 'produtos TEXT');
 const defeitoGravar = (claimId, defeito, produtos = null) =>
   db.prepare('INSERT OR REPLACE INTO devolucao_defeito (claim_id, defeito, produtos, atualizado_em) VALUES (?,?,?,?)')
     .run(claimId, defeito ? 1 : 0, Array.isArray(produtos) ? JSON.stringify(produtos) : null, agora());
+// Crédito do ML digitado pelo vendedor numa reclamação (quando o depósito não foi ligado sozinho,
+// ou veio com valor diferente). Vale no lugar do crédito ligado automaticamente.
+db.exec(`CREATE TABLE IF NOT EXISTS devolucao_credito (claim_id INTEGER PRIMARY KEY, valor REAL NOT NULL, gravado_em TEXT NOT NULL)`);
+const creditoManualGravar = (claimId, valor) => (valor == null
+  ? db.prepare('DELETE FROM devolucao_credito WHERE claim_id=?').run(claimId)
+  : db.prepare('INSERT OR REPLACE INTO devolucao_credito (claim_id, valor, gravado_em) VALUES (?,?,?)').run(claimId, valor, agora()));
+const creditosManuais = () => Object.fromEntries(db.prepare('SELECT claim_id, valor, gravado_em FROM devolucao_credito').all()
+  .map((r) => [r.claim_id, { valor: r.valor, gravado_em: r.gravado_em }]));
 const defeitosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, defeito FROM devolucao_defeito').all()
   .map((r) => [r.claim_id, r.defeito === 1]));
 const defeitoProdutosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, produtos FROM devolucao_defeito WHERE produtos IS NOT NULL').all()
@@ -1155,7 +1188,7 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // O que antes vivia no .env e o aluno teria de editar à mão: senha do painel, App ID e
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
 const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
-  'amazon_lwa_client_secret', 'amazon_refresh_token']);
+  'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;
@@ -1263,8 +1296,8 @@ module.exports = {
   devolucaoGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe,
-  skusDosPedidos, extraGravar, logisticaGravar, enviosSemLogistica, vendasComLogistica,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, creditoManualGravar, creditosManuais,
+  skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
   shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,

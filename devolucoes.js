@@ -409,11 +409,27 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       } catch (e) { erroCreditos = e.message; }
 
       const defeitos = D.defeitosDe();
+      const manuais = D.creditosManuais();   // crédito do ML digitado pelo vendedor (vale no lugar do ligado)
       const defeitosProdutos = D.defeitoProdutosDe();
       const skusVenda = D.skusDosPedidos([...new Set(linhas.map((l) => l.order_id).filter(Boolean))]);
+      const pedidosDev = [...new Set(linhas.map((l) => l.order_id).filter(Boolean))];
+      const clientes = D.compradoresDosPedidos(pedidosDev);
+      // Cliente que ainda não está na cópia das vendas (pedido antigo): lê o pedido (até 60 por
+      // abertura) e guarda; a busca da tela acha pelo apelido ou pelo nome.
+      const semCliente = pedidosDev.filter((id) => !clientes[id]?.apelido && !clientes[id]?.nome).slice(0, 60);
+      await emLotes(semCliente, 3, async (id) => {
+        const o = await ml(`/orders/${id}`, {}, conta.ml_user_id).catch(() => null);
+        if (!o) return;
+        const c = { id: o.buyer?.id ?? null, apelido: o.buyer?.nickname || '', nome: [o.buyer?.first_name, o.buyer?.last_name].filter(Boolean).join(' ') };
+        D.compradorGravarPedido(id, c);
+        clientes[id] = { apelido: c.apelido || null, nome: c.nome || null };
+      });
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
       const itens = linhas.map((l) => {
-        const cred = ligacao.porClaim[l.claim_id] || null;
+        const auto = ligacao.porClaim[l.claim_id] || null;
+        const manual = manuais[l.claim_id] || null;
+        const cred = manual ? { valor: manual.valor, data: manual.gravado_em, descricao: 'informado por você', manual: true,
+          automatico: auto ? auto.valor : null } : auto;
         const marcado = defeitos[l.claim_id];
         const kit = componentesDa(l, skusVenda, info[l.item_id], mapa);
         const custo = custoDa({ ...l, credito_ml: cred?.valor || 0, defeito: marcado,
@@ -422,11 +438,12 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
         try { acoes = JSON.parse(l.acoes || '[]'); } catch {}
         const rev = json(l.revisao);
         return {
-          credito_ml: cred ? { valor: cred.valor, data: cred.data, descricao: cred.descricao } : null,
+          credito_ml: cred ? { valor: cred.valor, data: cred.data, descricao: cred.descricao, manual: !!cred.manual, automatico: cred.automatico ?? null } : null,
           id: l.claim_id, tipo: l.tipo, tipo_nome: TIPOS[l.tipo] || l.tipo, status: l.status,
           aberta: l.status === 'opened', etapa: l.etapa,
           motivo: motivoTxt[l.motivo_id] || l.motivo_id,
           pedido: l.order_id, item_id: l.item_id, quantidade: l.quantidade,
+          sku: kit.sku || null, comprador: clientes[l.order_id]?.apelido || null, comprador_nome: clientes[l.order_id]?.nome || null,
           titulo: info[l.item_id]?.title || null, foto: info[l.item_id]?.thumbnail || null,
           criada_em: l.criada_em,
           resolucao: l.resolucao ? (RESOLUCAO[l.resolucao] || l.resolucao) : null,
@@ -478,6 +495,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       for (const x of itens) porMotivo[x.motivo || '—'] = (porMotivo[x.motivo || '—'] || 0) + 1;
 
       const s = (f) => cent(soma(itens.map(f)));
+      // Crédito digitado: entra no total; se a reclamação já tinha um crédito ligado, ele sai.
+      const ajusteManual = soma(itens.filter((x) => x.credito_ml?.manual).map((x) => x.credito_ml.valor - num(x.credito_ml.automatico)));
       return {
         dias, de: de.toISOString(), ate: ate.toISOString(), detalhadas_agora: mudaram.length,
         resumo: {
@@ -504,9 +523,10 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
           voltaram_bons: itens.filter((x) => [STATUS_DEVOLUCAO.delivered, STATUS_DEVOLUCAO.shipped, STATUS_DEVOLUCAO.closed].includes(x.status_devolucao) && !x.custo.defeito).length,
           custo_total: s((x) => x.custo.total),
           // crédito do ML: todos os do período (o total é exato) e quanto deles foi ligado
-          credito_ml: cent(soma(creditos.map((c) => c.valor))),
+          // + o que o vendedor digitou (no lugar do ligado na mesma reclamação, sem contar duas vezes)
+          credito_ml: cent(soma(creditos.map((c) => c.valor)) + ajusteManual),
           credito_ml_ligado: s((x) => x.custo.credito_ml),
-          resultado: cent(soma(creditos.map((c) => c.valor)) - soma(itens.map((x) => x.custo.total + x.custo.fretes))),
+          resultado: cent(soma(creditos.map((c) => c.valor)) + ajusteManual - soma(itens.map((x) => x.custo.total + x.custo.fretes))),
         },
         creditos_sem_reclamacao: ligacao.semDono,
         // todos os créditos do período, com a reclamação quando o valor bateu exato
@@ -524,6 +544,20 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
   };
 
   const rotasParam = [
+    // Crédito do ML de uma reclamação, digitado pelo vendedor (ex.: R$ 97,83 pelo produto com
+    // defeito). Vazio apaga e volta a valer o crédito ligado sozinho, se houver.
+    { m: 'PUT', re: /^\/api\/devolucoes\/(\d+)\/credito$/, fn: async ([id], body) => {
+      contaOuErro();
+      const txt = String(body?.valor ?? '').trim();
+      let valor = null;
+      if (txt) {
+        valor = Number(txt.includes(',') ? txt.replace(/\./g, '').replace(',', '.') : txt);
+        if (!Number.isFinite(valor) || valor < 0 || valor > 1e6) throw Object.assign(new Error('Crédito inválido: use o valor em reais, ex.: 97,83.'), { status: 400 });
+        valor = Math.round(valor * 100) / 100;
+      }
+      D.creditoManualGravar(Number(id), valor);
+      return { claim_id: Number(id), credito: valor };
+    } },
     // Marca (ou desmarca) o produto devolvido como com defeito: só a peça com defeito entra no custo.
     { m: 'PUT', re: /^\/api\/devolucoes\/(\d+)\/defeito$/, fn: async ([id], body) => {
       contaOuErro();
