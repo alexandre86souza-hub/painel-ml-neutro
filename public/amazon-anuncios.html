@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anúncios Amazon</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .preco-novo{display:flex;gap:6px;align-items:center}
+  .preco-novo input.margem{width:64px}
+  .preco-novo input{width:96px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;text-align:right}
+  .preco-novo button{white-space:nowrap}
+  .previa{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+  .previa.neg{color:#b91c1c}
+  .chip-st{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#eef1f6;color:#475569;margin-right:4px}
+  .chip-st.ok{background:#e6f4ea;color:#0b6b33}
+  td.est{white-space:nowrap}
+  tr.conc > td{background:#f8fafd;padding:12px 16px}
+  .conc-resumo{font-size:13px;margin:0 0 8px}
+  .conc-resumo b.ok{color:#0b6b33}
+  .conc-resumo b.nao{color:#b45309}
+  .conc table{font-size:13px}
+  .conc .atalhos{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#eef1f6;color:#475569;margin-right:4px}
+  .tag.destaque{background:#fff4d6;color:#7a5600}
+  .tag.voce{background:#dbeafe;color:#1d4ed8}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=8"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Anúncios — Amazon</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">Os seus anúncios na Amazon com preço, estoque, vendas de 30 dias e a margem no preço atual. Para mudar o preço, digite o novo valor ou a margem desejada (%): o lucro estimado aparece antes de salvar.</p>
+    <button type="button" class="bt" id="btAtualizar">Atualizar da Amazon</button>
+  </div>
+  <section class="bloco">
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por produto, SKU ou ASIN" aria-label="Buscar anúncio">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="" aria-pressed="true">Todos</button>
+        <button type="button" data-f="venderam">Venderam em 30 dias</button>
+        <button type="button" data-f="concorrentes">Com concorrentes</button>
+        <button type="button" data-f="semdestaque">Sem o destaque</button>
+        <button type="button" data-f="fba">FBA</button>
+        <button type="button" data-f="proprio">Envio próprio</button>
+        <button type="button" data-f="semcusto">Sem custo</button>
+        <button type="button" data-f="baixa">Margem abaixo de 10%</button>
+      </div>
+    </div>
+    <p class="sub" id="subLista"></p>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando os anúncios da Amazon…</p></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=4"></script>
+<script>
+let dados = null, filtro = '';
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+
+// Margem estimada num preço: comissão média do SKU na Amazon (% do preço) + a parte fixa por
+// unidade (tarifa do FBA), frete médio por unidade, custo do SKU, embalagem (envio próprio)
+// e impostos da Amazon. Sem custo ou sem histórico de tarifa: null.
+const fixos = (i) => (i.fixa_un || 0) + (i.frete_un || 0) + i.custo_unit + (i.embalagem_unit || 0);
+function estimar(i, preco){
+  if(preco == null || i.custo_unit == null || i.tarifa_pct == null) return null;
+  const lucro = preco - preco * i.tarifa_pct - fixos(i) - preco * (dados.imposto_pct || 0) / 100;
+  return { lucro, margem: preco > 0 ? lucro / preco : null };
+}
+// O preço que dá a margem pedida: preço × (1 − comissão − impostos − margem) = custos fixos.
+function precoPelaMargem(i, margem){
+  if(i.custo_unit == null || i.tarifa_pct == null) return null;
+  const sobra = 1 - i.tarifa_pct - (dados.imposto_pct || 0) / 100 - margem;
+  return sobra > 0.01 ? Math.ceil(fixos(i) / sobra * 100) / 100 : null;
+}
+// "89,90", "1.289,90" e "89.90" valem o mesmo que se lê (ponto só é milhar quando há vírgula).
+const lerPreco = (s) => { const x = String(s).trim(); return Number(x.includes(',') ? x.replace(/\./g, '').replace(',', '.') : x); };
+const txtMargem = (e) => (e ? `${real(e.lucro)} · ${pct(e.margem)}` : '—');
+
+$('segFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f;
+  for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintar();
+};
+$('busca').oninput = () => pintar();
+$('btAtualizar').onclick = () => carregar(true);
+
+function pintar(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  const itens = dados.itens.filter((i) => {
+    const e = estimar(i, i.preco);
+    if(filtro === 'venderam' && !i.vendas_30) return false;
+    if(filtro === 'concorrentes' && !(i.conc?.outros > 0)) return false;
+    if(filtro === 'semdestaque' && !(i.conc?.outros > 0 && !i.conc.voce_destaque)) return false;
+    if(filtro === 'fba' && i.canal !== 'FBA') return false;
+    if(filtro === 'proprio' && i.canal !== 'proprio') return false;
+    if(filtro === 'semcusto' && i.custo_unit != null) return false;
+    if(filtro === 'baixa' && !(e && e.margem < 0.10)) return false;
+    return !q || [i.titulo, i.sku, i.asin, i.nome_amazon].some((t) => (t || '').toLowerCase().includes(q));
+  });
+  $('subLista').textContent = (dados.conc_pendentes ? `Lendo os concorrentes de ${numero(dados.conc_pendentes)} produto(s) na Amazon (20 a cada 10 segundos); a tela se atualiza sozinha. ` : '')
+    + `${numero(itens.length)} de ${numero(dados.itens.length)} anúncio(s). Lucro e margem são estimados com a tarifa média de cada produto na Amazon (últimos 3 meses) e os impostos de ${String(dados.imposto_pct).replace('.', ',')}%.`;
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Envio', 'Estoque', 'Vendas 30d', 'Preço atual', 'Custo', 'Lucro · margem no preço atual', 'Novo preço', 'Concorrentes']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const i of itens.slice(0, 500)){
+    const tr = el('tr');
+    const st = el('span'); for(const s of i.status) st.appendChild(el('span', 'chip-st' + (s === 'BUYABLE' ? ' ok' : ''), s === 'BUYABLE' ? 'à venda' : s === 'DISCOVERABLE' ? 'visível' : s.toLowerCase()));
+    const prod = celulaProduto(i.foto, i.titulo, `${i.sku}${i.asin ? ' · ' + i.asin : ''}`, i.link);
+    prod.querySelector('.prod > div').appendChild(st);
+    const e = estimar(i, i.preco);
+    const novo = el('td'); const caixa = el('div', 'preco-novo');
+    const inp = el('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.placeholder = i.preco != null ? String(i.preco).replace('.', ',') : '0,00';
+    inp.setAttribute('aria-label', 'Novo preço de ' + i.sku);
+    const bt = el('button', 'bt', 'Salvar'); bt.type = 'button'; bt.disabled = true;
+    // ou a margem desejada (%): calcula o preço e preenche o campo de preço
+    const inpM = el('input', 'margem'); inpM.type = 'text'; inpM.inputMode = 'decimal'; inpM.placeholder = 'ou %';
+    inpM.title = 'Margem de lucro desejada (%): o painel calcula o preço'; inpM.setAttribute('aria-label', 'Margem desejada de ' + i.sku);
+    inpM.disabled = i.custo_unit == null || i.tarifa_pct == null;
+    if(inpM.disabled) inpM.title = 'Sem custo do produto ou sem histórico de tarifa: não dá para calcular pela margem';
+    const prev = el('span', 'previa');
+    inp.oninput = () => {
+      const v = lerPreco(inp.value);
+      const ok = inp.value.trim() && Number.isFinite(v) && v > 0;
+      bt.disabled = !ok;
+      if(!ok){ prev.textContent = ''; prev.className = 'previa'; return; }
+      const ne = estimar(i, v);
+      prev.textContent = ne ? `fica ${txtMargem(ne)}` : 'sem custo ou tarifa para estimar';
+      prev.className = 'previa' + (ne && ne.lucro < 0 ? ' neg' : '');
+    };
+    inpM.oninput = () => {
+      const m = lerPreco(inpM.value.replace('%', ''));
+      if(!inpM.value.trim() || !Number.isFinite(m)){ return; }
+      const p = precoPelaMargem(i, m / 100);
+      if(p == null){ inp.value = ''; inp.oninput(); prev.textContent = 'margem alta demais para os custos deste produto'; prev.className = 'previa neg'; return; }
+      inp.value = p.toFixed(2).replace('.', ','); inp.oninput();
+    };
+    bt.onclick = async () => {
+      const v = lerPreco(inp.value);
+      const ne = estimar(i, v);
+      if(!confirm(`Mudar o preço na Amazon?\n\n${i.titulo}\n${i.sku}\n\nDe ${real(i.preco)} para ${real(v)}`
+        + (ne ? `\nLucro estimado: ${txtMargem(ne)}` : '') + '\n\nA Amazon aplica em alguns minutos.')) return;
+      bt.disabled = true; bt.textContent = 'Enviando…';
+      try{
+        const r = await api('/api/amazon/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku: i.sku, preco: v }) });
+        i.preco = r.preco; inp.value = ''; prev.textContent = '';
+        aviso(`A Amazon aceitou o preço de ${real(r.preco)} para ${i.sku}. Ele aparece no anúncio em alguns minutos.` + (r.avisos.length ? ' Avisos da Amazon: ' + r.avisos.join(' · ') : ''), 'ok');
+        pintar();
+      }catch(err){ aviso(`Não mudou o preço de ${i.sku}: ${err.message}`); bt.disabled = false; }
+      bt.textContent = 'Salvar';
+    };
+    caixa.append(inp, inpM, bt); novo.append(caixa, prev);
+    // Concorrentes: abre uma linha embaixo com as ofertas do mesmo ASIN
+    const tdConc = el('td'); const btConc = el('button', 'bt', 'Ver'); btConc.type = 'button';
+    btConc.disabled = !i.asin; if(!i.asin) btConc.title = 'Anúncio sem ASIN';
+    if(i.conc){
+      const c = i.conc;
+      tdConc.appendChild(el('span', 'previa', !c.outros ? 'só você'
+        : `${numero(c.outros)} vendedor(es) · menor ${real(c.menor_outro)}` + (c.voce_destaque ? ' · destaque é seu' : ' · destaque com outro')));
+    }
+    tdConc.prepend(btConc);
+    let linhaConc = null;
+    const usarPreco = (v) => { inpM.value = ''; inp.value = String(v.toFixed(2)).replace('.', ','); inp.oninput(); inp.focus(); };
+    btConc.onclick = async () => {
+      if(linhaConc){ linhaConc.remove(); linhaConc = null; btConc.textContent = 'Ver'; return; }
+      linhaConc = el('tr', 'conc'); const cel = el('td'); cel.colSpan = 9; linhaConc.appendChild(cel);
+      tr.after(linhaConc); btConc.textContent = 'Fechar';
+      cel.appendChild(el('p', 'carregando', 'Consultando as ofertas na Amazon…'));
+      try{ pintarConcorrentes(cel, i, await api('/api/amazon/concorrentes?asin=' + encodeURIComponent(i.asin)), usarPreco); }
+      catch(err){ cel.innerHTML = ''; cel.appendChild(el('p', 'vazio', 'Não consegui ler as ofertas: ' + err.message)); }
+    };
+    tr.append(prod, el('td', null, i.canal === 'FBA' ? 'FBA' : 'próprio'), el('td', 'est', i.estoque == null ? '—' : numero(i.estoque)),
+      el('td', null, numero(i.vendas_30)), el('td', null, real(i.preco)),
+      el('td', null, i.custo_unit == null ? 'sem custo' : real(i.custo_unit)),
+      el('td', e == null ? null : e.lucro < 0 ? 'neg' : 'pos', txtMargem(e)), novo, tdConc);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  if(itens.length > 500) box.appendChild(el('p', 'sub', `Mostrando 500 de ${numero(itens.length)}. Use a busca.`));
+}
+
+// Ofertas do mesmo produto: preço, frete, FBA, oferta em destaque e, para cada preço, o
+// lucro e a margem que VOCÊ teria cobrando aquele valor. "Usar" preenche o novo preço.
+function pintarConcorrentes(cel, i, r, usarPreco){
+  cel.innerHTML = ''; const box = el('div', 'conc');
+  const outros = r.ofertas.filter((o) => !o.voce);
+  const resumo = el('p', 'conc-resumo');
+  resumo.append(`${numero(r.total_ofertas)} oferta(s) deste produto. `);
+  if(r.destaque) resumo.append(`Oferta em destaque (Buy Box): ${real(r.destaque.total)}${r.destaque.fba ? ' · FBA' : ''}. `);
+  resumo.appendChild(el('b', r.voce_destaque ? 'ok' : 'nao', r.voce_destaque ? 'Você está com o destaque.' : r.destaque ? 'O destaque está com outro vendedor.' : 'Nenhuma oferta em destaque agora.'));
+  box.appendChild(resumo);
+  // vendas: a Amazon não informa as de cada concorrente; o ranking de mais vendidos é do produto
+  const vend = el('p', 'conc-resumo');
+  vend.append(`Suas vendas deste produto em 30 dias: ${numero(i.vendas_30)} un. `);
+  if(r.ranking?.length) vend.append(`Ranking de mais vendidos da Amazon (todos os vendedores juntos; quanto menor, mais vende): `
+    + r.ranking.map((x) => `nº ${numero(x.posicao)} em ${x.titulo}`).join(' · ') + '.');
+  else vend.append('A Amazon não informou o ranking de vendas deste produto.');
+  vend.appendChild(el('span', 'previa', 'A Amazon não informa quantas vendas cada concorrente fez.'));
+  box.appendChild(vend);
+  if(!outros.length) box.appendChild(el('p', 'sub', 'Nenhum outro vendedor neste produto: só a sua oferta.'));
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Vendedor', 'Preço', 'Frete', 'Total', 'Envio', 'Avaliação', 'Se você cobrar este total', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody'); let n = 0;
+  for(const o of r.ofertas){
+    const tr = el('tr');
+    const quem = el('td');
+    if(o.voce) quem.appendChild(el('span', 'tag voce', 'você'));
+    else{
+      // A Amazon só dá o código: "ver loja" abre a página pública do vendedor, onde aparece o
+      // nome, e "dar nome" guarda o nome no painel para todos os produtos em que ele aparecer.
+      const n0 = ++n;
+      const nome = el('b', null, o.vendedor_nome || `Vendedor ${n0}`);
+      quem.appendChild(nome);
+      if(o.loja){
+        const lk = el('a', 'previa', 'ver loja ↗'); lk.href = o.loja; lk.target = '_blank'; lk.rel = 'noopener noreferrer';
+        const dn = el('button', 'previa', o.vendedor_nome ? 'mudar nome' : 'dar nome'); dn.type = 'button';
+        dn.style.cssText = 'border:0;background:none;padding:0;color:var(--brand);cursor:pointer;text-decoration:underline';
+        dn.onclick = async () => {
+          const v = prompt('Nome deste vendedor (como aparece na página da loja na Amazon). Vazio apaga.', o.vendedor_nome || '');
+          if(v === null) return;
+          try{
+            const r = await api('/api/amazon/vendedores', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: o.vendedor_id, nome: v }) });
+            o.vendedor_nome = r.nome; nome.textContent = r.nome || `Vendedor ${n0}`; dn.textContent = r.nome ? 'mudar nome' : 'dar nome';
+          }catch(e){ aviso(e.message); }
+        };
+        quem.append(lk, dn);
+      }
+    }
+    if(o.destaque) quem.appendChild(el('span', 'tag destaque', 'destaque'));
+    const e = estimar(i, o.total);
+    const acao = el('td');
+    if(!o.voce){ const b = el('button', 'bt', 'Usar'); b.type = 'button'; b.onclick = () => usarPreco(o.total); acao.appendChild(b); }
+    tr.append(quem, el('td', null, real(o.preco)), el('td', null, o.frete ? real(o.frete) : 'grátis'), el('td', null, real(o.total)),
+      el('td', null, [o.fba ? 'FBA' : 'próprio', o.prime ? 'Prime' : null].filter(Boolean).join(' · ')),
+      el('td', null, o.avaliacao_pct != null ? `${numero(o.avaliacao_pct)}% · ${numero(o.avaliacoes)}` : '—'),
+      el('td', o.voce || !e ? null : e.lucro < 0 ? 'neg' : 'pos', o.voce ? '(sua oferta)' : txtMargem(e)), acao);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  // atalhos
+  const at = el('div', 'atalhos');
+  const atalho = (rot, v) => { if(v == null || !(v > 0)) return; const e = estimar(i, v);
+    const b = el('button', 'bt', `${rot}: ${real(v)}${e ? ' → ' + txtMargem(e) : ''}`); b.type = 'button'; b.onclick = () => usarPreco(v); at.appendChild(b); };
+  if(r.destaque && !r.destaque.voce) atalho('Igualar ao destaque', r.destaque.total);
+  if(r.menor_outro) atalho('R$ 0,10 abaixo do menor', Math.round((r.menor_outro.total - 0.1) * 100) / 100);
+  if(at.childElementCount) box.appendChild(at);
+  // margem desejada a partir do concorrente
+  const atM = el('div', 'atalhos');
+  for(const m of [10, 15, 20, 25]){ const p = precoPelaMargem(i, m / 100); if(p == null) continue;
+    const b = el('button', 'bt', `Margem ${m}%: ${real(p)}${r.menor_outro ? (p <= r.menor_outro.total ? ' (abaixo do menor)' : ' (acima do menor)') : ''}`);
+    b.type = 'button'; b.onclick = () => usarPreco(p); atM.appendChild(b); }
+  if(atM.childElementCount) box.appendChild(atM);
+  box.appendChild(el('p', 'sub', `Preços da Amazon de ${new Date(r.em).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })} (a lista é guardada por 10 minutos). "Total" = preço + frete, que é o que o comprador compara. O lucro usa a tarifa média deste produto e os seus custos.`));
+  cel.appendChild(box);
+}
+
+// Enquanto a Amazon entrega a concorrência, a lista se atualiza sozinha (sem perder o que foi digitado: só repinta se nada estiver sendo editado).
+let releitura = null;
+function agendarReleitura(){
+  clearTimeout(releitura);
+  if(!dados?.conc_pendentes) return;
+  releitura = setTimeout(async () => {
+    const editando = [...document.querySelectorAll('.preco-novo input')].some((x) => x.value.trim()) || document.querySelector('tr.conc');
+    try{ const r = await api('/api/amazon/anuncios'); if(!editando){ dados = r; pintar(); } else dados.conc_pendentes = r.conc_pendentes; }catch{}
+    agendarReleitura();
+  }, 60000);
+}
+
+async function carregar(recarregar){
+  aviso('');
+  $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Carregando os anúncios da Amazon…'));
+  try{
+    dados = await api('/api/amazon/anuncios' + (recarregar ? '?recarregar=1' : ''));
+    pintar(); agendarReleitura();
+  }catch(e){ $('lista').innerHTML = ''; aviso(e.message); }
+}
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

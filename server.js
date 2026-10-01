@@ -19,6 +19,7 @@ const { URL } = require('node:url');
 const D = require('./db.js');
 const APP = require('./app-ml.js');
 const A = require('./public/analise.js'); // o mesmo arquivo que a tela usa
+const SEG = require('./seguranca.js');   // senha forte e verificação em duas etapas
 
 const PORT = Number(process.env.PORT) || 3100;
 const PORTA_PUBLICA = Number(process.env.PORTA_PUBLICA) || 3101;
@@ -150,23 +151,63 @@ const PAGINA_PRIMEIRO_ACESSO = (erro) => pagina('Primeiro acesso', `${PASSOS(0)}
 <p>Ela protege as contas do Mercado Livre que você conectar. Fica guardada só neste computador, cifrada.</p>
 <form method="POST" action="/primeiro-acesso">
 <label for="s1">Senha</label>
-<input id="s1" name="senha" type="password" minlength="8" required autofocus autocomplete="new-password"
+<input id="s1" name="senha" type="password" minlength="${SEG.SENHA_MIN}" required autofocus autocomplete="new-password"
  aria-describedby="d1${erro ? ' e1' : ''}">
-<p class="dica" id="d1">Mínimo de 8 caracteres.</p>
+<p class="dica" id="d1">${esc(SEG.POLITICA)}</p>
 <label for="s2">Repita a senha</label>
-<input id="s2" name="confirmacao" type="password" minlength="8" required autocomplete="new-password">
+<input id="s2" name="confirmacao" type="password" minlength="${SEG.SENHA_MIN}" required autocomplete="new-password">
 ${erro ? `<p class="erro" id="e1" role="alert">${esc(erro)}</p>` : ''}
 <button>Criar senha e continuar</button></form>`, erro ? 400 : 200);
 
 // erro: texto da mensagem; codigo: 401 senha errada, 429 bloqueado por tentativas.
+// Com a verificação em duas etapas ativa, o login pede também o código do aplicativo autenticador.
 const PAGINA_LOGIN = (erro, codigo = 401) => pagina('Entrar', `<h1>Painel Mercado Livre</h1>
-<p>Digite a senha que você criou no primeiro acesso.</p>
+<p>Digite a senha do painel${mfaAtivo() ? ' e o código de 6 dígitos do aplicativo autenticador do celular' : ''}.</p>
 <form method="POST" action="/login">
 <label for="s">Senha</label>
 <input id="s" name="senha" type="password" autofocus required autocomplete="current-password"
  ${erro ? 'aria-describedby="e1"' : ''}>
+${mfaAtivo() ? `<label for="c">Código do aplicativo autenticador</label>
+<input id="c" name="codigo" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autocomplete="one-time-code">` : ''}
 ${erro ? `<p class="erro" id="e1" role="alert">${esc(erro)}</p>` : ''}
 <button>Entrar</button></form>`, erro ? codigo : 200);
+
+// ---------- política de acesso: senha forte e verificação em duas etapas (seguranca.js) ----------
+const mfaAtivo = () => !!D.configLer('painel_2fa_segredo');
+// O que falta para liberar o painel: trocar a senha (fraca ou vencida) e depois ativar o 2FA.
+const pendenciaSeguranca = () => (D.configLer('painel_senha_fraca') || SEG.senhaVencida(D.configLer('painel_senha_em')))
+  ? 'senha' : !mfaAtivo() ? '2fa' : null;
+const nomePainel = () => { try { return marcaAtual().nome; } catch { return 'Painel'; } };
+
+const PAGINA_TROCAR_SENHA = (erro) => pagina('Trocar a senha', `<h1>Troque a senha do painel</h1>
+<p>${D.configLer('painel_senha_fraca') ? 'A senha atual não atende a política de segurança do painel.' : 'A senha do painel venceu (validade de 365 dias).'}
+Crie uma nova para continuar.</p>
+<form method="POST" action="/trocar-senha">
+<label for="a">Senha atual</label>
+<input id="a" name="atual" type="password" required autofocus autocomplete="current-password">
+<label for="n1">Senha nova</label>
+<input id="n1" name="nova" type="password" minlength="${SEG.SENHA_MIN}" required autocomplete="new-password" aria-describedby="d1">
+<p class="dica" id="d1">${esc(SEG.POLITICA)}</p>
+<label for="n2">Repita a senha nova</label>
+<input id="n2" name="confirmacao" type="password" minlength="${SEG.SENHA_MIN}" required autocomplete="new-password">
+${erro ? `<p class="erro" role="alert">${esc(erro)}</p>` : ''}
+<button>Trocar a senha</button></form>`, erro ? 400 : 200);
+
+const PAGINA_ATIVAR_2FA = (segredo, erro) => pagina('Verificação em duas etapas', `<h1>Ative a verificação em duas etapas</h1>
+<p>A partir de agora, entrar no painel pede a senha e um código de 6 dígitos que muda a cada 30 segundos no seu celular.</p>
+<ol>
+<li>Instale no celular um aplicativo autenticador: <b>Google Authenticator</b> ou <b>Microsoft Authenticator</b> (gratuitos).</li>
+<li>No aplicativo, toque em <b>+</b> e escolha <b>Inserir chave de configuração</b> (ou "Digitar uma chave").
+ Nome da conta: <b>${esc(nomePainel())}</b>. Chave:<br><code style="font-size:18px;letter-spacing:1px">${esc(SEG.segredoLegivel(segredo))}</code><br>
+ Tipo: <b>baseada em horário</b>.</li>
+<li>Digite abaixo o código que o aplicativo mostrar.</li>
+</ol>
+<form method="POST" action="/ativar-2fa">
+<label for="c">Código de 6 dígitos</label>
+<input id="c" name="codigo" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus autocomplete="one-time-code">
+${erro ? `<p class="erro" role="alert">${esc(erro)}</p>` : ''}
+<button>Ativar</button></form>
+<p class="dica">Perdeu o celular? No computador onde o painel está instalado, rode <code>npm run desativar-2fa</code> e ative de novo.</p>`, erro ? 400 : 200);
 
 // Pela internet, antes de existir senha: quem achasse a URL criaria a senha no lugar do aluno.
 const PAGINA_SO_NO_COMPUTADOR = () => pagina('Primeiro acesso', `${PASSOS(0)}
@@ -901,9 +942,27 @@ const routes = {
   'POST /api/config/senha': async (_u, body) => {
     if (!D.senhaConfere(String(body.atual || ''))) throw erro400('Senha atual incorreta.');
     const nova = String(body.nova || '');
-    if (nova.length < 8) throw erro400('A senha nova precisa de ao menos 8 caracteres.');
+    const fraca = SEG.problemaSenha(nova);
+    if (fraca) throw erro400(fraca);
     D.senhaDefinir(nova); // derruba todas as sessões, inclusive esta
     return { ok: true, relogar: true };
+  },
+
+  // Situação do acesso ao painel (tela Configurações → Segurança).
+  'GET /api/seguranca': async () => {
+    const em = D.configLer('painel_senha_em');
+    return { politica: SEG.POLITICA, senha_definida_em: em,
+      senha_vence_em: em ? new Date(Date.parse(em) + SEG.VALIDADE_SENHA_DIAS * 864e5).toISOString() : null,
+      mfa_ativo: mfaAtivo(), mfa_desde: D.configLer('painel_2fa_em') };
+  },
+  // Trocar de celular: com a senha e o código atuais, desliga o 2FA; na hora o painel pede
+  // para ativar de novo (com uma chave nova) no celular novo.
+  'POST /api/seguranca/2fa/reconfigurar': async (_u, body) => {
+    if (!D.senhaConfere(String(body?.senha || ''))) throw erro400('Senha incorreta.');
+    if (!SEG.codigoConfere(D.configLer('painel_2fa_segredo'), body?.codigo)) throw erro400('Código do aplicativo incorreto.');
+    D.configGravar('painel_2fa_segredo', null);
+    D.configGravar('painel_2fa_pendente', null);
+    return { ok: true, proximo: '/ativar-2fa' };
   },
 
   'POST /api/scraper/reiniciar': async () => {
@@ -953,10 +1012,15 @@ const routes = {
     // Filtro por produto do kit (DQ-407): o ML não busca por componente do SKU, então a
     // lista vem de todos os anúncios da conta e a ordem/paginação é feita aqui.
     const produto = (url.searchParams.get('produto') || '').trim();
-    const comProduto = produto ? new Set(await custosMod.idsComProduto(conta, produto)) : null;
+    const soProduto = produto ? new Set(await custosMod.idsComProduto(conta, produto)) : null;
+    // Só os anúncios com concorrentes marcados (Detalhes → Concorrentes), junto com o filtro por produto.
+    const soConc = url.searchParams.get('concorrentes') ? new Set(D.concItensMarcados(conta.ml_user_id)) : null;
+    const comProduto = soProduto && soConc ? new Set([...soProduto].filter((x) => soConc.has(x))) : (soProduto || soConc);
 
     let ids, total, aviso = null;
-    if (comProduto && !comProduto.size) return { total: 0, offset, dias, itens: [], aviso: `Nenhum anúncio tem o produto ${produto} no SKU.` };
+    if (comProduto && !comProduto.size) return { total: 0, offset, dias, itens: [], aviso: soConc && !soConc.size
+      ? 'Nenhum anúncio tem concorrente marcado ainda: abra Detalhes → Concorrentes num anúncio e marque os iguais ao seu.'
+      : soConc ? 'Nenhum anúncio com concorrente marcado neste filtro.' : `Nenhum anúncio tem o produto ${produto} no SKU.` };
     if (ORDENS_PERIODO.includes(ordem) || comProduto) {
       // O ML só ordena pelo total de sempre. "No período" e curva ABC saem da cópia local
       // dos pedidos: pega todos os anúncios do filtro, ordena aqui e corta a página.
@@ -1034,12 +1098,13 @@ const routes = {
     })));
 
     const custos = D.custosDe(ids);
+    const conc = D.concResumo(ids);
     const porId = Object.fromEntries(multi.filter((x) => x.code === 200).map((x) => [x.body.id, x.body]));
     const mapa = custosMod.catalogoMapa();
     const itens = ids.filter((id) => porId[id]).map((id) => {
       const { attributes, ...resto } = porId[id];   // a lista de atributos é grande e a tela não usa
       return {
-        ...resto, visitas: visitas[id], custo: custos[id] || null,
+        ...resto, visitas: visitas[id], custo: custos[id] || null, concorrentes: conc[id] || null,
         tem_familia: !!porId[id].family_name, tem_variacoes: (porId[id].variations || []).length > 0,
         composicao: custosMod.composicao(porId[id], mapa),
         gtin: (attributes || []).find((a) => a.id === 'GTIN')?.value_name || null,
@@ -1897,9 +1962,32 @@ routes['GET /api/ads/comparativo'] = async (url) => {
   routes['GET /api/avisos'] = async (url, corpo) => { vigiarCampanhas().catch(() => null); return avisosRota(url, corpo); };
 }
 
+// ---------- Shopee: conexão da loja (shopee.js) ----------
+// As rotas entram no mesmo despacho (sessão e origem iguais às outras); o retorno da
+// autorização chega pelo endereço público, em /shopee/callback/{state} (ver tratarPublico).
+const shopeeMod = require('./shopee.js').criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth,
+  portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
+  pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
+Object.assign(routes, shopeeMod.rotas);
+rotasParam.push(...shopeeMod.rotasParam);
+
+// ---------- concorrentes no Mercado Livre (concorrentes.js) ----------
+const concMod = require('./concorrentes.js').criar({ D, ml, scraper, contaOuErro, exigeItemId, classificarBusca, lembrarSessao });
+Object.assign(routes, concMod.rotas);
+rotasParam.push(...concMod.rotasParam);
+
+// ---------- Amazon: conexão da conta (amazon.js) ----------
+// Aplicativo privado autorizado no Seller Central: sem retorno pelo túnel. Dados da Amazon
+// não vão para o MCP (compromisso com a Amazon; test-amazon.js confere).
+const amazonMod = require('./amazon.js').criar({ D, janela });
+Object.assign(routes, amazonMod.rotas);
+rotasParam.push(...amazonMod.rotasParam);
+
 // ---------- identidade do painel: nome e logo da empresa ----------
 // O código não carrega a marca de ninguém: nome e logo são digitados na tela Empresa e ficam
-// no SQLite (tabela estado), do painel inteiro e não de uma conta. Logo: PNG, JPG ou WebP
+// no SQLite (tabela estado). Cada conta conectada tem a sua identidade (chave com o id da
+// conta): trocar de conta troca o logo. Sem identidade própria vale a geral (gravada sem
+// conta ativa) e, sem nome nenhum, o apelido da conta no ML. Logo: PNG, JPG ou WebP
 // até 300 KB, conferido pelos primeiros bytes — SVG fica de fora (pode carregar script e é
 // servido na mesma origem do painel).
 const MARCA_PADRAO = 'Painel Mercado Livre';
@@ -1929,18 +2017,30 @@ function validarMarca(b) {
   }
   return out;
 }
-const marcaLogo = () => { try { return JSON.parse(D.configLer('marca_logo') || 'null'); } catch { return null; } };
-const marcaAtual = () => {
-  const nome = D.configLer('marca_nome');
-  return { nome: nome || MARCA_PADRAO, personalizado: !!nome, tem_logo: !!marcaLogo(), v: D.configLer('marca_v') || '0' };
+const chaveMarca = (campo, contaId) => (contaId ? `marca_${campo}:${contaId}` : `marca_${campo}`);
+// da conta; se ela não tem, a geral
+const marcaLer = (campo, contaId) => (contaId && D.configLer(chaveMarca(campo, contaId))) || D.configLer(chaveMarca(campo, null));
+const marcaLogo = (contaId = D.contaAtivaId()) => { try { return JSON.parse(marcaLer('logo', contaId) || 'null'); } catch { return null; } };
+// A Amazon tem identidade própria (conta "amazon"): não é conta do Mercado Livre.
+const contaDaMarca = (url) => (url?.searchParams?.get('conta') === 'amazon' ? 'amazon' : D.contaAtivaId());
+const marcaAtual = (contaId = D.contaAtivaId()) => {
+  const amazon = contaId === 'amazon';
+  const nome = marcaLer('nome', contaId) || (amazon ? D.configLer('amazon_vendedor') || 'Amazon'
+    : contaId ? D.contaObter(Number(contaId))?.nickname : null);
+  return { conta: amazon ? 'amazon' : contaId ? Number(contaId) : null, nome: nome || MARCA_PADRAO, personalizado: !!nome,
+    nome_proprio: (contaId && D.configLer(chaveMarca('nome', contaId))) || '',
+    tem_logo: !!marcaLogo(contaId),
+    v: `${contaId || 0}-${marcaLer('v', contaId) || '0'}` };   // muda com a conta e a cada gravação: o navegador busca o logo de novo
 };
-routes['GET /api/marca'] = async () => marcaAtual();
-routes['PUT /api/marca'] = async (_u, body) => {
+routes['GET /api/marca'] = async (url) => marcaAtual(contaDaMarca(url));
+// Grava a identidade da conta ativa (sem conta conectada ainda, a geral); ?conta=amazon, a da Amazon.
+routes['PUT /api/marca'] = async (url, body) => {
   const m = validarMarca(body);
-  if ('nome' in m) D.configGravar('marca_nome', m.nome);
-  if ('logo' in m) D.configGravar('marca_logo', m.logo ? JSON.stringify(m.logo) : null);
-  D.configGravar('marca_v', String(Date.now()));   // muda o endereço do logo: o navegador busca de novo
-  return marcaAtual();
+  const contaId = contaDaMarca(url);
+  if ('nome' in m) D.configGravar(chaveMarca('nome', contaId), m.nome);
+  if ('logo' in m) D.configGravar(chaveMarca('logo', contaId), m.logo ? JSON.stringify(m.logo) : null);
+  D.configGravar(chaveMarca('v', contaId), String(Date.now()));
+  return marcaAtual(contaId);
 };
 
 // Dashboard: junta o resumo das outras telas (cada parte falha sozinha, sem derrubar as outras).
@@ -2039,6 +2139,8 @@ async function tratarPublico(req, res) {
   }
 
   if (url.pathname === '/callback' && req.method === 'GET') return callbackOAuth(req, res, url);
+  // Retorno da autorização da Shopee: o state (uso único) vai no caminho.
+  if (req.method === 'GET' && /^\/shopee\/callback\/[0-9a-f]{32}$/.test(url.pathname)) return shopeeMod.callback(res, url);
 
   // O painel inteiro, pela internet, com as regras de "online" (ver tratarPainel).
   if (painelOnline()) return tratarPainel(req, res, true);
@@ -2124,7 +2226,8 @@ async function tratarPainel(req, res, online = false) {
     if (req.method === 'POST') {
       const f = new URLSearchParams(await lerCorpo(req, 4096));
       const senha = f.get('senha') || '';
-      if (senha.length < 8) return enviarHtml(res, PAGINA_PRIMEIRO_ACESSO('A senha precisa de ao menos 8 caracteres.'));
+      const fraca = SEG.problemaSenha(senha);
+      if (fraca) return enviarHtml(res, PAGINA_PRIMEIRO_ACESSO(fraca));
       if (senha !== (f.get('confirmacao') || '')) return enviarHtml(res, PAGINA_PRIMEIRO_ACESSO('As duas senhas não são iguais.'));
       D.senhaDefinir(senha);
       return redirecionar(res, '/configuracao.html', { 'Set-Cookie': cookieSessao(D.sessaoCriar()) });
@@ -2144,11 +2247,19 @@ async function tratarPainel(req, res, online = false) {
         return enviarHtml(res, PAGINA_LOGIN(`Muitas tentativas erradas. Tente de novo em ${espera} min `
           + '(ou entre pelo computador onde o painel está instalado).', 429));
       }
-      const enviada = new URLSearchParams(await lerCorpo(req, 4096)).get('senha') || '';
+      const f = new URLSearchParams(await lerCorpo(req, 4096));
+      const enviada = f.get('senha') || '';
       if (!D.senhaConfere(enviada)) {
         if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); }
         return enviarHtml(res, PAGINA_LOGIN('Senha incorreta.'));
       }
+      // código errado conta como tentativa errada, igual à senha
+      if (mfaAtivo() && !SEG.codigoConfere(D.configLer('painel_2fa_segredo'), f.get('codigo'))) {
+        if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); }
+        return enviarHtml(res, PAGINA_LOGIN('Código de verificação incorreto ou vencido. Confira o horário do celular e tente de novo.'));
+      }
+      // senha criada antes da política atual: entra, mas vai direto trocar
+      if (SEG.problemaSenha(enviada)) D.configGravar('painel_senha_fraca', '1');
       if (online) tentativas.delete(chaveIp);
       const destino = D.contasListar().length ? '/' : '/configuracao.html';
       return redirecionar(res, destino, { 'Set-Cookie': cookieSessao(D.sessaoCriar(), undefined, online) });
@@ -2165,9 +2276,52 @@ async function tratarPainel(req, res, online = false) {
     return redirecionar(res, '/login');
   }
 
+  // Política de acesso: com a senha fraca/vencida ou sem o 2FA, só estas duas telas abrem.
+  if (url.pathname === '/trocar-senha') {
+    if (req.method === 'POST') {
+      const f = new URLSearchParams(await lerCorpo(req, 4096));
+      const atual = f.get('atual') || '', nova = f.get('nova') || '';
+      if (!D.senhaConfere(atual)) return enviarHtml(res, PAGINA_TROCAR_SENHA('Senha atual incorreta.'));
+      const fraca = SEG.problemaSenha(nova);
+      if (fraca) return enviarHtml(res, PAGINA_TROCAR_SENHA(fraca));
+      if (nova !== (f.get('confirmacao') || '')) return enviarHtml(res, PAGINA_TROCAR_SENHA('As duas senhas novas não são iguais.'));
+      if (nova === atual) return enviarHtml(res, PAGINA_TROCAR_SENHA('A senha nova precisa ser diferente da atual.'));
+      D.senhaDefinir(nova);   // derruba todas as sessões: esta ganha uma nova
+      return redirecionar(res, '/', { 'Set-Cookie': cookieSessao(D.sessaoCriar(), undefined, online) });
+    }
+    return enviarHtml(res, PAGINA_TROCAR_SENHA());
+  }
+  if (url.pathname === '/ativar-2fa') {
+    if (mfaAtivo()) return redirecionar(res, '/');
+    let pend = D.configLer('painel_2fa_pendente');
+    if (!pend) { pend = SEG.novoSegredo(); D.configGravar('painel_2fa_pendente', pend); }
+    if (req.method === 'POST') {
+      const f = new URLSearchParams(await lerCorpo(req, 4096));
+      if (!SEG.codigoConfere(pend, f.get('codigo'))) {
+        return enviarHtml(res, PAGINA_ATIVAR_2FA(pend, 'Código não confere. Confira se digitou a chave certa no aplicativo e se o horário do celular está automático.'));
+      }
+      D.configGravar('painel_2fa_segredo', pend);
+      D.configGravar('painel_2fa_pendente', null);
+      D.configGravar('painel_2fa_em', new Date().toISOString());
+      return redirecionar(res, '/');
+    }
+    return enviarHtml(res, PAGINA_ATIVAR_2FA(pend));
+  }
+  const pendencia = pendenciaSeguranca();
+  if (pendencia && url.pathname !== '/sair') {
+    if (url.pathname.startsWith('/api/')) {
+      return send(403, { pendencia, error: pendencia === 'senha' ? 'Troque a senha do painel antes de continuar.'
+        : 'Ative a verificação em duas etapas antes de continuar.' });
+    }
+    return redirecionar(res, pendencia === 'senha' ? '/trocar-senha' : '/ativar-2fa');
+  }
+
   // Logo da empresa (tela Empresa): imagem, não JSON. Só os três tipos aceitos em validarMarca.
   if (req.method === 'GET' && url.pathname === '/api/marca/logo') {
-    const logo = marcaLogo();
+    // ?conta=ID: o logo de outra conta conectada (tabela "todas as contas" do Dashboard)
+    const pedida = Number(url.searchParams.get('conta'));
+    const logo = url.searchParams.get('conta') === 'amazon' ? marcaLogo('amazon')
+      : pedida && D.contaObter(pedida) ? marcaLogo(pedida) : marcaLogo();
     if (!logo || !LOGO_ASSINATURA[logo.mime]) return send(404, { error: 'O painel não tem logo.' });
     res.writeHead(200, { 'Content-Type': logo.mime, 'Cache-Control': 'private, max-age=86400', ...SEGURANCA });
     return res.end(Buffer.from(logo.b64, 'base64'));

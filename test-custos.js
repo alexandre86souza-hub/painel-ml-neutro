@@ -11,6 +11,9 @@ assert.deepStrictEqual(C.componentes('KIT-795.713.739.802.698.'), [795, 713, 739
 assert.deepStrictEqual(C.componentes('DQ-407'), [407], 'SKU de um produto só');
 assert.deepStrictEqual(C.componentes('KIT-407.407'), [407, 407], 'kit com duas peças iguais conta duas vezes');
 assert.deepStrictEqual(C.componentes(''), []);
+assert.deepStrictEqual(C.componentes('KIT-795-615-746-698'), [795, 615, 746, 698], 'Amazon: hífen separa os produtos');
+assert.deepStrictEqual(C.componentes('KIT-801.714'), [801, 714]);
+assert.strictEqual(C.trocarComponente('KIT-795-615-746', 795, 854), 'KIT-854-615-746');
 assert.deepStrictEqual(C.componentes('MLB3526851685'), [], 'SKU que é o código do anúncio não tem componentes');
 
 // ---------- tabela colada ----------
@@ -79,4 +82,38 @@ assert.strictEqual(C.trocarComponente('KIT-830.079.816', 79, 5), 'KIT-830.005.81
 assert.strictEqual(C.trocarComponente('DD-795', 795, 854), 'DD-854');
 assert.deepStrictEqual(C.componentes(C.trocarComponente('KIT-795.713', 795, 854)), [854, 713]);
 
-console.log('custos, tabela de produtos, empresa, vendas e troca de SKU: ok');
+// ---------- dashboard de todas as contas: soma de hoje e dos 30 dias ----------
+const soma = C.somarContas([
+  { hoje: { pedidos: 3, unidades: 4, faturamento: 300, lucro: 60, cobertura: 1 },
+    periodo: { pedidos: 100, unidades: 120, faturamento: 10000, lucro: 2500, cobertura: 1, tarifa: 1200 } },
+  { hoje: { pedidos: 1, unidades: 1, faturamento: 100, lucro: 0, cobertura: 0 },
+    periodo: { pedidos: 50, unidades: 50, faturamento: 5000, lucro: 500, cobertura: 0.5, tarifa: 600 } },
+]);
+assert.deepStrictEqual([soma.contas, soma.hoje.pedidos, soma.hoje.faturamento, soma.periodo.pedidos, soma.periodo.faturamento, soma.periodo.tarifa],
+  [2, 4, 400, 150, 15000, 1800]);
+assert.strictEqual(soma.periodo.lucro, 3000);
+assert.strictEqual(soma.periodo.margem, 3000 / 12500, 'margem sobre o faturamento que tem custo (10000 + metade de 5000)');
+assert.strictEqual(soma.hoje.margem, 60 / 300, 'a venda sem custo não puxa a margem para baixo');
+assert.strictEqual(C.somarContas([]).periodo.margem, null);
+// o mesmo SKU vendido em duas contas vira uma linha, com a parte de cada conta
+const top = C.topPorSku([
+  { conta: 1, sku: 'KIT-407.408', item_id: 'MLB1', titulo: 'Kit ducha', quantidade: 2, faturamento: 200, lucro: 50 },
+  { conta: 2, sku: 'KIT-407.408', item_id: 'MLB9', titulo: 'Kit ducha outra conta', quantidade: 1, faturamento: 110, lucro: 30 },
+  { conta: 1, sku: 'KIT-500', item_id: 'MLB2', titulo: 'Bucha', quantidade: 5, faturamento: 50, lucro: null },
+  { conta: 2, sku: '', item_id: 'MLB3', titulo: 'Sem SKU', quantidade: 1, faturamento: 20, lucro: 5 },
+]);
+assert.deepStrictEqual(top.map((p) => [p.sku, p.unidades, p.faturamento, p.lucro]),
+  [['KIT-407.408', 3, 310, 80], ['KIT-500', 5, 50, null], [null, 1, 20, 5]]);
+assert.deepStrictEqual(top[0].por_conta, { 1: { unidades: 2, faturamento: 200 }, 2: { unidades: 1, faturamento: 110 } });
+assert.strictEqual(top[1].margem, null, 'venda sem custo: lucro e margem ficam sem valor, não zero');
+// contas que escrevem o SKU de jeitos diferentes: o que junta são os números dos produtos
+const misto = C.topPorSku([
+  { conta: 1, sku: 'KIT-769.790.816', quantidade: 2, faturamento: 500, lucro: 100 },
+  { conta: 2, sku: '769.790.816.', quantidade: 1, faturamento: 240, lucro: 60 },
+  { conta: 2, sku: '816.769.790', quantidade: 1, faturamento: 10, lucro: 1 },
+]);
+assert.strictEqual(misto.length, 1, 'mesmo kit, três jeitos de escrever');
+assert.deepStrictEqual([misto[0].unidades, misto[0].faturamento, misto[0].skus], [4, 750, ['KIT-769.790.816', '769.790.816.', '816.769.790']]);
+assert.strictEqual(C.topPorSku(top.map((p, i) => ({ conta: 1, sku: 's' + i, faturamento: i })), 2).length, 2);
+
+console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma das contas: ok');

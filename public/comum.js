@@ -40,13 +40,15 @@ function celulaProduto(foto, titulo, sub, link) {
 (async function contas() {
   const sel = $('selConta'); if (!sel) return;
   try {
+    // A opção "Amazon" é acrescentada pelo menu.js (em todas as telas).
     const { ativa, contas } = await api('/api/accounts');
+    const naAmazon = ['/amazon.html', '/amazon-anuncios.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
     sel.innerHTML = '';
     if (!contas.length) { sel.hidden = true; return; }
-    for (const c of contas) { const o = el('option', null, `${c.nickname} · ${c.site_id}`); o.value = c.ml_user_id; o.selected = c.ml_user_id === ativa; sel.appendChild(o); }
+    for (const c of contas) { const o = el('option', null, `${c.nickname} · ${c.site_id}`); o.value = c.ml_user_id; o.selected = !naAmazon && c.ml_user_id === ativa; sel.appendChild(o); }
     sel.onchange = async () => {
       await fetch('/api/accounts/active', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ml_user_id: Number(sel.value) }) });
-      location.reload();
+      if (naAmazon) location.href = '/'; else location.reload();
     };
   } catch { sel.hidden = true; }
 })();

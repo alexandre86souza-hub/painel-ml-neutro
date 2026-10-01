@@ -16,6 +16,7 @@ const assert = require('node:assert');
 const http = require('node:http');
 const S = require('./server.js');
 const D = require('./db.js');
+const SEG = require('./seguranca.js');
 
 const TUNEL = 'https://teste-da-aula.trycloudflare.com';
 
@@ -114,7 +115,7 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     r = await pedir(P, '/login');
     assert.strictEqual(r.headers.location, '/primeiro-acesso');
 
-    const senha = form({ senha: 'senha-da-aula', confirmacao: 'senha-da-aula' });
+    const senha = form({ senha: 'Senha-da-aula-2026', confirmacao: 'Senha-da-aula-2026' });
     for (const [origem, site] of [['https://site-malicioso.com', 'cross-site'], ['null', undefined], ['null', 'cross-site']]) {
       const h = { ...FORM, Origin: origem, ...(site ? { 'Sec-Fetch-Site': site } : {}) };
       r = await pedir(P, '/primeiro-acesso', { metodo: 'POST', headers: h, corpo: senha });
@@ -126,7 +127,7 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
       'no-referrer faz o navegador mandar Origin: null no POST e trava o login');
     r = await pedir(P, '/primeiro-acesso', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'curta', confirmacao: 'curta' }) });
     assert.strictEqual(r.status, 400);
-    r = await pedir(P, '/primeiro-acesso', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'senha-da-aula', confirmacao: 'outra-coisa' }) });
+    r = await pedir(P, '/primeiro-acesso', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'Senha-da-aula-2026', confirmacao: 'outra-coisa' }) });
     assert.strictEqual(r.status, 400);
     assert.strictEqual(D.senhaDefinida(), false);
 
@@ -138,10 +139,31 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.match(String(r.headers['set-cookie']), /HttpOnly/);
     const COOKIE = { Cookie: cookie };
 
+    // ---------- política de acesso: sem a verificação em duas etapas, só a tela de ativar abre ----------
+    r = await pedir(P, '/configuracao.html', { headers: COOKIE });
+    assert.strictEqual(r.headers.location, '/ativar-2fa', 'sem 2FA, o painel manda ativar');
+    r = await pedir(P, '/api/config', { headers: COOKIE });
+    assert.strictEqual(r.status, 403);
+    assert.strictEqual(JSON.parse(r.corpo).pendencia, '2fa');
+    r = await pedir(P, '/ativar-2fa', { headers: COOKIE });
+    assert.strictEqual(r.status, 200);
+    const pend = D.configLer('painel_2fa_pendente');
+    assert.ok(r.corpo.includes(SEG.segredoLegivel(pend)), 'a tela mostra a chave para o aplicativo');
+    const POST_SESS = { ...COOKIE, ...FORM, ...ORIGEM };
+    r = await pedir(P, '/ativar-2fa', { metodo: 'POST', headers: POST_SESS, corpo: form({ codigo: '12345' }) });
+    assert.strictEqual(r.status, 400, 'código inválido não ativa');
+    assert.strictEqual(D.configLer('painel_2fa_segredo'), null);
+    r = await pedir(P, '/ativar-2fa', { metodo: 'POST', headers: POST_SESS, corpo: form({ codigo: SEG.codigoTotp(pend, SEG.passoDe(Date.now())) }) });
+    assert.strictEqual(r.status, 302);
+    assert.strictEqual(D.configLer('painel_2fa_segredo'), pend, 'a chave confirmada vira a do login');
+    const codigo = () => SEG.codigoTotp(D.configLer('painel_2fa_segredo'), SEG.passoDe(Date.now()));
+    r = await pedir(P, '/api/config', { headers: COOKIE });
+    assert.strictEqual(r.status, 200, 'com o 2FA ativo, o painel abre');
+
     r = await pedir(P, '/primeiro-acesso');
     assert.strictEqual(r.headers.location, '/login', 'com senha criada, o primeiro acesso some');
     r = await pedir(P, '/primeiro-acesso', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'tomar-conta-1', confirmacao: 'tomar-conta-1' }) });
-    assert.ok(D.senhaConfere('senha-da-aula'), 'ninguém refaz o primeiro acesso por cima');
+    assert.ok(D.senhaConfere('Senha-da-aula-2026'), 'ninguém refaz o primeiro acesso por cima');
 
     // ---------- painel online (pela internet), depois de a senha existir ----------
     const FORM_FORA = (ip) => ({ ...FORM, ...ORIGEM_TUNEL, Host: 'teste-da-aula.trycloudflare.com', 'Cf-Connecting-Ip': ip });
@@ -149,7 +171,7 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.strictEqual(r.headers.location, '/login', 'pela internet, sem sessão, vai para o login');
     r = await pedir(PUB, '/primeiro-acesso', { headers: DE_FORA });
     assert.strictEqual(r.headers.location, '/login');
-    r = await pedir(PUB, '/login', { metodo: 'POST', headers: { ...FORM_FORA('203.0.113.20'), Origin: 'https://site-malicioso.com' }, corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(PUB, '/login', { metodo: 'POST', headers: { ...FORM_FORA('203.0.113.20'), Origin: 'https://site-malicioso.com' }, corpo: form({ senha: 'Senha-da-aula-2026' }) });
     assert.strictEqual(r.status, 403, 'login online vindo de outro site é recusado');
 
     // limite por IP: 5 erros bloqueiam aquele IP, mesmo que depois acerte a senha
@@ -157,12 +179,14 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
       r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.1'), corpo: form({ senha: `chute-${i}` }) });
       assert.strictEqual(r.status, 401);
     }
-    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.1'), corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.1'), corpo: form({ senha: 'Senha-da-aula-2026' }) });
     assert.strictEqual(r.status, 429, 'IP bloqueado não entra nem com a senha certa');
     assert.match(r.corpo, /Muitas tentativas/);
 
     // outro IP entra normalmente, com cookie Secure
-    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.2'), corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.2'), corpo: form({ senha: 'Senha-da-aula-2026', codigo: '000000' }) });
+    assert.strictEqual(r.status, 401, 'senha certa com código errado não entra');
+    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('198.51.100.2'), corpo: form({ senha: 'Senha-da-aula-2026', codigo: codigo() }) });
     assert.strictEqual(r.status, 302);
     assert.match(String(r.headers['set-cookie']), /; Secure/, 'cookie pela internet é Secure');
     const COOKIE_FORA = { ...DE_FORA, Cookie: String(r.headers['set-cookie']).split(';')[0] };
@@ -215,9 +239,9 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     for (let i = 0; i < 25; i++) {
       await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA(`192.0.2.${i + 1}`), corpo: form({ senha: `chute-${i}` }) });
     }
-    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('192.0.2.200'), corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(PUB, '/login', { metodo: 'POST', headers: FORM_FORA('192.0.2.200'), corpo: form({ senha: 'Senha-da-aula-2026' }) });
     assert.strictEqual(r.status, 429, 'depois de 30 erros pela internet, o login online fecha');
-    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'Senha-da-aula-2026', codigo: codigo() }) });
     assert.strictEqual(r.status, 302, 'o login no próprio computador nunca é bloqueado pelo que vem de fora');
 
     // ---------- login, sessão e saída ----------
@@ -225,9 +249,11 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.strictEqual(r.status, 401);
     // navegador com política de privacidade estrita: Origin null, mas o próprio navegador diz same-origin
     r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, Origin: 'null', 'Sec-Fetch-Site': 'same-origin' },
-      corpo: form({ senha: 'senha-da-aula' }) });
+      corpo: form({ senha: 'Senha-da-aula-2026', codigo: codigo() }) });
     assert.strictEqual(r.status, 302, 'login do próprio painel entra mesmo com Origin null');
-    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'senha-da-aula' }) });
+    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'Senha-da-aula-2026' }) });
+    assert.strictEqual(r.status, 401, 'com o 2FA ativo, só a senha não entra');
+    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'Senha-da-aula-2026', codigo: codigo() }) });
     assert.strictEqual(r.status, 302);
     const COOKIE2 = { Cookie: String(r.headers['set-cookie']).split(';')[0] };
 
@@ -249,7 +275,29 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     r = await pedir(P, '/api/config', { headers: COOKIE2 });
     assert.strictEqual(r.status, 401, 'depois de sair, o cookie antigo não vale');
 
-    console.log("OK — painel local e online, senha só no computador, limite de tentativas, OAuth de uso único, sessão");
+    // ---------- senha fora da política (criada antes dela): entra, mas vai direto trocar ----------
+    D.configGravar('painel_senha_fraca', '1');
+    r = await pedir(P, '/login', { metodo: 'POST', headers: { ...FORM, ...ORIGEM }, corpo: form({ senha: 'Senha-da-aula-2026', codigo: codigo() }) });
+    const COOKIE3 = { Cookie: String(r.headers['set-cookie']).split(';')[0] };
+    r = await pedir(P, '/vendas.html', { headers: COOKIE3 });
+    assert.strictEqual(r.headers.location, '/trocar-senha');
+    r = await pedir(P, '/api/vendas', { headers: COOKIE3 });
+    assert.strictEqual(JSON.parse(r.corpo).pendencia, 'senha');
+    const TROCA = { ...COOKIE3, ...FORM, ...ORIGEM };
+    r = await pedir(P, '/trocar-senha', { metodo: 'POST', headers: TROCA, corpo: form({ atual: 'Senha-da-aula-2026', nova: 'curta', confirmacao: 'curta' }) });
+    assert.strictEqual(r.status, 400, 'a senha nova também passa pela política');
+    r = await pedir(P, '/trocar-senha', { metodo: 'POST', headers: TROCA, corpo: form({ atual: 'Senha-da-aula-2026', nova: 'Nova-senha-2027!', confirmacao: 'Nova-senha-2027!' }) });
+    assert.strictEqual(r.status, 302);
+    assert.ok(D.senhaConfere('Nova-senha-2027!'));
+    assert.strictEqual(D.configLer('painel_senha_fraca'), null);
+    r = await pedir(P, '/api/config', { headers: { Cookie: String(r.headers['set-cookie']).split(';')[0] } });
+    assert.strictEqual(r.status, 200, 'com a senha trocada, a sessão nova abre o painel');
+    // senha vencida (mais de 365 dias) também manda trocar
+    D.configGravar('painel_senha_em', '2025-01-01T00:00:00.000Z');
+    r = await pedir(P, '/api/config', { headers: COOKIE3 });
+    assert.strictEqual(r.status, 401, 'trocar a senha derrubou as sessões antigas');
+
+    console.log("OK — painel local e online, senha forte e 2FA, só no computador, limite de tentativas, OAuth de uso único, sessão");
   } finally {
     await srv.fechar();
     D.db.close();

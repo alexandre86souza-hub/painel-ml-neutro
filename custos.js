@@ -48,12 +48,13 @@ function lerCatalogo(texto) {
 }
 
 // Números dos componentes de um SKU de anúncio. "KIT-407.408" -> [407, 408];
-// "DQ-407" (um produto só) -> [407]. Sem número -> [].
+// "DQ-407" (um produto só) -> [407]. Sem número -> []. Hífen também separa: a Amazon usa
+// "KIT-795-615-746-698" para os produtos 795 + 615 + 746 + 698 (SKU da Amazon não se troca).
 function componentes(sku) {
   const s = String(sku || '').trim();
   if (!s) return [];
   const resto = s.includes('-') ? s.slice(s.indexOf('-') + 1) : s;
-  return resto.split(/[.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);
+  return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);
 }
 
 // Custo de um SKU pela tabela. `porNumero` = Map(numero -> produto). Componente fora da
@@ -79,7 +80,7 @@ function trocarComponente(sku, de, para) {
   const prefixo = i >= 0 ? s.slice(0, i + 1) : '';
   const resto = i >= 0 ? s.slice(i + 1) : s;
   const novo = String(para).padStart(3, '0');
-  return prefixo + resto.replace(/(^|[.\s+/])(\d+)(?=$|[.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
+  return prefixo + resto.replace(/(^|[-.\s+/])(\d+)(?=$|[-.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
 }
 
 // SKUs de um anúncio: o do próprio anúncio e o de cada variação.
@@ -119,6 +120,53 @@ function validarEmpresa(b) {
     impostos, embalagem_padrao: emb };
 }
 const impostoTotal = (empresa) => Math.round(empresa.impostos.reduce((s, i) => s + (i.pct || 0), 0) * 100) / 100;
+
+// Soma o resumo (hoje e o período) de várias contas. A margem é o lucro sobre o faturamento
+// que TEM custo cadastrado (faturamento × cobertura de cada conta), como em cada conta.
+// Função pura: testada.
+// Os produtos (SKU) que mais faturaram juntando as contas: o mesmo kit vendido em duas
+// contas vira uma linha só, com a parte de cada conta. O que junta são os NÚMEROS dos
+// produtos, não o texto do SKU — medido em 30/09/2026: uma conta usa "KIT-769.790.816" e a
+// outra "769.790.816." para o mesmo kit. Venda sem SKU agrupa pelo anúncio.
+// Função pura: testada.
+function topPorSku(vendas, limite = 30) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const m = new Map();
+  for (const v of vendas) {
+    const nums = componentes(v.sku);
+    const chave = nums.length ? [...nums].sort((a, b) => a - b).join('.') : (v.sku || v.item_id);
+    const x = m.get(chave) || { sku: v.sku || null, skus: [], titulo: v.titulo || null, foto: v.foto || null, unidades: 0, pedidos: 0,
+      faturamento: 0, lucro: 0, sem_custo: false, por_conta: {} };
+    if (v.sku && !x.skus.includes(v.sku)) x.skus.push(v.sku);
+    x.titulo ||= v.titulo || null; x.foto ||= v.foto || null;
+    x.unidades += v.quantidade || 0; x.pedidos += 1; x.faturamento += v.faturamento || 0;
+    if (v.lucro == null) x.sem_custo = true; else x.lucro += v.lucro;
+    const pc = x.por_conta[v.conta] || { unidades: 0, faturamento: 0 };
+    pc.unidades += v.quantidade || 0; pc.faturamento += v.faturamento || 0;
+    x.por_conta[v.conta] = pc;
+    m.set(chave, x);
+  }
+  return [...m.values()].sort((a, b) => b.faturamento - a.faturamento).slice(0, limite).map((x) => ({ ...x,
+    faturamento: r2(x.faturamento), lucro: x.sem_custo ? null : r2(x.lucro),
+    margem: !x.sem_custo && x.faturamento > 0 ? x.lucro / x.faturamento : null,
+    por_conta: Object.fromEntries(Object.entries(x.por_conta).map(([k, p]) => [k, { unidades: p.unidades, faturamento: r2(p.faturamento) }])) }));
+}
+
+function somarContas(linhas) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const de = (k) => {
+    const t = { pedidos: 0, unidades: 0, faturamento: 0, tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0, lucro: 0, cancelados: 0 };
+    let comCusto = 0;
+    for (const l of linhas) {
+      const r = l[k] || {};
+      for (const c of Object.keys(t)) t[c] += r[c] || 0;
+      comCusto += (r.faturamento || 0) * (r.cobertura || 0);
+    }
+    for (const c of ['faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto', 'lucro']) t[c] = r2(t[c]);
+    return { ...t, margem: comCusto > 0 ? t.lucro / comCusto : null, cobertura: t.faturamento > 0 ? comCusto / t.faturamento : null };
+  };
+  return { contas: linhas.length, hoje: de('hoje'), periodo: de('periodo') };
+}
 
 // Uma linha de venda com todos os custos. `ctx` traz o custo do SKU, a embalagem do
 // anúncio e o imposto. Frete do envio é rateado pelo valor quando o pacote tem vários itens.
@@ -229,13 +277,26 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   }
 
   const rotas = {
-    'GET /api/empresa': async () => {
+    // ?conta=amazon: os dados da empresa que valem para a Amazon (amazon.js#empresaAmazon).
+    // Enquanto não forem salvos, a tela mostra os da conta do ML usada até então.
+    'GET /api/empresa': async (url) => {
+      if (url?.searchParams?.get('conta') === 'amazon') {
+        const proprio = D.configLer('empresa:amazon');
+        const reserva = Number(D.configLer('amazon_empresa_conta')) || D.contasListar()[0]?.ml_user_id;
+        const e = lerEmpresa(proprio || (reserva ? D.configLer(`empresa:${reserva}`) : null));
+        return { ...e, imposto_total: impostoTotal(e), catalogo: D.catalogoResumo(), amazon: true, salvo: !!proprio };
+      }
       const conta = contaOuErro();
       const e = empresaDe(conta);
       return { ...e, imposto_total: impostoTotal(e), catalogo: D.catalogoResumo() };
     },
 
-    'PUT /api/empresa': async (_u, body) => {
+    'PUT /api/empresa': async (url, body) => {
+      if (url?.searchParams?.get('conta') === 'amazon') {
+        const e = validarEmpresa(body || {});
+        D.configGravar('empresa:amazon', JSON.stringify(e));
+        return { ...e, imposto_total: impostoTotal(e), amazon: true };
+      }
       const conta = contaOuErro();
       const e = validarEmpresa(body || {});
       D.configGravar(`empresa:${conta.ml_user_id}`, JSON.stringify(e));
@@ -303,9 +364,20 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     },
 
     // Todas as vendas do período com frete, tarifa, imposto, custo do produto, embalagem e margem.
-    'GET /api/vendas': async (url) => {
-      const conta = contaOuErro();
-      const pedido = Number(url.searchParams.get('dias')) || 30;
+    'GET /api/vendas': async (url) => vendasDaConta(contaOuErro(), Number(url.searchParams.get('dias')) || 30),
+
+    // Dashboard de todas as contas conectadas (tela "Todas as contas"): hoje e o período de
+    // cada uma, a soma e os produtos mais vendidos juntando as contas.
+    'GET /api/contas/resumo': async (url) => {
+      const d = Number(url?.searchParams.get('dias')) || 30;
+      return resumoDasContas([7, 15, 30, 60, 90].includes(d) ? d : 30);
+    },
+  };
+
+  // As vendas de UMA conta (a ativa na tela Vendas; cada conta conectada no resumo geral).
+  // `titulos: false` pula a busca de título e foto dos anúncios, que o resumo não usa.
+  async function vendasDaConta(conta, pedido, { titulos = true } = {}) {
+    {
       const dias = DIAS_OK.includes(pedido) ? pedido : 30;
       await sincronizarVendas(conta, Math.max(dias, 7));
       const j = dias === 1
@@ -341,7 +413,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const empresa = empresaDe(conta);
       const impostoPct = impostoTotal(empresa) || D.impostoLer(conta.ml_user_id) || 0;
       const info = {};
-      for (let i = 0; i < ids.length; i += 20) {
+      for (let i = 0; titulos && i < ids.length; i += 20) {
         try {
           const r = await ml(`/items?ids=${ids.slice(i, i + 20).join(',')}&attributes=id,title,thumbnail,permalink`);
           for (const x of r) if (x.code === 200) info[x.body.id] = x.body;
@@ -394,8 +466,28 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         sem_custo: [...semCusto.values()].sort((a, b) => b.vendas - a.vendas),
         vendas,
       };
-    },
-  };
+    }
+  }
+
+  // Uma conta de cada vez (o ML limita chamadas por conta, e a primeira abertura de uma conta
+  // nova baixa os pedidos dela). Conta que falhar — token vencido, sem permissão — aparece
+  // com o erro, sem derrubar as outras.
+  async function resumoDasContas(dias = 30) {
+    const linhas = [], vendidas = [];
+    for (const c of D.contasListar()) {
+      const conta = D.contaObter(c.ml_user_id);
+      const base = { ml_user_id: c.ml_user_id, nickname: c.nickname };
+      try {
+        const hoje = await vendasDaConta(conta, 1, { titulos: false });
+        const per = await vendasDaConta(conta, dias);
+        linhas.push({ ...base, hoje: hoje.resumo, periodo: per.resumo, sem_custo: per.sem_custo.length,
+          fretes_pendentes: per.fretes_pendentes,
+          dias: D.vendasPorDia(c.ml_user_id, per.de, per.ate).map((d) => ({ dia: d.dia, faturamento: d.faturamento, pedidos: d.pedidos })) });
+        for (const v of per.vendas) if (v.valida) vendidas.push({ ...v, conta: c.ml_user_id });
+      } catch (e) { linhas.push({ ...base, erro: e.message }); }
+    }
+    return { dias, contas: linhas, total: somarContas(linhas.filter((l) => !l.erro)), produtos: topPorSku(vendidas, 30) };
+  }
 
   // Um produto da tabela a partir do formulário. O número sai do SKU (DQ-407 -> 407).
   function produtoDoCorpo(b, numeroFixo = null) {
@@ -569,5 +661,5 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa };
 }
 
-module.exports = { criar, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, validarEmpresa, lerEmpresa,
+module.exports = { criar, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, somarContas, topPorSku, validarEmpresa, lerEmpresa,
   impostoTotal, contaDaLinha, dinheiro };

@@ -51,4 +51,25 @@ assert.deepStrictEqual(a.fixas, [{ id: '46', quantidade: 2, preco: 60.56, pct: 0
 assert.deepStrictEqual(a.pct, []);
 assert.strictEqual(a.versao, 67);
 
+// Anúncio com preço próprio no Mercado Shops (medido em 30/09/2026): o base é o do marketplace
+// e os dois preços sem quantidade são os que ficam ao tirar o atacado antigo.
+const comShops = P.lerAtacado({ version: 402, prices: [
+  { id: '561', type: 'standard', amount: 125.27, conditions: { context_restrictions: ['channel_marketplace'] } },
+  { id: '529', type: 'standard', amount: 135.9, conditions: { context_restrictions: ['channel_mshops'] } },
+  { id: '562', type: 'standard', amount: 124.64, conditions: { context_restrictions: ['channel_marketplace', 'user_type_business'], min_purchase_unit: 2 } },
+  { id: '606', type: 'promotion', amount: 119, conditions: { context_restrictions: ['channel_marketplace'] } },
+] });
+assert.deepStrictEqual(comShops.base, { id: '561', preco: 125.27 });
+assert.deepStrictEqual(comShops.manter, ['561', '529']);
+assert.deepStrictEqual(comShops.fixas.map((f) => [f.quantidade, f.preco, f.pct]), [[2, 124.64, 0.5]]);
+
+// ---------- atacado em massa: o resumo de cada anúncio na lista ----------
+assert.deepStrictEqual(P.resumoAtacado({ pct: [{ id: 'x', quantidade: 3, pct: 5, preco: 95 }], fixas: [] }),
+  { formato: 'pct', faixas: [{ quantidade: 3, pct: 5, preco: 95 }] });
+assert.strictEqual(P.resumoAtacado({ pct: [], fixas: [{ id: 'y', quantidade: 10, preco: 80, pct: 20 }] }).formato, 'fixo', 'formato antigo, em valor');
+assert.deepStrictEqual(P.resumoAtacado({ pct: [], fixas: [] }), { formato: null, faixas: [] }, 'sem atacado');
+// em massa as faixas são sempre em %: valem para anúncios de preços diferentes
+assert.deepStrictEqual(P.faixasAtacado([{ quantidade: 10, tipo: 'pct', valor: 8 }, { quantidade: 3, tipo: 'pct', valor: '3,5' }], 1),
+  [{ quantidade: 3, pct: 3.5 }, { quantidade: 10, pct: 8 }]);
+
 console.log('preço pela margem, GTIN e atacado: ok');

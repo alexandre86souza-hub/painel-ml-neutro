@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Todas as contas</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dbe7ff}
+  /* um cartão por conta, com o logo dela */
+  .contas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:20px}
+  .conta{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;border-top:4px solid var(--cor,#2563eb)}
+  .conta-topo{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:48px}
+  .conta-topo img{max-width:120px;max-height:48px;object-fit:contain}
+  .conta-topo .nome{font-weight:700;font-size:15px;line-height:1.2}
+  .conta-topo .nome small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+  .conta-topo .bt{margin-left:auto;white-space:nowrap}
+  .conta dl{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin:0}
+  .conta dt{font-size:12px;color:var(--muted)}
+  .conta dd{margin:0;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .conta dd small{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+  .conta .part{height:8px;border-radius:4px;background:#eef1f6;overflow:hidden;margin-top:12px}
+  .conta .part i{display:block;height:100%;background:var(--cor,#2563eb)}
+  .conta .part-txt{font-size:12px;color:var(--muted);margin:4px 0 0}
+  .conta.erro p{color:#b91c1c;font-size:13px;margin:0}
+  tr.total td{font-weight:700;background:#f8fafd}
+  td .bola,.legenda .bola{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+  /* barras empilhadas: o faturamento de cada conta em cada dia */
+  .empilhado{display:flex;align-items:flex-end;gap:3px;height:190px;margin-top:8px;border-bottom:1px solid var(--line)}
+  .empilhado .col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse}
+  .empilhado .col i{display:block}
+  .empilhado .col i:last-child{border-radius:3px 3px 0 0}
+  .mini-part{display:flex;height:8px;border-radius:4px;overflow:hidden;background:#eef1f6;min-width:90px}
+  .mini-part i{display:block;height:100%}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=8"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Todas as contas</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">As vendas de todas as contas conectadas, somadas e lado a lado.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+    </div>
+  </div>
+
+  <div class="cartoes" id="cartoes"><p class="carregando">Somando as vendas de cada conta…</p></div>
+
+  <div class="contas" id="contas"></div>
+
+  <section class="bloco">
+    <h2>Para onde vai o dinheiro, por conta</h2>
+    <p class="sub">Do faturamento ao lucro no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos.</p>
+    <div class="tabela-rolagem" id="contasTabela"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Faturamento por dia</h2>
+    <p class="sub">Cada barra é um dia; as cores são as contas. Passe o mouse para ver os valores.</p>
+    <div class="empilhado" id="grafico"></div>
+    <div class="eixo" id="eixo"></div>
+    <div class="legenda" id="legenda"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Produtos que mais faturaram, juntando as contas</h2>
+    <p class="sub">O mesmo produto ou kit vendido em contas diferentes aparece numa linha só (pelos números dos produtos no SKU), com a parte de cada conta.</p>
+    <div class="tabela-rolagem" id="produtos"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=4"></script>
+<script>
+let dias = 30, geracao = 0;
+const COR = ['#2563eb', '#f59e0b', '#16a34a', '#9333ea', '#dc2626', '#0891b2'];
+const diaMes = (d) => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+
+// Abre o Dashboard de uma conta: troca a conta selecionada e vai para a tela dela.
+async function abrirConta(id){
+  try{ localStorage.removeItem('painel.marca'); }catch{}
+  await fetch('/api/accounts/active', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ml_user_id: id }) });
+  location.href = '/';
+}
+
+function pintarContas(r, cor){
+  const box = $('contas'); box.innerHTML = '';
+  const total = r.total.periodo.faturamento;
+  for(const c of r.contas){
+    const k = el('div', 'conta' + (c.erro ? ' erro' : '')); k.style.setProperty('--cor', cor[c.ml_user_id]);
+    const topo = el('div', 'conta-topo');
+    const img = el('img'); img.alt = ''; img.src = '/api/marca/logo?conta=' + c.ml_user_id;
+    img.onerror = () => img.remove();   // conta sem logo: fica só o nome
+    const nome = el('div', 'nome', c.nickname);
+    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : 'Abrir o Dashboard'); bt.type = 'button';
+    bt.onclick = () => (c.amazon ? (location.href = '/amazon.html') : abrirConta(c.ml_user_id));
+    topo.append(img, nome, bt); k.appendChild(topo);
+    if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); box.appendChild(k); continue; }
+    const p = c.periodo, dl = el('dl');
+    const bloco = (rot, valor, nota) => { const d = el('div'); const dd = el('dd', null, valor); if(nota) dd.appendChild(el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
+    bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
+    bloco(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`);
+    bloco('Lucro', real(p.lucro), `margem ${pct(p.margem)}` + (c.sem_custo ? ` · ${numero(c.sem_custo)} ${c.amazon ? 'SKU(s)' : 'anúncio(s)'} sem custo` : ''));
+    bloco('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), p.cancelados ? `${numero(p.cancelados)} cancelado(s)` : null);
+    k.appendChild(dl);
+    const parte = total > 0 ? p.faturamento / total : 0;
+    const barra = el('div', 'part'); const i = el('i'); i.style.width = (parte * 100) + '%'; barra.appendChild(i);
+    k.append(barra, el('p', 'part-txt', `${pct(parte, 0)} do faturamento de todas as contas`
+      + (c.fretes_pendentes ? ` · ${numero(c.fretes_pendentes)} frete(s) ainda sendo lidos` : '')));
+    box.appendChild(k);
+  }
+}
+
+function pintarTabela(r, cor){
+  const box = $('contasTabela'); box.innerHTML = '';
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Conta', 'Faturamento', 'Tarifas', 'Frete', 'Custo dos produtos', 'Embalagem', 'Impostos', 'Lucro', 'Margem']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  const linha = (nome, p, corBola, classe) => {
+    const tr = el('tr', classe || null);
+    const td = el('td'); if(corBola){ const b = el('i', 'bola'); b.style.background = corBola; td.appendChild(b); }
+    td.appendChild(document.createTextNode(nome));
+    const menos = (v) => (v ? '− ' + real(v) : real(0));
+    tr.append(td, el('td', null, real(p.faturamento)), el('td', null, menos(p.tarifa)), el('td', null, menos(p.frete)),
+      el('td', null, menos(p.produto)), el('td', null, menos(p.embalagem)), el('td', null, menos(p.imposto)),
+      el('td', p.lucro < 0 ? 'neg' : 'pos', real(p.lucro)), el('td', null, pct(p.margem)));
+    tb.appendChild(tr);
+  };
+  for(const c of r.contas) if(!c.erro) linha(c.nickname, c.periodo, cor[c.ml_user_id]);
+  linha('Total', r.total.periodo, null, 'total');
+  t.appendChild(tb); box.appendChild(t);
+}
+
+function pintarGrafico(r, cor){
+  const boas = r.contas.filter((c) => !c.erro);
+  const datas = [...new Set(boas.flatMap((c) => c.dias.map((d) => d.dia)))].sort();
+  const porConta = boas.map((c) => Object.fromEntries(c.dias.map((d) => [d.dia, d.faturamento])));
+  const teto = Math.max(1, ...datas.map((d) => porConta.reduce((s, m) => s + (m[d] || 0), 0)));
+  const g = $('grafico'); g.innerHTML = '';
+  for(const d of datas){
+    const col = el('div', 'col'); const partes = []; let soma = 0;
+    boas.forEach((c, i) => {
+      const v = porConta[i][d] || 0; if(!v) return;
+      const seg = el('i'); seg.style.height = (v / teto * 100) + '%'; seg.style.background = cor[c.ml_user_id];
+      col.appendChild(seg); partes.push(`${c.nickname} ${real(v)}`); soma += v;
+    });
+    col.title = `${diaMes(d)}: ${real(soma)}` + (partes.length ? ` (${partes.join(' · ')})` : '');
+    g.appendChild(col);
+  }
+  $('eixo').innerHTML = '';
+  if(datas.length) $('eixo').append(el('span', null, diaMes(datas[0])), el('span', null, diaMes(datas.at(-1))));
+  const leg = $('legenda'); leg.innerHTML = '';
+  for(const c of boas){ const s = el('span'); const b = el('i'); b.style.background = cor[c.ml_user_id]; s.append(b, c.nickname); leg.appendChild(s); }
+}
+
+function pintarProdutos(r, cor){
+  const box = $('produtos'); box.innerHTML = '';
+  if(!r.produtos.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda no período.')); return; }
+  const boas = r.contas.filter((c) => !c.erro);
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Unidades', 'Faturamento', 'Lucro', 'Margem', ...boas.map((c) => c.nickname), 'Divisão']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const p of r.produtos){
+    const tr = el('tr');
+    tr.append(celulaProduto(p.foto, p.titulo || p.sku || 'sem título', p.skus.length ? p.skus.join(' · ') : 'sem SKU'),
+      el('td', null, numero(p.unidades)), el('td', null, real(p.faturamento)),
+      el('td', p.lucro == null ? null : p.lucro < 0 ? 'neg' : 'pos', p.lucro == null ? 'sem custo' : real(p.lucro)), el('td', null, pct(p.margem)));
+    for(const c of boas){
+      const x = p.por_conta[c.ml_user_id];
+      const td = el('td', null, x ? real(x.faturamento) : '—'); if(x) td.appendChild(el('span', 'pequeno', `${numero(x.unidades)} un.`));
+      tr.appendChild(td);
+    }
+    const div = el('td'); const barra = el('div', 'mini-part');
+    for(const c of boas){ const x = p.por_conta[c.ml_user_id]; if(!x || !p.faturamento) continue; const i = el('i'); i.style.width = (x.faturamento / p.faturamento * 100) + '%'; i.style.background = cor[c.ml_user_id]; i.title = `${c.nickname}: ${pct(x.faturamento / p.faturamento, 0)}`; barra.appendChild(i); }
+    div.appendChild(barra); tr.appendChild(div);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+// ---------- Amazon: somada aqui no navegador ----------
+// As vendas da Amazon vêm de /api/amazon/vendas e entram na soma só nesta tela: a rota das
+// contas do Mercado Livre (/api/contas/resumo) é a mesma que o MCP usa, e dado da Amazon não
+// pode ir para lá (compromisso com a Amazon).
+const numerosSku = (sku) => { const s = String(sku || ''); const resto = s.includes('-') ? s.slice(s.indexOf('-') + 1) : s;
+  return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number).sort((a, b) => a - b).join('.'); };
+function somar(linhas){
+  const de = (k) => {
+    const t = { pedidos: 0, unidades: 0, faturamento: 0, tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0, lucro: 0, cancelados: 0 };
+    let comCusto = 0;
+    for(const l of linhas){ const r = l[k] || {}; for(const c of Object.keys(t)) t[c] += r[c] || 0; comCusto += (r.faturamento || 0) * (r.cobertura || 0); }
+    return { ...t, margem: comCusto > 0 ? t.lucro / comCusto : null, cobertura: t.faturamento > 0 ? comCusto / t.faturamento : null };
+  };
+  return { contas: linhas.length, hoje: de('hoje'), periodo: de('periodo') };
+}
+function juntarProdutos(ml, amz){
+  const m = new Map();
+  const chave = (p) => numerosSku(p.skus[0] || p.sku) || p.sku || p.titulo;
+  for(const p of [...ml, ...amz]){
+    const k = chave(p), x = m.get(k);
+    if(!x){ m.set(k, { ...p, skus: [...p.skus], por_conta: { ...p.por_conta } }); continue; }
+    for(const s of p.skus) if(!x.skus.includes(s)) x.skus.push(s);
+    x.titulo ||= p.titulo; x.foto ||= p.foto;
+    x.unidades += p.unidades; x.pedidos += p.pedidos; x.faturamento += p.faturamento;
+    if(p.lucro == null || x.lucro == null) x.lucro = null; else x.lucro += p.lucro;
+    Object.assign(x.por_conta, p.por_conta);
+  }
+  return [...m.values()].map((x) => ({ ...x, margem: x.lucro != null && x.faturamento > 0 ? x.lucro / x.faturamento : null }))
+    .sort((a, b) => b.faturamento - a.faturamento).slice(0, 30);
+}
+function comAmazon(r, a){
+  const linha = { ml_user_id: 'amazon', nickname: 'Amazon', amazon: true, hoje: a.hoje, periodo: a.resumo, dias: a.por_dia,
+    sem_custo: a.sem_custo.length, fretes_pendentes: 0 };
+  const contas = [...r.contas, linha];
+  return { ...r, contas, total: somar(contas.filter((c) => !c.erro)), produtos: juntarProdutos(r.produtos, a.produtos) };
+}
+
+async function carregar(){
+  const minha = ++geracao;
+  erroTela('');
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Somando as vendas de cada conta…'));
+  const amz = api(`/api/amazon/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+  try{
+    const r = await api(`/api/contas/resumo?dias=${dias}`);
+    if(minha !== geracao) return;
+    pintar(r, false);
+    const a = await amz;
+    if(minha !== geracao) return;
+    if(a.conectada === false) return pintar(r, true);
+    if(a.erro){ pintar(r, true); erroTela('Amazon: ' + a.erro); return; }
+    pintar(comAmazon(r, a), true);
+  }catch(e){ if(minha === geracao){ erroTela(e.message); $('cartoes').innerHTML = ''; } }
+}
+
+function pintar(r, temAmazon){
+  {
+    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : COR[i % COR.length]]));
+    const t = r.total, boas = r.contas.filter((c) => !c.erro).length;
+    $('topoTxt').textContent = `${boas} conta(s) somada(s)` + (r.contas.length > boas ? ` · ${r.contas.length - boas} com erro` : '')
+      + `. Hoje e os últimos ${dias} dias.` + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');
+    const box = $('cartoes'); box.innerHTML = '';
+    const p = t.periodo;
+    box.append(
+      cartao('Faturamento de hoje', real(t.hoje.faturamento), `${numero(t.hoje.pedidos)} pedido(s) · ${numero(t.hoje.unidades)} un.`),
+      cartao(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
+      cartao(`Lucro em ${dias} dias`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
+      cartao('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), `média de ${real(p.faturamento / dias)} por dia`),
+      cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
+    );
+    pintarContas(r, cor); pintarTabela(r, cor); pintarGrafico(r, cor); pintarProdutos(r, cor);
+    if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando a Amazon…'));
+  }
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 (function () {
   const ICONE = {
     dashboard: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    geral: '<circle cx="12" cy="12" r="8"/><path d="M12 12V4M12 12l6.5 4.5M12 12l-6.5 4.5"/>',
     hoje: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     pedidos: '<path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
     performance: '<path d="M4 18 9 12l4 3 7-8"/><path d="M16 7h4v4"/>',
@@ -14,11 +15,14 @@
     full: '<path d="M3 8h11v9H3zM14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
     devolucoes: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/>',
     empresa: '<path d="M4 20V8l6-3v15M10 20V10l10 3v7M4 20h16"/>',
+    shopee: '<path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+    amazon: '<path d="M4 9h16v10H4z"/><path d="M8 9V6h8v3"/><path d="M7 14c3 2 7 2 10 0"/>',
     publicar: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 9v6M9 12h6"/>',
     navegador: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.4 2.6 2.4 12.8 0 16M12 4c-2.4 2.6-2.4 12.8 0 16"/>',
     config: '<path d="M5 8h14M5 16h14"/><circle cx="10" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/>',
   };
   const ITENS = [
+    ['/geral.html', 'Todas as contas', 'geral'],
     ['/', 'Dashboard', 'dashboard'],
     ['/vendas.html?dias=1', 'Vendas Hoje', 'hoje'],
     ['/vendas.html', 'Pedidos', 'pedidos'],
@@ -32,6 +36,8 @@
     null,
     ['/devolucoes.html', 'Devoluções', 'devolucoes'],
     ['/empresa.html', 'Empresa e custos', 'empresa'],
+    ['/shopee.html', 'Shopee', 'shopee'],
+    ['/amazon.html', 'Amazon', 'amazon'],
     ['/publicar.html', 'Publicar', 'publicar'],
     ['/navegador.html', 'Navegador', 'navegador'],
     ['/configuracao.html', 'Configurações', 'config'],
@@ -39,13 +45,17 @@
   // Identidade do painel (nome e logo da empresa, tela Empresa). O último valor fica no
   // navegador para a marca aparecer junto com a página; o servidor confirma em seguida.
   const PADRAO = 'Painel Mercado Livre';
+  // Telas da Amazon (a própria e a Empresa com ?conta=amazon) mostram a identidade da Amazon.
+  const NA_AMAZON = ['/amazon.html', '/amazon-anuncios.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
+  const QM = NA_AMAZON ? 'conta=amazon&' : '';
+  const GUARDA = NA_AMAZON ? 'painel.marca.amazon' : 'painel.marca';
   function pintarMarca(m) {
     const box = document.getElementById('marcaPainel');
     if (box) {
       box.textContent = '';
       if (m.tem_logo) {
         const img = document.createElement('img');
-        img.className = 'marca-logo-painel'; img.alt = m.nome; img.src = '/api/marca/logo?v=' + encodeURIComponent(m.v || '0');
+        img.className = 'marca-logo-painel'; img.alt = m.nome; img.src = '/api/marca/logo?' + QM + 'v=' + encodeURIComponent(m.v || '0');
         box.appendChild(img);
       } else {
         const t = document.createElement('span'); t.className = 'marca-nome'; t.textContent = m.nome; box.appendChild(t);
@@ -56,16 +66,73 @@
     document.title = m.personalizado ? base + ' — ' + m.nome : base;
   }
   let guardada = null;
-  try { guardada = JSON.parse(localStorage.getItem('painel.marca') || 'null'); } catch {}
+  try { guardada = JSON.parse(localStorage.getItem(GUARDA) || 'null'); } catch {}
   pintarMarca(guardada || { nome: PADRAO, personalizado: false, tem_logo: false });
-  const buscarMarca = () => fetch('/api/marca').then((r) => (r.ok ? r.json() : null)).then((m) => {
+  const buscarMarca = () => fetch('/api/marca' + (NA_AMAZON ? '?conta=amazon' : '')).then((r) => (r.ok ? r.json() : null)).then((m) => {
     if (!m) return;
-    try { localStorage.setItem('painel.marca', JSON.stringify(m)); } catch {}
+    try { localStorage.setItem(GUARDA, JSON.stringify(m)); } catch {}
     pintarMarca(m);
   }).catch(() => {});
   // depois que a página terminou de montar (uma tela pode trocar o título ao abrir)
   if (document.readyState === 'complete') buscarMarca(); else window.addEventListener('load', buscarMarca);
   window.atualizarMarca = buscarMarca;   // a tela Empresa chama depois de salvar
+  // Trocar de conta troca a identidade: esquece a guardada para o logo antigo não piscar.
+  // Telas que já mostram a Amazon (com ?conta=amazon); nas outras, escolher a Amazon abre a
+  // tela dela. O Dashboard da Amazon é a tela Amazon.
+  const COM_AMAZON = ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html', '/full.html'];
+  const comConta = (href) => {
+    const u = new URL(href, location.origin);
+    if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
+    if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
+    if (!COM_AMAZON.includes(u.pathname)) return href;
+    u.searchParams.set('conta', 'amazon');
+    return u.pathname + u.search;
+  };
+  const semConta = () => {
+    if (location.pathname === '/amazon.html') return '/';
+    if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
+    const u = new URL(location.href); u.searchParams.delete('conta');
+    return u.pathname + u.search;
+  };
+  // "Amazon" na lista: a mesma tela com a Amazon (ou a tela Amazon). Conta do ML estando na
+  // Amazon: troca a ativa e volta para a mesma tela sem a Amazon.
+  document.addEventListener('change', async (ev) => {
+    if (!ev.target || ev.target.id !== 'selConta') return;
+    if (ev.target.value === 'amazon') {
+      ev.stopImmediatePropagation();
+      location.href = COM_AMAZON.includes(location.pathname) || location.pathname === '/anuncios.html' ? comConta(location.pathname + location.search) : '/amazon.html';
+      return;
+    }
+    try { localStorage.removeItem('painel.marca'); } catch {}
+    if (NA_AMAZON) {
+      ev.stopImmediatePropagation();
+      await fetch('/api/accounts/active', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ml_user_id: Number(ev.target.value) }) });
+      location.href = semConta();
+    }
+  }, true);
+
+  // A Amazon entra no fim da lista de contas de todas as telas (cada tela monta a sua lista;
+  // aqui só acrescenta a opção depois que ela aparece).
+  fetch('/api/amazon/config', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((amz) => {
+    if (!amz?.conectada_em) return;
+    const pendurar = () => {
+      const sel = document.getElementById('selConta');
+      if (!sel || !sel.options.length || [...sel.options].some((o) => o.value === 'amazon')) return;
+      const o = document.createElement('option');
+      o.value = 'amazon'; o.textContent = `${amz.vendedor || 'AMAZON'} · Amazon`;
+      o.selected = NA_AMAZON;
+      sel.appendChild(o);
+      sel.hidden = false;
+    };
+    const vigiar = () => {
+      const sel = document.getElementById('selConta');
+      if (!sel) return;
+      pendurar();
+      new MutationObserver(pendurar).observe(sel, { childList: true });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', vigiar); else vigiar();
+  }).catch(() => {});
 
   const nav = document.getElementById('menuPainel');
   if (!nav) return;
@@ -75,9 +142,11 @@
     if (!it) { const hr = document.createElement('hr'); hr.className = 'nav-sep'; nav.appendChild(hr); continue; }
     const [href, rotulo, icone] = it;
     const a = document.createElement('a');
-    a.href = href;
+    a.href = NA_AMAZON ? comConta(href) : href;
     const [caminho, query] = href.split('?');
-    const atual = caminho === aqui && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
+    const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
+      || (caminho === '/anuncios.html' && aqui === '/amazon-anuncios.html'))
+      && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;
     a.appendChild(document.createTextNode(rotulo));

@@ -323,6 +323,13 @@ const FERRAMENTAS = [
     schema: obj({}),
     rota: () => ['GET', '/api/dashboard/resumo'] },
 
+  { nome: 'ml_contas_resumo', titulo: 'Vendas de todas as contas',
+    descricao: 'Dashboard de todas as contas conectadas: pedidos, faturamento, custos, lucro e margem de hoje e '
+      + 'do período de cada conta, a série diária de cada uma, a soma de todas e os produtos (SKU) que mais '
+      + 'faturaram juntando as contas.',
+    schema: obj({ dias: { type: 'integer', enum: [7, 15, 30, 60, 90], default: 30 } }),
+    rota: (a) => ['GET', `/api/contas/resumo${qs({ dias: a.dias })}`] },
+
   { nome: 'ml_performance', titulo: 'Performance do período',
     descricao: 'Faturamento, pedidos, ticket, visitas, conversão, tarifas e cancelamentos do período contra '
       + 'o período anterior, série diária e os anúncios que mais cresceram e mais caíram.',
@@ -384,6 +391,28 @@ const FERRAMENTAS = [
       produtos: { type: 'array', items: { type: 'integer', minimum: 0 }, description: 'Kit: posições das peças com defeito' } },
     ['reclamacao']),
     rota: (a) => ['PUT', `/api/devolucoes/${a.reclamacao}/defeito`, a.produtos ? { produtos: a.produtos } : { defeito: a.defeito }] },
+
+  { nome: 'ml_atacado_lista', titulo: 'Preço de atacado dos anúncios',
+    descricao: 'Anúncios ativos com o preço de atacado de cada um (faixas: quantidade mínima, % e preço). '
+      + 'filtro=sem mostra os que não têm atacado; novo = em percentual; antigo = em valor fixo (formato que o ML '
+      + 'desliga em 27/10/2026). contagem.faltam_ler > 0 = ainda lendo o atacado de alguns anúncios: chame de novo.',
+    schema: obj({ filtro: { type: 'string', enum: ['sem', 'novo', 'antigo', 'com'] }, q: { type: 'string', description: 'Título, MLB ou SKU' } }),
+    rota: (a) => ['GET', `/api/atacado${qs({ filtro: a.filtro, q: a.q })}`] },
+
+  { nome: 'ml_atacado_aplicar', titulo: 'Aplicar atacado em massa', escrita: true,
+    descricao: 'Grava as mesmas faixas de atacado (quantidade mínima de 2 a 100 e % de desconto, até 5 faixas, '
+      + 'desconto crescente) em vários anúncios no Mercado Livre — até 100 por chamada. Substitui o atacado '
+      + 'que o anúncio já tiver. CONFIRME as faixas e a lista com o usuário antes.',
+    schema: obj({ ids: { type: 'array', items: ITEM, minItems: 1, maxItems: 100 },
+      faixas: { type: 'array', minItems: 1, maxItems: 5, items: obj({ quantidade: { type: 'integer', minimum: 2, maximum: 100 },
+        pct: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 100 } }, ['quantidade', 'pct']) } }, ['ids', 'faixas']),
+    rota: (a) => ['POST', '/api/atacado/aplicar', { ids: a.ids, faixas: a.faixas }] },
+
+  { nome: 'ml_atacado_remover', titulo: 'Remover atacado', escrita: true,
+    descricao: 'Tira o preço de atacado de um ou vários anúncios no Mercado Livre — até 100 por chamada. '
+      + 'CONFIRME a lista com o usuário antes.',
+    schema: obj({ ids: { type: 'array', items: ITEM, minItems: 1, maxItems: 100 } }, ['ids']),
+    rota: (a) => ['POST', '/api/atacado/remover', { ids: a.ids }] },
 
   { nome: 'ml_status_em_massa', titulo: 'Pausar ou reativar em massa', escrita: true,
     descricao: 'Pausa (paused) ou reativa (active) vários anúncios de uma vez no Mercado Livre — até 300 por '

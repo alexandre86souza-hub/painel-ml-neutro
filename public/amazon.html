@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .passo{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;margin-right:8px}
+  .form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:12px;align-items:end}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .form input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;width:100%}
+  .form input.segredo:not(:placeholder-shown){-webkit-text-security:disc}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .aviso-amarelo{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0 0}
+  .conta{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+  .conta-topo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .conta-topo b{font-size:15px}
+  .conta-topo .acoes{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .diag{margin-top:12px;font-size:13px}
+  .diag dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 16px;margin:0 0 10px}
+  .diag dt{font-size:12px;color:var(--muted)}
+  .diag dd{margin:0;font-weight:700}
+  .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-word}
+  .diag summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
+  ol.como li{margin-bottom:4px}
+  .cartao.destaque{background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dbe7ff}
+  .linha-empresa{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;font-size:13px;color:var(--muted)}
+  .linha-empresa select{font:inherit;font-size:14px;padding:6px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff}
+  #vendasBloco h3{font-size:15px;margin:16px 0 8px}
+  #detLanc{margin-top:14px}
+  #detLanc summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  @media (max-width:900px){ .form{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=8"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Amazon</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Conexão da sua conta de vendedor da Amazon com o painel. Por enquanto esta tela só conecta e testa; vendas e lucro da Amazon entram na próxima etapa.</p>
+  </div>
+
+  <section class="bloco" id="vendasBloco" hidden>
+    <div class="topo">
+      <h2>Vendas e lucro na Amazon</h2>
+      <div class="seg" role="group" aria-label="Período" id="segDias">
+        <button type="button" data-dias="7">7 dias</button>
+        <button type="button" data-dias="15">15 dias</button>
+        <button type="button" data-dias="30">30 dias</button>
+        <button type="button" data-dias="60">60 dias</button>
+        <button type="button" data-dias="90">90 dias</button>
+      </div>
+    </div>
+    <p class="sub" id="vendasInfo">Pelo que a Amazon lançou no financeiro (data do envio), com o custo de cada SKU da tabela de produtos.</p>
+    <div class="cartoes" id="cartoes"></div>
+    <div class="linha-empresa">
+      <span id="empresaTxt"></span>
+      <a class="bt" href="/empresa.html?conta=amazon">Impostos e embalagem da Amazon</a>
+      <button type="button" class="bt" id="btRecarregar">Ler de novo da Amazon</button>
+    </div>
+    <div id="semCusto"></div>
+    <h3>Produtos</h3>
+    <div class="tabela-rolagem" id="produtos"></div>
+    <details id="detLanc"><summary>Ver cada lançamento (vendas, reembolsos e ajustes)</summary><div class="tabela-rolagem" id="lancamentos"></div></details>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">1</span>Onde pegar os códigos</h2>
+    <ol class="como">
+      <li>No Seller Central: <b>Aplicativos e serviços → Desenvolver aplicativos</b>.</li>
+      <li>Na linha do aplicativo, em <b>Credenciais do LWA → Visualizar</b>: copie o <b>Identificador do cliente</b> (Client ID) e o <b>Segredo do cliente</b> (Client Secret).</li>
+      <li>No botão ao lado de <b>Alterar aplicativo</b> (a setinha), escolha <b>Autorizar aplicativo</b> e depois <b>Gerar token de atualização</b>: copie o <b>Refresh Token</b> (começa com Atzr|).</li>
+    </ol>
+    <p class="aviso-amarelo">Cole os códigos só aqui no painel. Eles ficam neste computador; o segredo e o token são guardados cifrados.</p>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">2</span>Aplicativo da Amazon</h2>
+    <p class="sub">O painel testa os códigos com a Amazon antes de gravar: código errado não é salvo.</p>
+    <form class="form" id="formConfig">
+      <!-- Campos de texto mascarados (não type=password): com senha, o Chrome preencheria
+           sozinho com o usuário e a senha guardados do painel. -->
+      <label>Client ID<input id="cId" name="amazon-client-id" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="amzn1.application-oa2-client…" required></label>
+      <label>Client Secret<input id="cSeg" name="amazon-client-secret" type="text" class="segredo" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="amzn1.oa2-cs…"></label>
+      <label>Refresh Token<input id="cRt" name="amazon-refresh-token" type="text" class="segredo" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Atzr|…"></label>
+      <button class="bt primario">Salvar e testar</button>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">3</span>Conta conectada</h2>
+    <div id="conta"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=4"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—');
+
+let cfg = null;
+async function carregar(){
+  try{
+    cfg = await api('/api/amazon/config');
+    $('cId').value = cfg.client_id || '';
+    $('cSeg').placeholder = cfg.tem_segredo ? 'já gravado — preencha só para trocar' : 'amzn1.oa2-cs…';
+    $('cRt').placeholder = cfg.tem_refresh ? 'já gravado — preencha só para trocar' : 'Atzr|…';
+    $('cSeg').required = !cfg.tem_segredo; $('cRt').required = !cfg.tem_refresh;
+    pintarConta();
+    $('vendasBloco').hidden = !cfg.conectada_em;
+    if(cfg.conectada_em) carregarVendas();
+  }catch(e){ aviso(e.message); }
+}
+
+// ---------- vendas e lucro ----------
+let dias = 30, geracao = 0;
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const menos = (v) => (v ? '− ' + real(v) : real(0));
+
+async function carregarVendas(recarregar){
+  const minha = ++geracao;
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', recarregar ? 'Lendo de novo da Amazon…' : 'Somando as vendas da Amazon… (a primeira vez lê 3 meses e pode levar alguns minutos)'));
+  try{
+    const r = await api(`/api/amazon/vendas?dias=${dias}${recarregar ? '&recarregar=1' : ''}`);
+    if(minha !== geracao) return;
+    if(r.conectada === false){ $('vendasBloco').hidden = true; return; }
+    if(r.erro_leitura) aviso('Não consegui ler as novidades da Amazon agora (' + r.erro_leitura + '). Os números abaixo são da última leitura.');
+    const p = r.resumo, h = r.hoje;
+    $('vendasInfo').textContent = `Pelo que a Amazon lançou no financeiro (data do envio), com o custo de cada SKU da tabela de produtos. Impostos ${pct(r.imposto_pct / 100)} · embalagem ${real(r.embalagem_padrao)} por unidade no envio próprio. Lido da Amazon em ${quando(r.lido_em)}.`;
+    const box = $('cartoes'); box.innerHTML = '';
+    box.append(
+      cartao('Hoje', real(h.faturamento), `${numero(h.pedidos)} pedido(s) · ${numero(h.unidades)} un.`),
+      cartao(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
+      cartao(`Lucro em ${dias} dias`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
+      cartao('Tarifas da Amazon', real(p.tarifa), p.faturamento ? `${pct(p.tarifa / p.faturamento)} do faturamento · frete ${real(p.frete)}` : ''),
+      cartao('Custo dos produtos', real(p.produto), `impostos ${real(p.imposto)} · embalagem ${real(p.embalagem)}`),
+      cartao('Reembolsos e ajustes', real(p.reembolsos + p.ajustes), `reembolsos ${real(p.reembolsos)} · ajustes da Amazon ${real(p.ajustes)}`),
+    );
+    $('empresaTxt').textContent = r.empresa_propria ? '' : 'Os impostos e a embalagem da Amazon ainda não foram salvos: valem os de uma conta do Mercado Livre até você salvar.';
+    const sc = $('semCusto'); sc.innerHTML = '';
+    if(r.sem_custo.length){
+      sc.appendChild(el('p', 'aviso-amarelo', `${numero(r.sem_custo.length)} SKU(s) vendidos sem custo na tabela de produtos (ficam fora do lucro): `
+        + r.sem_custo.slice(0, 15).map((s) => (s.sku || 'sem SKU') + (s.faltando?.length ? ` (falta ${s.faltando.join(', ')})` : '')).join(' · ')
+        + (r.sem_custo.length > 15 ? ' …' : '') + '. Cadastre em Produtos ou na tela Empresa.'));
+    }
+    pintarProdutos(r.produtos);
+    $('lancamentos').innerHTML = '';
+    if($('detLanc').open) carregarLancamentos();
+  }catch(e){ if(minha === geracao){ $('cartoes').innerHTML = ''; aviso(e.message); } }
+}
+
+function pintarProdutos(lista){
+  const box = $('produtos'); box.innerHTML = '';
+  if(!lista.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda no período.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Unidades', 'Pedidos', 'Faturamento', 'Lucro', 'Margem']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const p of lista){
+    const tr = el('tr');
+    tr.append(celulaProduto(p.foto, p.titulo || p.sku || 'sem título', p.skus.join(' · ') || 'sem SKU'),
+      el('td', null, numero(p.unidades)), el('td', null, numero(p.pedidos)), el('td', null, real(p.faturamento)),
+      el('td', p.lucro == null ? null : p.lucro < 0 ? 'neg' : 'pos', p.lucro == null ? 'sem custo' : real(p.lucro)), el('td', null, pct(p.margem)));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+
+async function carregarLancamentos(){
+  const box = $('lancamentos'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Carregando…'));
+  try{
+    const r = await api(`/api/amazon/vendas?dias=${dias}&lancamentos=1`);
+    box.innerHTML = '';
+    const t = el('table'); const cab = el('tr');
+    for(const h of ['Data', 'Tipo', 'Pedido', 'SKU', 'Envio', 'Un.', 'Faturamento', 'Tarifas', 'Frete', 'Produto', 'Impostos', 'Lucro']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    for(const l of [...r.lancamentos].reverse()){
+      const tr = el('tr');
+      tr.append(el('td', null, quando(l.data)), el('td', null, l.tipo), el('td', null, l.pedido || '—'), el('td', null, l.sku || '—'),
+        el('td', null, l.canal === 'FBA' ? 'FBA' : l.canal ? 'próprio' : '—'), el('td', null, numero(l.quantidade)), el('td', null, real(l.faturamento)),
+        el('td', null, menos(l.tarifa)), el('td', null, menos(l.frete)), el('td', null, l.produto == null ? 'sem custo' : menos(l.produto)),
+        el('td', null, menos(l.imposto)), el('td', l.lucro == null ? null : l.lucro < 0 ? 'neg' : 'pos', l.lucro == null ? '—' : real(l.lucro)));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); box.appendChild(t);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', e.message)); }
+}
+
+$('detLanc').addEventListener('toggle', () => { if($('detLanc').open && !$('lancamentos').childElementCount) carregarLancamentos(); });
+$('btRecarregar').onclick = () => carregarVendas(true);
+periodo('segDias', dias, (d) => { dias = d; carregarVendas(); });
+
+function pintarConta(){
+  const box = $('conta'); box.innerHTML = '';
+  if(!cfg.conectada_em){ box.appendChild(el('p', 'vazio', 'Nenhuma conta conectada ainda.')); return; }
+  const card = el('div', 'conta');
+  const topo = el('div', 'conta-topo');
+  const nome = el('div'); nome.append(el('b', null, cfg.vendedor || 'Amazon Brasil'), el('span', 'pequeno', ` · conectada em ${quando(cfg.conectada_em)}`));
+  const acoes = el('div', 'acoes');
+  const testar = el('button', 'bt primario', 'Testar conexão'); testar.type = 'button';
+  const remover = el('button', 'bt', 'Remover'); remover.type = 'button';
+  acoes.append(testar, remover); topo.append(nome, acoes); card.appendChild(topo);
+  const diag = el('div', 'diag'); card.appendChild(diag);
+  testar.onclick = () => diagnostico(diag, testar);
+  remover.onclick = async () => {
+    if(!confirm('Remover a conta da Amazon do painel?\n\nO painel apaga os três códigos. Para voltar, é só colar de novo.')) return;
+    try{ await enviar('POST', '/api/amazon/remover'); aviso('Conta da Amazon removida do painel.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
+  };
+  box.appendChild(card);
+}
+
+// O que a Amazon devolve: quantidades e a FORMA das respostas (campos e tipos, sem valores).
+async function diagnostico(box, bt){
+  bt.disabled = true; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Perguntando à Amazon…'));
+  try{
+    const r = await api('/api/amazon/diagnostico?dias=7');
+    box.innerHTML = '';
+    const dl = el('dl');
+    const par = (rot, valor) => { const d = el('div'); d.append(el('dt', null, rot), el('dd', null, valor)); dl.appendChild(d); };
+    const lidoOu = (x, txt) => (x == null ? '—' : x.erro ? 'erro: ' + x.erro : txt);
+    par('Conta', r.conta.erro ? 'erro: ' + r.conta.erro : !r.conta.brasil ? 'sem Amazon Brasil' : r.conta.ativa ? 'Amazon Brasil, ativa' : 'Amazon Brasil, inativa');
+    par(`Pedidos nos últimos ${r.dias} dias`, r.erro_pedidos ? 'erro: ' + r.erro_pedidos : numero(r.pedidos_no_periodo) + (r.tem_mais ? ' ou mais' : ''));
+    par('Por situação', Object.entries(r.situacoes).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—');
+    par('Por envio (AFN = FBA, MFN = você)', Object.entries(r.canais).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—');
+    par('Itens de um pedido', lidoOu(r.itens, 'lidos'));
+    par('Taxas de um pedido', lidoOu(r.taxas, 'lidas'));
+    par('Estoque FBA', r.estoque_fba.erro ? 'erro: ' + r.estoque_fba.erro : numero(r.estoque_fba.produtos) + ' produtos');
+    const ev = r.financeiro_30d.eventos, tr = r.financeiro_30d.transacoes;
+    par('Taxas em 30 dias (API de eventos)', ev.erro ? 'erro: ' + ev.erro : Object.keys(ev.listas).length ? Object.entries(ev.listas).map(([k, v]) => `${k.replace(/EventList$/, '')}: ${v}`).join(' · ') + (ev.tem_mais ? ' ou mais' : '') : 'nenhum evento');
+    par('Taxas em 30 dias (API de transações)', tr.erro ? 'erro: ' + tr.erro : tr.quantidade ? numero(tr.quantidade) + ' transações' + (tr.tem_mais ? ' ou mais' : '') : 'nenhuma transação');
+    box.appendChild(dl);
+    const ok = !r.conta.erro && !r.erro_pedidos;
+    box.appendChild(el('p', 'sub', ok ? 'Conexão funcionando. Abaixo está a forma das respostas da Amazon (os campos e os tipos, sem valores nem dados de compradores): é com ela que as telas de vendas e lucro vão ser montadas.'
+      : 'A conexão respondeu com erro. Veja a mensagem acima.'));
+    const det = el('details'); det.appendChild(el('summary', null, 'Ver a forma das respostas'));
+    det.appendChild(el('pre', null, JSON.stringify(r.forma, null, 2)));
+    box.appendChild(det);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui testar: ' + e.message)); }
+  bt.disabled = false;
+}
+
+$('formConfig').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const bt = ev.submitter; if(bt) bt.disabled = true;
+  try{
+    const corpo = { client_id: $('cId').value };
+    if($('cSeg').value.trim()) corpo.client_secret = $('cSeg').value;
+    if($('cRt').value.trim()) corpo.refresh_token = $('cRt').value;
+    await enviar('PUT', '/api/amazon/config', corpo);
+    $('cSeg').value = ''; $('cRt').value = '';
+    aviso('A Amazon aceitou os códigos e a conta está conectada. Clique em "Testar conexão" para ver o que ela devolve.', 'ok');
+    carregar();
+  }catch(e){ aviso(e.message); }
+  if(bt) bt.disabled = false;
+};
+
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

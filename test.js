@@ -153,3 +153,21 @@ console.log('OK — sale_terms');
   assert.throws(() => validarMarca({ logo: url('image/png', Buffer.concat([png, Buffer.alloc(301 * 1024)])) }), /300 KB/);
   console.log('OK — identidade do painel');
 }
+
+// Amazon com identidade e empresa próprias (?conta=amazon), separadas das contas do ML.
+(async () => {
+  const S = require('./server.js');
+  const D = require('./db.js');
+  const pedir = (m, c, corpo) => S.despachar(m, new URL('http://painel' + c), corpo || {});
+  const m = await pedir('PUT', '/api/marca?conta=amazon', { nome: 'Loja na Amazon' });
+  assert.strictEqual(m.conta, 'amazon'); assert.strictEqual(m.nome, 'Loja na Amazon');
+  assert.strictEqual(D.configLer('marca_nome:amazon'), 'Loja na Amazon');
+  assert.notStrictEqual((await pedir('GET', '/api/marca')).nome, 'Loja na Amazon', 'a geral não muda');
+  assert.strictEqual((await pedir('GET', '/api/marca?conta=amazon')).nome, 'Loja na Amazon');
+  assert.strictEqual((await pedir('GET', '/api/empresa?conta=amazon')).salvo, false, 'sem salvar: mostra a de reserva');
+  const e = await pedir('PUT', '/api/empresa?conta=amazon', { regime: 'Simples Nacional', impostos: [{ nome: 'Simples', pct: '6,5' }], embalagem_padrao: '2' });
+  assert.strictEqual(e.imposto_total, 6.5);
+  const g = await pedir('GET', '/api/empresa?conta=amazon');
+  assert.strictEqual(g.salvo, true); assert.strictEqual(g.embalagem_padrao, 2);
+  console.log('OK — Amazon com identidade e empresa próprias');
+})().catch((e) => { console.error(e); process.exit(1); });

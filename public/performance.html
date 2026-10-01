@@ -20,7 +20,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=2"></script>
+    <script src="/menu.js?v=8"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -66,9 +66,16 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=1"></script>
+<script src="/comum.js?v=4"></script>
 <script>
 let dias = 30;
+// ?conta=amazon: a mesma tela com os pedidos da Amazon (sem visitas: a Amazon só dá sessões por relatório).
+const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
+const BASE = NA_AMAZON ? '/api/amazon' : '/api';
+if(NA_AMAZON){
+  document.querySelector('h1').textContent = 'Performance — Amazon';
+  $('canaisSub').textContent = 'Quantas vendas saíram pelo FBA (a Amazon guarda e envia) e pelo envio próprio no período, e quanto cada um faturou.';
+}
 function cartao(rot, valor, atual, antes, invertido, nota){
   const c = el('div', 'cartao');
   c.append(el('p', 'rotulo', rot), el('div', 'valor', valor));
@@ -94,7 +101,7 @@ function tabela(alvo, lista){
 }
 // Vendas por tipo de envio. O tipo (Flex x Mercado Envios) é uma consulta por envio: a
 // primeira abertura de um período lê até 500 e a tela pede de novo sozinha até acabar.
-const COR_CANAL = { full: '#16a34a', flex: '#f59e0b', envios: '#2563eb', outros: '#64748b', pendente: '#cbd5e1' };
+const COR_CANAL = { full: '#16a34a', flex: '#f59e0b', envios: '#2563eb', outros: '#64748b', pendente: '#cbd5e1', fba: '#232f3e', proprio: '#ff9900' };
 let geracaoCanais = 0;
 async function carregarCanais(){
   const minha = ++geracaoCanais;
@@ -102,7 +109,7 @@ async function carregarCanais(){
   box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo os envios…')); barra.innerHTML = '';
   try{
     for(let volta = 0; volta < 12; volta++){
-      const r = await api(`/api/performance/logistica?dias=${dias}`);
+      const r = await api(`${BASE}/performance/logistica?dias=${dias}`);
       if(minha !== geracaoCanais) return;
       box.innerHTML = ''; barra.innerHTML = '';
       for(const c of r.canais){
@@ -114,6 +121,11 @@ async function carregarCanais(){
             + (c.ticket != null ? ` · ticket ${real(c.ticket)}` : '')));
         box.appendChild(k);
         if(c.participacao > 0){ const i = el('i'); i.style.width = (c.participacao * 100) + '%'; i.style.background = COR_CANAL[c.canal]; i.title = `${c.nome}: ${pct(c.participacao)}`; barra.appendChild(i); }
+      }
+      if(NA_AMAZON){
+        $('canaisSub').textContent = `${numero(r.total.pedidos)} venda(s): FBA (a Amazon guarda e envia) e envio próprio.`
+          + (r.envios_pendentes ? ` A Amazon ainda está entregando os itens de ${numero(r.envios_pendentes)} pedido(s); atualize a página daqui a pouco.` : '');
+        return;   // os itens chegam em segundo plano: não fica pedindo de novo
       }
       $('canaisSub').textContent = r.envios_pendentes
         ? `Lendo o tipo de envio das vendas: faltam ${numero(r.envios_pendentes)} envio(s). Os números vão se completando sozinhos.`
@@ -128,16 +140,17 @@ async function carregar(){
   carregarCanais();
   $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Carregando…'));
   try{
-    const r = await api(`/api/performance?dias=${dias}`);
+    const r = await api(`${BASE}/performance?dias=${dias}`);
     const a = r.atual, b = r.anterior;
     const box = $('cartoes'); box.innerHTML = '';
     box.append(
       cartao('Faturamento', real(a.faturamento), a.faturamento, b.faturamento, false, `(antes ${real(b.faturamento)})`),
       cartao('Pedidos', numero(a.pedidos), a.pedidos, b.pedidos, false, `${numero(a.unidades)} un.`),
       cartao('Ticket médio', real(a.ticket), a.ticket, b.ticket),
-      cartao('Conversão', pct(a.conversao, 2), a.conversao, b.conversao, false, `${numero(a.visitas)} visitas`),
-      cartao('Visitas', numero(a.visitas), a.visitas, b.visitas),
-      cartao('Tarifas do ML', real(a.tarifas), a.tarifas, b.tarifas, true, a.faturamento ? pct(a.tarifas / a.faturamento) + ' do faturamento' : ''),
+      ...(NA_AMAZON ? [] : [
+        cartao('Conversão', pct(a.conversao, 2), a.conversao, b.conversao, false, `${numero(a.visitas)} visitas`),
+        cartao('Visitas', numero(a.visitas), a.visitas, b.visitas)]),
+      cartao(NA_AMAZON ? 'Tarifas da Amazon' : 'Tarifas do ML', real(a.tarifas), a.tarifas, b.tarifas, true, a.faturamento ? pct(a.tarifas / a.faturamento) + ' do faturamento' : ''),
       cartao('Cancelamentos', numero(a.cancelados), a.cancelados, b.cancelados, true),
     );
     const g = $('grafico'); g.innerHTML = '';

@@ -310,7 +310,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=2"></script>
+    <script src="/menu.js?v=8"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -364,6 +364,13 @@
     <div style="flex:1 1 220px">
       <label for="fBusca">Buscar no título</label>
       <input id="fBusca" placeholder="iMac, camiseta…">
+    </div>
+    <div>
+      <label for="fConc">Concorrentes</label>
+      <select id="fConc">
+        <option value="">Todos os anúncios</option>
+        <option value="1">Com concorrentes marcados</option>
+      </select>
     </div>
     <div style="flex:0 1 170px">
       <label for="fProduto">Produto do kit</label>
@@ -764,6 +771,7 @@ function cartao(it){
   meta.textContent = [it.id, skus.length ? skus.join(', ') : 'sem SKU',
     `estoque no ML: ${num(it.available_quantity ?? 0)}`,
     `${num(it.sold_quantity ?? 0)} vendido(s) no total`,
+    it.concorrentes ? `${num(it.concorrentes.marcados)} concorrente(s) marcado(s), menor ${dinheiro(it.concorrentes.menor_preco)}` : null,
   ].filter(Boolean).join(' · ');
   const abrir = document.createElement('a');
   abrir.href = it.permalink || '#'; abrir.target = '_blank'; abrir.rel = 'noopener';
@@ -1002,6 +1010,7 @@ function pintarDetalhes(it, alvo){
 
   alvo.appendChild(blocoGtin(it, el));
   alvo.appendChild(blocoCalculadora(it, el));
+  alvo.appendChild(blocoConcorrentes(it, el));
   alvo.appendChild(blocoAtacado(it, el));
 }
 
@@ -1129,6 +1138,145 @@ function blocoCalculadora(it, el){
     finally{ bt.disabled = false; }
   };
   b.append(f, res);
+  return b;
+}
+
+// ---------- concorrentes no Mercado Livre ----------
+// A busca do ML (scraper) traz os outros vendedores: preço, posição, patrocinado, frete grátis
+// e os vendidos em FAIXAS (total da vida do anúncio; venda de 30 dias o ML não mostra). O
+// vendedor marca os que são "iguais ao meu": eles ficam guardados, com o último preço, e o
+// filtro "Com concorrentes marcados" da lista mostra só esses anúncios.
+const faixaTxt = (v) => (v == null ? 'sem número' : `+${num(v)} vendidos`);
+function historicoTxt(c){
+  const d = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '');
+  if(c.vendidos == null) return '';
+  if(c.faixa_anterior != null) return `subiu de +${num(c.faixa_anterior)} em ${d(c.faixa_desde)}`;
+  return c.acompanhado_desde ? `nesta faixa desde ${d(c.faixa_desde)}` : '';
+}
+function blocoConcorrentes(it, el){
+  const b = el('div', 'det-bloco');
+  b.appendChild(el('div', 'det-cab')).appendChild(el('b', null, 'Concorrentes no Mercado Livre'));
+  b.appendChild(el('p', 'nota', 'Busca no Mercado Livre e mostra os outros vendedores. Marque "igual ao meu" nos que forem o mesmo produto: eles ficam guardados e entram no filtro "Com concorrentes marcados". Vendidos: o ML mostra só o total do anúncio, em faixas (+100, +500…); o painel avisa quando um concorrente sobe de faixa.'));
+  const f = el('form', 'det-sku');
+  const lab = el('label', null, 'Termo de busca (vazio: o termo da Posição ou o começo do título)');
+  const inp = el('input'); inp.maxLength = 80; inp.placeholder = 'ex.: ducha redonda cromada';
+  lab.appendChild(inp);
+  const bt = el('button', null, 'Buscar concorrentes'); bt.type = 'submit';
+  f.append(lab, bt);
+  const marcadosBox = el('div'); const resBox = el('div');
+  b.append(f, marcadosBox, resBox);
+
+  const lucros = new Map();   // preço -> { lucro, margem, cruza_79 }
+  let semLucro = null;
+  async function carregarLucros(precos){
+    const faltam = [...new Set(precos.filter((p) => p > 0 && !lucros.has(p)))].slice(0, 30);
+    if(!faltam.length || semLucro) return;
+    try{
+      const r = await api(`/api/items/${it.id}/lucro-nos-precos?precos=${faltam.join(',')}`);
+      for(const p of r.precos) lucros.set(p.preco, p);
+    }catch(e){ semLucro = e.message; }
+  }
+  const celLucro = (preco) => {
+    const x = lucros.get(preco);
+    if(!x) return el('td', null, semLucro ? '—' : '…');
+    const td = el('td', x.lucro < 0 ? 'neg' : 'pos', `${dinheiro(x.lucro)} · ${pct(x.margem)}`);
+    if(x.cruza_79) td.title = 'Esse preço cruza R$ 79: o frete pago por você muda nessa faixa.';
+    return td;
+  };
+  const botaoUsar = (preco) => {
+    const td = el('td');
+    if(!preco || it.tem_variacoes || it.status === 'closed') return td;
+    const u = el('button', null, 'Usar'); u.type = 'button';
+    u.onclick = async () => {
+      const x = lucros.get(preco);
+      if(!confirm(`Mudar o preço de ${it.id} de ${dinheiro(it.price)} para ${dinheiro(preco)}?`
+        + (x ? `\nLucro estimado: ${dinheiro(x.lucro)} (${pct(x.margem)})` : '') + '\n\nMuda no Mercado Livre na hora.')) return;
+      u.disabled = true;
+      await mandar(it, { price: preco }, `Preço de ${it.id} atualizado para ${dinheiro(preco)}.`);
+      u.disabled = false;
+    };
+    td.appendChild(u); return td;
+  };
+  const celAnuncio = (c) => {
+    const td = el('td'); const p = el('div', 'prod');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(c.imagem) im.src = c.imagem;
+    const tx = el('div'); const a = el('a', null, c.titulo || c.item_id); a.href = c.link; a.target = '_blank'; a.rel = 'noopener';
+    tx.append(a, el('span', 'pequeno', [c.item_id, c.vendedor].filter(Boolean).join(' · ')));
+    p.append(im, tx); td.appendChild(p); return td;
+  };
+  const celPreco = (c) => {
+    const td = el('td', null, dinheiro(c.preco));
+    if(c.preco_original) td.appendChild(el('span', 'pequeno', `de ${dinheiro(c.preco_original)}`));
+    return td;
+  };
+  const celVendidos = (c) => { const td = el('td', null, faixaTxt(c.vendidos)); const h = historicoTxt(c); if(h) td.appendChild(el('span', 'pequeno', h)); return td; };
+
+  async function pintarMarcados(lista){
+    marcadosBox.innerHTML = '';
+    if(!lista.length) return;
+    await carregarLucros(lista.map((c) => c.preco));
+    marcadosBox.appendChild(el('h4', null, `Marcados como iguais ao seu (${lista.length})`));
+    const t = el('table', 'det-tab'); const cab = el('tr');
+    for(const h of ['Concorrente', 'Preço', 'Vendidos', 'Visto em', 'Se você cobrar este preço', '', '']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th); const tb = el('tbody');
+    for(const c of lista){
+      const tr = el('tr');
+      const des = el('td'); const bd = el('button', null, 'Desmarcar'); bd.type = 'button';
+      bd.onclick = async () => { try{ const r = await api('/api/concorrentes/desmarcar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ item: it.id, conc: c.item_id }) }); pintarMarcados(r.marcados); }catch(e){ aviso(e.message, 'err'); } };
+      des.appendChild(bd);
+      tr.append(celAnuncio(c), celPreco(c), celVendidos(c), el('td', null, c.visto_em ? new Date(c.visto_em).toLocaleDateString('pt-BR') : '—'),
+        celLucro(c.preco), botaoUsar(c.preco), des);
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); marcadosBox.appendChild(t);
+    if(semLucro) marcadosBox.appendChild(el('p', 'nota det-falta', 'Lucro em cada preço: ' + semLucro));
+  }
+
+  async function pintarResultados(r){
+    resBox.innerHTML = '';
+    await carregarLucros(r.resultados.map((c) => c.preco));
+    resBox.appendChild(el('h4', null, `Busca "${r.termo}": ${r.resultados.length} concorrente(s)`));
+    resBox.appendChild(el('p', 'nota', (r.minha_posicao ? `Seu anúncio está em ${r.minha_posicao}º. ` : 'Seu anúncio não apareceu nesta página. ')
+      + (r.da_casa ? `${r.da_casa} anúncio(s) seus (desta ou da outra conta) ficaram fora da lista. ` : '')
+      + (r.falhas?.length ? 'Aviso: ' + r.falhas.join('; ') : '')));
+    if(!r.resultados.length) return;
+    const t = el('table', 'det-tab'); const cab = el('tr');
+    for(const h of ['Igual ao meu', 'Pos.', 'Concorrente', 'Preço', 'Frete', 'Vendidos', 'Se você cobrar este preço', '']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th); const tb = el('tbody');
+    for(const c of r.resultados){
+      const tr = el('tr');
+      const tdM = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = c.marcado;
+      cb.setAttribute('aria-label', 'Igual ao meu: ' + (c.titulo || c.item_id));
+      cb.onchange = async () => {
+        cb.disabled = true;
+        try{
+          const rr = cb.checked
+            ? await api('/api/concorrentes/marcar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ item: it.id, concorrente: c }) })
+            : await api('/api/concorrentes/desmarcar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ item: it.id, conc: c.item_id }) });
+          c.marcado = cb.checked; pintarMarcados(rr.marcados);
+        }catch(e){ cb.checked = !cb.checked; aviso(e.message, 'err'); }
+        cb.disabled = false;
+      };
+      tdM.appendChild(cb);
+      const pos = el('td', null, `${c.posicao}º`); if(c.tipo && c.tipo !== 'ORGANIC') pos.appendChild(el('span', 'pequeno', 'patrocinado'));
+      tr.append(tdM, pos, celAnuncio(c), celPreco(c), el('td', null, c.frete_gratis ? 'grátis' : '—'), celVendidos(c), celLucro(c.preco), botaoUsar(c.preco));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); resBox.appendChild(t);
+    if(semLucro) resBox.appendChild(el('p', 'nota det-falta', 'Lucro em cada preço: ' + semLucro));
+  }
+
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    bt.disabled = true; resBox.innerHTML = ''; resBox.appendChild(el('p', 'nota', 'Buscando no Mercado Livre… (leva uns segundos)'));
+    try{
+      const r = await api('/api/concorrentes/buscar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ item: it.id, termo: inp.value.trim() }) });
+      if(!inp.value.trim()) inp.placeholder = r.termo;
+      await pintarResultados(r); pintarMarcados(r.marcados);
+    }catch(e){ resBox.innerHTML = ''; resBox.appendChild(el('p', 'nota det-falta', e.message)); }
+    finally{ bt.disabled = false; }
+  };
+  api('/api/concorrentes?item=' + it.id).then((r) => pintarMarcados(r.marcados)).catch(() => {});
   return b;
 }
 
@@ -1459,6 +1607,7 @@ function filtrosDaLista(){
   if($('fStatus').value) qs.set('status', $('fStatus').value);
   if($('fBusca').value.trim()) qs.set('q', $('fBusca').value.trim());
   if($('fProduto').value.trim()) qs.set('produto', $('fProduto').value.trim());
+  if($('fConc').value) qs.set('concorrentes', '1');
   qs.set('sort', $('fOrdem').value);
   return qs;
 }
@@ -1515,6 +1664,7 @@ $('btnFiltrar').onclick = () => { offset = 0; carregar(); };
 $('fBusca').onkeydown = (e) => { if(e.key === 'Enter'){ offset = 0; carregar(); } };
 $('fProduto').onkeydown = (e) => { if(e.key === 'Enter'){ offset = 0; carregar(); } };
 $('fProduto').onchange = () => { offset = 0; carregar(); };
+$('fConc').onchange = () => { offset = 0; carregar(); };
 // Sugestões do filtro de produto: a tabela de produtos (SKU + nome).
 api('/api/produtos-custo').then((r) => {
   const dl = $('listaProdutos');

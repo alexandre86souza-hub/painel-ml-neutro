@@ -49,6 +49,18 @@
   .novo label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
   .novo input,.novo select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px}
   .mais{margin-top:12px;text-align:center}
+  .at-faixas{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:#f8fafd}
+  .at-faixa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;font-size:13px}
+  .at-faixa input{font:inherit;font-size:14px;padding:7px 9px;border:1px solid #d5dbe5;border-radius:8px;width:84px;text-align:right;background:#fff}
+  .at-faixa button{font:inherit;border:0;background:none;color:#8c1d18;cursor:pointer;font-size:18px;line-height:1;padding:2px 6px}
+  .linha-at{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .at-acoes{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .at-acoes .bt{margin-left:0}
+  button.bt.perigo{background:#fce8e6;color:#8c1d18;border-color:#f0b3ad}
+  .at-faixas-txt{font-size:12px;white-space:normal;line-height:1.5}
+  .chip.azul{background:#e8efff;color:#1d4ed8}
+  #atTabela input[type=checkbox]{width:16px;height:16px}
+  #atTabela td.res{font-size:11px;white-space:normal;max-width:220px}
   .troca{display:grid;grid-template-columns:200px 200px auto;gap:8px;align-items:end;justify-content:start;margin-bottom:12px}
   .troca label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
   .troca input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;text-transform:uppercase}
@@ -68,7 +80,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=2"></script>
+    <script src="/menu.js?v=8"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -105,6 +117,44 @@
     </div>
     <div class="tabela-rolagem" id="tabela"><p class="sub">Carregando… (conta os anúncios de cada produto no Mercado Livre)</p></div>
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
+  </section>
+
+  <section class="bloco" id="blocoAtacado">
+    <h2>Preço de atacado em massa</h2>
+    <p class="sub">Defina as faixas de desconto por quantidade, marque os anúncios e aplique em todos de uma vez. O desconto é em % sobre o preço de cada anúncio,
+      então as mesmas faixas servem para anúncios de preços diferentes. Aplicar substitui o atacado que o anúncio já tiver.</p>
+
+    <div class="at-faixas">
+      <b>Faixas de desconto</b>
+      <div id="atFaixas"></div>
+      <div class="linha-at">
+        <button type="button" class="bt" id="atMais">+ adicionar faixa</button>
+        <span class="sub" id="atExemplo" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="filtros">
+      <input id="atBusca" type="search" placeholder="Buscar por título, MLB ou SKU (ex.: 407)" aria-label="Buscar anúncio">
+      <div class="seg" role="group" aria-label="Filtro de atacado" id="atFiltro">
+        <button type="button" data-f="" aria-pressed="true">Todos <b id="atNTodos"></b></button>
+        <button type="button" data-f="sem">Sem atacado <b id="atNSem"></b></button>
+        <button type="button" data-f="antigo">Formato antigo <b id="atNAntigo"></b></button>
+        <button type="button" data-f="novo">Em % (novo) <b id="atNNovo"></b></button>
+      </div>
+      <button type="button" class="bt" id="atReler" title="Lê de novo o atacado de todos os anúncios no Mercado Livre">Ler de novo do ML</button>
+    </div>
+    <p class="sub" id="atNota">Lendo o atacado dos anúncios…</p>
+
+    <div class="troca-barra" id="atBarra" hidden>
+      <label><input type="checkbox" id="atTodos"> Selecionar todos do filtro</label>
+      <span class="sub" id="atCont" style="margin:0"></span>
+      <span class="at-acoes">
+        <button type="button" class="bt primario" id="atAplicar" disabled>Aplicar atacado nos selecionados</button>
+        <button type="button" class="bt perigo" id="atExcluir" disabled>Excluir atacado dos selecionados</button>
+      </span>
+    </div>
+    <div class="tabela-rolagem" id="atTabela"></div>
+    <div class="mais"><button type="button" class="bt" id="atMaisLinhas" hidden>Mostrar mais</button></div>
   </section>
 
   <section class="bloco" id="blocoTroca">
@@ -255,6 +305,173 @@ function linha(p){
     el('td', 'num', p.uso.ativos ? `${numero(p.uso.estoque)} un.` : '—'), tdAc);
   return tr;
 }
+
+// ---------- preço de atacado em massa ----------
+const AT = { itens: [], filtro: '', sel: new Set(), mostrar: 100, res: {}, lendo: 0 };
+const pc1 = (n) => (n == null ? '?' : Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%');
+
+// editor das faixas (até 5): "a partir de N unidades -> X% de desconto"
+function novaFaixa(q = '', p = ''){
+  if($('atFaixas').children.length >= 5) return aviso('O Mercado Livre aceita no máximo 5 faixas de atacado.');
+  const d = el('div', 'at-faixa');
+  const iq = el('input'); iq.type = 'number'; iq.min = '2'; iq.max = '100'; iq.step = '1'; iq.value = q; iq.className = 'at-q'; iq.setAttribute('aria-label', 'Quantidade mínima');
+  const ip = el('input'); ip.type = 'number'; ip.min = '0.1'; ip.max = '99'; ip.step = '0.1'; ip.value = p; ip.className = 'at-p'; ip.setAttribute('aria-label', 'Desconto em %');
+  const x = el('button', null, '×'); x.type = 'button'; x.title = 'Tirar esta faixa';
+  x.onclick = () => { d.remove(); pintarExemplo(); };
+  iq.oninput = ip.oninput = pintarExemplo;
+  d.append('A partir de', iq, 'unidades →', ip, '% de desconto', x);
+  $('atFaixas').appendChild(d);
+  pintarExemplo();
+}
+// faixas digitadas, conferidas como o Mercado Livre exige; devolve { faixas } ou { erro }
+function faixasDaTela(){
+  const faixas = [...$('atFaixas').children].map((d) => ({ quantidade: Number(d.querySelector('.at-q').value), pct: Number(d.querySelector('.at-p').value),
+    vazia: !d.querySelector('.at-q').value && !d.querySelector('.at-p').value })).filter((f) => !f.vazia)
+    .sort((a, b) => a.quantidade - b.quantidade);
+  if(!faixas.length) return { erro: 'Preencha pelo menos uma faixa: a quantidade mínima e o desconto em %.' };
+  for(const [i, f] of faixas.entries()){
+    if(!Number.isInteger(f.quantidade) || f.quantidade < 2 || f.quantidade > 100) return { erro: 'A quantidade mínima de cada faixa vai de 2 a 100 unidades.' };
+    if(!(f.pct > 0 && f.pct < 100)) return { erro: `Desconto inválido na faixa de ${f.quantidade} unidades.` };
+    if(i && f.quantidade === faixas[i - 1].quantidade) return { erro: `Quantidade ${f.quantidade} repetida.` };
+    if(i && f.pct <= faixas[i - 1].pct) return { erro: 'O desconto precisa aumentar conforme a quantidade aumenta.' };
+  }
+  return { faixas: faixas.map((f) => ({ quantidade: f.quantidade, pct: f.pct })) };
+}
+function pintarExemplo(){
+  const r = faixasDaTela();
+  $('atExemplo').textContent = r.erro ? '' : 'Num anúncio de R$ 100,00: ' + r.faixas.map((f) => `${f.quantidade}+ un. por ${real(100 * (1 - f.pct / 100))}`).join(' · ');
+}
+
+const textoFaixas = (a) => a.faixas.map((f) => `${f.quantidade}+ un. −${pc1(f.pct)}` + (f.preco != null ? ` (${real(f.preco)})` : '')).join(' · ');
+const atVisiveis = () => {
+  const q = $('atBusca').value.trim().toLowerCase();
+  return AT.itens.filter((a) => {
+    if(AT.filtro === 'sem' && a.faixas.length) return false;
+    if(AT.filtro === 'antigo' && a.formato !== 'fixo') return false;
+    if(AT.filtro === 'novo' && a.formato !== 'pct') return false;
+    return !q || a.id.toLowerCase().includes(q) || (a.titulo || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q);
+  });
+};
+function atContar(){
+  const n = AT.sel.size;
+  $('atCont').textContent = `${numero(n)} selecionado(s)`;
+  $('atAplicar').disabled = $('atExcluir').disabled = !n;
+  $('atAplicar').textContent = n ? `Aplicar atacado em ${numero(n)} anúncio(s)` : 'Aplicar atacado nos selecionados';
+  $('atExcluir').textContent = n ? `Excluir atacado de ${numero(n)} anúncio(s)` : 'Excluir atacado dos selecionados';
+  const vis = atVisiveis();
+  $('atTodos').checked = vis.length > 0 && vis.every((a) => AT.sel.has(a.id));
+}
+function atPintar(){
+  const cont = { sem: 0, antigo: 0, novo: 0 };
+  for(const a of AT.itens){ if(!a.faixas.length) cont.sem++; else if(a.formato === 'fixo') cont.antigo++; else cont.novo++; }
+  $('atNTodos').textContent = numero(AT.itens.length); $('atNSem').textContent = numero(cont.sem);
+  $('atNAntigo').textContent = numero(cont.antigo); $('atNNovo').textContent = numero(cont.novo);
+  const box = $('atTabela'); box.innerHTML = '';
+  const lista = atVisiveis();
+  $('atBarra').hidden = !AT.itens.length;
+  if(!lista.length){ box.appendChild(el('p', 'sub', AT.itens.length ? 'Nenhum anúncio com esse filtro.' : '')); $('atMaisLinhas').hidden = true; atContar(); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['', 'Anúncio', 'Preço', 'Atacado hoje', '', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const a of lista.slice(0, AT.mostrar)){
+    const tr = el('tr');
+    const ck = el('input'); ck.type = 'checkbox'; ck.checked = AT.sel.has(a.id); ck.setAttribute('aria-label', 'Selecionar ' + a.id);
+    ck.onchange = () => { ck.checked ? AT.sel.add(a.id) : AT.sel.delete(a.id); atContar(); };
+    const c0 = el('td'); c0.appendChild(ck);
+    const c1 = el('td'); const lk = el('a', null, a.titulo || a.id); lk.href = a.link || '#'; lk.target = '_blank'; lk.rel = 'noopener';
+    c1.append(lk, el('br'), el('span', 'chip cinza', a.id), ' ', el('span', 'sku', a.sku || 'sem SKU'));
+    const c3 = el('td', 'at-faixas-txt');
+    if(!a.faixas.length) c3.appendChild(el('span', 'chip amarelo', 'sem atacado'));
+    else{
+      c3.appendChild(el('span', 'chip ' + (a.formato === 'pct' ? 'azul' : 'cinza'), a.formato === 'pct' ? 'em %' : 'formato antigo'));
+      c3.append(' ', textoFaixas(a));
+    }
+    const c4 = el('td', 'num');
+    if(a.faixas.length){
+      const bt = el('button', 'bt', 'Excluir'); bt.type = 'button'; bt.title = 'Tirar o preço de atacado deste anúncio';
+      bt.onclick = () => atExecutar('remover', [a.id]);
+      c4.appendChild(bt);
+    }
+    const r = AT.res[a.id];
+    const c5 = el('td', 'res', r ? r.txt : ''); if(r) c5.style.color = r.ok ? '#0b6b33' : '#8c1d18';
+    tr.append(c0, c1, el('td', 'num', real(a.preco)), c3, c4, c5);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  $('atMaisLinhas').hidden = lista.length <= AT.mostrar;
+  $('atMaisLinhas').textContent = `Mostrar mais (${numero(lista.length - AT.mostrar)} restantes)`;
+  atContar();
+}
+
+// Lê a lista. O atacado é uma consulta por anúncio: a primeira vez lê 300 por volta e a
+// tela pede de novo sozinha até acabar.
+async function carregarAtacado(reler){
+  const minha = ++AT.lendo;
+  $('atNota').textContent = 'Lendo o atacado dos anúncios no Mercado Livre…';
+  try{
+    for(let volta = 0; volta < 15; volta++){
+      const r = await api('/api/atacado' + (reler && volta === 0 ? '?recarregar=1' : ''));
+      if(minha !== AT.lendo) return;
+      AT.itens = r.itens.filter((a) => a.lido);
+      const c = r.contagem;
+      $('atNota').textContent = c.faltam_ler
+        ? `Lendo o atacado: ${numero(c.ativos - c.faltam_ler)} de ${numero(c.ativos)} anúncios ativos…`
+        : `${numero(c.ativos)} anúncios ativos: ${numero(c.sem)} sem atacado, ${numero(c.antigo)} no formato antigo (em valor fixo) e ${numero(c.novo)} em %.`
+          + (c.antigo ? ' O Mercado Livre avisou que desliga o formato antigo em 27/10/2026: aplique as faixas em % neles para não perder o atacado.' : '');
+      atPintar();
+      if(!c.faltam_ler) return;
+    }
+  }catch(e){ if(minha === AT.lendo) $('atNota').textContent = 'Não consegui ler o atacado: ' + e.message; }
+}
+
+// Aplica ou exclui nos anúncios escolhidos, de 20 em 20, mostrando o andamento.
+async function atExecutar(acao, ids){
+  let corpoBase = {};
+  if(acao === 'aplicar'){
+    const f = faixasDaTela();
+    if(f.erro) return aviso(f.erro);
+    corpoBase = { faixas: f.faixas };
+    if(!confirm(`Aplicar este atacado em ${ids.length} anúncio(s)?\n\n` + f.faixas.map((x) => `  ${x.quantidade}+ unidades: ${pc1(x.pct)} de desconto`).join('\n')
+      + '\n\nMuda o preço de atacado no Mercado Livre e substitui o atacado que o anúncio já tiver.')) return;
+  }else if(!confirm(`Excluir o preço de atacado de ${ids.length} anúncio(s) no Mercado Livre?`)) return;
+  const bts = [$('atAplicar'), $('atExcluir'), $('atReler')];
+  bts.forEach((b) => { b.disabled = true; });
+  let ok = 0, falhas = 0;
+  const porId = Object.fromEntries(AT.itens.map((a) => [a.id, a]));
+  for(let i = 0; i < ids.length; i += 20){
+    const lote = ids.slice(i, i + 20);
+    $('atCont').textContent = `${acao === 'aplicar' ? 'Aplicando' : 'Excluindo'}… ${Math.min(i + 20, ids.length)} de ${ids.length}`;
+    try{
+      const r = await enviar('POST', `/api/atacado/${acao}`, { ...corpoBase, ids: lote });
+      for(const x of r.resultado){
+        const a = porId[x.id];
+        if(x.faixas && a){ a.faixas = x.faixas.map((f) => ({ ...f })); a.formato = x.formato; }
+        if(x.ok){ ok++; AT.sel.delete(x.id); AT.res[x.id] = { ok: true, txt: acao === 'aplicar' ? 'atacado aplicado' : 'atacado excluído' }; }
+        else{ falhas++; AT.res[x.id] = { ok: false, txt: 'não mudou: ' + x.erro }; }
+      }
+    }catch(e){ falhas += lote.length; for(const id of lote) AT.res[id] = { ok: false, txt: 'não mudou: ' + e.message }; }
+    atPintar();
+  }
+  bts.forEach((b) => { b.disabled = false; });
+  aviso(`${ok} anúncio(s) ${acao === 'aplicar' ? 'com o atacado aplicado' : 'com o atacado excluído'}.`
+    + (falhas ? ` ${falhas} não mudaram: o motivo aparece na linha de cada um (continuam selecionados).` : ''), falhas && !ok ? 'erro' : 'ok');
+  atPintar();
+}
+$('atMais').onclick = () => novaFaixa();
+$('atFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; AT.filtro = b.dataset.f; AT.mostrar = 100;
+  for(const x of $('atFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  atPintar();
+};
+$('atBusca').oninput = () => { AT.mostrar = 100; atPintar(); };
+$('atMaisLinhas').onclick = () => { AT.mostrar += 200; atPintar(); };
+$('atTodos').onchange = () => { for(const a of atVisiveis()) $('atTodos').checked ? AT.sel.add(a.id) : AT.sel.delete(a.id); atPintar(); };
+$('atAplicar').onclick = () => atExecutar('aplicar', [...AT.sel]);
+$('atExcluir').onclick = () => atExecutar('remover', [...AT.sel]);
+$('atReler').onclick = () => { AT.res = {}; carregarAtacado(true); };
+novaFaixa(); novaFaixa(); novaFaixa();
+carregarAtacado();
 
 // ---------- trocar um produto no SKU dos anúncios ----------
 const numeroDo = (txt) => { const m = /(\d+)\s*$/.exec(String(txt || '').trim()); return m ? Number(m[1]) : null; };

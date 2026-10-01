@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=2"></script>
+    <script src="/menu.js?v=8"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -213,7 +213,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 
       <section class="cfg-section" id="seguranca" aria-labelledby="cfg-sec-title">
         <div class="cfg-section-head"><div><span class="cfg-kicker">03 · SEGURANÇA</span><h3 id="cfg-sec-title">Acesso ao painel</h3><p>Controle a senha utilizada para acessar esta instalação.</p></div><div class="cfg-status-chip cfg-status-safe"><i></i> Protegido</div></div>
-        <article class="cfg-security-row" aria-labelledby="t5"><div><span class="cfg-security-icon">●</span><div><h4 id="t5">Senha do painel</h4><p>Trocar a senha encerra as sessões abertas. Mínimo de 8 caracteres.</p></div></div><details><summary class="cfg-security-action">Trocar senha</summary><form id="formSenha" novalidate class="cfg-password-form"><label for="senhaAtual">Senha atual</label><input id="senhaAtual" type="password" autocomplete="current-password" required><label for="senhaNova">Senha nova</label><input id="senhaNova" type="password" minlength="8" autocomplete="new-password" required aria-describedby="senhaDica"><p class="sub" id="senhaDica">Mínimo de 8 caracteres.</p><div class="acoes"><button type="submit">Atualizar senha</button></div></form><div id="senhaStatus"></div></details></article>
+        <article class="cfg-security-row" aria-labelledby="t5"><div><span class="cfg-security-icon">●</span><div><h4 id="t5">Senha do painel</h4><p id="senhaInfo">Trocar a senha encerra as sessões abertas. Mínimo de 12 caracteres, com letra, número e caractere especial; vale por 365 dias.</p></div></div><details><summary class="cfg-security-action">Trocar senha</summary><form id="formSenha" novalidate class="cfg-password-form"><label for="senhaAtual">Senha atual</label><input id="senhaAtual" type="password" autocomplete="current-password" required><label for="senhaNova">Senha nova</label><input id="senhaNova" type="password" minlength="12" autocomplete="new-password" required aria-describedby="senhaDica"><p class="sub" id="senhaDica">Mínimo de 12 caracteres, com letra, número e caractere especial (ex.: ! @ # $ % - _ .).</p><div class="acoes"><button type="submit">Atualizar senha</button></div></form><div id="senhaStatus"></div></details></article>
+        <article class="cfg-security-row" aria-labelledby="t6"><div><span class="cfg-security-icon">●</span><div><h4 id="t6">Verificação em duas etapas</h4><p id="mfaInfo">Todo login pede a senha e o código de 6 dígitos do aplicativo autenticador do celular.</p></div></div><details><summary class="cfg-security-action">Trocar de celular</summary><form id="formMfa" novalidate class="cfg-password-form"><p class="sub">Confirme a senha e o código do celular atual. Em seguida o painel mostra uma chave nova para cadastrar no celular novo.</p><label for="mfaSenha">Senha do painel</label><input id="mfaSenha" type="password" autocomplete="current-password" required><label for="mfaCodigo">Código do aplicativo (celular atual)</label><input id="mfaCodigo" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required><div class="acoes"><button type="submit">Trocar de celular</button></div><p class="sub">Perdeu o celular? No computador do painel, rode <code>npm run desativar-2fa</code>.</p></form><div id="mfaStatus"></div></details></article>
       </section>
 
       
@@ -513,6 +514,23 @@ $('btnTestarSessao').onclick = async () => {
 $('btnReiniciar').onclick = async () => {
   try{ await post('/api/scraper/reiniciar'); await carregar(false); }
   catch(e){ $('aviso').replaceChildren(caixa('err', 'Não reiniciou.', [e.message])); }
+};
+
+// Validade da senha e situação do 2FA
+api('/api/seguranca').then((s) => {
+  const d = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+  if(s.senha_vence_em) $('senhaInfo').textContent = `Definida em ${d(s.senha_definida_em)}; vence em ${d(s.senha_vence_em)}. ${s.politica} Trocar a senha encerra as sessões abertas.`;
+  $('mfaInfo').textContent = s.mfa_ativo
+    ? `Ativa desde ${d(s.mfa_desde)}. Todo login pede a senha e o código de 6 dígitos do aplicativo autenticador do celular.`
+    : 'Ainda não ativada: o painel pede a ativação no próximo acesso.';
+}).catch(() => {});
+$('formMfa').onsubmit = async (ev) => {
+  ev.preventDefault();
+  if(!confirm('Trocar de celular? A chave atual deixa de valer e o painel mostra uma nova para cadastrar.')) return;
+  try{
+    const r = await post('/api/seguranca/2fa/reconfigurar', { senha: $('mfaSenha').value, codigo: $('mfaCodigo').value });
+    location.href = r.proximo || '/ativar-2fa';
+  }catch(e){ $('mfaStatus').replaceChildren(caixa('err', 'Não trocou.', [e.message])); }
 };
 
 $('formSenha').onsubmit = async (ev) => {

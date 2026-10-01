@@ -50,17 +50,75 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   com a última configuração vista (`ads_campanhas`) e grava em `ads_mudancas`. Acompanha
   `budget` (orçamento do vendedor), não `daily_budget` (oscila sozinho). Confere a cada 30 min
   junto com `/api/avisos`.
+- Atacado em massa (`precos.js`, bloco na tela Produtos): `GET /api/atacado` lista os anúncios
+  ativos com o atacado de cada um (uma chamada por anúncio, guardada em `anuncio_atacado`);
+  `POST /api/atacado/aplicar` e `/remover` usam o mesmo `gravarAtacado` do anúncio individual.
 - Em massa: `POST /api/items/status-em-massa` (pausar/reativar, até 300) e
   `POST /api/produtos/:n/trocar-sku` (troca um produto dentro do SKU, `custos.js#trocarComponente`).
 - Identidade: o código não tem marca de empresa. Nome e logo são digitados na tela Empresa
   (`PUT /api/marca`, tabela `estado`), o logo sai em `GET /api/marca/logo` e `public/menu.js`
   pinta os dois em todas as telas. Logo só PNG/JPG/WebP conferido pelos bytes — SVG não.
+  Cada conta tem a sua (`marca_nome:{id}`, `marca_logo:{id}`); sem ela vale a geral e o apelido.
+- Várias contas: a tela "Todas as contas" (`public/geral.html`) usa `GET /api/contas/resumo?dias=`
+  (`custos.js#resumoDasContas`): roda as vendas de cada conta conectada (hoje e o período), soma
+  e junta os produtos por SKU. O Dashboard (`/`) continua sendo só da conta selecionada.
+  A tabela de produtos (`produtos_custo`) é uma só para todas as contas.
+- Shopee (`shopee.js`, tela `public/shopee.html`): por enquanto só a conexão da loja. Partner ID
+  e Partner Key digitados na tela (chave cifrada em `estado`), autorização com retorno em
+  `/shopee/callback/{state}` pela porta pública, tokens em `shopee_lojas` (refresh de uso
+  único: `shopeeTokensGravar` na hora) e `GET /api/shopee/diagnostico`, que mostra o que a
+  Shopee devolve de verdade. Vendas e lucro da Shopee ainda NÃO existem: construir a partir
+  do que o diagnóstico mostrar com a loja real, não da documentação.
+- Amazon (`amazon.js`, tela `public/amazon.html`): por enquanto só a conexão. Aplicativo
+  privado (Rascunho) autorizado no próprio Seller Central: Client ID, Client Secret e Refresh
+  Token digitados na tela (segredo e token cifrados em `estado`), testados com a Amazon antes
+  de gravar. SP-API região NA, marketplace Brasil `A2Q3Y263D00KWC`, sem assinatura AWS.
+  Compromissos declarados à Amazon no cadastro (não afrouxe): nenhum dado pessoal de
+  comprador (sem RDT; `semPessoais` em toda resposta), dados da Amazon NUNCA no MCP
+  (`test-amazon.js` reprova) e o diagnóstico mostra só a forma das respostas, sem valores.
+  Plano de incidentes: `PLANO-DE-RESPOSTA-A-INCIDENTES.md` (revisão a cada 6 meses).
+  Vendas e lucro (`GET /api/amazon/vendas`): pelos lançamentos financeiros
+  (`finances/v0/financialEvents`, data = PostedDate), copiados em `amazon_lancamentos` (no
+  máximo a cada 10 min; 1ª leitura = 92 dias). Custo pelo SKU (`produtos_custo`; hífen também
+  separa os produtos: `KIT-795-615-746-698`). A Amazon é uma "conta" própria na lista do topo
+  (`menu.js` acrescenta a opção): identidade `marca_*:amazon` e empresa `empresa:amazon`
+  (`/api/marca?conta=amazon`, `/api/empresa?conta=amazon`, tela `empresa.html?conta=amazon`);
+  sem empresa salva, vale a da conta do ML em `amazon_empresa_conta`.
+  Telas do ML com a Amazon (`?conta=amazon`; `menu.js#COM_AMAZON` leva o parâmetro nos links):
+  Pedidos/Vendas Hoje, Performance e ABC chamam `/api/amazon/pedidos|performance|abc` (mesmo
+  formato das rotas do ML). Base: pedidos copiados em `amazon_pedidos`/`amazon_itens` (data da
+  COMPRA, como no ML; 1ª leitura 152 dias; itens 1 por pedido, 0,5/s, em segundo plano) + taxas
+  reais do financeiro por pedido+SKU; sem lançamento ainda = média do SKU/canal (`estimado`).
+  Full com a Amazon = FBA (`/api/amazon/full`, estoque de `/fba/inventory/v1/summaries`).
+  Anúncios da Amazon: tela própria `public/amazon-anuncios.html` (o menu troca `/anuncios.html`
+  por ela). Lista pela Listings API (`searchListingsItems`, ID do vendedor tirado de uma
+  transação financeira e guardado em `amazon_seller_id`); preço muda em
+  `POST /api/amazon/anuncios/preco` = PATCH do `purchasable_offer` lido na hora, trocando só o
+  `our_price` da oferta ao consumidor (mínimo/máximo e B2B ficam). Escrita: só pela tela.
+  Concorrentes: `getItemOffers` (um ASIN) e `getItemOffersBatch` (todos, em segundo plano,
+  `amazon_concorrencia`). A API só dá o código do vendedor: o nome NÃO é raspado do site
+  (declaramos à Amazon que os dados vêm só da SP-API) — a tela tem o link da loja pública e o
+  vendedor digita o nome (`amazon_vendedores`). Venda de concorrente não existe; só o BSR. Em "Todas as contas" a Amazon é
+  somada NO NAVEGADOR (`geral.html#comAmazon`): `/api/contas/resumo` é usada pelo MCP.
+- Concorrentes no ML (`concorrentes.js`, bloco em Anúncios → Detalhes): a API do ML dá 403
+  para busca e anúncio de terceiros, então vêm do scraper (`/posicao`, a mesma busca da
+  Posição). Vendidos = total da vida, EM FAIXAS (+100, +500…); venda de 30 dias de concorrente
+  não existe. Cada busca grava a faixa (`ml_conc_medidas`) para mostrar "subiu de faixa"; os
+  marcados "igual ao meu" ficam em `ml_concorrentes` e o filtro `/api/items?concorrentes=1`
+  usa a mesma lista de ids do filtro por produto. Anúncios das contas conectadas saem da lista
+  (`classificarBusca` + nome do vendedor). Lucro em cada preço: `/api/items/:id/lucro-nos-precos`.
 - Scraper: `scraper-processo.js` sobe e reinicia o Python; ele escuta só em `127.0.0.1`.
 - `mcp.js` expõe as MESMAS rotas do painel como ferramentas MCP (stdio, sem porta, sem OAuth:
   usa a conta já conectada). Ferramenta nova = uma linha na tabela `FERRAMENTAS` apontando
   para a rota; `server.js#despachar` é o único caminho, e `test-mcp.js` reprova ferramenta
   que aponte para rota inexistente. O repasse livre à API do ML (`ml_api`) mora só no MCP e
   usa `server.js#ml` — não crie rota HTTP equivalente (ver "Nunca").
+
+- Acesso ao painel (`seguranca.js`): senha de 12+ caracteres com letra, número e especial,
+  validade de 365 dias, e verificação em duas etapas (TOTP) OBRIGATÓRIA. Sem 2FA ativo ou com
+  senha fraca/vencida, `tratarPainel` só abre `/ativar-2fa` e `/trocar-senha` (API dá 403 com
+  `pendencia`). Exigência da Amazon para a SP-API; não afrouxe. Perdeu o celular:
+  `npm run desativar-2fa` no próprio computador.
 
 ## Nunca
 

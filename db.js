@@ -821,6 +821,275 @@ const adsMudancas = (mlUserId, de, campanhaId = null) =>
 const adsHistoricoDesde = (mlUserId) =>
   db.prepare('SELECT MIN(desde) AS d FROM ads_campanhas WHERE ml_user_id=?').get(mlUserId)?.d ?? null;
 
+// ---------- preço de atacado de cada anúncio (tela Produtos, atacado em massa) ----------
+// Ler o atacado é uma chamada por anúncio (/items/{id}/prices): o que foi lido fica aqui e
+// é refeito depois de cada gravação. faixas = [{quantidade, pct, preco}]; formato 'pct'
+// (novo, em percentual), 'fixo' (antigo, em valor) ou NULL (sem atacado).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS anuncio_atacado (
+    item_id    TEXT PRIMARY KEY,
+    ml_user_id INTEGER NOT NULL,
+    faixas     TEXT NOT NULL,
+    formato    TEXT,
+    lido_em    TEXT NOT NULL
+  );
+`);
+const atacadoGravar = (mlUserId, itemId, faixas, formato) =>
+  db.prepare('INSERT OR REPLACE INTO anuncio_atacado (item_id, ml_user_id, faixas, formato, lido_em) VALUES (?,?,?,?,?)')
+    .run(itemId, mlUserId, JSON.stringify(faixas || []), formato || null, agora());
+const atacadoDaConta = (mlUserId) => Object.fromEntries(
+  db.prepare('SELECT item_id, faixas, formato, lido_em FROM anuncio_atacado WHERE ml_user_id=?').all(mlUserId)
+    .map((r) => [r.item_id, { faixas: JSON.parse(r.faixas || '[]'), formato: r.formato, lido_em: r.lido_em }]));
+const atacadoEsquecer = (mlUserId) => db.prepare('DELETE FROM anuncio_atacado WHERE ml_user_id=?').run(mlUserId);
+
+// ---------- Shopee: lojas conectadas ----------
+// Tokens cifrados como os do Mercado Livre. O refresh_token da Shopee é de uso único: cada
+// renovação grava o par novo por cima (shopeeTokensGravar).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shopee_lojas (
+    shop_id       INTEGER PRIMARY KEY,
+    nome          TEXT,
+    regiao        TEXT,
+    access_token  TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expira_em     INTEGER NOT NULL,
+    conectada_em  TEXT NOT NULL,
+    renovada_em   TEXT
+  );
+`);
+const shopeeExpira = (t) => Date.now() + (Number(t.expire_in) || 4 * 3600) * 1000;
+const shopeeLojaSalvar = (shopId, t) =>
+  db.prepare(`INSERT INTO shopee_lojas (shop_id, access_token, refresh_token, expira_em, conectada_em) VALUES (?,?,?,?,?)
+              ON CONFLICT(shop_id) DO UPDATE SET access_token=excluded.access_token, refresh_token=excluded.refresh_token,
+                expira_em=excluded.expira_em, conectada_em=excluded.conectada_em`)
+    .run(shopId, cifrar(t.access_token), cifrar(t.refresh_token), shopeeExpira(t), agora());
+const shopeeTokensGravar = (shopId, t) =>
+  db.prepare('UPDATE shopee_lojas SET access_token=?, refresh_token=?, expira_em=?, renovada_em=? WHERE shop_id=?')
+    .run(cifrar(t.access_token), cifrar(t.refresh_token), shopeeExpira(t), agora(), shopId);
+const shopeeLojaNomear = (shopId, nome, regiao) =>
+  db.prepare('UPDATE shopee_lojas SET nome=?, regiao=? WHERE shop_id=?').run(nome, regiao, shopId);
+function shopeeLojaObter(shopId) {
+  const l = db.prepare('SELECT * FROM shopee_lojas WHERE shop_id=?').get(shopId);
+  return l ? { ...l, access_token: decifrar(l.access_token), refresh_token: decifrar(l.refresh_token) } : null;
+}
+// Nunca devolve token — é o que vai para o navegador.
+const shopeeLojasListar = () =>
+  db.prepare('SELECT shop_id, nome, regiao, expira_em, conectada_em, renovada_em FROM shopee_lojas ORDER BY conectada_em').all();
+const shopeeLojaRemover = (shopId) => db.prepare('DELETE FROM shopee_lojas WHERE shop_id=?').run(shopId);
+
+// ---------- concorrentes no Mercado Livre ----------
+// A API do ML não deixa ler anúncio de outro vendedor: os concorrentes vêm da página de busca
+// (scraper). Os "vendidos" que o ML mostra são o total da vida do anúncio, EM FAIXAS (25, 50,
+// 100, 500, 1000…; medido em 01/10/2026): cada busca grava a faixa de cada concorrente para a
+// tela mostrar quando ele subiu de faixa. ml_concorrentes = os que o vendedor marcou como
+// "igual ao meu", com o último preço visto.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ml_conc_medidas (
+    conc_item TEXT NOT NULL,
+    vendidos  INTEGER,
+    preco     REAL,
+    medido_em TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS ml_conc_med_item ON ml_conc_medidas(conc_item, medido_em);
+  CREATE TABLE IF NOT EXISTS ml_concorrentes (
+    ml_user_id     INTEGER NOT NULL,
+    meu_item       TEXT NOT NULL,
+    conc_item      TEXT NOT NULL,
+    titulo         TEXT,
+    vendedor       TEXT,
+    imagem         TEXT,
+    preco          REAL,
+    preco_original REAL,
+    vendidos       INTEGER,
+    frete_gratis   INTEGER,
+    visto_em       TEXT,
+    marcado_em     TEXT NOT NULL,
+    PRIMARY KEY (meu_item, conc_item)
+  );
+`);
+function concMedidasGravar(lista) {
+  const st = db.prepare('INSERT INTO ml_conc_medidas (conc_item, vendidos, preco, medido_em) VALUES (?,?,?,?)');
+  const quando = agora();
+  db.exec('BEGIN');
+  try { for (const r of lista) st.run(r.item_id, r.vendidos ?? null, r.preco ?? null, quando); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+const concMedidas = (concItem) =>
+  db.prepare('SELECT vendidos, preco, medido_em FROM ml_conc_medidas WHERE conc_item=? ORDER BY medido_em').all(concItem);
+const concMarcar = (mlUserId, meu, c) => db.prepare(`INSERT INTO ml_concorrentes (ml_user_id, meu_item, conc_item, titulo, vendedor, imagem,
+    preco, preco_original, vendidos, frete_gratis, visto_em, marcado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  ON CONFLICT(meu_item, conc_item) DO UPDATE SET titulo=excluded.titulo, vendedor=excluded.vendedor, imagem=excluded.imagem,
+    preco=excluded.preco, preco_original=excluded.preco_original, vendidos=excluded.vendidos, frete_gratis=excluded.frete_gratis,
+    visto_em=excluded.visto_em`)
+  .run(mlUserId, meu, c.item_id, c.titulo ?? null, c.vendedor ?? null, c.imagem ?? null, c.preco ?? null, c.preco_original ?? null,
+    c.vendidos ?? null, c.frete_gratis ? 1 : 0, agora(), agora());
+// Atualiza o último preço/faixa dos marcados que apareceram numa busca.
+function concAtualizar(meu, lista) {
+  const st = db.prepare(`UPDATE ml_concorrentes SET preco=?, preco_original=?, vendidos=?, frete_gratis=?, visto_em=?
+    WHERE meu_item=? AND conc_item=?`);
+  for (const r of lista) st.run(r.preco ?? null, r.preco_original ?? null, r.vendidos ?? null, r.frete_gratis ? 1 : 0, agora(), meu, r.item_id);
+}
+const concDesmarcar = (meu, conc) => db.prepare('DELETE FROM ml_concorrentes WHERE meu_item=? AND conc_item=?').run(meu, conc);
+const concDoItem = (meu) => db.prepare('SELECT * FROM ml_concorrentes WHERE meu_item=? ORDER BY preco').all(meu);
+const concItensMarcados = (mlUserId) =>
+  db.prepare('SELECT DISTINCT meu_item FROM ml_concorrentes WHERE ml_user_id=?').all(mlUserId).map((r) => r.meu_item);
+const concResumo = (ids) => {
+  if (!ids.length) return {};
+  const q = db.prepare(`SELECT meu_item, COUNT(*) AS n, MIN(preco) AS menor, MAX(visto_em) AS visto_em
+    FROM ml_concorrentes WHERE meu_item IN (${ids.map(() => '?').join(',')}) GROUP BY meu_item`).all(...ids);
+  return Object.fromEntries(q.map((r) => [r.meu_item, { marcados: r.n, menor_preco: r.menor, visto_em: r.visto_em }]));
+};
+
+// ---------- Amazon: lançamentos financeiros (vendas, reembolsos, ajustes) ----------
+// Cópia local do que a SP-API (finances/v0/financialEvents) lançou, um por item de pedido.
+// Só valores, SKU e o número do pedido: nada do comprador (amazon.js#lancamentosDe).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS amazon_lancamentos (
+    chave      TEXT PRIMARY KEY,
+    tipo       TEXT NOT NULL,      -- venda | reembolso | ajuste
+    pedido     TEXT,
+    sku        TEXT,
+    quantidade INTEGER NOT NULL DEFAULT 0,
+    data       TEXT NOT NULL,      -- PostedDate (ISO)
+    canal      TEXT,               -- FBA | proprio
+    receita    REAL NOT NULL DEFAULT 0,   -- produto + frete cobrado + presente, menos promoções
+    tarifa     REAL NOT NULL DEFAULT 0,   -- comissão, tarifa FBA etc. (positivo = custo)
+    frete      REAL NOT NULL DEFAULT 0,   -- etiqueta/frete do envio próprio (positivo = custo)
+    imposto_cobrado REAL NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS amazon_lanc_data ON amazon_lancamentos(data);
+`);
+// tarifa_fixa = a parte da tarifa que é por unidade (FBA), já somada em `tarifa`. Coluna nova:
+// a próxima leitura relê os 92 dias para preencher (a cópia é refeita por cima).
+if (!db.prepare('PRAGMA table_info(amazon_lancamentos)').all().some((c) => c.name === 'tarifa_fixa')) {
+  db.exec('ALTER TABLE amazon_lancamentos ADD COLUMN tarifa_fixa REAL NOT NULL DEFAULT 0');
+  db.prepare("DELETE FROM estado WHERE chave='amazon_lanc_lido_em'").run();
+}
+function amazonLancGravar(linhas) {
+  const st = db.prepare(`INSERT INTO amazon_lancamentos (chave, tipo, pedido, sku, quantidade, data, canal, receita, tarifa, frete, imposto_cobrado, tarifa_fixa)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(chave) DO UPDATE SET tipo=excluded.tipo, pedido=excluded.pedido, sku=excluded.sku, quantidade=excluded.quantidade,
+      data=excluded.data, canal=excluded.canal, receita=excluded.receita, tarifa=excluded.tarifa, frete=excluded.frete,
+      imposto_cobrado=excluded.imposto_cobrado, tarifa_fixa=excluded.tarifa_fixa`);
+  db.exec('BEGIN');
+  try {
+    for (const l of linhas) st.run(l.chave, l.tipo, l.pedido, l.sku, l.quantidade, l.data, l.canal, l.receita, l.tarifa, l.frete, l.imposto_cobrado, l.tarifa_fixa || 0);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return linhas.length;
+}
+// Pedidos da Amazon (Orders API): data da compra, situação e os itens (SKU, quantidade e
+// preço). Sem nada do comprador. Os itens são uma chamada por pedido (lidos aos poucos).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS amazon_pedidos (
+    pedido      TEXT PRIMARY KEY,
+    data        TEXT NOT NULL,      -- PurchaseDate (ISO)
+    status      TEXT,
+    canal       TEXT,               -- FBA | proprio
+    total       REAL,
+    atualizado  TEXT,
+    itens_lidos INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS amazon_ped_data ON amazon_pedidos(data);
+  CREATE TABLE IF NOT EXISTS amazon_itens (
+    pedido        TEXT NOT NULL,
+    item_id       TEXT NOT NULL,
+    sku           TEXT,
+    asin          TEXT,
+    quantidade    INTEGER NOT NULL DEFAULT 0,
+    preco         REAL,              -- ItemPrice: total da linha (todas as unidades)
+    frete_cobrado REAL NOT NULL DEFAULT 0,
+    desconto      REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (pedido, item_id)
+  );
+`);
+// Pedido que estava pendente (sem preço nos itens) e mudou de situação: lê os itens de novo.
+const PENDENTES_AMZ = "('Pending','PendingAvailability')";
+function amazonPedidosGravar(lista) {
+  const st = db.prepare(`INSERT INTO amazon_pedidos (pedido, data, status, canal, total, atualizado) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(pedido) DO UPDATE SET data=excluded.data, status=excluded.status, canal=excluded.canal, total=excluded.total,
+      atualizado=excluded.atualizado,
+      itens_lidos=CASE WHEN amazon_pedidos.status IN ${PENDENTES_AMZ} AND excluded.status NOT IN ${PENDENTES_AMZ} THEN 0 ELSE amazon_pedidos.itens_lidos END`);
+  db.exec('BEGIN');
+  try { for (const p of lista) st.run(p.pedido, p.data, p.status, p.canal, p.total, p.atualizado); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const amazonPedidosSemItens = (limite) =>
+  db.prepare("SELECT pedido FROM amazon_pedidos WHERE itens_lidos=0 AND status<>'Canceled' ORDER BY data DESC LIMIT ?").all(limite).map((r) => r.pedido);
+function amazonItensGravar(pedido, itens) {
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM amazon_itens WHERE pedido=?').run(pedido);
+    const st = db.prepare('INSERT INTO amazon_itens (pedido, item_id, sku, asin, quantidade, preco, frete_cobrado, desconto) VALUES (?,?,?,?,?,?,?,?)');
+    for (const i of itens) st.run(pedido, i.item_id, i.sku, i.asin, i.quantidade, i.preco, i.frete_cobrado, i.desconto);
+    db.prepare('UPDATE amazon_pedidos SET itens_lidos=1 WHERE pedido=?').run(pedido);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+// Linhas de venda (um item de pedido por linha; pedido sem itens lidos vem com sku NULL).
+const amazonVendasPeriodo = (de, ate) => db.prepare(`
+  SELECT p.pedido, p.data, p.status, p.canal, p.total, p.itens_lidos, i.item_id, i.sku, i.asin, i.quantidade, i.preco,
+         i.frete_cobrado, i.desconto
+  FROM amazon_pedidos p LEFT JOIN amazon_itens i ON i.pedido = p.pedido
+  WHERE p.data >= ? AND p.data < ? ORDER BY p.data DESC`).all(de, ate);
+// Unidades, faturamento e pedidos por SKU e canal (FBA x próprio) desde uma data (tela Full).
+const amazonUnidadesPorSku = (desde) => db.prepare(`
+  SELECT i.sku, p.canal, SUM(i.quantidade) AS u, SUM(COALESCE(i.preco,0) + i.frete_cobrado - i.desconto) AS f,
+         COUNT(DISTINCT p.pedido) AS p
+  FROM amazon_pedidos p JOIN amazon_itens i ON i.pedido = p.pedido
+  WHERE p.data >= ? AND p.status <> 'Canceled' AND i.sku IS NOT NULL GROUP BY i.sku, p.canal`).all(desde);
+const amazonItensSemFoto = () => db.prepare(`SELECT i.sku, MAX(i.asin) AS asin FROM amazon_itens i
+  LEFT JOIN amazon_fotos f ON f.sku = i.sku WHERE i.sku IS NOT NULL AND i.asin IS NOT NULL AND f.sku IS NULL GROUP BY i.sku`).all();
+
+// Concorrência de cada ASIN (quantas ofertas, a mais barata dos outros, quem tem o destaque),
+// para o filtro "com concorrentes" da tela Anúncios. Relida a cada 6 h.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS amazon_concorrencia (
+    asin          TEXT PRIMARY KEY,
+    total_ofertas INTEGER,
+    outros        INTEGER,
+    menor_outro   REAL,
+    destaque      REAL,
+    voce_destaque INTEGER,
+    lido_em       TEXT NOT NULL
+  );
+`);
+const amazonConcGravar = (asin, c) => db.prepare(`INSERT INTO amazon_concorrencia (asin, total_ofertas, outros, menor_outro, destaque, voce_destaque, lido_em)
+  VALUES (?,?,?,?,?,?,?) ON CONFLICT(asin) DO UPDATE SET total_ofertas=excluded.total_ofertas, outros=excluded.outros,
+  menor_outro=excluded.menor_outro, destaque=excluded.destaque, voce_destaque=excluded.voce_destaque, lido_em=excluded.lido_em`)
+  .run(asin, c.total_ofertas ?? null, c.ofertas.filter((o) => !o.voce).length, c.menor_outro?.total ?? null,
+    c.destaque?.total ?? null, c.voce_destaque ? 1 : 0, agora());
+// Nome dos vendedores concorrentes, digitado pelo vendedor (a API só dá o código; o nome
+// aparece na página pública da loja, que ele mesmo abre pelo link).
+db.exec(`CREATE TABLE IF NOT EXISTS amazon_vendedores (seller_id TEXT PRIMARY KEY, nome TEXT NOT NULL, gravado_em TEXT NOT NULL)`);
+const amazonVendedorNomear = (id, nome) => (nome
+  ? db.prepare(`INSERT INTO amazon_vendedores (seller_id, nome, gravado_em) VALUES (?,?,?)
+      ON CONFLICT(seller_id) DO UPDATE SET nome=excluded.nome, gravado_em=excluded.gravado_em`).run(id, nome, agora())
+  : db.prepare('DELETE FROM amazon_vendedores WHERE seller_id=?').run(id));
+const amazonVendedoresNomes = () => new Map(db.prepare('SELECT seller_id, nome FROM amazon_vendedores').all().map((r) => [r.seller_id, r.nome]));
+const amazonConcorrencia = () => new Map(db.prepare('SELECT * FROM amazon_concorrencia').all().map((c) => [c.asin, c]));
+
+// Foto de cada SKU (ASIN pelo item do pedido, foto principal pelo catálogo). foto NULL com
+// lido_em = tentou e não achou (tenta de novo depois de 7 dias).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS amazon_fotos (
+    sku     TEXT PRIMARY KEY,
+    asin    TEXT,
+    foto    TEXT,
+    lido_em TEXT NOT NULL
+  );
+`);
+const amazonFotoGravar = (sku, asin, foto) =>
+  db.prepare(`INSERT INTO amazon_fotos (sku, asin, foto, lido_em) VALUES (?,?,?,?)
+              ON CONFLICT(sku) DO UPDATE SET asin=excluded.asin, foto=excluded.foto, lido_em=excluded.lido_em`).run(sku, asin, foto, agora());
+const amazonFotos = () => new Map(db.prepare('SELECT * FROM amazon_fotos').all().map((f) => [f.sku, f]));
+const amazonLancPeriodo = (de, ate) =>
+  db.prepare('SELECT * FROM amazon_lancamentos WHERE data >= ? AND data < ? ORDER BY data').all(de, ate);
+const amazonLancApagar = () => {
+  for (const t of ['amazon_lancamentos', 'amazon_fotos', 'amazon_pedidos', 'amazon_itens']) db.prepare(`DELETE FROM ${t}`).run();
+};
+
 // ---------- tipo de logística de cada envio (Full, Flex, Mercado Envios) ----------
 // /shipments/{id} -> logistic_type. Medido em 30/09/2026 numa conta real: "self_service" = Flex
 // (entrega no mesmo dia pelo vendedor), "fulfillment" = Full, "cross_docking"/"xd_drop_off"/
@@ -885,7 +1154,8 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // ---------- configuração do painel (primeiro acesso) ----------
 // O que antes vivia no .env e o aluno teria de editar à mão: senha do painel, App ID e
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
-const CONFIG_SECRETA = new Set(['ml_client_secret']);
+const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
+  'amazon_lwa_client_secret', 'amazon_refresh_token']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;
@@ -914,6 +1184,8 @@ function senhaDefinir(senha) {
   const sal = crypto.randomBytes(16);
   const hash = crypto.scryptSync(String(senha), sal, 64);
   configGravar('painel_senha', `scrypt:${sal.toString('base64')}:${hash.toString('base64')}`);
+  configGravar('painel_senha_em', agora());   // validade de 365 dias (seguranca.js)
+  configGravar('painel_senha_fraca', null);    // a nova já passou pela política
   db.prepare('DELETE FROM sessoes').run(); // senha nova derruba quem estava logado
 }
 
@@ -994,5 +1266,11 @@ module.exports = {
   avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe,
   skusDosPedidos, extraGravar, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
+  atacadoGravar, atacadoDaConta, atacadoEsquecer,
+  shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,
+  amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
+  amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
+  amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
+  concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
 };

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shopee</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .passo{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;margin-right:8px}
+  .form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:12px;align-items:end}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .form input,.form select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;width:100%}
+  .form input.segredo:not(:placeholder-shown){-webkit-text-security:disc}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .dominio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .dominio code{font-size:14px;font-weight:700;word-break:break-all}
+  .aviso-amarelo{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0 0}
+  .lojas{display:grid;gap:12px;margin-top:12px}
+  .loja{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .loja-topo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .loja-topo b{font-size:15px}
+  .loja-topo .acoes{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .diag{margin-top:12px;font-size:13px}
+  .diag dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 16px;margin:0 0 10px}
+  .diag dt{font-size:12px;color:var(--muted)}
+  .diag dd{margin:0;font-weight:700}
+  .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-word}
+  .diag summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
+  ol.como li{margin-bottom:4px}
+  @media (max-width:900px){ .form{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=8"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Shopee</h1>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Conexão da sua loja da Shopee com o painel. Por enquanto esta tela só conecta e testa; vendas e lucro da Shopee entram na próxima etapa.</p>
+  </div>
+
+  <section class="bloco">
+    <h2><span class="passo">1</span>Aplicativo da Shopee</h2>
+    <p class="sub">Os dois códigos do seu aplicativo na Shopee Open Platform (em App List, abrindo o aplicativo). Ficam só neste computador; a chave é guardada cifrada.</p>
+    <form class="form" id="formConfig">
+      <!-- A chave é campo de texto mascarado (não type=password): com senha, o Chrome trata o
+           formulário como login e preenche sozinho com o usuário e a senha guardados do painel. -->
+      <label>Partner ID<input id="cId" name="shopee-partner-id" inputmode="numeric" autocomplete="off" placeholder="ex.: 2001234" required></label>
+      <label>Partner Key<input id="cKey" name="shopee-partner-key" type="text" class="segredo" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="cole a chave do aplicativo"></label>
+      <label>Ambiente<select id="cAmb"></select></label>
+      <button class="bt primario">Salvar</button>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">2</span>Domínio de retorno</h2>
+    <p class="sub">A Shopee só devolve a autorização para um endereço cadastrado no aplicativo. No aplicativo da Shopee, no campo de domínio de redirecionamento (Redirect URL Domain), cole este endereço:</p>
+    <div class="dominio"><code id="dominio">—</code><button type="button" class="bt" id="btCopiar">Copiar</button></div>
+    <p class="aviso-amarelo">Este endereço é o do túnel do painel. Ele só muda se o painel for encerrado com "npm run parar"; se mudar, é preciso atualizar o campo na Shopee.</p>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">3</span>Lojas conectadas</h2>
+    <p class="sub">Clique em conectar, entre com a conta da loja na Shopee e confirme a autorização. O painel volta para esta tela sozinho.</p>
+    <button type="button" class="bt primario" id="btConectar">Conectar loja da Shopee</button>
+    <div class="lojas" id="lojas"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=4"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—');
+
+let cfg = null;
+async function carregar(){
+  try{
+    cfg = await api('/api/shopee/config');
+    $('cId').value = cfg.partner_id || '';
+    $('cKey').placeholder = cfg.tem_chave ? 'já gravada — preencha só para trocar' : 'cole a chave do aplicativo';
+    $('cKey').required = !cfg.tem_chave;
+    $('cAmb').innerHTML = '';
+    for(const a of cfg.ambientes){ const o = el('option', null, a.nome); o.value = a.id; o.selected = a.id === cfg.ambiente; $('cAmb').appendChild(o); }
+    $('dominio').textContent = cfg.dominio_redirect || 'o endereço público do painel está fora do ar (confira em Configurações)';
+    $('btCopiar').disabled = !cfg.dominio_redirect;
+    $('btConectar').disabled = !(cfg.partner_id && cfg.tem_chave);
+    $('btConectar').title = $('btConectar').disabled ? 'Salve o Partner ID e a Partner Key primeiro' : '';
+    pintarLojas();
+  }catch(e){ aviso(e.message); }
+}
+
+function pintarLojas(){
+  const box = $('lojas'); box.innerHTML = '';
+  if(!cfg.lojas.length){ box.appendChild(el('p', 'vazio', 'Nenhuma loja conectada ainda.')); return; }
+  for(const l of cfg.lojas){
+    const card = el('div', 'loja');
+    const topo = el('div', 'loja-topo');
+    const nome = el('div'); nome.append(el('b', null, l.nome || `Loja ${l.shop_id}`),
+      el('span', 'pequeno', `nº ${l.shop_id}${l.regiao ? ' · ' + l.regiao : ''} · conectada em ${quando(l.conectada_em)}`));
+    const acoes = el('div', 'acoes');
+    const testar = el('button', 'bt primario', 'Testar conexão'); testar.type = 'button';
+    const remover = el('button', 'bt', 'Remover'); remover.type = 'button';
+    acoes.append(testar, remover); topo.append(nome, acoes); card.appendChild(topo);
+    const diag = el('div', 'diag'); card.appendChild(diag);
+    testar.onclick = () => diagnostico(l, diag, testar);
+    remover.onclick = async () => {
+      if(!confirm(`Remover a loja ${l.nome || l.shop_id} do painel?\n\nO painel esquece o acesso. Para voltar, é só conectar de novo.`)) return;
+      try{ await enviar('POST', `/api/shopee/lojas/${l.shop_id}/remover`); aviso('Loja removida.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
+    };
+    box.appendChild(card);
+  }
+}
+
+// O que a Shopee devolve para a loja: serve para conferir a conexão e para montar as
+// próximas telas em cima dos dados reais.
+async function diagnostico(l, box, bt){
+  bt.disabled = true; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
+  try{
+    const r = await api(`/api/shopee/diagnostico?loja=${l.shop_id}&dias=7`);
+    box.innerHTML = '';
+    const dl = el('dl');
+    const par = (rot, valor) => { const d = el('div'); d.append(el('dt', null, rot), el('dd', null, valor)); dl.appendChild(d); };
+    par('Loja', r.loja.erro ? 'erro: ' + r.loja.erro : (r.loja.shop_name || '—') + (r.loja.region ? ` (${r.loja.region})` : ''));
+    par(`Pedidos nos últimos ${r.dias} dias`, r.erro_pedidos ? 'erro: ' + r.erro_pedidos : numero(r.pedidos_no_periodo) + (r.tem_mais ? ' ou mais' : ''));
+    par('Por situação', Object.entries(r.situacoes).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—');
+    par('Detalhe de um pedido', !r.pedido_exemplo ? 'sem pedido no período' : r.detalhe?.erro ? 'erro: ' + r.detalhe.erro : 'lido');
+    par('Repasse (taxas e frete)', !r.pedido_exemplo ? '—' : r.repasse?.erro ? 'erro: ' + r.repasse.erro : 'lido');
+    box.appendChild(dl);
+    const ok = !r.loja.erro && !r.erro_pedidos;
+    box.appendChild(el('p', 'sub', ok ? 'Conexão funcionando. Os dados abaixo são o que a Shopee respondeu; é com eles que as telas de vendas e lucro vão ser montadas.'
+      : 'A conexão respondeu com erro. Veja a mensagem acima.'));
+    const det = el('details'); det.appendChild(el('summary', null, 'Ver a resposta completa da Shopee'));
+    det.appendChild(el('pre', null, JSON.stringify(r, null, 2)));
+    box.appendChild(det);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui testar: ' + e.message)); }
+  bt.disabled = false;
+}
+
+$('formConfig').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    const corpo = { partner_id: $('cId').value, ambiente: $('cAmb').value };
+    if($('cKey').value.trim()) corpo.partner_key = $('cKey').value;
+    await enviar('PUT', '/api/shopee/config', corpo);
+    $('cKey').value = '';
+    aviso('Aplicativo da Shopee salvo. Agora cadastre o domínio de retorno no aplicativo e conecte a loja.', 'ok');
+    carregar();
+  }catch(e){ aviso(e.message); }
+};
+$('btCopiar').onclick = async () => {
+  try{ await navigator.clipboard.writeText(cfg.dominio_redirect); $('btCopiar').textContent = 'Copiado'; setTimeout(() => { $('btCopiar').textContent = 'Copiar'; }, 2000); }
+  catch{ prompt('Copie o endereço:', cfg.dominio_redirect); }
+};
+$('btConectar').onclick = async () => {
+  $('btConectar').disabled = true;
+  try{ const r = await enviar('POST', '/api/shopee/conectar'); location.href = r.url; }
+  catch(e){ aviso(e.message); $('btConectar').disabled = false; }
+};
+
+if(new URLSearchParams(location.search).get('conectado')) aviso('Loja da Shopee conectada. Clique em "Testar conexão" para conferir.', 'ok');
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>
