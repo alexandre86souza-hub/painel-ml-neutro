@@ -22,7 +22,9 @@
 //   - money_transfer: "bonificaciones_flex" (bônus do Flex) e "…correspondente a sua
 //     reclamação" trazem um código de 10 dígitos que não é pedido, envio, reclamação nem pack
 //     (tudo 404). O de reclamação é ligado pelo valor e pela data (devolucoes.js#ligarCreditos);
-//     o do Flex fica sem venda, explicado.
+//     o do Flex fica sem venda, explicado. ATUALIZADO (02/10/2026): o pagamento traz
+//     point_of_interaction.transaction_data.reference_type/reference_id — "shipment" no bônus do
+//     Flex (o envio da venda) e "payment" em parte dos créditos de reclamação (o pagamento da venda).
 const { ligarCreditos } = require('./devolucoes.js');
 
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -50,13 +52,18 @@ function pagamentoDe(p, mlUserId) {
   const referencia = String(p.external_reference ?? '').slice(0, 40) || null;
   // frete pago à parte: o order.id não é pedido; o nº do envio vem no external_reference
   const freteAParte = p.description === 'marketplace_shipment';
+  // bônus do Flex: reference_type "shipment" = nº do envio (100% de 783 em 120 dias, um por
+  // envio); crédito de reclamação: "payment" = o pagamento da venda ("coverage" não abre: 404)
+  const td = p.point_of_interaction?.transaction_data || {};
+  const refNum = /^\d+$/.test(String(td.reference_id ?? '')) ? Number(td.reference_id) : null;
   return { id: p.id, ml_user_id: mlUserId, order_id: p.order?.id && !freteAParte ? Number(p.order.id) : null, tipo: venda ? 'venda' : 'outro',
     descricao: (p.description || '').slice(0, 120) || null, criado: iso(p.date_created), aprovado: iso(p.date_approved),
     status: p.status || null, status_detalhe: p.status_detail || null, bruto: r2(n(p.transaction_amount)), frete_cobrado: r2(n(p.shipping_amount)),
     reembolsado: r2(n(p.transaction_amount_refunded)), liquido: p.transaction_details?.net_received_amount != null ? r2(n(p.transaction_details.net_received_amount)) : null,
     tarifa_ml: r2(tarifaMl), tarifa_mp: r2(tarifaMp), frete: r2(frete), cupom: r2(cupom),
     libera_em: iso(p.money_release_date), liberado: p.money_release_status || null, atualizado: iso(p.date_last_updated),
-    referencia, envio_id: freteAParte && /^\d+$/.test(referencia || '') ? Number(referencia) : null };
+    referencia, envio_id: freteAParte && /^\d+$/.test(referencia || '') ? Number(referencia) : (td.reference_type === 'shipment' ? refNum : null),
+    ref_pagamento: td.reference_type === 'payment' ? refNum : null };
 }
 
 // O que conta como dinheiro a receber/liberado: aprovado (o reembolsado total não entra).
@@ -185,8 +192,9 @@ function conferenciaDe({ pags, todos = pags, vendas, vendasJanela = [], notas = 
         freteCobrado.set(p.order_id, n(freteCobrado.get(p.order_id)) + n(p.frete_cobrado));
       }
     }
-    if (p.envio_id) enviosComPag.add(Number(p.envio_id));
+    if (p.envio_id && p.tipo === 'venda') enviosComPag.add(Number(p.envio_id));   // bônus do Flex não é pagamento da venda
   }
+  const pagPorId = new Map(todos.map((p) => [Number(p.id), p]));
   const vendaDe = (v, por) => (v ? { order_id: v.order_id, data: v.data, itens: v.itens, titulo: v.titulo || null, por } : null);
   const itens = [];
   for (const p of pags) {
@@ -200,9 +208,12 @@ function conferenciaDe({ pags, todos = pags, vendas, vendasJanela = [], notas = 
       situacao = 'ok'; motivo = v ? 'Ligado à mão.' : `Ligado à mão ao pedido ${nota.order_id} (ele não está nas vendas copiadas pelo painel).`;
     } else if (p.envio_id) {
       const v = porEnvio.get(Number(p.envio_id));
+      const flex = /bonificaciones_flex/i.test(p.descricao || '');
+      const oque = flex ? 'Bônus do Flex (incentivo do Mercado Livre por venda enviada pelo Flex)' : 'Frete pago à parte pelo comprador';
       venda = vendaDe(v, 'envio');
-      if (v) { situacao = 'ok'; motivo = `Frete pago à parte pelo comprador (envio ${p.envio_id}).`; }
-      else motivo = `Frete pago à parte do envio ${p.envio_id}, que não está nas vendas copiadas pelo painel.`;
+      if (v) { situacao = 'ok'; motivo = `${oque}, envio ${p.envio_id}.`; }
+      else if (flex) { situacao = 'explicado'; motivo = `${oque}, envio ${p.envio_id} — a venda desse envio não está nas vendas copiadas pelo painel.`; }
+      else motivo = `${oque}, envio ${p.envio_id}, que não está nas vendas copiadas pelo painel.`;
     } else if (p.tipo === 'venda' && p.order_id) {
       const v = porPedido.get(Number(p.order_id));
       venda = vendaDe(v, 'pedido');
@@ -217,7 +228,11 @@ function conferenciaDe({ pags, todos = pags, vendas, vendasJanela = [], notas = 
         else motivo = `O comprador pagou ${brl(somaPedido.get(p.order_id))} e os itens da venda somam ${brl(v.itens)} (diferença de ${brl(dif)}).`;
       }
     } else if (/bonificaciones_flex/i.test(p.descricao || '')) {
-      situacao = 'explicado'; motivo = 'Bônus do Mercado Envios Flex. O Mercado Pago não informa a qual envio ele se refere.';
+      situacao = 'explicado'; motivo = 'Bônus do Flex (incentivo do Mercado Livre por venda enviada pelo Flex). Este não trouxe o nº do envio.';
+    } else if (p.ref_pagamento && pagPorId.get(Number(p.ref_pagamento))?.order_id) {
+      const orig = pagPorId.get(Number(p.ref_pagamento));
+      venda = vendaDe(porPedido.get(Number(orig.order_id)) || { order_id: orig.order_id }, 'reclamacao');
+      situacao = 'ok'; motivo = `Crédito do Mercado Livre pela reclamação desta venda (o Mercado Pago aponta o pagamento ${orig.id} da venda).`;
     } else if (/reclama/i.test(p.descricao || '') || (creditosLigados[p.id] && !p.descricao)) {
       const c = creditosLigados[p.id];
       if (c) {
@@ -418,8 +433,12 @@ function criar({ D, ml }) {
       const pags = alvo.flatMap((c) => D.mpPagamentos(c.ml_user_id, de, ate));
       return { dias, contas: contas.map((c) => ({ ml_user_id: c.ml_user_id, nickname: c.nickname })), conta: pedida, erros,
         ...financeiroDe(pags, { dias }),
-        pagamentos: pags.filter((p) => p.status !== 'rejected').slice(0, 3000).map((p) => ({ ...p, conta_nome: nomes[p.ml_user_id] || null,
-          link_pedido: linkPedido(p.order_id) })),
+        pagamentos: (() => {
+          const lista = pags.filter((p) => p.status !== 'rejected').slice(0, 3000);
+          const peloEnvio = D.mpPedidosDosEnvios([...new Set(lista.filter((p) => !p.order_id && p.envio_id).map((p) => p.envio_id))]);
+          return lista.map((p) => { const pedido = p.order_id || peloEnvio[p.envio_id] || null;
+            return { ...p, pedido, conta_nome: nomes[p.ml_user_id] || null, link_pedido: linkPedido(pedido) }; });
+        })(),
         lido_em: alvo.map((c) => D.configLer(`mp_lido_em:${c.ml_user_id}`)).filter(Boolean).sort()[0] || null };
     },
 
@@ -437,7 +456,9 @@ function criar({ D, ml }) {
         const est = await extratoGerar(c.ml_user_id).catch((e) => ({ situacao: 'erro', erro: e.message }));
         const saldos = D.mpExtratoSaldos(c.ml_user_id);
         const ex = extratoDe(D.mpExtrato(c.ml_user_id), saldos);
-        const pags = new Map(D.mpPagamentosConta(c.ml_user_id).map((p) => [String(p.id), p]));
+        const pagsLista = D.mpPagamentosConta(c.ml_user_id);
+        const pags = new Map(pagsLista.map((p) => [String(p.id), p]));
+        const peloEnvio = D.mpPedidosDosEnvios([...new Set(pagsLista.filter((p) => !p.order_id && p.envio_id).map((p) => p.envio_id))]);
         if (ex.saldo_atual != null) { saldoAtual += ex.saldo_atual; temSaldo = true; }
         situacoes.push({ ml_user_id: c.ml_user_id, nickname: c.nickname, situacao: est.situacao, erro: est.erro || null, desde: est.desde || null,
           inicio: saldos[0]?.inicio || null, fim: saldos.at(-1)?.fim || null, importado: saldos.at(-1)?.importado || null,
@@ -447,7 +468,8 @@ function criar({ D, ml }) {
           const p = m.source_id ? pags.get(String(m.source_id)) : null;
           movimentos.push({ data: m.data, tipo: m.tipo, nome: nomeTipo(m.tipo), credito: m.credito, debito: m.debito, saldo: m.saldo,
             source_id: m.source_id, ml_user_id: c.ml_user_id, conta_nome: nomes[c.ml_user_id],
-            order_id: p?.order_id || null, envio_id: p?.envio_id || null, descricao: p?.descricao || null, link_pedido: linkPedido(p?.order_id) });
+            order_id: p?.order_id || peloEnvio[p?.envio_id] || null, envio_id: p?.envio_id || null, descricao: p?.descricao || null,
+            link_pedido: linkPedido(p?.order_id || peloEnvio[p?.envio_id]) });
         }
         for (const d of ex.dias) {
           const x = porDia.get(d.dia) || { dia: d.dia, entradas: 0, saidas: 0, saques: 0, saldo: 0, contas: {} };
@@ -506,7 +528,8 @@ function criar({ D, ml }) {
         // pedidos citados fora da janela (pagamento de venda antiga, ligação à mão, reclamação)
         const devol = D.devolucoesListar(c.ml_user_id, '2000-01-01', new Date().toISOString());
         const lig = ligarCreditosReclamacao(todos, devol, manuais);
-        const citados = [...new Set([...pags.map((p) => p.order_id), ...Object.values(notas).map((x) => x.order_id), ...Object.values(lig).map((x) => x.order_id)]
+        const porId = new Map(todos.map((p) => [p.id, p]));
+        const citados = [...new Set([...pags.map((p) => p.order_id), ...pags.map((p) => porId.get(p.ref_pagamento)?.order_id), ...Object.values(notas).map((x) => x.order_id), ...Object.values(lig).map((x) => x.order_id)]
           .filter(Boolean).map(Number))].filter((id) => !vendasJanela.some((v) => v.order_id === id));
         const porEnvio = pags.filter((p) => p.envio_id).map((p) => p.envio_id);
         const extra = [...D.mpVendasDosPedidos(citados),

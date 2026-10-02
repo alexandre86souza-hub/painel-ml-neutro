@@ -61,7 +61,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Conferência (aba "Conferência", `GET /api/financeiro/conferencia`, `PUT …/conferencia/{pag|venda}:{id}`):
   liga cada pagamento à venda — pedido; frete pago à parte (`marketplace_shipment`) pelo ENVIO
   do `external_reference`; crédito de reclamação pela regra das Devoluções ou pelo crédito
-  digitado lá. Bônus do Flex não tem venda (o código dele não é pedido nem envio: 404). O que
+  digitado lá. Bônus do Flex (incentivo do ML, um por venda Flex) e parte dos créditos de
+  reclamação trazem `point_of_interaction.transaction_data.reference_type/reference_id`:
+  "shipment" = envio da venda (`envio_id`), "payment" = pagamento da venda (`ref_pagamento`);
+  "coverage" não abre em nenhuma rota (404). O external_reference "cashback_…" não serve. O que
   sobra fica "a conferir" com o motivo; o vendedor liga à mão, anota e marca (`mp_conferencia`).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.

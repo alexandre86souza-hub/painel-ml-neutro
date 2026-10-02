@@ -1060,13 +1060,13 @@ db.exec(`
 `);
 function mpPagamentosGravar(linhas) {
   const st = db.prepare(`INSERT OR REPLACE INTO mp_pagamentos (id, ml_user_id, order_id, tipo, descricao, criado, aprovado, status, status_detalhe,
-    bruto, frete_cobrado, reembolsado, liquido, tarifa_ml, tarifa_mp, frete, cupom, libera_em, liberado, atualizado, referencia, envio_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    bruto, frete_cobrado, reembolsado, liquido, tarifa_ml, tarifa_mp, frete, cupom, libera_em, liberado, atualizado, referencia, envio_id, ref_pagamento)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   db.exec('BEGIN');
   try {
     for (const p of linhas) st.run(p.id, p.ml_user_id, p.order_id, p.tipo, p.descricao, p.criado, p.aprovado, p.status, p.status_detalhe,
       p.bruto, p.frete_cobrado, p.reembolsado, p.liquido, p.tarifa_ml, p.tarifa_mp, p.frete, p.cupom, p.libera_em, p.liberado, p.atualizado,
-      p.referencia ?? null, p.envio_id ?? null);
+      p.referencia ?? null, p.envio_id ?? null, p.ref_pagamento ?? null);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return linhas.length;
@@ -1078,10 +1078,16 @@ const mpPagamentos = (mlUserId, de, ate) => db.prepare(`SELECT * FROM mp_pagamen
 // external_reference do pagamento: no frete pago à parte (description "marketplace_shipment") é
 // o nº do ENVIO, e o order.id dele não é pedido (medido: /orders dá 404) -> envio_id. Coluna
 // nova em banco que já tinha pagamentos: relê os 120 dias para preenchê-la.
-const mpSemReferencia = !db.prepare('PRAGMA table_info(mp_pagamentos)').all().some((c) => c.name === 'referencia');
+// Bônus do Flex: envio_id vem de point_of_interaction.transaction_data (reference_type shipment);
+// crédito de reclamação: ref_pagamento = o pagamento da venda (reference_type payment).
+const mpSemReferencia = !db.prepare('PRAGMA table_info(mp_pagamentos)').all().some((c) => c.name === 'ref_pagamento');
 colunaNova('mp_pagamentos', 'referencia TEXT');
 colunaNova('mp_pagamentos', 'envio_id INTEGER');
+colunaNova('mp_pagamentos', 'ref_pagamento INTEGER');
 if (mpSemReferencia) db.prepare("DELETE FROM estado WHERE chave LIKE 'mp_lido_em:%'").run();
+// pedido de cada envio (bônus do Flex e frete pago à parte não trazem o pedido)
+const mpPedidosDosEnvios = (envios) => (envios.length ? Object.fromEntries(db.prepare(`SELECT envio_id, MIN(order_id) AS order_id FROM vendas
+  WHERE envio_id IN (${envios.map(() => '?').join(',')}) GROUP BY envio_id`).all(...envios).map((r) => [r.envio_id, r.order_id])) : {});
 const mpPagamentosConta = (mlUserId) => db.prepare('SELECT * FROM mp_pagamentos WHERE (? IS NULL OR ml_user_id = ?) ORDER BY criado DESC')
   .all(mlUserId, mlUserId);
 
@@ -1544,7 +1550,7 @@ module.exports = {
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
-  mpVendasDesde, mpVendasDosPedidos,
+  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
 };

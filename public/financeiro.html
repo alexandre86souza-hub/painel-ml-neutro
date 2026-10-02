@@ -253,8 +253,10 @@ function pintarLista(){
     const [, txt, cor] = situacao(p);
     const tr = el('tr');
     const td = el('td');
-    if(p.order_id) td.appendChild(linkPedido(p.order_id, p.link_pedido));
-    else td.appendChild(document.createTextNode(p.envio_id ? `Frete à parte · envio ${p.envio_id}` : (p.descricao || 'Crédito')));
+    const flex = p.descricao === 'bonificaciones_flex';
+    if(flex || (!p.order_id && p.envio_id)) td.appendChild(document.createTextNode(flex ? 'Bônus do Flex ' : 'Frete pago à parte '));
+    if(p.pedido) td.appendChild(linkPedido(p.pedido, p.link_pedido));
+    else if(!flex && !p.envio_id) td.appendChild(document.createTextNode(p.descricao || 'Crédito'));
     td.appendChild(el('span', 'pequeno', `pag. ${p.id}${p.conta_nome && !dados.conta ? ' · ' + p.conta_nome : ''} · ${data(p.criado)}`));
     const sit = el('td'); sit.appendChild(el('span', 'chip ' + cor, txt));
     tr.append(td, sit, el('td', null, p.libera_em ? new Date(p.libera_em).toLocaleDateString('pt-BR') : '—'),
@@ -355,9 +357,9 @@ function pintarListaExt(){
     const tr = el('tr');
     const td = el('td'); td.appendChild(document.createTextNode(m.nome));
     const sub = el('span', 'pequeno');
+    if(m.descricao === 'bonificaciones_flex') sub.appendChild(document.createTextNode('bônus do Flex · '));
+    else if(m.envio_id) sub.appendChild(document.createTextNode('frete pago à parte · '));
     if(m.order_id){ sub.appendChild(linkPedido(m.order_id, m.link_pedido)); sub.appendChild(document.createTextNode(' · ')); }
-    else if(m.envio_id) sub.appendChild(document.createTextNode(`frete à parte do envio ${m.envio_id} · `));
-    else if(m.descricao === 'bonificaciones_flex') sub.appendChild(document.createTextNode('bônus do Flex · '));
     sub.appendChild(document.createTextNode(`${m.source_id ? 'ref. ' + m.source_id : ''}${todas ? ' · ' + m.conta_nome : ''}`));
     td.appendChild(sub);
     tr.append(el('td', null, dataHora(m.data)), td, el('td', 'dinheiro pos', m.credito ? real(m.credito) : ''),
@@ -386,7 +388,7 @@ function pintarConf(){
   const box = $('cartoesConf'); box.innerHTML = '';
   box.append(
     cartao('Ligados à venda', numero(r.ok), `de ${numero(r.total)} pagamento(s) em ${dias} dias`, 'destaque'),
-    cartao('Sem venda, explicados', numero(r.explicado), 'bônus do Flex e pagamentos cancelados'),
+    cartao('Sem venda, explicados', numero(r.explicado), 'pagamentos cancelados e créditos sem venda conhecida'),
     cartao('A conferir', numero(r.a_conferir), r.a_conferir ? 'sem venda identificada: veja o motivo em cada um' : 'nada pendente', r.a_conferir ? 'alerta' : ''),
     cartao('Conferidos por você', numero(r.conferido), 'marcados ou anotados na lista'),
   );

@@ -109,6 +109,19 @@ assert.match(cf.itens.find((i) => i.chave === 'pag:11').motivo, /R\$ 18,00 de fr
 assert.match(cf.itens.find((i) => i.chave === 'pag:12').motivo, /diferença de R\$ 30,00/);
 assert.deepStrictEqual({ ...cf.resumo }, { total: 12, ok: 6, explicado: 2, pendente: 4, conferido: 2, a_conferir: 3, ligados: 8 });
 
+// ---------- bônus do Flex pelo envio e crédito de reclamação pelo pagamento da venda ----------
+const bon = F.pagamentoDe({ id: 40, operation_type: 'money_transfer', description: 'bonificaciones_flex', status: 'approved', transaction_amount: 1.1,
+  point_of_interaction: { transaction_data: { reference_type: 'shipment', reference_id: '43' } } }, 55);
+const cred = F.pagamentoDe({ id: 41, operation_type: 'money_transfer', description: 'Entrada de dinheiro correspondente a sua reclamação', status: 'approved',
+  transaction_amount: 30, point_of_interaction: { transaction_data: { reference_type: 'payment', reference_id: '10' } } }, 55);
+assert.deepStrictEqual([bon.envio_id, bon.ref_pagamento, bon.tipo, cred.envio_id, cred.ref_pagamento], [43, null, 'outro', null, 10]);
+const cf3 = F.conferenciaDe({ pags: [bon, cred], todos: [pg({ id: 10, order_id: 1 }), bon, cred], vendas, vendasJanela: [] });
+assert.deepStrictEqual(cf3.itens.map((i) => [i.pag_id, i.situacao, i.venda?.order_id, i.venda?.por]), [[40, 'ok', 3, 'envio'], [41, 'ok', 1, 'reclamacao']]);
+assert.match(cf3.itens[0].motivo, /Bônus do Flex/);
+// o bônus do envio 43 não conta como pagamento da venda 3
+const cf4 = F.conferenciaDe({ pags: [bon], todos: [bon], vendas, vendasJanela: [vendas[2]] });
+assert.ok(cf4.itens.some((i) => i.chave === 'venda:3'), 'venda só com bônus continua sem pagamento');
+
 // ---------- crédito de reclamação ligado à devolução ----------
 const devs = [{ claim_id: 500, order_id: 6, criada_em: '2026-09-01T00:00:00.000Z', valor_pedido: 70, reembolso_vendedor: 0, reembolso_ml: 0 },
   { claim_id: 501, order_id: 7, criada_em: '2026-09-01T00:00:00.000Z', valor_pedido: 200, reembolso_vendedor: 0, reembolso_ml: 0 }];
