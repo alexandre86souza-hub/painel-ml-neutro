@@ -1060,12 +1060,13 @@ db.exec(`
 `);
 function mpPagamentosGravar(linhas) {
   const st = db.prepare(`INSERT OR REPLACE INTO mp_pagamentos (id, ml_user_id, order_id, tipo, descricao, criado, aprovado, status, status_detalhe,
-    bruto, frete_cobrado, reembolsado, liquido, tarifa_ml, tarifa_mp, frete, cupom, libera_em, liberado, atualizado)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    bruto, frete_cobrado, reembolsado, liquido, tarifa_ml, tarifa_mp, frete, cupom, libera_em, liberado, atualizado, referencia, envio_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   db.exec('BEGIN');
   try {
     for (const p of linhas) st.run(p.id, p.ml_user_id, p.order_id, p.tipo, p.descricao, p.criado, p.aprovado, p.status, p.status_detalhe,
-      p.bruto, p.frete_cobrado, p.reembolsado, p.liquido, p.tarifa_ml, p.tarifa_mp, p.frete, p.cupom, p.libera_em, p.liberado, p.atualizado);
+      p.bruto, p.frete_cobrado, p.reembolsado, p.liquido, p.tarifa_ml, p.tarifa_mp, p.frete, p.cupom, p.libera_em, p.liberado, p.atualizado,
+      p.referencia ?? null, p.envio_id ?? null);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return linhas.length;
@@ -1074,6 +1075,77 @@ function mpPagamentosGravar(linhas) {
 const mpPagamentos = (mlUserId, de, ate) => db.prepare(`SELECT * FROM mp_pagamentos WHERE (? IS NULL OR ml_user_id = ?)
   AND ((criado >= ? AND criado < ?) OR (libera_em >= ? AND libera_em < ?) OR (liberado = 'pending' AND status = 'approved'))
   ORDER BY COALESCE(libera_em, criado) DESC`).all(mlUserId, mlUserId, de, ate, de, ate);
+// external_reference do pagamento: no frete pago à parte (description "marketplace_shipment") é
+// o nº do ENVIO, e o order.id dele não é pedido (medido: /orders dá 404) -> envio_id. Coluna
+// nova em banco que já tinha pagamentos: relê os 120 dias para preenchê-la.
+const mpSemReferencia = !db.prepare('PRAGMA table_info(mp_pagamentos)').all().some((c) => c.name === 'referencia');
+colunaNova('mp_pagamentos', 'referencia TEXT');
+colunaNova('mp_pagamentos', 'envio_id INTEGER');
+if (mpSemReferencia) db.prepare("DELETE FROM estado WHERE chave LIKE 'mp_lido_em:%'").run();
+const mpPagamentosConta = (mlUserId) => db.prepare('SELECT * FROM mp_pagamentos WHERE (? IS NULL OR ml_user_id = ?) ORDER BY criado DESC')
+  .all(mlUserId, mlUserId);
+
+// Extrato do Mercado Pago (relatório de liberações): cada movimento que mexeu no saldo
+// disponível — venda liberada, reserva por disputa, reembolso, saque… Cada relatório importado
+// substitui os movimentos da sua janela (inicio..fim) e guarda o saldo inicial e final dela.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mp_extrato (
+    ml_user_id INTEGER NOT NULL,
+    data       TEXT NOT NULL,             -- ISO UTC
+    source_id  TEXT,
+    referencia TEXT,
+    tipo       TEXT NOT NULL,             -- DESCRIPTION do relatório (payment, payout…)
+    credito    REAL NOT NULL DEFAULT 0,
+    debito     REAL NOT NULL DEFAULT 0,
+    ordem      INTEGER NOT NULL           -- posição no relatório (desempate na mesma data)
+  );
+  CREATE INDEX IF NOT EXISTS mp_ext_conta_data ON mp_extrato(ml_user_id, data);
+  CREATE TABLE IF NOT EXISTS mp_extrato_saldos (
+    ml_user_id    INTEGER NOT NULL,
+    inicio        TEXT NOT NULL,
+    fim           TEXT NOT NULL,
+    saldo_inicial REAL NOT NULL,
+    saldo_final   REAL NOT NULL,
+    importado     TEXT NOT NULL,
+    PRIMARY KEY (ml_user_id, inicio)
+  );
+  CREATE TABLE IF NOT EXISTS mp_conferencia (
+    chave      TEXT PRIMARY KEY,          -- pag:{id do pagamento} | venda:{order_id}
+    ml_user_id INTEGER NOT NULL,
+    order_id   INTEGER,                   -- venda ligada à mão
+    observacao TEXT,
+    conferido  INTEGER NOT NULL DEFAULT 0,
+    atualizado TEXT NOT NULL
+  );
+`);
+function mpExtratoImportar(mlUserId, { inicio, fim, saldo_inicial, saldo_final, linhas }) {
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM mp_extrato WHERE ml_user_id=? AND data >= ?').run(mlUserId, inicio);
+    db.prepare('DELETE FROM mp_extrato_saldos WHERE ml_user_id=? AND inicio >= ?').run(mlUserId, inicio);
+    const st = db.prepare('INSERT INTO mp_extrato (ml_user_id, data, source_id, referencia, tipo, credito, debito, ordem) VALUES (?,?,?,?,?,?,?,?)');
+    linhas.forEach((l, i) => st.run(mlUserId, l.data, l.source_id, l.referencia, l.tipo, l.credito, l.debito, i));
+    db.prepare(`INSERT OR REPLACE INTO mp_extrato_saldos (ml_user_id, inicio, fim, saldo_inicial, saldo_final, importado)
+      VALUES (?,?,?,?,?,?)`).run(mlUserId, inicio, fim, saldo_inicial, saldo_final, agora());
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+const mpExtrato = (mlUserId) => db.prepare('SELECT * FROM mp_extrato WHERE ml_user_id=? ORDER BY data, ordem').all(mlUserId);
+const mpExtratoSaldos = (mlUserId) => db.prepare('SELECT * FROM mp_extrato_saldos WHERE ml_user_id=? ORDER BY inicio').all(mlUserId);
+const mpConferencias = () => Object.fromEntries(db.prepare('SELECT * FROM mp_conferencia').all().map((r) => [r.chave, r]));
+function mpConferenciaGravar(chave, mlUserId, { order_id = null, observacao = null, conferido = false }) {
+  if (!order_id && !observacao && !conferido) return db.prepare('DELETE FROM mp_conferencia WHERE chave=?').run(chave);
+  return db.prepare(`INSERT OR REPLACE INTO mp_conferencia (chave, ml_user_id, order_id, observacao, conferido, atualizado)
+    VALUES (?,?,?,?,?,?)`).run(chave, mlUserId, order_id, observacao, conferido ? 1 : 0, agora());
+}
+// Vendas da conta desde uma data, uma linha por pedido: valor dos itens, envio e o 1º anúncio.
+const MP_VENDA_SQL = (onde) => `SELECT x.*, (SELECT p.title FROM produtos p WHERE p.item_id = x.item_id) AS titulo FROM (
+    SELECT v.order_id, MIN(v.ml_user_id) AS ml_user_id, MIN(v.data) AS data, MAX(v.status) AS status,
+      ROUND(SUM(v.preco_unit * v.quantidade), 2) AS itens, MAX(v.envio_id) AS envio_id, MIN(v.item_id) AS item_id
+    FROM vendas v WHERE ${onde} GROUP BY v.order_id) x`;
+const mpVendasDesde = (mlUserId, de) => db.prepare(MP_VENDA_SQL('v.ml_user_id=? AND v.data >= ?')).all(mlUserId, de);
+// Os pedidos citados (ligação à mão, venda antiga, reclamação), em qualquer data.
+const mpVendasDosPedidos = (ids) => (ids.length ? db.prepare(MP_VENDA_SQL(`v.order_id IN (${ids.map(() => '?').join(',')})`)).all(...ids) : []);
 
 // ---------- concorrentes no Mercado Livre ----------
 // A API do ML não deixa ler anúncio de outro vendedor: os concorrentes vêm da página de busca
@@ -1471,7 +1543,8 @@ module.exports = {
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
-  mpPagamentosGravar, mpPagamentos,
+  mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
+  mpVendasDesde, mpVendasDosPedidos,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
 };

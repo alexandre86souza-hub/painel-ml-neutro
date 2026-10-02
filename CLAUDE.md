@@ -53,6 +53,16 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `financing_transfer` payer→collector abate a taxa de parcelamento — com isso bruto − cobranças
   bate com o líquido em 100% das vendas, medido nas duas contas). A receber = aprovado e
   `money_release_status` pending; liberação vencida e ainda pendente = retido.
+  Extrato (aba "Extrato e saldo", `GET /api/financeiro/extrato`): relatório de liberações
+  (`/v1/account/release_report`: pede, espera ~2-5 min, baixa o CSV) em `mp_extrato` +
+  `mp_extrato_saldos`; 1ª vez 90 dias, depois do dia anterior ao último, no máximo a cada 6 h.
+  Saldo inicial + créditos − débitos = saldo final (conferido a cada relatório). Conta sem a
+  configuração do relatório (404): só cria quando o vendedor clica "Ativar" na tela.
+  Conferência (aba "Conferência", `GET /api/financeiro/conferencia`, `PUT …/conferencia/{pag|venda}:{id}`):
+  liga cada pagamento à venda — pedido; frete pago à parte (`marketplace_shipment`) pelo ENVIO
+  do `external_reference`; crédito de reclamação pela regra das Devoluções ou pelo crédito
+  digitado lá. Bônus do Flex não tem venda (o código dele não é pedido nem envio: 404). O que
+  sobra fica "a conferir" com o motivo; o vendedor liga à mão, anota e marca (`mp_conferencia`).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
 - Custo por anúncio: `custos.outros` = embalagem (NULL = padrão da empresa) e `custos.extra` =

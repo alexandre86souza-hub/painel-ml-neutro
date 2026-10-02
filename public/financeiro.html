@@ -17,12 +17,28 @@
   .barras .col i{display:block;border-radius:3px 3px 0 0;min-height:1px}
   .barras.receber .col i{background:#2563eb}
   .barras.liberado .col i{background:#16a34a}
+  .barras.saldo .col i{background:#0f766e}
+  .barras.saldo .col.saque i{background:#b45309}
   .linha-filtros{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  .linha-filtros select{font:inherit;font-size:14px;padding:6px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff}
-  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569}
+  .linha-filtros select,.filtros select{font:inherit;font-size:14px;padding:6px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
   .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.azul{background:#dbeafe;color:#1d4ed8}.chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}
   .colunas2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media (max-width:900px){ .colunas2{grid-template-columns:1fr} }
+  .abas{margin:4px 0 14px}
+  .situacao-extrato{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px;background:#fff;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .situacao-extrato.alerta{background:#fff8e6;border-color:#f5d48a}
+  .situacao-extrato.erro{background:#fdeceb;border-color:#f3b4b0}
+  .situacao-extrato p{margin:0;flex:1;min-width:240px}
+  .motivo{display:block;font-size:12px;color:var(--muted);margin-top:2px;max-width:420px}
+  .nota-vendedor{display:block;font-size:12px;margin-top:4px;color:#7a5600}
+  .editor{display:grid;grid-template-columns:200px 1fr auto;gap:10px;align-items:start;padding:10px;background:#f8fafc;border-radius:10px}
+  .editor input[type=text],.editor textarea{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5dbe5;border-radius:8px;width:100%;box-sizing:border-box}
+  .editor textarea{min-height:56px;resize:vertical}
+  .editor .acoes{display:flex;flex-direction:column;gap:6px}
+  .editor label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+  @media (max-width:700px){ .editor{grid-template-columns:1fr} }
+  td.dinheiro{white-space:nowrap;text-align:right}
 </style>
 </head>
 <body>
@@ -38,6 +54,11 @@
 </header>
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
+  <div class="seg abas" role="tablist" aria-label="Parte do financeiro" id="segAba">
+    <button type="button" role="tab" data-aba="resumo">Resumo</button>
+    <button type="button" role="tab" data-aba="extrato">Extrato e saldo</button>
+    <button type="button" role="tab" data-aba="conferencia">Conferência</button>
+  </div>
   <div class="topo">
     <div class="linha-filtros">
       <label for="selFin">Conta</label>
@@ -50,8 +71,12 @@
       <button type="button" data-dias="30">30 dias</button>
       <button type="button" data-dias="60">60 dias</button>
       <button type="button" data-dias="90">90 dias</button>
+      <button type="button" data-dias="120" id="bt120" hidden>120 dias</button>
     </div>
   </div>
+
+  <!-- ===================== RESUMO ===================== -->
+  <div id="abaResumo" role="tabpanel">
   <p class="sub" id="sub">O dinheiro das vendas pelo Mercado Pago: o que vai cair na conta (e quando), o que já caiu e cada pagamento ligado ao seu pedido. Valores líquidos, já sem tarifas e frete.</p>
 
   <div class="cartoes" id="cartoes"><p class="carregando">Lendo os pagamentos no Mercado Pago… (a primeira vez lê 4 meses)</p></div>
@@ -92,19 +117,77 @@
     <div class="tabela-rolagem" id="lista"></div>
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
   </section>
+  </div>
+
+  <!-- ===================== EXTRATO ===================== -->
+  <div id="abaExtrato" role="tabpanel" hidden>
+    <p class="sub" id="subExtrato">Cada movimento do saldo disponível no Mercado Pago (o relatório de liberações): vendas liberadas, reservas por disputa, reembolsos, bônus e os saques para o banco, com o saldo depois de cada um.</p>
+    <div id="situacoesExtrato"></div>
+    <div class="cartoes" id="cartoesExtrato"></div>
+    <section class="bloco">
+      <h2>Saldo disponível por dia</h2>
+      <p class="sub">Saldo no fim de cada dia (passe o mouse). Em laranja, dias com saque para o banco.</p>
+      <div class="barras saldo" id="gSaldo"></div>
+      <div class="eixo" id="eSaldo"></div>
+    </section>
+    <section class="bloco">
+      <h2>Resumo por tipo de movimento</h2>
+      <div class="tabela-rolagem" id="porTipo"></div>
+    </section>
+    <section class="bloco">
+      <h2>Movimentos</h2>
+      <div class="filtros">
+        <input id="buscaExt" type="search" placeholder="Buscar por nº do pedido ou do pagamento" aria-label="Buscar movimento">
+        <select id="selTipo" aria-label="Tipo de movimento"><option value="">Todos os tipos</option></select>
+      </div>
+      <div class="tabela-rolagem" id="listaExt"></div>
+      <div class="mais"><button type="button" class="bt" id="btMaisExt" hidden>Mostrar mais</button></div>
+    </section>
+  </div>
+
+  <!-- ===================== CONFERÊNCIA ===================== -->
+  <div id="abaConf" role="tabpanel" hidden>
+    <p class="sub">Cada pagamento recebido no Mercado Pago ligado à sua venda: pelo pedido, pelo envio (frete pago à parte) ou pelo valor da reclamação. O que não deu para ligar fica com o motivo — e você pode ligar à mão, anotar e marcar como conferido.</p>
+    <div class="cartoes" id="cartoesConf"></div>
+    <section class="bloco">
+      <div class="filtros">
+        <input id="buscaConf" type="search" placeholder="Buscar por nº do pedido, do pagamento, produto ou anotação" aria-label="Buscar na conferência">
+        <div class="seg" role="group" aria-label="Filtro da conferência" id="segConf">
+          <button type="button" data-f="pendente" aria-pressed="true">A conferir</button>
+          <button type="button" data-f="explicado">Sem venda (explicados)</button>
+          <button type="button" data-f="ok">Ligados à venda</button>
+          <button type="button" data-f="conferido">Conferidos por você</button>
+          <button type="button" data-f="">Todos</button>
+        </div>
+      </div>
+      <div class="tabela-rolagem" id="listaConf"></div>
+      <div class="mais"><button type="button" class="bt" id="btMaisConf" hidden>Mostrar mais</button></div>
+    </section>
+  </div>
 </main>
   </div>
 </div>
 <script src="/comum.js?v=7"></script>
 <script>
+const params = new URLSearchParams(location.search);
+let aba = ['resumo', 'extrato', 'conferencia'].includes(params.get('aba')) ? params.get('aba') : 'resumo';
 let dias = 30, dados = null, filtro = '', mostrar = 200;
+let extrato = null, mostrarExt = 200, timerExtrato = null;
+let conf = null, filtroConf = 'pendente', mostrarConf = 200, editando = null;
 function cartao(rot, valor, nota, cls){
   const c = el('div', 'cartao' + (cls ? ' ' + cls : ''));
   c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
   return c;
 }
+const contaSel = () => $('selFin').value;
 const hojeLocal = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
 const diaDe = (iso) => (iso ? new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10) : null);
+const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+function linkPedido(id, href){ const a = el('a', null, `Pedido ${id}`); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+function preencherContas(lista){
+  if($('selFin').options.length > 1) return;
+  for(const c of lista){ const o = el('option', null, c.nickname); o.value = c.ml_user_id; $('selFin').appendChild(o); }
+}
 function situacao(p){
   if(p.status === 'refunded') return ['reembolso', 'Reembolsado', 'vermelho'];
   if(p.status !== 'approved') return ['outra', p.status_detalhe || p.status, ''];
@@ -112,14 +195,26 @@ function situacao(p){
   if(p.liberado === 'pending' && diaDe(p.libera_em) && diaDe(p.libera_em) < hojeLocal()) return ['retido', 'Retido', 'amarelo'];
   return ['receber', 'A receber', 'azul'];
 }
-function barras(alvo, eixo, serie){
+function barras(alvo, eixo, serie, titulo, classe){
   const g = $(alvo); g.innerHTML = '';
   const teto = Math.max(1, ...serie.map((d) => d.valor));
-  for(const d of serie){ const col = el('div', 'col'); const i = el('i'); i.style.height = (d.valor / teto * 100) + '%'; col.title = `${data(d.dia)}: ${real(d.valor)}`; col.appendChild(i); g.appendChild(col); }
+  for(const d of serie){
+    const col = el('div', 'col' + (classe ? ' ' + (classe(d) || '') : '')); const i = el('i');
+    i.style.height = (Math.max(0, d.valor) / teto * 100) + '%';
+    col.title = titulo ? titulo(d) : `${data(d.dia)}: ${real(d.valor)}`; col.appendChild(i); g.appendChild(col);
+  }
   $(eixo).innerHTML = '';
   if(serie.length) $(eixo).append(el('span', null, data(serie[0].dia)), el('span', null, data(serie.at(-1).dia)));
   if(!serie.length) g.appendChild(el('p', 'vazio', 'Nada no período.'));
 }
+function tabela(cabecalhos){
+  const t = el('table'); const cab = el('tr');
+  for(const h of cabecalhos) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th); const tb = el('tbody'); t.appendChild(tb);
+  return [t, tb];
+}
+
+// ===================== RESUMO =====================
 function pintar(){
   const t = dados.totais;
   const box = $('cartoes'); box.innerHTML = '';
@@ -131,7 +226,6 @@ function pintar(){
   );
   barras('gReceber', 'eReceber', dados.a_receber_por_dia);
   barras('gLiberado', 'eLiberado', dados.liberado_por_dia);
-  // quebra das vendas liberadas
   const q = $('quebra'); q.innerHTML = '';
   const tab = el('table'); const tb = el('tbody');
   const linha = (rot, v, cls) => { const tr = el('tr', cls || null); tr.append(el('td', null, rot), el('td', null, v)); tb.appendChild(tr); };
@@ -151,18 +245,16 @@ function pintarLista(){
     const [s] = situacao(p);
     if(filtro === 'outro' && p.tipo !== 'outro') return false;
     if(filtro && filtro !== 'outro' && s !== filtro) return false;
-    return !qv || [String(p.order_id || ''), String(p.id), p.descricao].some((x) => (x || '').toLowerCase().includes(qv));
+    return !qv || [String(p.order_id || ''), String(p.id), String(p.envio_id || ''), p.descricao].some((x) => (x || '').toLowerCase().includes(qv));
   });
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); $('btMais').hidden = true; return; }
-  const t = el('table'); const cab = el('tr');
-  for(const h of ['Pagamento', 'Situação', 'Libera em', 'Bruto', 'Tarifa ML', 'Taxas MP', 'Frete', 'Líquido']) cab.appendChild(el('th', null, h));
-  const th = el('thead'); th.appendChild(cab); t.appendChild(th); const tb = el('tbody');
+  const [t, tb] = tabela(['Pagamento', 'Situação', 'Libera em', 'Bruto', 'Tarifa ML', 'Taxas MP', 'Frete', 'Líquido']);
   for(const p of itens.slice(0, mostrar)){
     const [, txt, cor] = situacao(p);
     const tr = el('tr');
     const td = el('td');
-    if(p.order_id){ const a = el('a', null, `Pedido ${p.order_id}`); a.href = p.link_pedido; a.target = '_blank'; a.rel = 'noopener'; td.appendChild(a); }
-    else td.appendChild(document.createTextNode(p.descricao || 'Crédito'));
+    if(p.order_id) td.appendChild(linkPedido(p.order_id, p.link_pedido));
+    else td.appendChild(document.createTextNode(p.envio_id ? `Frete à parte · envio ${p.envio_id}` : (p.descricao || 'Crédito')));
     td.appendChild(el('span', 'pequeno', `pag. ${p.id}${p.conta_nome && !dados.conta ? ' · ' + p.conta_nome : ''} · ${data(p.criado)}`));
     const sit = el('td'); sit.appendChild(el('span', 'chip ' + cor, txt));
     tr.append(td, sit, el('td', null, p.libera_em ? new Date(p.libera_em).toLocaleDateString('pt-BR') : '—'),
@@ -171,30 +263,251 @@ function pintarLista(){
       el('td', p.status === 'approved' ? 'pos' : null, real(p.liquido)));
     tb.appendChild(tr);
   }
-  t.appendChild(tb); box.appendChild(t);
+  box.appendChild(t);
   $('btMais').hidden = itens.length <= mostrar;
   $('btMais').textContent = `Mostrar mais (${numero(itens.length - mostrar)} restantes)`;
 }
+async function carregarResumo(recarregar){
+  if(!dados){ $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Lendo os pagamentos no Mercado Pago… (a primeira vez lê 4 meses e pode levar um minuto)')); }
+  const conta = contaSel();
+  dados = await api(`/api/financeiro?dias=${Math.min(dias, 90)}${conta ? '&conta=' + conta : ''}${recarregar ? '&recarregar=1' : ''}`);
+  preencherContas(dados.contas);
+  if(dados.erros.length) erroTela('Não consegui ler: ' + dados.erros.join(' · '));
+  $('sub').textContent = `O dinheiro das vendas pelo Mercado Pago: o que vai cair na conta (e quando), o que já caiu e cada pagamento ligado ao seu pedido. Valores líquidos, já sem tarifas e frete. Lido em ${dados.lido_em ? new Date(dados.lido_em).toLocaleString('pt-BR') : '—'}.`;
+  pintar();
+}
+
+// ===================== EXTRATO =====================
+async function gerarExtrato(conta, ativar){
+  try{
+    await api('/api/financeiro/extrato/gerar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conta, ativar }) });
+    carregarExtrato();
+  }catch(e){ erroTela(e.message); }
+}
+function pintarSituacoes(){
+  const box = $('situacoesExtrato'); box.innerHTML = '';
+  for(const s of extrato.situacoes){
+    let cls = '', txt = '', bt = null;
+    if(s.situacao === 'gerando'){ cls = 'alerta'; txt = `${s.nickname}: pedindo o relatório ao Mercado Pago… Leva de 2 a 5 minutos; a tela atualiza sozinha.`; }
+    else if(s.situacao === 'sem_config'){
+      cls = 'alerta';
+      txt = `${s.nickname}: o relatório de liberações ainda não está ativado nesta conta do Mercado Pago. Ativar grava a configuração do relatório na conta (as colunas do arquivo) e gera o extrato dos últimos 90 dias. Nada é movimentado.`;
+      bt = el('button', 'bt primario', 'Ativar e gerar o extrato'); bt.type = 'button';
+      bt.onclick = () => { bt.disabled = true; gerarExtrato(s.ml_user_id, true); };
+    } else if(s.situacao === 'erro'){
+      cls = 'erro'; txt = `${s.nickname}: não consegui gerar o extrato — ${s.erro}`;
+      bt = el('button', 'bt', 'Tentar de novo'); bt.type = 'button'; bt.onclick = () => { bt.disabled = true; gerarExtrato(s.ml_user_id, false); };
+    } else if(s.inicio){
+      const conf = s.confere?.ok === false ? ' · ⚠ o saldo calculado não bateu com o informado pelo Mercado Pago em ' + s.confere.erradas.length + ' ponto(s)' : (s.confere?.ok ? ' · saldo conferido com o Mercado Pago ✓' : '');
+      txt = `${s.nickname}: extrato de ${new Date(s.inicio).toLocaleDateString('pt-BR')} até ${new Date(s.fim).toLocaleDateString('pt-BR')}, importado em ${dataHora(s.importado)}${conf}.`;
+      bt = el('button', 'bt', 'Atualizar extrato'); bt.type = 'button'; bt.onclick = () => { bt.disabled = true; gerarExtrato(s.ml_user_id, false); };
+      if(s.confere?.ok === false) cls = 'alerta';
+    } else continue;
+    const d = el('div', 'situacao-extrato' + (cls ? ' ' + cls : '')); d.appendChild(el('p', null, txt)); if(bt) d.appendChild(bt); box.appendChild(d);
+  }
+  clearTimeout(timerExtrato);
+  if(extrato.situacoes.some((s) => s.situacao === 'gerando') && aba === 'extrato') timerExtrato = setTimeout(() => carregarExtrato(), 15000);
+}
+function pintarExtrato(){
+  pintarSituacoes();
+  const r = extrato.resumo;
+  const box = $('cartoesExtrato'); box.innerHTML = '';
+  const temDados = extrato.saldo_atual != null;
+  if(!temDados){ box.appendChild(el('p', 'vazio', 'O extrato aparece aqui quando o primeiro relatório ficar pronto.')); }
+  else box.append(
+    cartao('Saldo disponível no Mercado Pago', real(extrato.saldo_atual), 'pelo último relatório importado (sem o que ainda vai liberar)', 'destaque'),
+    cartao(`Entradas em ${dias} dias`, real(r.entradas), 'vendas liberadas, bônus, créditos e reservas devolvidas'),
+    cartao(`Saídas em ${dias} dias`, real(r.saidas), 'saques, reservas, reclamações e reembolsos'),
+    cartao(`Saques para o banco`, real(r.saques), `${numero(r.qtd_saques)} saque(s) no período`),
+  );
+  barras('gSaldo', 'eSaldo', extrato.por_dia.map((d) => ({ ...d, valor: d.saldo })),
+    (d) => `${data(d.dia)}: saldo ${real(d.saldo)} · entradas ${real(d.entradas)} · saídas ${real(d.saidas)}${d.saques ? ' · saque ' + real(d.saques) : ''}`,
+    (d) => (d.saques ? 'saque' : ''));
+  // por tipo
+  const pt = $('porTipo'); pt.innerHTML = '';
+  if(!r.por_tipo.length) pt.appendChild(el('p', 'vazio', 'Nada no período.'));
+  else {
+    const [t, tb] = tabela(['Movimento', 'Quantidade', 'Entradas', 'Saídas', 'Líquido']);
+    for(const x of r.por_tipo){
+      const tr = el('tr');
+      tr.append(el('td', null, x.nome), el('td', null, numero(x.qtd)), el('td', 'dinheiro', x.credito ? real(x.credito) : '—'),
+        el('td', 'dinheiro', x.debito ? '− ' + real(x.debito) : '—'), el('td', 'dinheiro ' + (x.liquido >= 0 ? 'pos' : 'neg'), real(x.liquido)));
+      tb.appendChild(tr);
+    }
+    pt.appendChild(t);
+  }
+  const sel = $('selTipo'); const atual = sel.value; sel.innerHTML = '';
+  sel.appendChild(Object.assign(el('option', null, 'Todos os tipos'), { value: '' }));
+  for(const x of r.por_tipo){ const o = el('option', null, `${x.nome} (${x.qtd})`); o.value = x.tipo; sel.appendChild(o); }
+  sel.value = r.por_tipo.some((x) => x.tipo === atual) ? atual : '';
+  pintarListaExt();
+}
+function pintarListaExt(){
+  const box = $('listaExt'); box.innerHTML = '';
+  const qv = $('buscaExt').value.trim();
+  const tipo = $('selTipo').value;
+  const itens = extrato.movimentos.filter((m) => (!tipo || m.tipo === tipo)
+    && (!qv || [m.order_id, m.source_id, m.envio_id].some((x) => String(x || '').includes(qv))));
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); $('btMaisExt').hidden = true; return; }
+  const todas = !extrato.conta && extrato.contas.length > 1;
+  const [t, tb] = tabela(['Data', 'Movimento', 'Entrada', 'Saída', todas ? 'Saldo da conta' : 'Saldo']);
+  for(const m of itens.slice(0, mostrarExt)){
+    const tr = el('tr');
+    const td = el('td'); td.appendChild(document.createTextNode(m.nome));
+    const sub = el('span', 'pequeno');
+    if(m.order_id){ sub.appendChild(linkPedido(m.order_id, m.link_pedido)); sub.appendChild(document.createTextNode(' · ')); }
+    else if(m.envio_id) sub.appendChild(document.createTextNode(`frete à parte do envio ${m.envio_id} · `));
+    else if(m.descricao === 'bonificaciones_flex') sub.appendChild(document.createTextNode('bônus do Flex · '));
+    sub.appendChild(document.createTextNode(`${m.source_id ? 'ref. ' + m.source_id : ''}${todas ? ' · ' + m.conta_nome : ''}`));
+    td.appendChild(sub);
+    tr.append(el('td', null, dataHora(m.data)), td, el('td', 'dinheiro pos', m.credito ? real(m.credito) : ''),
+      el('td', 'dinheiro neg', m.debito ? '− ' + real(m.debito) : ''), el('td', 'dinheiro', real(m.saldo)));
+    tb.appendChild(tr);
+  }
+  box.appendChild(t);
+  $('btMaisExt').hidden = itens.length <= mostrarExt;
+  $('btMaisExt').textContent = `Mostrar mais (${numero(itens.length - mostrarExt)} restantes)`;
+}
+async function carregarExtrato(){
+  if(!extrato){ $('cartoesExtrato').innerHTML = ''; $('cartoesExtrato').appendChild(el('p', 'carregando', 'Lendo o extrato…')); }
+  const conta = contaSel();
+  try{
+    extrato = await api(`/api/financeiro/extrato?dias=${Math.min(dias, 90)}${conta ? '&conta=' + conta : ''}`);
+    preencherContas(extrato.contas);
+    pintarExtrato();
+  }catch(e){ erroTela(e.message); }
+}
+
+// ===================== CONFERÊNCIA =====================
+const SIT = { ok: ['Ligado à venda', 'verde'], explicado: ['Sem venda (explicado)', 'azul'], pendente: ['A conferir', 'amarelo'] };
+const POR = { pedido: 'pelo pedido', envio: 'pelo envio', reclamacao: 'pela reclamação', manual: 'ligado à mão' };
+function pintarConf(){
+  const r = conf.resumo;
+  const box = $('cartoesConf'); box.innerHTML = '';
+  box.append(
+    cartao('Ligados à venda', numero(r.ok), `de ${numero(r.total)} pagamento(s) em ${dias} dias`, 'destaque'),
+    cartao('Sem venda, explicados', numero(r.explicado), 'bônus do Flex e pagamentos cancelados'),
+    cartao('A conferir', numero(r.a_conferir), r.a_conferir ? 'sem venda identificada: veja o motivo em cada um' : 'nada pendente', r.a_conferir ? 'alerta' : ''),
+    cartao('Conferidos por você', numero(r.conferido), 'marcados ou anotados na lista'),
+  );
+  pintarListaConf();
+}
+function editor(i){
+  const box = el('div', 'editor');
+  const c1 = el('div'); const l1 = el('label', null, 'Venda (nº do pedido)'); const inp = el('input'); inp.type = 'text'; inp.inputMode = 'numeric';
+  inp.value = i.venda?.por === 'manual' ? i.venda.order_id : ''; inp.placeholder = 'ligar à mão (opcional)'; l1.htmlFor = inp.id = 'edPed';
+  c1.append(l1, inp);
+  const c2 = el('div'); const l2 = el('label', null, 'Observação'); const ta = el('textarea'); ta.value = i.observacao || ''; ta.maxLength = 500; l2.htmlFor = ta.id = 'edObs';
+  const lc = el('label'); const ck = el('input'); ck.type = 'checkbox'; ck.checked = i.conferido || !i.observacao;   // anotação nova: já marca como conferido lc.append(ck, document.createTextNode(' Conferido'));
+  c2.append(l2, ta, lc);
+  const c3 = el('div', 'acoes');
+  const salvar = el('button', 'bt primario', 'Salvar'); salvar.type = 'button';
+  const cancelar = el('button', 'bt', 'Cancelar'); cancelar.type = 'button';
+  const limpar = el('button', 'bt', 'Apagar anotação'); limpar.type = 'button';
+  const gravar = async (corpo) => {
+    salvar.disabled = limpar.disabled = true;
+    try{
+      await api(`/api/financeiro/conferencia/${encodeURIComponent(i.chave)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+      editando = null; await carregarConf();
+    }catch(e){ erroTela(e.message); salvar.disabled = limpar.disabled = false; }
+  };
+  salvar.onclick = () => gravar({ order_id: inp.value.trim(), observacao: ta.value, conferido: ck.checked });
+  limpar.onclick = () => gravar({});
+  cancelar.onclick = () => { editando = null; pintarListaConf(); };
+  c3.append(salvar, cancelar, limpar);
+  box.append(c1, c2, c3);
+  setTimeout(() => ta.focus(), 0);
+  return box;
+}
+function pintarListaConf(){
+  const box = $('listaConf'); box.innerHTML = '';
+  const qv = $('buscaConf').value.trim().toLowerCase();
+  const itens = conf.itens.filter((i) => {
+    if(filtroConf === 'pendente' && !(i.situacao === 'pendente' && !i.conferido)) return false;
+    if(filtroConf === 'conferido' && !i.conferido) return false;
+    if((filtroConf === 'ok' || filtroConf === 'explicado') && i.situacao !== filtroConf) return false;
+    return !qv || [i.pag_id, i.venda?.order_id, i.venda?.titulo, i.descricao, i.observacao, i.motivo].some((x) => String(x || '').toLowerCase().includes(qv));
+  });
+  if(!itens.length){ box.appendChild(el('p', 'vazio', filtroConf === 'pendente' ? 'Nada a conferir neste período. 🎉' : 'Nada por aqui.')); $('btMaisConf').hidden = true; return; }
+  const todas = !conf.conta && conf.contas.length > 1;
+  const [t, tb] = tabela(['Data', 'Pagamento', 'Venda', 'Situação', '']);
+  for(const i of itens.slice(0, mostrarConf)){
+    const tr = el('tr');
+    const tdPag = el('td');
+    if(i.tipo === 'venda') tdPag.appendChild(el('span', null, 'sem pagamento'));
+    else {
+      tdPag.appendChild(document.createTextNode(real(i.valor)));
+      const desc = i.venda || !i.descricao || i.descricao === 'marketplace_shipment' ? '' : ' · ' + (i.descricao === 'bonificaciones_flex' ? 'bônus do Flex' : i.descricao);
+      tdPag.appendChild(el('span', 'pequeno', `pag. ${i.pag_id}${desc}${todas ? ' · ' + i.conta_nome : ''}`));
+    }
+    const tdVenda = el('td');
+    if(i.venda){
+      tdVenda.appendChild(linkPedido(i.venda.order_id, i.venda.link));
+      tdVenda.appendChild(el('span', 'pequeno', [i.venda.titulo, i.venda.itens != null ? 'itens ' + real(i.venda.itens) : null, POR[i.venda.por]].filter(Boolean).join(' · ')));
+    } else tdVenda.appendChild(el('span', 'pequeno', '—'));
+    const tdSit = el('td');
+    const [txt, cor] = SIT[i.situacao];
+    tdSit.appendChild(el('span', 'chip ' + cor, txt));
+    if(i.conferido) tdSit.appendChild(el('span', 'chip verde', ' ✓ conferido'));
+    if(i.motivo) tdSit.appendChild(el('span', 'motivo', i.motivo));
+    if(i.observacao) tdSit.appendChild(el('span', 'nota-vendedor', '✎ ' + i.observacao));
+    const tdAc = el('td');
+    const bt = el('button', 'bt', i.observacao || i.conferido || i.venda?.por === 'manual' ? 'Editar' : 'Anotar'); bt.type = 'button';
+    bt.onclick = () => { editando = i.chave; pintarListaConf(); };
+    tdAc.appendChild(bt);
+    tr.append(el('td', null, dataHora(i.data)), tdPag, tdVenda, tdSit, tdAc);
+    tb.appendChild(tr);
+    if(editando === i.chave){ const tre = el('tr'); const td = el('td'); td.colSpan = 5; td.appendChild(editor(i)); tre.appendChild(td); tb.appendChild(tre); }
+  }
+  box.appendChild(t);
+  $('btMaisConf').hidden = itens.length <= mostrarConf;
+  $('btMaisConf').textContent = `Mostrar mais (${numero(itens.length - mostrarConf)} restantes)`;
+}
+async function carregarConf(){
+  if(!conf){ $('cartoesConf').innerHTML = ''; $('cartoesConf').appendChild(el('p', 'carregando', 'Conferindo os pagamentos com as vendas…')); }
+  const conta = contaSel();
+  conf = await api(`/api/financeiro/conferencia?dias=${dias}${conta ? '&conta=' + conta : ''}`);
+  preencherContas(conf.contas);
+  if(conf.erros.length) erroTela('Não consegui ler: ' + conf.erros.join(' · '));
+  pintarConf();
+}
+
+// ===================== abas e eventos =====================
 async function carregar(recarregar){
   erroTela('');
-  if(!dados){ $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Lendo os pagamentos no Mercado Pago… (a primeira vez lê 4 meses e pode levar um minuto)')); }
   try{
-    const conta = $('selFin').value;
-    dados = await api(`/api/financeiro?dias=${dias}${conta ? '&conta=' + conta : ''}${recarregar ? '&recarregar=1' : ''}`);
-    if($('selFin').options.length === 1) for(const c of dados.contas){ const o = el('option', null, c.nickname); o.value = c.ml_user_id; $('selFin').appendChild(o); }
-    if(dados.erros.length) erroTela('Não consegui ler: ' + dados.erros.join(' · '));
-    $('sub').textContent = `O dinheiro das vendas pelo Mercado Pago: o que vai cair na conta (e quando), o que já caiu e cada pagamento ligado ao seu pedido. Valores líquidos, já sem tarifas e frete. Lido em ${dados.lido_em ? new Date(dados.lido_em).toLocaleString('pt-BR') : '—'}.`;
-    pintar();
-  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+    if(aba === 'resumo') await carregarResumo(recarregar);
+    else if(aba === 'extrato') await carregarExtrato();
+    else await carregarConf();
+  }catch(e){ erroTela(e.message); }
 }
-$('selFin').onchange = () => { dados = null; carregar(); };
+function mostrarAba(nova){
+  aba = nova;
+  for(const b of $('segAba').querySelectorAll('button')) { b.setAttribute('aria-pressed', String(b.dataset.aba === aba)); b.setAttribute('aria-selected', String(b.dataset.aba === aba)); }
+  $('abaResumo').hidden = aba !== 'resumo'; $('abaExtrato').hidden = aba !== 'extrato'; $('abaConf').hidden = aba !== 'conferencia';
+  $('bt120').hidden = aba !== 'conferencia';
+  if(aba !== 'conferencia' && dias > 90){ dias = 90; periodo('segDias', dias, mudarDias); }
+  $('btAtualizar').hidden = aba === 'extrato';
+  const u = new URL(location.href); if(aba === 'resumo') u.searchParams.delete('aba'); else u.searchParams.set('aba', aba); history.replaceState(null, '', u);
+  carregar();
+}
+function mudarDias(d){ dias = d; mostrar = mostrarExt = mostrarConf = 200; carregar(); }
+$('segAba').onclick = (ev) => { const b = ev.target.closest('button'); if(b) mostrarAba(b.dataset.aba); };
+$('selFin').onchange = () => { dados = extrato = conf = null; carregar(); };
 $('btAtualizar').onclick = () => carregar(true);
 $('busca').oninput = () => { mostrar = 200; pintarLista(); };
 $('btMais').onclick = () => { mostrar += 300; pintarLista(); };
 $('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f;
   for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); mostrar = 200; pintarLista(); };
-periodo('segDias', dias, (d) => { dias = d; carregar(); });
-carregar();
+$('buscaExt').oninput = () => { mostrarExt = 200; pintarListaExt(); };
+$('selTipo').onchange = () => { mostrarExt = 200; pintarListaExt(); };
+$('btMaisExt').onclick = () => { mostrarExt += 300; pintarListaExt(); };
+$('buscaConf').oninput = () => { mostrarConf = 200; pintarListaConf(); };
+$('btMaisConf').onclick = () => { mostrarConf += 300; pintarListaConf(); };
+$('segConf').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtroConf = b.dataset.f; editando = null;
+  for(const x of $('segConf').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); mostrarConf = 200; pintarListaConf(); };
+periodo('segDias', dias, mudarDias);
+mostrarAba(aba);
 </script>
 <script src="/sino.js?v=1" defer></script>
 </body>
