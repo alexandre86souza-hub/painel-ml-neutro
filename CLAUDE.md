@@ -46,6 +46,13 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   de pedidos) e `comprador_nome` (só em `/orders/{id}`: 200 por abertura em segundo plano,
   `custos.js#nomesDosClientes`; Devoluções lê o pedido direto quando falta). Dado pessoal: o
   `mcp.js#semCliente` tira esses campos de toda resposta ao Claude. Amazon não tem cliente.
+- Financeiro (`financeiro.js`, tela `public/financeiro.html`): o dinheiro das vendas do ML pelo
+  Mercado Pago, com o MESMO token da conta (`/v1/payments/search`; saldo direto dá 403). Cópia em
+  `mp_pagamentos` (1ª leitura 120 dias; depois por `date_last_updated`, a cada 10 min no máximo).
+  Líquido = `net_received_amount`; cobranças por `charges_details` (só as pagas pelo vendedor;
+  `financing_transfer` payer→collector abate a taxa de parcelamento — com isso bruto − cobranças
+  bate com o líquido em 100% das vendas, medido nas duas contas). A receber = aprovado e
+  `money_release_status` pending; liberação vencida e ainda pendente = retido.
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
 - Custo por anúncio: `custos.outros` = embalagem (NULL = padrão da empresa) e `custos.extra` =

@@ -1988,6 +1988,9 @@ const amazonAdsMod = require('./amazon-ads.js').criar({ D, urlPublica, novoEstad
 Object.assign(routes, amazonAdsMod.rotas);
 rotasParam.push(...amazonAdsMod.rotasParam);
 
+// ---------- Financeiro: o dinheiro das vendas pelo Mercado Pago (financeiro.js) ----------
+Object.assign(routes, require('./financeiro.js').criar({ D, ml }).rotas);
+
 // ---------- concorrentes no Mercado Livre (concorrentes.js) ----------
 const concMod = require('./concorrentes.js').criar({ D, ml, scraper, contaOuErro, exigeItemId, classificarBusca, lembrarSessao });
 Object.assign(routes, concMod.rotas);

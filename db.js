@@ -1028,6 +1028,53 @@ const shopeePendentes = (shopId) => db.prepare(`SELECT
   SUM(CASE WHEN detalhe_lido=1 AND escrow_em IS NULL AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') THEN 1 ELSE 0 END) AS repasse
   FROM shopee_pedidos WHERE shop_id=?`).get(shopId);
 
+// ---------- Financeiro: pagamentos do Mercado Pago (o dinheiro das vendas) ----------
+// Um registro por pagamento recebido pela conta (venda do ML ou outro crédito, como bônus do
+// Flex e crédito de reclamação). Valores do próprio Mercado Pago: bruto, cada tarifa, líquido
+// e a data em que o dinheiro é liberado. Nada do comprador.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mp_pagamentos (
+    id            INTEGER PRIMARY KEY,
+    ml_user_id    INTEGER NOT NULL,
+    order_id      INTEGER,
+    tipo          TEXT NOT NULL,          -- venda | outro
+    descricao     TEXT,
+    criado        TEXT,
+    aprovado      TEXT,
+    status        TEXT,
+    status_detalhe TEXT,
+    bruto         REAL,
+    frete_cobrado REAL,
+    reembolsado   REAL,
+    liquido       REAL,
+    tarifa_ml     REAL,
+    tarifa_mp     REAL,
+    frete         REAL,
+    cupom         REAL,
+    libera_em     TEXT,
+    liberado      TEXT,                   -- released | pending
+    atualizado    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS mp_pag_conta_lib ON mp_pagamentos(ml_user_id, libera_em);
+  CREATE INDEX IF NOT EXISTS mp_pag_order ON mp_pagamentos(order_id);
+`);
+function mpPagamentosGravar(linhas) {
+  const st = db.prepare(`INSERT OR REPLACE INTO mp_pagamentos (id, ml_user_id, order_id, tipo, descricao, criado, aprovado, status, status_detalhe,
+    bruto, frete_cobrado, reembolsado, liquido, tarifa_ml, tarifa_mp, frete, cupom, libera_em, liberado, atualizado)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  db.exec('BEGIN');
+  try {
+    for (const p of linhas) st.run(p.id, p.ml_user_id, p.order_id, p.tipo, p.descricao, p.criado, p.aprovado, p.status, p.status_detalhe,
+      p.bruto, p.frete_cobrado, p.reembolsado, p.liquido, p.tarifa_ml, p.tarifa_mp, p.frete, p.cupom, p.libera_em, p.liberado, p.atualizado);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return linhas.length;
+}
+// Pagamentos de uma conta (ou de todas) criados ou liberados na janela.
+const mpPagamentos = (mlUserId, de, ate) => db.prepare(`SELECT * FROM mp_pagamentos WHERE (? IS NULL OR ml_user_id = ?)
+  AND ((criado >= ? AND criado < ?) OR (libera_em >= ? AND libera_em < ?) OR (liberado = 'pending' AND status = 'approved'))
+  ORDER BY COALESCE(libera_em, criado) DESC`).all(mlUserId, mlUserId, de, ate, de, ate);
+
 // ---------- concorrentes no Mercado Livre ----------
 // A API do ML não deixa ler anúncio de outro vendedor: os concorrentes vêm da página de busca
 // (scraper). Os "vendidos" que o ML mostra são o total da vida do anúncio, EM FAIXAS (25, 50,
@@ -1424,6 +1471,7 @@ module.exports = {
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
+  mpPagamentosGravar, mpPagamentos,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
 };
