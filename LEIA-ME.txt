@@ -1,0 +1,19 @@
+PAINEL DO VENDEDOR - Mercado Livre, Shopee e Amazon
+====================================================
+
+Antes de tudo, abra o arquivo "Guia-de-Instalacao.pdf": ele explica,
+passo a passo e com os links, como instalar os programas, pedir as
+chaves de API em cada marketplace e conectar as suas contas.
+
+Resumo rapido (Windows):
+
+  1. Instale o Node.js LTS ............ https://nodejs.org
+  2. Instale o Python 3.13 oficial .... https://www.python.org/downloads/windows/
+  3. De dois cliques em INSTALAR.bat
+  4. De dois cliques em INICIAR.bat (deixe a janela aberta)
+  5. O painel abre no navegador em http://localhost:3100
+
+Os dados ficam SOMENTE neste computador (arquivo dados.sqlite).
+O painel faz uma copia de seguranca por dia na pasta "backups".
+
+Licenca: MIT (arquivo LICENSE). Mantenha o aviso de copyright.

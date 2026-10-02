@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Guia de Instalação — Painel do Vendedor</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  :root { --azul:#1d4ed8; --escuro:#0f172a; --cinza:#475569; --linha:#e2e8f0; --fundo:#f8fafc; --laranja:#ee4d2d; --amarelo:#fff7e0; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--escuro); font-size: 10.6pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 6px; color: var(--azul); page-break-before: always; padding-top: 4px; }
+  h1.sem-quebra { page-break-before: auto; }
+  h2 { font-size: 14pt; margin: 20px 0 6px; color: var(--escuro); border-bottom: 2px solid var(--linha); padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; color: var(--azul); page-break-after: avoid; }
+  p { margin: 5px 0 8px; }
+  ol, ul { margin: 4px 0 10px; padding-left: 22px; }
+  li { margin: 3px 0; }
+  a { color: var(--azul); text-decoration: none; word-break: break-all; }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size: 9.6pt; background: #eef2f7; padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.6pt; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--linha); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: var(--fundo); }
+  .caixa { border-radius: 8px; padding: 9px 12px; margin: 10px 0; page-break-inside: avoid; }
+  .dica { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .atencao { background: var(--amarelo); border: 1px solid #f3d27a; }
+  .perigo { background: #fdecec; border: 1px solid #f5b5b0; }
+  .caixa b:first-child { display: block; margin-bottom: 2px; }
+  .passos > li { margin-bottom: 6px; }
+  .capa { height: 255mm; display: flex; flex-direction: column; justify-content: center; text-align: left; padding: 0 6mm; }
+  .capa .selo { display:inline-block; background: var(--azul); color:#fff; font-size: 10pt; padding: 4px 10px; border-radius: 20px; margin-bottom: 18px; letter-spacing:.04em; }
+  .capa h1 { font-size: 34pt; page-break-before: auto; color: var(--escuro); line-height: 1.1; margin-bottom: 10px; }
+  .capa .sub { font-size: 14pt; color: var(--cinza); margin-bottom: 28px; }
+  .capa .canais { display:flex; gap:10px; margin-bottom: 30px; }
+  .capa .canais span { border:1px solid var(--linha); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+  .capa .rodape { margin-top: 40px; font-size: 9.5pt; color: var(--cinza); }
+  .sumario { columns: 2; column-gap: 24px; font-size: 10pt; }
+  .sumario li { break-inside: avoid; }
+  .tempo { font-size: 9.5pt; color: var(--cinza); }
+  .check li { list-style: none; margin-left: -18px; }
+  .check li::before { content: "☐  "; }
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ================= CAPA ================= -->
+<section class="capa">
+  <div><span class="selo">GUIA DE INSTALAÇÃO</span></div>
+  <h1>Painel do Vendedor</h1>
+  <div class="sub">Instalação completa, passo a passo: programas, chaves de API dos marketplaces, conexão das contas e uso no dia a dia.</div>
+  <div class="canais"><span>Mercado Livre</span><span>Mercado Pago</span><span>Shopee</span><span>Amazon</span><span>Amazon Ads</span></div>
+  <p><b>Para quem é este guia:</b> para quem nunca instalou um sistema assim. Cada etapa diz o que clicar, o que digitar e como saber que deu certo.</p>
+  <p><b>Tempo:</b> cerca de 1 hora para instalar e conectar o Mercado Livre. Shopee e Amazon dependem da aprovação de cada marketplace (alguns dias), então vale pedir os acessos logo no começo.</p>
+  <div class="rodape">Versão 1.0 · Windows 10/11 (e macOS) · Os dados ficam somente no seu computador.</div>
+</section>
+
+<!-- ================= SUMÁRIO ================= -->
+<h1>Sumário</h1>
+<ol class="sumario">
+  <li>O que é o Painel do Vendedor</li>
+  <li>Antes de começar (requisitos e prazos)</li>
+  <li>Instalar os programas (Node.js e Python)</li>
+  <li>Instalar o painel</li>
+  <li>Ligar o painel</li>
+  <li>Primeiro acesso: senha e verificação em duas etapas</li>
+  <li>Mercado Livre e Mercado Pago</li>
+  <li>Shopee</li>
+  <li>Amazon (SP-API)</li>
+  <li>Amazon Ads (anúncios patrocinados)</li>
+  <li>Configurar a empresa: custos, impostos, frete, nome e logo</li>
+  <li>Uso no dia a dia e cópia de segurança</li>
+  <li>Perguntar ao Claude (opcional)</li>
+  <li>Problemas comuns</li>
+  <li>Segurança e responsabilidades</li>
+  <li>Apêndice A — Todos os links</li>
+  <li>Apêndice B — Textos prontos para os formulários</li>
+  <li>Apêndice C — Lista de conferência final</li>
+</ol>
+
+<!-- ================= 1 ================= -->
+<h1>1. O que é o Painel do Vendedor</h1>
+<p>Um sistema de gestão para quem vende em marketplaces. Ele roda <b>no seu computador</b> e abre no navegador, como um site. Ele lê as suas vendas pelas APIs oficiais de cada marketplace e calcula <b>lucro e margem de verdade</b>: tarifas, frete, impostos, embalagem e o custo de cada produto.</p>
+<h2>O que ele faz</h2>
+<table>
+  <tr><th>Tela</th><th>Para que serve</th></tr>
+  <tr><td>Dashboard, Pedidos e Vendas Hoje</td><td>Cada venda com faturamento, tarifa (e a % dela), frete, imposto, custo do produto, lucro e margem.</td></tr>
+  <tr><td>Todas as contas</td><td>Soma Mercado Livre (várias contas), Shopee e Amazon numa tela só.</td></tr>
+  <tr><td>Performance e Análise ABC</td><td>Evolução das vendas e a curva ABC dos produtos.</td></tr>
+  <tr><td>Produtos e Anúncios</td><td>Custo por SKU, troca de SKU em massa, preço pela margem desejada, atacado, concorrentes.</td></tr>
+  <tr><td>Campanhas e Histórico ADS</td><td>Promoções e anúncios patrocinados (Mercado Ads, Shopee Ads, Amazon Ads).</td></tr>
+  <tr><td>Full / FBA</td><td>Estoque nos armazéns do Mercado Livre e da Amazon.</td></tr>
+  <tr><td>Devoluções e Reputação</td><td>Custo das devoluções; vendas que afetaram a reputação, com sugestão de solução ou contestação.</td></tr>
+  <tr><td>Financeiro</td><td>Dinheiro a receber e liberado no Mercado Pago, extrato com saques e saldo, conferência pagamento × venda.</td></tr>
+  <tr><td>Publicar</td><td>Publica no Mercado Livre e copia anúncios do ML para a Shopee e a Amazon.</td></tr>
+  <tr><td>Empresa e custos</td><td>Tabela de produtos com custo, impostos, embalagem, custo de entrega, nome e logo de cada conta.</td></tr>
+</table>
+<h2>Como ele funciona (em uma frase)</h2>
+<p>O painel fica no seu computador, guarda tudo num arquivo local (<code>dados.sqlite</code>) e cria sozinho um <b>endereço público seguro</b> (HTTPS, terminado em <code>.trycloudflare.com</code>). Os marketplaces usam esse endereço para devolver a autorização quando você conecta uma conta. Você também pode abrir o painel pelo celular, com a mesma senha.</p>
+<div class="caixa dica"><b>Importante</b>O painel só funciona com o computador <b>ligado</b> e com a janela do painel <b>aberta</b>. Desligou o computador, o painel para; ligou de novo e abriu o painel, ele continua de onde parou.</div>
+
+<!-- ================= 2 ================= -->
+<h1>2. Antes de começar</h1>
+<h2>Você vai precisar de</h2>
+<ul>
+  <li><b>Um computador</b> com Windows 10 ou 11 (64 bits), ou um Mac, com pelo menos 4 GB de memória e 2 GB livres no disco.</li>
+  <li><b>Internet</b> estável.</li>
+  <li><b>Um celular</b> com um aplicativo autenticador (Google Authenticator ou Microsoft Authenticator, gratuitos). Ele gera o código de 6 dígitos do login.</li>
+  <li><b>Acesso de administrador</b> das contas de vendedor: Mercado Livre, Shopee e/ou Amazon.</li>
+  <li><b>Dados da empresa</b>: CNPJ, razão social e um documento do responsável (RG ou CNH). A Amazon e a Shopee pedem para liberar a API.</li>
+  <li>Opcional: a sua <b>planilha de produtos</b> com SKU e custo de cada um.</li>
+</ul>
+<h2>Prazos de aprovação (comece cedo)</h2>
+<table>
+  <tr><th>Marketplace</th><th>O que pede</th><th>Prazo típico</th></tr>
+  <tr><td>Mercado Livre (e Mercado Pago)</td><td>Criar um aplicativo no DevCenter</td><td>Na hora</td></tr>
+  <tr><td>Shopee</td><td>Conta de desenvolvedor, aplicativo e liberação "Go-Live"</td><td>Alguns dias</td></tr>
+  <tr><td>Amazon SP-API</td><td>Verificação de identidade e cadastro de desenvolvedor privado</td><td>Alguns dias (até 1–2 semanas)</td></tr>
+  <tr><td>Amazon Ads</td><td>Perfil de segurança e pedido de acesso à API</td><td>2 a 3 dias úteis</td></tr>
+</table>
+<div class="caixa atencao"><b>Dica de ordem</b>Instale o painel e conecte o Mercado Livre primeiro (capítulos 3 a 7). No mesmo dia, comece os cadastros da Shopee (cap. 8) e da Amazon (cap. 9 e 10), que ficam esperando aprovação enquanto você já usa o painel.</div>
+<h2>Links que você vai usar</h2>
+<p>Todos os links estão no <b>Apêndice A</b>, organizados por assunto. Os principais:</p>
+<table>
+  <tr><th>O quê</th><th>Link</th></tr>
+  <tr><td>Node.js (obrigatório)</td><td><a href="https://nodejs.org/pt">https://nodejs.org/pt</a></td></tr>
+  <tr><td>Python 3.13 oficial (Windows)</td><td><a href="https://www.python.org/downloads/windows/">https://www.python.org/downloads/windows/</a></td></tr>
+  <tr><td>Mercado Livre — DevCenter</td><td><a href="https://developers.mercadolivre.com.br/devcenter">https://developers.mercadolivre.com.br/devcenter</a></td></tr>
+  <tr><td>Shopee Open Platform</td><td><a href="https://open.shopee.com">https://open.shopee.com</a></td></tr>
+  <tr><td>Amazon — Solution Provider Portal</td><td><a href="https://solutionproviderportal.amazon.com">https://solutionproviderportal.amazon.com</a></td></tr>
+  <tr><td>Amazon Ads API</td><td><a href="https://advertising.amazon.com/about-api">https://advertising.amazon.com/about-api</a></td></tr>
+</table>
+
+<!-- ================= 3 ================= -->
+<h1>3. Instalar os programas</h1>
+<p class="tempo">Tempo: 10 minutos.</p>
+<p>O painel precisa de dois programas gratuitos: o <b>Node.js</b> (que roda o painel) e o <b>Python</b> (que roda o leitor de páginas do Mercado Livre). O resto (o navegador interno, o túnel seguro e as bibliotecas) o instalador do painel baixa sozinho.</p>
+
+<h2>3.1 Node.js</h2>
+<ol class="passos">
+  <li>Abra <a href="https://nodejs.org/pt">https://nodejs.org/pt</a> e clique no botão da versão <b>LTS</b> (a recomendada). Baixa um arquivo <code>.msi</code> (Windows) ou <code>.pkg</code> (Mac).</li>
+  <li>Abra o arquivo baixado e clique em <b>Next</b> (Avançar) em todas as telas, aceitando os termos. Pode deixar todas as opções como vêm.</li>
+  <li>Se aparecer a tela "Tools for Native Modules" com a caixa "Automatically install the necessary tools", <b>não precisa marcar</b>.</li>
+  <li>Clique em <b>Install</b> e depois em <b>Finish</b>.</li>
+</ol>
+<p><b>Como conferir:</b> abra o menu Iniciar, digite <code>cmd</code>, abra o <b>Prompt de Comando</b> e digite:</p>
+<pre>node -v</pre>
+<p>Deve aparecer um número como <code>v22.x.x</code> ou maior. Se aparecer "não é reconhecido", feche e abra o Prompt de Comando de novo (ou reinicie o computador).</p>
+
+<h2>3.2 Python 3.13 oficial (Windows)</h2>
+<div class="caixa atencao"><b>Por que instalar o Python oficial</b>O Windows 11 tem uma proteção chamada <b>Controle Inteligente de Aplicativos</b> que bloqueia programas sem assinatura digital. O Python do site oficial é assinado e passa. Sem ele, o leitor do Mercado Livre pode parar com o erro "os error 4551".</div>
+<ol class="passos">
+  <li>Abra <a href="https://www.python.org/downloads/windows/">https://www.python.org/downloads/windows/</a>.</li>
+  <li>Em <b>Stable Releases</b>, procure a versão <b>Python 3.13</b> mais recente e clique em <b>Download Windows installer (64-bit)</b>.</li>
+  <li>Abra o instalador. Na primeira tela:
+    <ul>
+      <li><b>Marque</b> "Add python.exe to PATH" (no rodapé);</li>
+      <li><b>Deixe desmarcado</b> "Use admin privileges when installing py.exe";</li>
+      <li>clique em <b>Install Now</b>.</li>
+    </ul></li>
+  <li>No fim aparece "Setup was successful". Clique em <b>Close</b>. A opção "Disable path length limit" pode ser ignorada.</li>
+</ol>
+<p><b>No Mac:</b> não precisa instalar o Python; o instalador do painel cuida disso.</p>
+
+<!-- ================= 4 ================= -->
+<h1>4. Instalar o painel</h1>
+<p class="tempo">Tempo: 5 a 15 minutos (depende da internet).</p>
+<h2>4.1 Extrair os arquivos</h2>
+<ol class="passos">
+  <li>Copie o arquivo <code>painel-do-vendedor.zip</code> para o computador.</li>
+  <li>Clique com o botão direito nele → <b>Extrair tudo…</b></li>
+  <li>Escolha uma pasta simples, de preferência <code>C:\PainelVendedor</code>, e clique em <b>Extrair</b>.</li>
+</ol>
+<div class="caixa dica"><b>Onde guardar</b>Evite a Área de Trabalho e pastas sincronizadas (OneDrive, Google Drive). A pasta do painel recebe o banco de dados, que muda o tempo todo. A cópia de segurança para a nuvem é feita de outro jeito (capítulo 12).</div>
+
+<h2>4.2 Rodar o instalador (Windows)</h2>
+<ol class="passos">
+  <li>Abra a pasta <code>C:\PainelVendedor</code>.</li>
+  <li>Dê dois cliques em <b>INSTALAR.bat</b>.
+    <ul><li>Se o Windows mostrar "O Windows protegeu o computador", clique em <b>Mais informações</b> → <b>Executar assim mesmo</b>. O arquivo é só um atalho que roda os comandos de instalação.</li></ul></li>
+  <li>Espere. O instalador:
+    <ul>
+      <li>baixa as dependências (<code>npm install</code>);</li>
+      <li>instala o <b>uv</b> (gerenciador do Python), as bibliotecas do leitor de páginas e o navegador <b>Chromium</b>;</li>
+      <li>baixa o <b>cloudflared</b> (o túnel seguro);</li>
+      <li>cria o arquivo <code>.env</code> com a chave que cifra as senhas;</li>
+      <li>e roda os testes do painel.</li>
+    </ul></li>
+  <li>No fim aparece um <b>Resumo</b> com <code>[ok]</code> em cada item e a frase <b>"Tudo pronto. Agora rode: npm start"</b>, seguida de "Instalação concluída".</li>
+</ol>
+<p>Se algum item aparecer com <code>[x]</code>, leia a dica logo abaixo dele, resolva e rode o <b>INSTALAR.bat</b> de novo. Ele pode ser rodado quantas vezes for preciso, sem perder nada.</p>
+<h2>4.3 No Mac</h2>
+<p>Abra o aplicativo <b>Terminal</b>, entre na pasta do painel e rode:</p>
+<pre>cd ~/PainelVendedor
+npm install
+npm run setup</pre>
+
+<!-- ================= 5 ================= -->
+<h1>5. Ligar o painel</h1>
+<ol class="passos">
+  <li>Na pasta do painel, dê dois cliques em <b>INICIAR.bat</b> (no Mac: <code>npm start</code> no Terminal).</li>
+  <li>Abre uma janela preta. <b>Deixe ela aberta</b> enquanto usa o painel: é o painel funcionando.</li>
+  <li>Em até 1 minuto aparecem:
+    <ul>
+      <li><code>painel no ar: http://localhost:3100</code>;</li>
+      <li><code>scraper pronto: http://127.0.0.1:8100</code>;</li>
+      <li>o <b>endereço público</b>, terminado em <code>.trycloudflare.com</code>, e um quadro com os endereços para o Mercado Livre.</li>
+    </ul></li>
+  <li>O navegador abre sozinho no painel. Se não abrir, digite <a href="http://localhost:3100">http://localhost:3100</a>.</li>
+</ol>
+<h2>Desligar e religar</h2>
+<ul>
+  <li><b>Desligar:</b> clique na janela preta e aperte <b>Ctrl + C</b>. Se perguntar "Deseja finalizar o arquivo em lotes (S/N)?", digite <b>S</b> e Enter.</li>
+  <li><b>Religar:</b> dois cliques em <b>INICIAR.bat</b>.</li>
+</ul>
+<div class="caixa atencao"><b>O endereço público pode mudar</b>Quando o computador é reiniciado, o endereço <code>…trycloudflare.com</code> pode mudar. O painel avisa na tela <b>Configuração</b> ("a URL mudou") e mostra o que atualizar no Mercado Livre. Na Shopee e no Amazon Ads o endereço só importa no momento de conectar a conta.</div>
+
+<!-- ================= 6 ================= -->
+<h1>6. Primeiro acesso: senha e verificação em duas etapas</h1>
+<h2>6.1 Criar a senha do painel</h2>
+<p>Na primeira vez, o painel pede para criar a senha. Regras:</p>
+<ul>
+  <li>pelo menos <b>12 caracteres</b>, com <b>letra, número e caractere especial</b> (ex.: <code>! @ # $ % - _ .</code>);</li>
+  <li>vale por <b>365 dias</b> (depois o painel pede para trocar);</li>
+  <li>só pode ser criada <b>no próprio computador</b> do painel, nunca pelo endereço público.</li>
+</ul>
+<div class="caixa perigo"><b>Anote a senha num lugar seguro</b>Não existe "esqueci a senha" por e-mail. Guarde num gerenciador de senhas.</div>
+<h2>6.2 Ativar a verificação em duas etapas (obrigatória)</h2>
+<ol class="passos">
+  <li>Instale no celular o <b>Google Authenticator</b> ou o <b>Microsoft Authenticator</b> (links no Apêndice A).</li>
+  <li>O painel mostra um <b>QR code</b>. No aplicativo do celular, toque em <b>+</b> → <b>Ler código QR</b> e aponte para a tela.</li>
+  <li>Digite no painel o código de 6 dígitos que aparece no celular.</li>
+</ol>
+<p>A partir daí, todo login pede a senha e o código do celular. Perdeu o celular? Veja o capítulo 14.</p>
+
+<!-- ================= 7 ================= -->
+<h1>7. Mercado Livre e Mercado Pago</h1>
+<p class="tempo">Tempo: 15 minutos. Aprovação: imediata.</p>
+<p>O painel conversa com o Mercado Livre por um <b>aplicativo seu</b>, criado no DevCenter. O Mercado Pago usa a mesma conexão: não precisa de cadastro separado.</p>
+<h2>7.1 Pegar os endereços no painel</h2>
+<p>No painel, abra <b>Configuração</b>. O <b>passo 1</b> mostra dois endereços com botão <b>Copiar</b>:</p>
+<ul>
+  <li><b>URI de redirect</b> — termina em <code>/callback</code>;</li>
+  <li><b>URL de notificação</b> — termina em <code>/webhook</code>.</li>
+</ul>
+<h2>7.2 Criar o aplicativo no DevCenter</h2>
+<ol class="passos">
+  <li>Abra <a href="https://developers.mercadolivre.com.br/devcenter">https://developers.mercadolivre.com.br/devcenter</a> e entre com a conta de vendedor (o titular).</li>
+  <li>Clique em <b>Criar aplicação</b> e preencha nome, nome curto e descrição (ex.: "Painel interno de gestão da [NOME DA EMPRESA]"). O logo é opcional.</li>
+  <li>Em <b>URIs de redirect</b>, cole a URI de redirect do painel, <b>exatamente como está, sem barra no final</b>.</li>
+  <li>Em <b>Fluxos OAuth</b>, marque <b>Authorization Code</b>, <b>Client Credentials</b> e <b>Refresh Token</b>.</li>
+  <li>Em <b>Permissões</b>, dê <b>leitura e escrita</b> em todas as áreas que aparecerem para vendedor: usuários, publicação e sincronização, vendas e envios, comunicações, métricas, promoções e publicidade.</li>
+  <li>Em <b>URL de retornos de chamada de notificação</b>, cole a URL de notificação do painel. Em <b>Tópicos</b>, marque pedidos (orders), itens (items), perguntas (questions), envios (shipments) e reclamações (claims).</li>
+  <li>Aceite os termos, resolva o reCAPTCHA e clique em <b>Salvar</b>.</li>
+  <li>Na lista de aplicações aparecem o <b>App ID</b> (número) e a <b>Chave secreta</b>.</li>
+</ol>
+<div class="caixa perigo"><b>Nunca envie o App ID e a Chave secreta para ninguém</b>Nem por WhatsApp, nem por e-mail, nem para suporte. Eles são digitados <b>direto no painel</b>, que os guarda cifrados.</div>
+<h2>7.3 Ligar o painel ao aplicativo</h2>
+<ol class="passos">
+  <li>No painel, <b>Configuração → passo 2</b>: digite o <b>App ID</b> e a <b>Chave secreta</b> e clique em <b>Salvar e validar</b>. O painel confere com o Mercado Livre.</li>
+  <li><b>Passo 3</b>: clique em <b>Conectar conta</b>. Abre o Mercado Livre: entre com a conta de vendedor e autorize. Você volta ao painel com a conta listada.</li>
+  <li>Tem <b>mais de uma conta</b> no Mercado Livre? Saia da conta no navegador, entre com a outra e clique de novo em <b>Conectar conta</b>. A lista "Conta" no topo do painel troca entre elas.</li>
+</ol>
+<h2>7.4 Leitor de páginas (para Posição e Concorrentes)</h2>
+<p>Algumas informações (posição na busca, concorrentes) não existem na API e são lidas da própria página do Mercado Livre, com a sua sessão. No menu, abra <b>Navegador → Fazer login</b> e entre com a conta do Mercado Livre na tela que aparece. A senha é digitada nessa tela, e não fica gravada no painel.</p>
+<p><b>Pronto quando:</b> em Configuração, a conta aparece conectada e o "Scraper" aparece como <b>rodando</b>.</p>
+
+<!-- ================= 8 ================= -->
+<h1>8. Shopee</h1>
+<p class="tempo">Tempo: 30 minutos para os cadastros. Aprovação da Shopee: alguns dias.</p>
+<p>A Shopee libera os dados da loja para aplicativos cadastrados na <b>Shopee Open Platform</b>. Você cria o seu, de uso próprio, e recebe dois códigos: <b>Partner ID</b> e <b>Partner Key</b>.</p>
+<h2>8.1 Conta de desenvolvedor</h2>
+<ol class="passos">
+  <li>Abra <a href="https://open.shopee.com">https://open.shopee.com</a> e clique em <b>Log In / Sign Up</b>.</li>
+  <li>Crie a conta de desenvolvedor com os <b>dados da empresa</b> (CNPJ). Quando perguntar o tipo, escolha a opção de <b>vendedor</b> que integra a própria loja.</li>
+  <li>Aguarde o e-mail de boas-vindas (perfil aprovado).</li>
+</ol>
+<h2>8.2 Criar o aplicativo</h2>
+<ol class="passos">
+  <li>No topo, clique em <b>Console</b> → <b>App List</b> → <b>+ Create a APP</b>.</li>
+  <li><b>App Name:</b> ex.: "Painel [NOME DA EMPRESA]". <b>App Type:</b> escolha <b>Seller In House System</b> (sistema próprio do vendedor). Não escolha "Ads Service", "Consignment" nem "Seller Logistics".</li>
+  <li><b>Test Redirect URL Domain</b> e <b>Live Redirect URL Domain:</b> no painel, abra o menu <b>Shopee</b> → <b>passo 2 "Domínio de retorno"</b> → <b>Copiar</b>, e cole o mesmo endereço nos dois campos.</li>
+  <li><b>APP IP Address Management:</b> o endereço de internet do seu escritório (descubra em <a href="https://meuip.com.br">https://meuip.com.br</a>). <b>Deixe "Enable IP Address Whitelist" desligado</b>: o IP de internet comum muda sozinho e, ligado, a Shopee passaria a recusar o painel.</li>
+  <li>Salve. O aplicativo aparece como <b>Developing</b>, só com o par de <b>teste</b>, que não enxerga a loja real.</li>
+</ol>
+<h2>8.3 Pedir a liberação (Go-Live)</h2>
+<ol class="passos">
+  <li>Na página do aplicativo, clique no botão laranja <b>Go-Live</b>.</li>
+  <li><b>Brief Introduction</b> (obrigatório): use o texto do <b>Apêndice B.1</b>, trocando o nome da empresa.</li>
+  <li><b>Client user interface screenshot</b> (obrigatório): um print da tela <b>Shopee</b> do painel (Windows + Shift + S para recortar a tela).</li>
+  <li><b>URL do produto, Test Username, Test Password:</b> deixe em branco. O sistema é interno e a senha dele dá acesso aos seus dados; não entregue a ninguém.</li>
+  <li>Confira os domínios de retorno e clique em <b>Submit</b>. Acompanhe em <b>App List</b> ou em <b>My Notifications</b>.</li>
+</ol>
+<h2>8.4 Conectar a loja (depois da aprovação)</h2>
+<ol class="passos">
+  <li>Na página do aplicativo aparecem o <b>Live Partner_id</b> e a <b>Live API Partner Key</b> (ícone de olho para ver a chave).</li>
+  <li>Confira se o domínio de retorno no aplicativo ainda é o mesmo do <b>passo 2</b> da tela Shopee do painel. Se mudou, atualize pelo botão <b>Edit</b>.</li>
+  <li>No painel, menu <b>Shopee → passo 1</b>: digite o <b>Partner ID</b> e a <b>Partner Key</b>, ambiente <b>Produção</b>, e salve.</li>
+  <li><b>Passo 3:</b> clique em <b>Conectar loja da Shopee</b>, entre com a conta da loja e autorize.</li>
+  <li>Clique em <b>Testar conexão</b>: aparecem o nome da loja e os pedidos dos últimos dias.</li>
+</ol>
+<p>A loja passa a aparecer na lista <b>Conta</b> do topo. A primeira leitura das vendas leva alguns minutos.</p>
+
+<!-- ================= 9 ================= -->
+<h1>9. Amazon (SP-API)</h1>
+<p class="tempo">Tempo: 40 minutos de cadastro. Aprovação da Amazon: alguns dias a 2 semanas.</p>
+<p>A Amazon libera a <b>Selling Partner API</b> para quem se cadastra como <b>desenvolvedor privado</b>, ou seja, quem integra a <b>própria empresa</b>. Cada empresa faz o seu cadastro. No fim você terá três códigos: <b>Client ID</b>, <b>Client Secret</b> e <b>Refresh Token</b>.</p>
+<div class="caixa atencao"><b>A Amazon exige segurança — o painel já atende</b>Senha forte (12+ caracteres) com validade, verificação em duas etapas obrigatória, chaves guardadas cifradas, nenhum dado pessoal de comprador e um plano de resposta a incidentes. Antes de enviar o cadastro: <b>ative a verificação em duas etapas</b> (cap. 6), <b>coloque senha no Windows</b> e <b>preencha o arquivo</b> <code>PLANO-DE-RESPOSTA-A-INCIDENTES.md</code> da pasta do painel (nome do responsável e de um substituto).</div>
+<h2>9.1 Inscrição e verificação de identidade</h2>
+<ol class="passos">
+  <li>Abra o <a href="https://sellercentral.amazon.com.br">Seller Central</a> → menu <b>Aplicativos e serviços → Desenvolver aplicativos</b>, ou direto o <a href="https://solutionproviderportal.amazon.com">Solution Provider Portal</a>. Entre com o e-mail do administrador da conta de vendedor.</li>
+  <li>Marque só <b>"Crie aplicativos que usam SP-APIs"</b> e clique em <b>Inscrever-se</b>. Deixe "Oferecer serviços" desmarcada.</li>
+  <li>Em <b>Introdução / Verificar identidade</b>: informe os dados da empresa como no cartão CNPJ e envie o documento (RG ou CNH) do responsável legal. Leva uns 20 minutos.</li>
+</ol>
+<h2>9.2 Perfil de desenvolvedor (depois da identidade aprovada)</h2>
+<ol class="passos">
+  <li>Clique em <b>"Dê os primeiros passos depois que sua identidade for verificada"</b>.</li>
+  <li><b>Contato:</b> razão social; site (ou o link da sua loja); país Brasil; nome de uma <b>pessoa</b>; e-mail que você acompanha; telefone <b>com DDD</b>.</li>
+  <li><b>Acesso aos dados:</b> <b>"Prestador de soluções privadas: Eu crio aplicativos para integrar minha organização às APIs da Amazon"</b>.</li>
+  <li><b>Atividade comercial principal</b> (até 500 caracteres): texto do <b>Apêndice B.2</b>.</li>
+  <li><b>Funções (roles):</b> marque
+    <ul>
+      <li>Oferta de produtos (Product Listing);</li>
+      <li>Precificação (Pricing);</li>
+      <li>Finanças e contabilidade (Finance and Accounting);</li>
+      <li>Inventário e rastreamento de pedidos (Inventory and Order Tracking);</li>
+      <li>Enviado pela Amazon (Amazon Fulfillment) — só se você usa o FBA.</li>
+    </ul>
+    <b>Não marque</b> nenhuma marcada como <b>(Restrito)</b>: elas dão acesso a dados pessoais dos compradores, o painel não usa e a análise fica muito mais rigorosa.</li>
+  <li><b>Casos de uso:</b> texto do <b>Apêndice B.3</b>.</li>
+  <li><b>Controles de segurança:</b> responda <b>com a verdade</b> sobre o seu escritório. A Amazon pode pedir comprovação. As respostas sobre o sistema (senha, duas etapas, cifra das chaves, plano de incidentes) o painel cumpre; as que dizem respeito ao seu computador e à sua rede, só você sabe.</li>
+  <li><b>Partes externas e fontes externas:</b> textos do <b>Apêndice B.4</b>.</li>
+  <li>Marque "Li e concordo" e clique em <b>Registrar</b>. A resposta chega por e-mail. Se a Amazon pedir mais informações, responda em até 5 dias.</li>
+</ol>
+<h2>9.3 Criar o aplicativo (depois da aprovação)</h2>
+<ol class="passos">
+  <li>Em <b>Desenvolver aplicativos</b>, clique em <b>+ Adicionar novo cliente do aplicativo</b>.</li>
+  <li><b>Nome:</b> ex.: "Painel [NOME DA EMPRESA]". <b>Tipo de API:</b> <b>SP-API</b>. Ambiente: <b>Produção</b>. <b>Funções:</b> as mesmas aprovadas. Se pedir ARN da AWS/IAM, deixe em branco.</li>
+  <li>Salve. O aplicativo fica como <b>Rascunho</b>. Para uso só na própria conta ele fica assim mesmo; não precisa publicar.</li>
+</ol>
+<p>Se a opção <b>Produção</b> estiver cinza, a aprovação pode estar terminando de propagar: saia e entre de novo, ou tente pelo Seller Central (<b>Aplicativos e serviços → Desenvolver aplicativos</b>).</p>
+<h2>9.4 Autorizar e ligar ao painel</h2>
+<ol class="passos">
+  <li>Na lista de aplicativos, em <b>Credenciais LWA → Exibir</b>, estão o <b>Client ID</b> e o <b>Client Secret</b>.</li>
+  <li>No menu do aplicativo, use <b>Autorizar aplicativo</b> (Authorize app): ele gera o <b>Refresh Token</b>.</li>
+  <li>No painel, menu <b>Amazon</b>: digite os três códigos e salve. O painel testa com a Amazon antes de gravar.</li>
+</ol>
+<p>A Amazon aparece na lista <b>Conta</b> do topo. A primeira leitura das vendas leva alguns minutos; os itens dos pedidos chegam aos poucos (cerca de 45 minutos com o painel ligado).</p>
+<div class="caixa dica"><b>Compromissos com a Amazon que o painel cumpre</b>Nenhum dado pessoal de comprador é lido ou guardado; os dados da Amazon <b>não</b> passam pelo assistente Claude (cap. 13); os dados vêm só da API oficial, nunca do site.</div>
+
+<!-- ================= 10 ================= -->
+<h1>10. Amazon Ads (anúncios patrocinados)</h1>
+<p class="tempo">Tempo: 20 minutos. Aprovação: 2 a 3 dias úteis.</p>
+<p>Os anúncios patrocinados da Amazon usam outra API, com cadastro próprio. <b>Use o mesmo e-mail do Seller Central em todas as etapas.</b> Antes, confira se a conta tem o Amazon Ads ativo: Seller Central → <b>Publicidade → Gerenciador de campanhas</b>.</p>
+<h2>10.1 Perfil de segurança (Login with Amazon)</h2>
+<ol class="passos">
+  <li>Abra <a href="https://developer.amazon.com">https://developer.amazon.com</a> → <b>Console</b>. Na primeira vez, crie o perfil de desenvolvedor com os dados da empresa e, em "Em que você tem mais interesse?", escolha <b>Outro/Não tenho certeza</b>.</li>
+  <li>Abra <a href="https://developer.amazon.com/loginwithamazon/console/site/lwa/overview.html">o console do Login with Amazon</a> → <b>Create a New Security Profile</b>.</li>
+  <li><b>Nome:</b> "Painel [NOME DA EMPRESA] Ads". <b>Descrição:</b> "Sistema interno da [NOME DA EMPRESA] para acompanhar as próprias campanhas de anúncios patrocinados."</li>
+  <li><b>URL do aviso de privacidade:</b> o painel tem uma página pública pronta. Use o <b>endereço público</b> do painel (Configuração) + <code>/privacidade</code>, por exemplo <code>https://xxxx.trycloudflare.com/privacidade</code>. Ela mostra a razão social cadastrada na tela Empresa.</li>
+  <li>Salve.</li>
+</ol>
+<h2>10.2 Pedir o acesso à API</h2>
+<ol class="passos">
+  <li>Abra <a href="https://advertising.amazon.com/about-api">https://advertising.amazon.com/about-api</a> → <b>Request API access</b>, com o mesmo e-mail.</li>
+  <li>Escolha <b>Direct advertiser</b> (anunciante direto, quem gerencia os próprios anúncios). Não escolha agência nem ferramenta para terceiros.</li>
+  <li>Descrição de uso: texto do <b>Apêndice B.5</b>. Envie e aguarde o e-mail de aprovação.</li>
+</ol>
+<h2>10.3 Conectar no painel (depois da aprovação)</h2>
+<ol class="passos">
+  <li>No painel, menu <b>Ads</b> com a conta Amazon escolhida (tela "Ads — Amazon"), <b>passo 1 "Endereço de retorno"</b>: copie o endereço (termina em <code>/amazon-ads/callback</code>).</li>
+  <li>No console do Login with Amazon, no seu perfil → engrenagem → <b>Web Settings</b> → <b>Allowed Return URLs</b>: cole e salve.</li>
+  <li>Ainda em Web Settings, <b>Show Client ID and Client Secret</b>. No painel, <b>passo 2</b>: digite os dois e salve.</li>
+  <li><b>Passo 3:</b> clique em <b>Conectar</b>, entre com a conta e autorize. O painel escolhe o perfil de anúncios do Brasil.</li>
+</ol>
+
+<!-- ================= 11 ================= -->
+<h1>11. Configurar a empresa</h1>
+<p>Menu <b>Empresa e custos</b>. Escolha cada conta na lista <b>Conta</b> do topo: Mercado Livre, Shopee e Amazon têm configuração própria.</p>
+<h2>11.1 Nome e logo</h2>
+<p>Digite o nome que deve aparecer no painel e envie o logo (PNG, JPG ou WebP). O nome e o logo aparecem no menu e na tela "Todas as contas".</p>
+<h2>11.2 Impostos, embalagem e entrega</h2>
+<ul>
+  <li><b>Razão social, CNPJ e regime</b> (a razão social aparece no aviso de privacidade).</li>
+  <li><b>Impostos:</b> cada imposto em % do faturamento (ex.: Simples Nacional 10%). O total entra no lucro de cada venda.</li>
+  <li><b>Embalagem padrão por unidade</b> (R$).</li>
+  <li><b>Custo por entrega Flex</b> (conta do Mercado Livre): o que você paga à empresa de entrega por envio Flex. O painel desconta esse valor e soma o bônus Flex que o ML paga.</li>
+  <li><b>Custo por entrega própria — Entrega Direta</b> (conta da Shopee): o mesmo, para os pedidos que você entrega.</li>
+</ul>
+<h2>11.3 Tabela de produtos (custo por SKU)</h2>
+<p>O lucro de cada venda depende do custo do produto, que o painel acha pelo <b>SKU</b> do anúncio. Copie a sua planilha (Excel ou Google Planilhas), <b>com o cabeçalho</b>, e cole no quadro da tela. Colunas:</p>
+<table>
+  <tr><th>SKU</th><th>Produto</th><th>Custo</th><th>Situação</th><th>Fornecedor</th></tr>
+  <tr><td>DQ-407</td><td>Ducha quadrada</td><td>25,90</td><td>ativo</td><td>Fornecedor A</td></tr>
+  <tr><td>BR-408</td><td>Braço 30 cm</td><td>8,50</td><td>ativo</td><td>Fornecedor B</td></tr>
+</table>
+<p><b>SKU</b> e <b>Custo</b> são obrigatórios. O número no fim do SKU identifica o produto (407, 408…).</p>
+<p><b>Kits:</b> no anúncio, o SKU com vários números soma os produtos. Exemplo: <code>KIT-407.408</code> = produto 407 + produto 408. O hífen também separa: <code>KIT-407-408</code>.</p>
+
+<!-- ================= 12 ================= -->
+<h1>12. Uso no dia a dia</h1>
+<h2>12.1 Rotina</h2>
+<ul>
+  <li><b>Ligar:</b> dois cliques em <b>INICIAR.bat</b> e deixar a janela aberta.</li>
+  <li><b>Pelo celular:</b> abra o <b>endereço público</b> (Configuração) no navegador do celular e entre com a senha e o código.</li>
+  <li><b>Desligar:</b> Ctrl + C na janela do painel.</li>
+</ul>
+<h2>12.2 Cópia de segurança</h2>
+<p>Tudo fica no arquivo <code>dados.sqlite</code>. O painel faz <b>uma cópia por dia</b>, sozinho, e confere cada cópia. Ele guarda:</p>
+<ul>
+  <li>as 7 últimas diárias;</li>
+  <li>1 por semana, por 8 semanas;</li>
+  <li>1 por mês, por 2 anos.</li>
+</ul>
+<p>A tela <b>Configuração → Cópia de segurança</b> mostra a última cópia e tem o botão <b>Fazer cópia agora</b>.</p>
+<p><b>Guardar fora do computador (recomendado):</b> mande as cópias para uma pasta do OneDrive ou do Google Drive. Na pasta do painel, clique na barra de endereço do Explorador de Arquivos, digite <code>cmd</code> e Enter. Na janela que abrir:</p>
+<pre>npm run backup -- --pasta "C:\Users\SEU_USUARIO\OneDrive\Painel-Backup"</pre>
+<p>Guarde também uma cópia do arquivo <code>.env</code> (da pasta do painel) num gerenciador de senhas. Ele tem a chave que abre as senhas cifradas do banco. Sem ele, a cópia volta inteira, mas é preciso reconectar as contas.</p>
+<p><b>Voltar uma cópia:</b> desligue o painel (Ctrl + C) e rode, na pasta do painel:</p>
+<pre>npm run restaurar -- painel-AAAAMMDD-HHMM.sqlite</pre>
+<p>O banco atual fica guardado ao lado, com outro nome.</p>
+<h2>12.3 Trocar de computador</h2>
+<ol>
+  <li>No computador novo, instale o painel (capítulos 3 e 4).</li>
+  <li>Copie <code>dados.sqlite</code> e <code>.env</code> do computador antigo para a pasta do novo, com o painel desligado.</li>
+  <li>Ligue o painel e confira o endereço público no Mercado Livre (cap. 7).</li>
+</ol>
+
+<!-- ================= 13 ================= -->
+<h1>13. Perguntar ao Claude (opcional)</h1>
+<p>O painel pode ser consultado em português pelo <b>Claude Code</b>, o assistente de IA da Anthropic. Exemplos: "quais foram meus 10 melhores produtos nos últimos 30 dias?", "quem está na curva A?".</p>
+<ol class="passos">
+  <li>Instale o Claude Code: <a href="https://claude.com/claude-code">https://claude.com/claude-code</a> (precisa de uma assinatura do Claude).</li>
+  <li>No painel, <b>Configuração → Claude Code</b>: copie o comando pronto e cole no Terminal.</li>
+  <li>Na primeira vez, permita o servidor do painel. Digite <code>/mcp</code> para conferir se aparece como <i>connected</i>.</li>
+</ol>
+<p>Os dados de clientes (nomes) e <b>todos os dados da Amazon</b> ficam de fora do Claude. Para deixar o assistente só em consulta (sem alterar anúncios), escreva <code>ML_MCP_ESCRITA=0</code> no arquivo <code>.env</code> e religue o painel.</p>
+
+<!-- ================= 14 ================= -->
+<h1>14. Problemas comuns</h1>
+<table>
+  <tr><th style="width:34%">O que aparece</th><th>O que fazer</th></tr>
+  <tr><td>"node não é reconhecido" ou INSTALAR.bat diz que falta o Node.js</td><td>Instale o Node.js (cap. 3.1). Feche e abra a janela de novo, ou reinicie o computador.</td></tr>
+  <tr><td>Scraper "reiniciando…" com "os error 4551" ou "uv trampoline failed"</td><td>O Windows bloqueou o Python. Instale o Python 3.13 oficial (cap. 3.2) e rode o <b>INSTALAR.bat</b> de novo: ele passa a usar o Python oficial.</td></tr>
+  <tr><td>"O Windows protegeu o computador" ao abrir o .bat</td><td><b>Mais informações → Executar assim mesmo</b>.</td></tr>
+  <tr><td>Antivírus avisa sobre o <code>cloudflared</code> ou um endereço da Amazon</td><td>São componentes legítimos (túnel da Cloudflare e rede da Amazon). Não desligue o antivírus; se ele bloquear o <code>cloudflared</code>, libere só esse arquivo, que fica em <code>node_modules\cloudflared</code>.</td></tr>
+  <tr><td>A porta 3100 está ocupada</td><td>O painel usa outra porta e mostra qual na janela. Use o endereço que aparecer.</td></tr>
+  <tr><td>"O painel já está rodando"</td><td>Ele já estava ligado: só abra o endereço mostrado.</td></tr>
+  <tr><td>Configuração avisa "a URL mudou"</td><td>O endereço público mudou: atualize a URI de redirect e a URL de notificação no DevCenter do Mercado Livre (cap. 7.2), como a tela mostra.</td></tr>
+  <tr><td>Shopee recusa a conexão (redirect)</td><td>O domínio de retorno no aplicativo da Shopee ficou diferente do passo 2 da tela Shopee do painel: atualize pelo botão <b>Edit</b>.</td></tr>
+  <tr><td>Amazon: "Produção" cinza ao criar o aplicativo</td><td>A aprovação ainda está propagando: espere, saia e entre de novo, ou crie pelo Seller Central.</td></tr>
+  <tr><td>Perdi o celular da verificação em duas etapas</td><td>No computador do painel, na pasta dele, abra o <code>cmd</code> (barra de endereço → <code>cmd</code>) e rode <code>npm run desativar-2fa</code>. No próximo acesso, ative de novo com o celular novo.</td></tr>
+  <tr><td>Posição/Concorrentes do ML pararam</td><td>A sessão do leitor expirou: <b>Navegador → Fazer login</b> de novo.</td></tr>
+  <tr><td>A internet caiu</td><td>O painel tenta de novo sozinho. As leituras voltam quando a internet voltar.</td></tr>
+</table>
+
+<!-- ================= 15 ================= -->
+<h1>15. Segurança e responsabilidades</h1>
+<ul>
+  <li><b>Chaves e senhas</b> só são digitadas no painel, que as guarda cifradas. Nunca as envie a ninguém. Se uma chave vazar, gere outra no portal do marketplace.</li>
+  <li><b>Dados no seu computador:</b> vendas, valores e nomes de clientes (Mercado Livre) ficam só no arquivo local. Pela LGPD, a sua empresa é responsável por eles: use senha no Windows e mantenha o antivírus ativo.</li>
+  <li><b>Endereço público:</b> qualquer pessoa com o endereço chega à tela de login, mas só entra com a senha e o código do celular. A senha nunca pode ser criada pelo endereço público.</li>
+  <li><b>Termos dos marketplaces:</b> use as APIs dentro das regras de cada um. O leitor de páginas do Mercado Livre usa a sua própria sessão, em ritmo lento; mesmo assim, leitura automatizada em excesso pode levar a bloqueio da conta.</li>
+  <li><b>Publicações:</b> mudanças de preço, SKU, estoque e anúncios novos só acontecem quando você clica nos botões das telas.</li>
+  <li><b>Licença:</b> o sistema é distribuído sob a licença MIT (arquivo <code>LICENSE</code>), que deve acompanhar todas as cópias.</li>
+</ul>
+
+<!-- ================= APÊNDICE A ================= -->
+<h1>Apêndice A — Todos os links</h1>
+<h2>Programas para instalar</h2>
+<table>
+  <tr><th>Programa</th><th>Link</th><th>Observação</th></tr>
+  <tr><td>Node.js (LTS)</td><td><a href="https://nodejs.org/pt">https://nodejs.org/pt</a></td><td>Obrigatório</td></tr>
+  <tr><td>Python 3.13 (Windows)</td><td><a href="https://www.python.org/downloads/windows/">https://www.python.org/downloads/windows/</a></td><td>Obrigatório no Windows 11</td></tr>
+  <tr><td>Google Authenticator (Android)</td><td><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2">play.google.com — Google Authenticator</a></td><td>Ou o Microsoft</td></tr>
+  <tr><td>Google Authenticator (iPhone)</td><td><a href="https://apps.apple.com/br/app/google-authenticator/id388497605">apps.apple.com — Google Authenticator</a></td><td></td></tr>
+  <tr><td>Microsoft Authenticator</td><td><a href="https://www.microsoft.com/pt-br/security/mobile-authenticator-app">microsoft.com — Microsoft Authenticator</a></td><td>Android e iPhone</td></tr>
+  <tr><td>Claude Code</td><td><a href="https://claude.com/claude-code">https://claude.com/claude-code</a></td><td>Opcional (cap. 13)</td></tr>
+  <tr><td>uv (instalado sozinho)</td><td><a href="https://docs.astral.sh/uv/">https://docs.astral.sh/uv/</a></td><td>Só se o instalador pedir</td></tr>
+  <tr><td>Descobrir o seu IP</td><td><a href="https://meuip.com.br">https://meuip.com.br</a></td><td>Para o cadastro da Shopee</td></tr>
+</table>
+<h2>Mercado Livre e Mercado Pago</h2>
+<table>
+  <tr><th>O quê</th><th>Link</th></tr>
+  <tr><td>DevCenter (criar o aplicativo, App ID e Chave secreta)</td><td><a href="https://developers.mercadolivre.com.br/devcenter">https://developers.mercadolivre.com.br/devcenter</a></td></tr>
+  <tr><td>Documentação: criar aplicação</td><td><a href="https://developers.mercadolivre.com.br/pt_br/crie-uma-aplicacao-no-mercado-livre">developers.mercadolivre.com.br — crie uma aplicação</a></td></tr>
+  <tr><td>Mercado Pago</td><td>Não precisa de cadastro: usa a mesma conexão do Mercado Livre.</td></tr>
+</table>
+<h2>Shopee</h2>
+<table>
+  <tr><th>O quê</th><th>Link</th></tr>
+  <tr><td>Shopee Open Platform (conta de desenvolvedor)</td><td><a href="https://open.shopee.com">https://open.shopee.com</a></td></tr>
+  <tr><td>Console → App List (aplicativo, Partner ID, Partner Key, Go-Live)</td><td><a href="https://open.shopee.com/console">https://open.shopee.com/console</a></td></tr>
+  <tr><td>Seller Centre (a sua loja)</td><td><a href="https://seller.shopee.com.br">https://seller.shopee.com.br</a></td></tr>
+</table>
+<h2>Amazon SP-API</h2>
+<table>
+  <tr><th>O quê</th><th>Link</th></tr>
+  <tr><td>Seller Central Brasil</td><td><a href="https://sellercentral.amazon.com.br">https://sellercentral.amazon.com.br</a></td></tr>
+  <tr><td>Solution Provider Portal (cadastro de desenvolvedor)</td><td><a href="https://solutionproviderportal.amazon.com">https://solutionproviderportal.amazon.com</a></td></tr>
+  <tr><td>Desenvolver aplicativos (Seller Central)</td><td><a href="https://sellercentral.amazon.com.br/sellingpartner/developerconsole">sellercentral.amazon.com.br/sellingpartner/developerconsole</a></td></tr>
+  <tr><td>Guia: cadastro de desenvolvedor privado</td><td><a href="https://developer-docs.amazon.com/sp-api/docs/register-as-a-private-developer">developer-docs.amazon.com — register as a private developer</a></td></tr>
+  <tr><td>Guia: autorizar o próprio aplicativo (Refresh Token)</td><td><a href="https://developer-docs.amazon.com/sp-api/docs/self-authorization">developer-docs.amazon.com — self authorization</a></td></tr>
+</table>
+<h2>Amazon Ads</h2>
+<table>
+  <tr><th>O quê</th><th>Link</th></tr>
+  <tr><td>Pedir acesso à Amazon Ads API</td><td><a href="https://advertising.amazon.com/about-api">https://advertising.amazon.com/about-api</a></td></tr>
+  <tr><td>Amazon Developer (conta e Console)</td><td><a href="https://developer.amazon.com">https://developer.amazon.com</a></td></tr>
+  <tr><td>Login with Amazon (perfil de segurança, Client ID e Secret)</td><td><a href="https://developer.amazon.com/loginwithamazon/console/site/lwa/overview.html">developer.amazon.com — Login with Amazon console</a></td></tr>
+  <tr><td>Guia: perfil de segurança</td><td><a href="https://developer.amazon.com/docs/login-with-amazon/security-profile.html">developer.amazon.com — security profile</a></td></tr>
+</table>
+
+<!-- ================= APÊNDICE B ================= -->
+<h1>Apêndice B — Textos prontos para os formulários</h1>
+<p>Troque o que está entre colchetes. Os textos em inglês vão nos formulários que estão em inglês. <b>Ajuste o que não for verdade para a sua empresa</b>: os marketplaces avaliam as respostas.</p>
+<h2>B.1 Shopee — Brief Introduction (Go-Live)</h2>
+<pre>Internal management dashboard used only by our own company ([COMPANY NAME]) to run our own Shopee store. It reads our orders, order items, fees and shipping costs through the Open API to calculate cost, profit and margin per order and per product, together with our sales from other channels. It runs locally on our office computer and is not offered to other sellers, so there is no public URL or test account. It only reads our own shop data; it does not store buyer personal data.</pre>
+<h2>B.2 Amazon — Atividade comercial principal (até 500 caracteres)</h2>
+<pre>A [NOME DA EMPRESA] vende [SEUS PRODUTOS] na Amazon Brasil e em outros marketplaces. Usaremos a API somente na nossa própria conta, em um sistema interno de gestão, para consultar pedidos, taxas e repasses e calcular custo, lucro e margem por pedido e por produto; acompanhar estoque (inclusive FBA) e preços; e atualizar preço e estoque dos nossos anúncios. Não acessamos dados de outros vendedores nem usamos dados pessoais de compradores.</pre>
+<h2>B.3 Amazon — Casos de uso</h2>
+<pre>Sistema interno de gestão da [NOME DA EMPRESA], usado somente pela nossa empresa e somente na nossa própria conta de vendedor. Ele roda no computador do escritório e é acessado apenas pelos responsáveis da empresa, com senha e verificação em duas etapas.
+
+Funcionalidades:
+1. Pedidos (Inventário e rastreamento de pedidos): lista os pedidos e os itens vendidos por dia e por período, para acompanhar faturamento, quantidade vendida e ticket médio. Não usamos nome, endereço ou outros dados pessoais dos compradores.
+2. Lucro e margem (Finanças e contabilidade): lê comissões, taxas de frete e repasses de cada pedido e, junto com o custo dos produtos cadastrado por nós, calcula o lucro e a margem por pedido, por produto e por período.
+3. Anúncios e SKU (Oferta de produtos): lista nossos anúncios com o SKU de cada um, para ligar cada venda ao custo do produto, e permite atualizar preço e estoque dos nossos próprios anúncios.
+4. Preços (Precificação): acompanha o preço dos nossos anúncios e ajuda a definir o preço pela margem desejada.
+5. Estoque no FBA (Enviado pela Amazon): mostra o estoque nos centros de distribuição da Amazon e para quantos dias ele dura, pela média de vendas.
+
+Os dados ficam armazenados localmente no computador da empresa. As credenciais de acesso à API são guardadas cifradas e não são compartilhadas com terceiros. Não acessamos dados de outros vendedores.</pre>
+<p>Tire o item 5 se você não usa o FBA (e desmarque a função "Enviado pela Amazon").</p>
+<h2>B.4 Amazon — Partes externas e fontes externas</h2>
+<p><b>Partes externas com quem a empresa compartilha dados da Amazon:</b></p>
+<pre>Nenhuma. As informações da Amazon ficam somente no computador da empresa e não são vendidas, compartilhadas nem enviadas a terceiros. O acesso remoto ao sistema, apenas pelo proprietário, usa um túnel HTTPS criptografado da Cloudflare, que atua só como transporte.</pre>
+<p><b>Fontes externas fora da Amazon:</b></p>
+<pre>Nenhuma. As informações da Amazon são obtidas somente pela Selling Partner API, diretamente da nossa própria conta de vendedor.</pre>
+<h2>B.5 Amazon Ads — Descrição de uso</h2>
+<pre>[COMPANY NAME] is a seller on Amazon Brazil. We will use the Amazon Ads API only for our own advertising account, in an internal management system used solely by our company, to read campaign performance (spend, sales, ACOS/ROAS, clicks, impressions) and to adjust our own campaigns' budgets and bids. We do not manage ads for other advertisers and do not share advertising data with third parties.</pre>
+
+<!-- ================= APÊNDICE C ================= -->
+<h1>Apêndice C — Lista de conferência final</h1>
+<h3>Instalação</h3>
+<ul class="check">
+  <li>Node.js instalado (<code>node -v</code> mostra v22 ou maior)</li>
+  <li>Python 3.13 oficial instalado (Windows)</li>
+  <li>INSTALAR.bat terminou com "Instalação concluída"</li>
+  <li>INICIAR.bat abre o painel em http://localhost:3100</li>
+  <li>Senha criada e guardada num lugar seguro</li>
+  <li>Verificação em duas etapas ativa no celular</li>
+</ul>
+<h3>Mercado Livre</h3>
+<ul class="check">
+  <li>Aplicativo criado no DevCenter com os dois endereços do painel</li>
+  <li>App ID e Chave secreta validados no painel</li>
+  <li>Conta(s) conectada(s)</li>
+  <li>Leitor de páginas com login feito (Navegador)</li>
+</ul>
+<h3>Shopee</h3>
+<ul class="check">
+  <li>Conta de desenvolvedor aprovada</li>
+  <li>Aplicativo "Seller In House System" com o domínio de retorno do painel</li>
+  <li>Go-Live aprovado; Partner ID e Partner Key (Live) no painel</li>
+  <li>Loja conectada e testada</li>
+</ul>
+<h3>Amazon</h3>
+<ul class="check">
+  <li>Identidade verificada e cadastro de desenvolvedor privado aprovado</li>
+  <li>Plano de resposta a incidentes preenchido</li>
+  <li>Aplicativo SP-API criado (Rascunho) e autorizado</li>
+  <li>Client ID, Client Secret e Refresh Token no painel</li>
+  <li>Amazon Ads: perfil de segurança, acesso aprovado, Return URL e conexão</li>
+</ul>
+<h3>Empresa</h3>
+<ul class="check">
+  <li>Nome, logo e razão social de cada conta</li>
+  <li>Impostos, embalagem, custo de entrega Flex / Entrega Direta</li>
+  <li>Tabela de produtos com SKU e custo importada</li>
+  <li>Cópia de segurança indo para a nuvem (OneDrive ou Google Drive)</li>
+  <li>Cópia do arquivo <code>.env</code> guardada num gerenciador de senhas</li>
+</ul>
+
+</body>
+</html>

@@ -82,12 +82,32 @@ if (!uv) {
 
   // 4. dependências Python
   etapa('Scraper: Python e dependências');
+  // Windows: o Python que o uv baixa não é assinado, e o "Controle Inteligente de Aplicativos"
+  // do Windows 11 pode bloqueá-lo (erro 4551, medido em 02/10/2026). Com o Python oficial do
+  // python.org instalado (assinado pela Python Software Foundation), o ambiente usa ele.
+  if (WIN) {
+    const local = process.env.LOCALAPPDATA || '';
+    const candidatos = ['Python313', 'Python312', 'Python314'].flatMap((v) => [path.join(local, 'Programs', 'Python', v, 'python.exe'),
+      path.join(process.env.ProgramFiles || 'C:\\Program Files', v, 'python.exe')]);
+    const oficial = candidatos.find((p) => fs.existsSync(p));
+    const cfg = path.join(SCRAPER, '.venv', 'pyvenv.cfg');
+    const usaOficial = fs.existsSync(cfg) && oficial && fs.readFileSync(cfg, 'utf8').includes(path.dirname(oficial));
+    if (oficial && !usaOficial) {
+      fs.rmSync(path.join(SCRAPER, '.venv'), { recursive: true, force: true });
+      if (rodar(uv, ['venv', '--python', oficial, '.venv'], { cwd: SCRAPER })) ok(`Python oficial: ${oficial}`);
+    } else if (!oficial) {
+      console.log('  Aviso: Python oficial (python.org) não encontrado. Se o Windows bloquear o Python (erro 4551),\n'
+        + '  instale o Python 3.13 de https://www.python.org/downloads/windows/ e rode npm run setup de novo.');
+    }
+  }
   if (rodar(uv, ['sync', '--frozen'], { cwd: SCRAPER })) ok('uv sync');
   else falhou('uv sync falhou', 'Veja o erro acima.');
 
   // 5. Chromium
   etapa('Scraper: navegador Chromium (Playwright)');
-  if (rodar(uv, ['run', '--frozen', 'playwright', 'install', 'chromium'], { cwd: SCRAPER })) ok('Chromium instalado');
+  // python -m playwright (não o atalho playwright.exe: arquivo novo e sem assinatura, que o
+  // Controle Inteligente de Aplicativos do Windows bloqueia — erro 4551, medido em 02/10/2026)
+  if (rodar(uv, ['run', '--frozen', 'python', '-m', 'playwright', 'install', 'chromium'], { cwd: SCRAPER })) ok('Chromium instalado');
   else {
     falhou('playwright install falhou', process.platform === 'linux'
       ? 'No Linux, instale as dependências do sistema: cd scraper && sudo $(which uv) run playwright install-deps chromium'
