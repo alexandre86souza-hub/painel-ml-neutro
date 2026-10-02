@@ -23,7 +23,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=9"></script>
+    <script src="/menu.js?v=21"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -69,13 +69,16 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=5"></script>
+<script src="/comum.js?v=7"></script>
 <script>
 let dias = 30, dados = null, classe = '';
 // ?conta=amazon: a curva dos SKUs da Amazon; "sem venda" = produtos com estoque no FBA.
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
-if(NA_AMAZON){
-  document.querySelector('h1').textContent = 'Análise ABC — Amazon';
+const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : 'Shopee';
+if(NA_EXT){
+  document.querySelector('h1').textContent = 'Análise ABC — ' + NOME_CANAL;
   $('busca').placeholder = 'Buscar por produto ou SKU';
 }
 const COR = { A: '#16a34a', B: '#f59e0b', C: '#dc2626' };
@@ -130,7 +133,7 @@ function pintarLista(){
       celulaProduto(l.foto, l.titulo || l.id, `${l.id}${l.status && l.status !== 'active' ? ' · ' + l.status : ''}`),
       el('td', null, real(l.faturamento)), el('td', null, pct(l.participacao)), el('td', null, pct(l.acumulado, 0)),
       el('td', null, numero(l.unidades)),
-      el('td', l.lucro == null ? null : l.lucro < 0 ? 'neg' : 'pos', l.lucro == null ? (l.falta.includes('custo') ? 'sem custo' : NA_AMAZON ? 'sem tarifa' : 'sem frete') : real(l.lucro)),
+      el('td', l.lucro == null ? null : l.lucro < 0 ? 'neg' : 'pos', l.lucro == null ? (l.falta.includes('custo') ? 'sem custo' : NA_EXT ? 'sem tarifa' : 'sem frete') : real(l.lucro)),
       el('td', null, pct(l.margem)), el('td', null, numero(l.estoque)));
     tb.appendChild(tr);
   }
@@ -141,7 +144,7 @@ async function carregar(){
   erroTela('');
   $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Carregando…'));
   try{
-    dados = await api(NA_AMAZON ? `/api/amazon/abc?dias=${dias}` : `/api/abc?dias=${dias}`);
+    dados = await api(NA_AMAZON ? `/api/amazon/abc?dias=${dias}` : NA_SHOPEE ? `/api/shopee/abc?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/abc?dias=${dias}`);
     const box = $('cartoes'); box.innerHTML = '';
     const tot = el('div', 'cartao');
     tot.append(el('p', 'rotulo', 'Faturamento do período'), el('div', 'valor', real(dados.total)),

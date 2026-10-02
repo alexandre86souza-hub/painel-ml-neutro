@@ -910,6 +910,124 @@ const shopeeLojasListar = () =>
   db.prepare('SELECT shop_id, nome, regiao, expira_em, conectada_em, renovada_em FROM shopee_lojas ORDER BY conectada_em').all();
 const shopeeLojaRemover = (shopId) => db.prepare('DELETE FROM shopee_lojas WHERE shop_id=?').run(shopId);
 
+// Pedidos da Shopee (cópia local, por loja): a lista dá o número e a situação; o detalhe dá a
+// data, os itens (SKU, quantidade, preço) e a foto; o repasse (escrow) dá quanto o vendedor
+// recebe e as taxas. Nada do comprador. Repasse final = pedido COMPLETED.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shopee_pedidos (
+    order_sn      TEXT PRIMARY KEY,
+    shop_id       INTEGER NOT NULL,
+    data          TEXT,
+    status        TEXT,
+    atualizado    INTEGER,
+    detalhe_lido  INTEGER NOT NULL DEFAULT 0,
+    escrow_em     TEXT,
+    escrow_final  INTEGER NOT NULL DEFAULT 0,
+    recebido      REAL,
+    comissao      REAL,
+    servico       REAL,
+    transacao     REAL,
+    frete_vendedor REAL,
+    cupom_vendedor REAL,
+    devolucao     REAL
+  );
+  CREATE INDEX IF NOT EXISTS shopee_ped_loja_data ON shopee_pedidos(shop_id, data);
+  CREATE TABLE IF NOT EXISTS shopee_itens (
+    order_sn   TEXT NOT NULL,
+    linha      INTEGER NOT NULL,
+    sku        TEXT,
+    item_id    INTEGER,
+    model_id   INTEGER,
+    nome       TEXT,
+    quantidade INTEGER NOT NULL DEFAULT 0,
+    preco_unit REAL,
+    imagem     TEXT,
+    PRIMARY KEY (order_sn, linha)
+  );
+`);
+// Lista de pedidos: situação nova ou atualização nova = o detalhe e o repasse são lidos de novo.
+function shopeePedidosGravar(shopId, lista) {
+  const st = db.prepare(`INSERT INTO shopee_pedidos (order_sn, shop_id, status, atualizado) VALUES (?,?,?,?)
+    ON CONFLICT(order_sn) DO UPDATE SET status=excluded.status,
+      detalhe_lido=CASE WHEN shopee_pedidos.status IS NOT excluded.status THEN 0 ELSE shopee_pedidos.detalhe_lido END,
+      escrow_final=CASE WHEN shopee_pedidos.status IS NOT excluded.status THEN 0 ELSE shopee_pedidos.escrow_final END,
+      atualizado=COALESCE(excluded.atualizado, shopee_pedidos.atualizado)`);
+  db.exec('BEGIN');
+  try { for (const p of lista) st.run(p.order_sn, shopId, p.status ?? null, p.atualizado ?? null); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const shopeeSemDetalhe = (shopId, limite) =>
+  db.prepare('SELECT order_sn FROM shopee_pedidos WHERE shop_id=? AND detalhe_lido=0 LIMIT ?').all(shopId, limite).map((r) => r.order_sn);
+function shopeeDetalheGravar(p, itens) {
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE shopee_pedidos SET data=?, status=?, atualizado=?, detalhe_lido=1 WHERE order_sn=?').run(p.data, p.status, p.atualizado ?? null, p.order_sn);
+    db.prepare('DELETE FROM shopee_itens WHERE order_sn=?').run(p.order_sn);
+    const st = db.prepare('INSERT INTO shopee_itens (order_sn, linha, sku, item_id, model_id, nome, quantidade, preco_unit, imagem) VALUES (?,?,?,?,?,?,?,?,?)');
+    itens.forEach((i, k) => st.run(p.order_sn, k, i.sku, i.item_id ?? null, i.model_id ?? null, i.nome ?? null, i.quantidade, i.preco_unit ?? null, i.imagem ?? null));
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+// Repasse a ler: pedido pago e não cancelado, sem repasse ou com repasse ainda provisório (12 h).
+const shopeeSemEscrow = (shopId, limite) => db.prepare(`SELECT order_sn FROM shopee_pedidos WHERE shop_id=? AND detalhe_lido=1
+  AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') AND escrow_final=0
+  AND (escrow_em IS NULL OR escrow_em < ?) ORDER BY data DESC LIMIT ?`).all(shopId, new Date(Date.now() - 12 * 3600e3).toISOString(), limite).map((r) => r.order_sn);
+const shopeeEscrowGravar = (orderSn, e) => db.prepare(`UPDATE shopee_pedidos SET escrow_em=?, escrow_final=?, recebido=?, comissao=?, servico=?,
+  transacao=?, frete_vendedor=?, cupom_vendedor=?, devolucao=? WHERE order_sn=?`)
+  .run(agora(), e.final ? 1 : 0, e.recebido, e.comissao, e.servico, e.transacao, e.frete_vendedor, e.cupom_vendedor, e.devolucao, orderSn);
+// Anúncios da Shopee (cópia local por loja, relida a cada 6 h): um registro por anúncio sem
+// variação (model_id 0) ou por variação. Preço atual (com promoção) e original (o que o
+// vendedor define), estoque, vendas do anúncio e visitas.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shopee_anuncios (
+    shop_id        INTEGER NOT NULL,
+    item_id        INTEGER NOT NULL,
+    model_id       INTEGER NOT NULL DEFAULT 0,
+    nome           TEXT,
+    variacao       TEXT,
+    sku            TEXT,
+    preco          REAL,
+    preco_original REAL,
+    promocao       INTEGER NOT NULL DEFAULT 0,
+    estoque        INTEGER,
+    status         TEXT,
+    imagem         TEXT,
+    vendas_total   INTEGER,
+    visitas        INTEGER,
+    lido_em        TEXT NOT NULL,
+    PRIMARY KEY (item_id, model_id)
+  );
+  CREATE INDEX IF NOT EXISTS shopee_anun_loja ON shopee_anuncios(shop_id);
+`);
+function shopeeAnunciosGravar(shopId, linhas) {
+  const st = db.prepare(`INSERT OR REPLACE INTO shopee_anuncios (shop_id, item_id, model_id, nome, variacao, sku, preco, preco_original,
+    promocao, estoque, status, imagem, vendas_total, visitas, lido_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const quando = agora();
+  db.exec('BEGIN');
+  try {
+    for (const a of linhas) st.run(shopId, a.item_id, a.model_id || 0, a.nome ?? null, a.variacao ?? null, a.sku ?? null, a.preco ?? null,
+      a.preco_original ?? null, a.promocao ? 1 : 0, a.estoque ?? null, a.status ?? null, a.imagem ?? null, a.vendas_total ?? null, a.visitas ?? null, quando);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+// Leitura completa: o que não veio nela (anúncio apagado ou banido) sai.
+const shopeeAnunciosLimparAntes = (shopId, quando) => db.prepare('DELETE FROM shopee_anuncios WHERE shop_id=? AND lido_em < ?').run(shopId, quando);
+const shopeeAnuncios = (shopId) => db.prepare('SELECT * FROM shopee_anuncios WHERE shop_id=? ORDER BY item_id, model_id').all(shopId);
+const shopeePrecoGravar = (itemId, modelId, preco, original) =>
+  db.prepare('UPDATE shopee_anuncios SET preco=?, preco_original=? WHERE item_id=? AND model_id=?').run(preco, original, itemId, modelId || 0);
+
+// Linhas de venda de uma loja na janela (pedido sem detalhe ainda não tem data: fica de fora).
+const shopeeVendasPeriodo = (shopId, de, ate) => db.prepare(`
+  SELECT p.order_sn, p.data, p.status, p.escrow_em, p.escrow_final, p.recebido, p.comissao, p.servico, p.transacao,
+         p.frete_vendedor, p.cupom_vendedor, p.devolucao, i.linha, i.sku, i.item_id, i.nome, i.quantidade, i.preco_unit, i.imagem
+  FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
+  WHERE p.shop_id=? AND p.data >= ? AND p.data < ? ORDER BY p.data DESC, i.linha`).all(shopId, de, ate);
+const shopeePendentes = (shopId) => db.prepare(`SELECT
+  SUM(CASE WHEN detalhe_lido=0 THEN 1 ELSE 0 END) AS detalhe,
+  SUM(CASE WHEN detalhe_lido=1 AND escrow_em IS NULL AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') THEN 1 ELSE 0 END) AS repasse
+  FROM shopee_pedidos WHERE shop_id=?`).get(shopId);
+
 // ---------- concorrentes no Mercado Livre ----------
 // A API do ML não deixa ler anúncio de outro vendedor: os concorrentes vêm da página de busca
 // (scraper). Os "vendidos" que o ML mostra são o total da vida do anúncio, EM FAIXAS (25, 50,
@@ -1301,6 +1419,8 @@ module.exports = {
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
   shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,
+  shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
+  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeePrecoGravar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,

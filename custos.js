@@ -280,11 +280,12 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     // ?conta=amazon: os dados da empresa que valem para a Amazon (amazon.js#empresaAmazon).
     // Enquanto não forem salvos, a tela mostra os da conta do ML usada até então.
     'GET /api/empresa': async (url) => {
-      if (url?.searchParams?.get('conta') === 'amazon') {
-        const proprio = D.configLer('empresa:amazon');
-        const reserva = Number(D.configLer('amazon_empresa_conta')) || D.contasListar()[0]?.ml_user_id;
+      const externa = /^(amazon|shopee-\d+)$/.test(url?.searchParams?.get('conta') || '') ? url.searchParams.get('conta') : null;
+      if (externa) {
+        const proprio = D.configLer(`empresa:${externa}`);
+        const reserva = (externa === 'amazon' && Number(D.configLer('amazon_empresa_conta'))) || D.contasListar()[0]?.ml_user_id;
         const e = lerEmpresa(proprio || (reserva ? D.configLer(`empresa:${reserva}`) : null));
-        return { ...e, imposto_total: impostoTotal(e), catalogo: D.catalogoResumo(), amazon: true, salvo: !!proprio };
+        return { ...e, imposto_total: impostoTotal(e), catalogo: D.catalogoResumo(), externa, amazon: externa === 'amazon', salvo: !!proprio };
       }
       const conta = contaOuErro();
       const e = empresaDe(conta);
@@ -292,10 +293,11 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     },
 
     'PUT /api/empresa': async (url, body) => {
-      if (url?.searchParams?.get('conta') === 'amazon') {
+      const externa = /^(amazon|shopee-\d+)$/.test(url?.searchParams?.get('conta') || '') ? url.searchParams.get('conta') : null;
+      if (externa) {
         const e = validarEmpresa(body || {});
-        D.configGravar('empresa:amazon', JSON.stringify(e));
-        return { ...e, imposto_total: impostoTotal(e), amazon: true };
+        D.configGravar(`empresa:${externa}`, JSON.stringify(e));
+        return { ...e, imposto_total: impostoTotal(e), externa, amazon: externa === 'amazon' };
       }
       const conta = contaOuErro();
       const e = validarEmpresa(body || {});

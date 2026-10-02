@@ -42,7 +42,8 @@ function celulaProduto(foto, titulo, sub, link) {
   try {
     // A opção "Amazon" é acrescentada pelo menu.js (em todas as telas).
     const { ativa, contas } = await api('/api/accounts');
-    const naAmazon = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
+    // conta de outro marketplace (Amazon, loja da Shopee): nenhuma conta do ML fica marcada
+    const naAmazon = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) || /^(amazon|shopee-\d+)$/.test(new URLSearchParams(location.search).get('conta') || '');
     sel.innerHTML = '';
     if (!contas.length) { sel.hidden = true; return; }
     for (const c of contas) { const o = el('option', null, `${c.nickname} · ${c.site_id}`); o.value = c.ml_user_id; o.selected = !naAmazon && c.ml_user_id === ativa; sel.appendChild(o); }

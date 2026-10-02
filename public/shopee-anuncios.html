@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anúncios Shopee</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .preco-novo{display:flex;gap:6px;align-items:center}
+  .preco-novo input.margem{width:64px}
+  .preco-novo input{width:96px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;text-align:right}
+  .preco-novo button{white-space:nowrap}
+  .previa{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+  .previa.neg{color:#b91c1c}
+  .chip-st{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#eef1f6;color:#475569;margin-right:4px}
+  .chip-st.ok{background:#e6f4ea;color:#0b6b33}
+  .chip-st.promo{background:#fff4d6;color:#7a5600}
+  td.est{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=21"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Anúncios — Shopee</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">Os anúncios da loja na Shopee com preço, estoque, vendas e a margem no preço atual. Para mudar o preço, digite o novo valor ou a margem desejada (%): o lucro estimado aparece antes de salvar.</p>
+    <button type="button" class="bt" id="btAtualizar">Atualizar da Shopee</button>
+  </div>
+  <section class="bloco">
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por produto, SKU ou nº do anúncio" aria-label="Buscar anúncio">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="" aria-pressed="true">Todos</button>
+        <button type="button" data-f="venderam">Venderam em 30 dias</button>
+        <button type="button" data-f="promocao">Em promoção</button>
+        <button type="button" data-f="pausados">Pausados</button>
+        <button type="button" data-f="semcusto">Sem custo</button>
+        <button type="button" data-f="baixa">Margem abaixo de 10%</button>
+      </div>
+    </div>
+    <p class="sub" id="subLista"></p>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando os anúncios da Shopee…</p></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
+let dados = null, filtro = '';
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+
+// Margem estimada num preço: o que a Shopee tira em média deste produto (comissão, taxas e
+// frete, pelos repasses dos últimos 90 dias; sem histórico, a média da loja), custo do SKU,
+// embalagem e impostos da loja. Sem custo ou sem histórico: null.
+const fixos = (i) => i.custo_unit + (i.embalagem_unit || 0);
+function estimar(i, preco){
+  if(preco == null || i.custo_unit == null || i.taxa_pct == null) return null;
+  const lucro = preco - preco * i.taxa_pct - fixos(i) - preco * (dados.imposto_pct || 0) / 100;
+  return { lucro, margem: preco > 0 ? lucro / preco : null };
+}
+function precoPelaMargem(i, margem){
+  if(i.custo_unit == null || i.taxa_pct == null) return null;
+  const sobra = 1 - i.taxa_pct - (dados.imposto_pct || 0) / 100 - margem;
+  return sobra > 0.01 ? Math.ceil(fixos(i) / sobra * 100) / 100 : null;
+}
+const lerPreco = (s) => { const x = String(s).trim(); return Number(x.includes(',') ? x.replace(/\./g, '').replace(',', '.') : x); };
+const txtMargem = (e) => (e ? `${real(e.lucro)} · ${pct(e.margem)}` : '—');
+
+$('segFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f;
+  for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintar();
+};
+$('busca').oninput = () => pintar();
+$('btAtualizar').onclick = () => carregar(true);
+
+function pintar(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  const itens = dados.itens.filter((i) => {
+    const e = estimar(i, i.preco);
+    if(filtro === 'venderam' && !i.vendas_30) return false;
+    if(filtro === 'promocao' && !i.promocao) return false;
+    if(filtro === 'pausados' && i.status !== 'UNLIST') return false;
+    if(filtro === 'semcusto' && i.custo_unit != null) return false;
+    if(filtro === 'baixa' && !(e && e.margem < 0.10)) return false;
+    return !q || [i.titulo, i.nome_shopee, i.sku, String(i.item_id), i.variacao].some((t) => (t || '').toLowerCase().includes(q));
+  });
+  $('subLista').textContent = (dados.lendo ? 'Lendo os anúncios na Shopee (a primeira vez leva cerca de 1 minuto); a tela se atualiza sozinha. ' : '')
+    + `${numero(itens.length)} de ${numero(dados.itens.length)} anúncio(s). Lucro e margem estimados com o que a Shopee tira em média de cada produto (repasses dos últimos 90 dias) e os impostos de ${String(dados.imposto_pct).replace('.', ',')}%.`;
+  if(!itens.length){ box.appendChild(el('p', 'vazio', dados.lendo ? 'Carregando…' : 'Nada por aqui.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Estoque', 'Vendas 30d', 'Preço', 'Custo', 'Lucro · margem no preço atual', 'Novo preço']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const i of itens.slice(0, 500)){
+    const tr = el('tr');
+    const st = el('span');
+    st.appendChild(el('span', 'chip-st' + (i.status === 'NORMAL' ? ' ok' : ''), i.status === 'NORMAL' ? 'ativo' : i.status === 'UNLIST' ? 'pausado' : (i.status || '').toLowerCase()));
+    if(i.promocao) st.appendChild(el('span', 'chip-st promo', 'em promoção'));
+    else if(i.atacado_ou_campanha) st.appendChild(el('span', 'chip-st', 'atacado'));
+    const prod = celulaProduto(i.foto, i.titulo + (i.variacao ? ` — ${i.variacao}` : ''), `${i.sku || 'sem SKU'} · nº ${i.item_id}`, i.link);
+    prod.querySelector('.prod > div').appendChild(st);
+    const e = estimar(i, i.preco);
+    const precoTd = el('td', null, real(i.preco));
+    if(i.preco_original != null && i.preco != null && Math.abs(i.preco_original - i.preco) >= 0.01) precoTd.appendChild(el('span', 'pequeno', `de ${real(i.preco_original)}`));
+    const vendTd = el('td', null, numero(i.vendas_30));
+    vendTd.appendChild(el('span', 'pequeno', `${numero(i.vendas_total ?? 0)} no total · ${numero(i.visitas ?? 0)} visitas`));
+    const novo = el('td'); const caixa = el('div', 'preco-novo');
+    const inp = el('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.placeholder = i.preco_original != null ? String(i.preco_original).replace('.', ',') : '0,00';
+    inp.setAttribute('aria-label', 'Novo preço de ' + (i.sku || i.item_id));
+    const inpM = el('input', 'margem'); inpM.type = 'text'; inpM.inputMode = 'decimal'; inpM.placeholder = 'ou %';
+    inpM.title = 'Margem de lucro desejada (%): o painel calcula o preço'; inpM.setAttribute('aria-label', 'Margem desejada de ' + (i.sku || i.item_id));
+    inpM.disabled = i.custo_unit == null || i.taxa_pct == null;
+    if(inpM.disabled) inpM.title = 'Sem custo do produto ou sem histórico de taxa: não dá para calcular pela margem';
+    const bt = el('button', 'bt', 'Salvar'); bt.type = 'button'; bt.disabled = true;
+    const prev = el('span', 'previa');
+    inp.oninput = () => {
+      const v = lerPreco(inp.value);
+      const ok = inp.value.trim() && Number.isFinite(v) && v > 0;
+      bt.disabled = !ok;
+      if(!ok){ prev.textContent = ''; prev.className = 'previa'; return; }
+      const ne = estimar(i, v);
+      prev.textContent = ne ? `fica ${txtMargem(ne)}` : 'sem custo ou taxa para estimar';
+      prev.className = 'previa' + (ne && ne.lucro < 0 ? ' neg' : '');
+    };
+    inpM.oninput = () => {
+      const m = lerPreco(inpM.value.replace('%', ''));
+      if(!inpM.value.trim() || !Number.isFinite(m)) return;
+      const p = precoPelaMargem(i, m / 100);
+      if(p == null){ inp.value = ''; inp.oninput(); prev.textContent = 'margem alta demais para os custos deste produto'; prev.className = 'previa neg'; return; }
+      inp.value = p.toFixed(2).replace('.', ','); inp.oninput();
+    };
+    bt.onclick = async () => {
+      const v = lerPreco(inp.value);
+      const ne = estimar(i, v);
+      if(!confirm(`Mudar o preço na Shopee?\n\n${i.titulo}${i.variacao ? ' — ' + i.variacao : ''}\n${i.sku || 'nº ' + i.item_id}\n\nDe ${real(i.preco_original)} para ${real(v)}`
+        + (ne ? `\nLucro estimado: ${txtMargem(ne)}` : '')
+        + (i.promocao ? '\n\nAtenção: este anúncio está em promoção; o comprador continua vendo o preço da promoção até ela acabar.' : '')
+        + (!i.promocao && i.atacado_ou_campanha ? '\n\nEste anúncio tem preço de atacado: o preço novo precisa ficar acima das faixas de atacado.' : ''))) return;
+      bt.disabled = true; bt.textContent = 'Enviando…';
+      try{
+        const r = await api('/api/shopee/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ loja: LOJA, item_id: i.item_id, model_id: i.model_id, preco: v }) });
+        i.preco_original = r.preco_original; if(r.preco_atual != null) i.preco = r.preco_atual;
+        inp.value = ''; inpM.value = ''; prev.textContent = '';
+        aviso(r.conferido ? `Preço de ${i.sku || i.item_id} mudado para ${real(r.preco_original)} na Shopee (conferido).`
+          : `A Shopee aceitou o preço de ${real(v)} para ${i.sku || i.item_id}. Confira no anúncio em alguns instantes.`, 'ok');
+        pintar();
+      }catch(err){ aviso(`Não mudou o preço de ${i.sku || i.item_id}: ${err.message}`); bt.disabled = false; }
+      bt.textContent = 'Salvar';
+    };
+    caixa.append(inp, inpM, bt); novo.append(caixa, prev);
+    tr.append(prod, el('td', 'est', i.estoque == null ? '—' : numero(i.estoque)), vendTd, precoTd,
+      el('td', null, i.custo_unit == null ? 'sem custo' : real(i.custo_unit)),
+      el('td', e == null ? null : e.lucro < 0 ? 'neg' : 'pos', txtMargem(e)), novo);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  if(itens.length > 500) box.appendChild(el('p', 'sub', `Mostrando 500 de ${numero(itens.length)}. Use a busca.`));
+}
+
+let releitura = null;
+async function carregar(recarregar){
+  aviso('');
+  if(!LOJA){ aviso('Escolha a loja da Shopee na lista "Conta" do topo.'); $('lista').innerHTML = ''; return; }
+  if(!dados){ $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Carregando os anúncios da Shopee…')); }
+  try{
+    dados = await api(`/api/shopee/anuncios?loja=${LOJA}` + (recarregar ? '&recarregar=1' : ''));
+    if(recarregar) dados.lendo = true;
+    pintar();
+    clearTimeout(releitura);
+    // enquanto a leitura roda, a lista se atualiza (sem atrapalhar quem está digitando um preço)
+    if(dados.lendo) releitura = setTimeout(() => {
+      const editando = [...document.querySelectorAll('.preco-novo input')].some((x) => x.value.trim());
+      if(editando) releitura = setTimeout(() => carregar(), 15000); else carregar();
+    }, 15000);
+  }catch(e){ $('lista').innerHTML = ''; aviso(e.message); }
+}
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

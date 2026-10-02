@@ -73,6 +73,22 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   único: `shopeeTokensGravar` na hora) e `GET /api/shopee/diagnostico`, que mostra o que a
   Shopee devolve de verdade. Vendas e lucro da Shopee ainda NÃO existem: construir a partir
   do que o diagnóstico mostrar com a loja real, não da documentação.
+  Vendas e lucro da Shopee (`shopee-vendas.js`, por loja `?loja=`): pedidos copiados em
+  `shopee_pedidos`/`shopee_itens` (lista em janelas de 15 dias; 1ª leitura 152 dias; detalhe
+  50 por chamada; repasse `get_escrow_detail` 200 por leitura). Lucro EXATO: o repasse
+  (`escrow_amount`) já vem sem comissão, taxas, frete e cupons; tarifa+frete = faturamento −
+  recebido, rateado entre os itens. Sem repasse ainda = proporção média da loja (`estimado`).
+  Cada loja é uma conta externa `shopee-{loja}` (como `amazon`): na lista do topo
+  (`menu.js#TELAS`), identidade `marca_*:shopee-{loja}`, empresa `empresa:shopee-{loja}`
+  (sem salvar = a da 1ª conta do ML) e em "Todas as contas". As respostas das telas são
+  montadas em `canais.js` (o mesmo formato das rotas do ML) — use-o para Magalu e Leroy.
+  Anúncios da Shopee (`shopee-anuncios.js`, tela `public/shopee-anuncios.html`; o menu troca
+  `/anuncios.html` por ela): cópia em `shopee_anuncios` (relida a cada 6 h em segundo plano),
+  preço muda em `update_price` (original_price). `has_promotion` também vale para ATACADO
+  ("Whole Sale"): "em promoção" na tela = preço atual < original. Taxa estimada por SKU =
+  (tarifa+frete)/faturamento dos repasses de 90 dias. Concorrentes na Shopee: não há API e o
+  scraper só lê o ML. Ads da Shopee (`shopee-ads.js`, `public/shopee-ads.html`): saldo e
+  desempenho diário da loja; detalhe por campanha só quando houver campanha real para medir.
 - Amazon (`amazon.js`, tela `public/amazon.html`): por enquanto só a conexão. Aplicativo
   privado (Rascunho) autorizado no próprio Seller Central: Client ID, Client Secret e Refresh
   Token digitados na tela (segredo e token cifrados em `estado`), testados com a Amazon antes

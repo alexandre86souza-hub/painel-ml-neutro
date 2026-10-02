@@ -45,10 +45,14 @@
   // Identidade do painel (nome e logo da empresa, tela Empresa). O último valor fica no
   // navegador para a marca aparecer junto com a página; o servidor confirma em seguida.
   const PADRAO = 'Painel Mercado Livre';
-  // Telas da Amazon (a própria e a Empresa com ?conta=amazon) mostram a identidade da Amazon.
-  const NA_AMAZON = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) || new URLSearchParams(location.search).get('conta') === 'amazon';
-  const QM = NA_AMAZON ? 'conta=amazon&' : '';
-  const GUARDA = NA_AMAZON ? 'painel.marca.amazon' : 'painel.marca';
+  // Contas de outros marketplaces: "amazon" e "shopee-{loja}". As telas delas (e as do ML com
+  // ?conta=…) mostram a identidade daquela conta e os dados dela.
+  const PARAM = new URLSearchParams(location.search).get('conta');
+  const EXT = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) ? 'amazon'
+    : /^(amazon|shopee-\d+)$/.test(PARAM || '') ? PARAM : null;
+  const NA_AMAZON = EXT === 'amazon';
+  const QM = EXT ? `conta=${EXT}&` : '';
+  const GUARDA = EXT ? 'painel.marca.' + EXT : 'painel.marca';
   function pintarMarca(m) {
     const box = document.getElementById('marcaPainel');
     if (box) {
@@ -68,7 +72,7 @@
   let guardada = null;
   try { guardada = JSON.parse(localStorage.getItem(GUARDA) || 'null'); } catch {}
   pintarMarca(guardada || { nome: PADRAO, personalizado: false, tem_logo: false });
-  const buscarMarca = () => fetch('/api/marca' + (NA_AMAZON ? '?conta=amazon' : '')).then((r) => (r.ok ? r.json() : null)).then((m) => {
+  const buscarMarca = () => fetch('/api/marca' + (EXT ? '?conta=' + EXT : '')).then((r) => (r.ok ? r.json() : null)).then((m) => {
     if (!m) return;
     try { localStorage.setItem(GUARDA, JSON.stringify(m)); } catch {}
     pintarMarca(m);
@@ -76,37 +80,48 @@
   // depois que a página terminou de montar (uma tela pode trocar o título ao abrir)
   if (document.readyState === 'complete') buscarMarca(); else window.addEventListener('load', buscarMarca);
   window.atualizarMarca = buscarMarca;   // a tela Empresa chama depois de salvar
-  // Trocar de conta troca a identidade: esquece a guardada para o logo antigo não piscar.
-  // Telas que já mostram a Amazon (com ?conta=amazon); nas outras, escolher a Amazon abre a
-  // tela dela. O Dashboard da Amazon é a tela Amazon.
-  const COM_AMAZON = ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html', '/full.html'];
-  const comConta = (href) => {
+  // Telas que mostram cada conta externa (com ?conta=…). A Amazon tem telas próprias de
+  // Dashboard, Anúncios e Ads; na Shopee o Dashboard é a tela Pedidos.
+  const TELAS = { amazon: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html', '/full.html'],
+    shopee: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'] };
+  const tipo = (ext) => (ext === 'amazon' ? 'amazon' : 'shopee');
+  const comConta = (href, ext = EXT) => {
     const u = new URL(href, location.origin);
-    if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
-    if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
-    if (u.pathname === '/ads.html') return '/amazon-ads.html';
-    if (!COM_AMAZON.includes(u.pathname)) return href;
-    u.searchParams.set('conta', 'amazon');
+    if (tipo(ext) === 'amazon') {
+      if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
+      if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
+      if (u.pathname === '/ads.html') return '/amazon-ads.html';
+    } else if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
+    else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
+    else if (u.pathname === '/ads.html') return `/shopee-ads.html?conta=${ext}`;
+    if (!TELAS[tipo(ext)].includes(u.pathname)) return href;
+    u.searchParams.set('conta', ext);
     return u.pathname + u.search;
+  };
+  const telaDaConta = (ext) => {
+    const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html'].includes(location.pathname);
+    if (aquiTem) { const u = new URL(location.href); u.searchParams.delete('conta'); return comConta(u.pathname + u.search, ext); }
+    return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;
   };
   const semConta = () => {
     if (location.pathname === '/amazon.html') return '/';
     if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
-    if (location.pathname === '/amazon-ads.html') return '/ads.html';
+    if (location.pathname === '/amazon-ads.html' || location.pathname === '/shopee-ads.html') return '/ads.html';
+    if (location.pathname === '/shopee-anuncios.html') return '/anuncios.html';
     const u = new URL(location.href); u.searchParams.delete('conta');
     return u.pathname + u.search;
   };
-  // "Amazon" na lista: a mesma tela com a Amazon (ou a tela Amazon). Conta do ML estando na
-  // Amazon: troca a ativa e volta para a mesma tela sem a Amazon.
+  // Conta externa na lista: a mesma tela com ela (ou a tela dela). Conta do ML estando numa
+  // externa: troca a ativa e volta para a mesma tela sem a externa.
   document.addEventListener('change', async (ev) => {
     if (!ev.target || ev.target.id !== 'selConta') return;
-    if (ev.target.value === 'amazon') {
+    if (/^(amazon|shopee-\d+)$/.test(ev.target.value)) {
       ev.stopImmediatePropagation();
-      location.href = COM_AMAZON.includes(location.pathname) || ['/anuncios.html', '/ads.html'].includes(location.pathname) ? comConta(location.pathname + location.search) : '/amazon.html';
+      location.href = telaDaConta(ev.target.value);
       return;
     }
     try { localStorage.removeItem('painel.marca'); } catch {}
-    if (NA_AMAZON) {
+    if (EXT) {
       ev.stopImmediatePropagation();
       await fetch('/api/accounts/active', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ml_user_id: Number(ev.target.value) }) });
@@ -114,17 +129,23 @@
     }
   }, true);
 
-  // A Amazon entra no fim da lista de contas de todas as telas (cada tela monta a sua lista;
-  // aqui só acrescenta a opção depois que ela aparece).
-  fetch('/api/amazon/config', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((amz) => {
-    if (!amz?.conectada_em) return;
+  // Amazon e lojas da Shopee entram no fim da lista de contas de todas as telas (cada tela monta
+  // a sua lista; aqui só acrescenta as opções depois que ela aparece).
+  const ler = (u) => fetch(u, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  Promise.all([ler('/api/amazon/config'), ler('/api/shopee/config')]).then(([amz, sh]) => {
+    const extras = [];
+    if (amz?.conectada_em) extras.push({ valor: 'amazon', nome: `${amz.vendedor || 'AMAZON'} · Amazon` });
+    for (const l of sh?.lojas || []) extras.push({ valor: `shopee-${l.shop_id}`, nome: `${l.nome || 'Loja ' + l.shop_id} · Shopee` });
+    if (!extras.length) return;
     const pendurar = () => {
       const sel = document.getElementById('selConta');
-      if (!sel || !sel.options.length || [...sel.options].some((o) => o.value === 'amazon')) return;
-      const o = document.createElement('option');
-      o.value = 'amazon'; o.textContent = `${amz.vendedor || 'AMAZON'} · Amazon`;
-      o.selected = NA_AMAZON;
-      sel.appendChild(o);
+      if (!sel || !sel.options.length) return;
+      for (const x of extras) {
+        if ([...sel.options].some((o) => o.value === x.valor)) continue;
+        const o = document.createElement('option');
+        o.value = x.valor; o.textContent = x.nome; o.selected = EXT === x.valor;
+        sel.appendChild(o);
+      }
       sel.hidden = false;
     };
     const vigiar = () => {
@@ -134,7 +155,7 @@
       new MutationObserver(pendurar).observe(sel, { childList: true });
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', vigiar); else vigiar();
-  }).catch(() => {});
+  });
 
   const nav = document.getElementById('menuPainel');
   if (!nav) return;
@@ -144,10 +165,11 @@
     if (!it) { const hr = document.createElement('hr'); hr.className = 'nav-sep'; nav.appendChild(hr); continue; }
     const [href, rotulo, icone] = it;
     const a = document.createElement('a');
-    a.href = NA_AMAZON ? comConta(href) : href;
+    a.href = EXT ? comConta(href) : href;
     const [caminho, query] = href.split('?');
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
-      || (caminho === '/anuncios.html' && aqui === '/amazon-anuncios.html') || (caminho === '/ads.html' && aqui === '/amazon-ads.html'))
+      || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html'].includes(aqui))
+      || (caminho === '/ads.html' && ['/amazon-ads.html', '/shopee-ads.html'].includes(aqui)))
       && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;

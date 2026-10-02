@@ -1971,6 +1971,13 @@ const shopeeMod = require('./shopee.js').criar({ D, urlPublica, novoEstadoOAuth,
   pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, shopeeMod.rotas);
 rotasParam.push(...shopeeMod.rotasParam);
+// Vendas e lucro da Shopee (shopee-vendas.js), por loja: ?loja={shop_id}.
+const shopeeVendasMod = require('./shopee-vendas.js').criar({ D, daLoja: shopeeMod.daLoja, janela });
+Object.assign(routes, shopeeVendasMod.rotas);
+// Anúncios da Shopee (shopee-anuncios.js): lista e troca de preço.
+Object.assign(routes, require('./shopee-anuncios.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
+// Ads da Shopee (shopee-ads.js): saldo e desempenho diário da loja.
+Object.assign(routes, require('./shopee-ads.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
 
 // ---------- Amazon Ads: conexão da conta de anúncios (amazon-ads.js) ----------
 // Retorno da autorização em /amazon-ads/callback, pela porta pública (ver tratarPublico).
@@ -2031,13 +2038,16 @@ const chaveMarca = (campo, contaId) => (contaId ? `marca_${campo}:${contaId}` : 
 // da conta; se ela não tem, a geral
 const marcaLer = (campo, contaId) => (contaId && D.configLer(chaveMarca(campo, contaId))) || D.configLer(chaveMarca(campo, null));
 const marcaLogo = (contaId = D.contaAtivaId()) => { try { return JSON.parse(marcaLer('logo', contaId) || 'null'); } catch { return null; } };
-// A Amazon tem identidade própria (conta "amazon"): não é conta do Mercado Livre.
-const contaDaMarca = (url) => (url?.searchParams?.get('conta') === 'amazon' ? 'amazon' : D.contaAtivaId());
+// A Amazon e cada loja da Shopee têm identidade própria ("amazon", "shopee-{loja}"): não são
+// contas do Mercado Livre.
+const contaExterna = (v) => (/^(amazon|shopee-\d+)$/.test(String(v || '')) ? String(v) : null);
+const contaDaMarca = (url) => contaExterna(url?.searchParams?.get('conta')) || D.contaAtivaId();
 const marcaAtual = (contaId = D.contaAtivaId()) => {
-  const amazon = contaId === 'amazon';
-  const nome = marcaLer('nome', contaId) || (amazon ? D.configLer('amazon_vendedor') || 'Amazon'
-    : contaId ? D.contaObter(Number(contaId))?.nickname : null);
-  return { conta: amazon ? 'amazon' : contaId ? Number(contaId) : null, nome: nome || MARCA_PADRAO, personalizado: !!nome,
+  const externa = contaExterna(contaId);
+  const loja = externa?.startsWith('shopee-') ? D.shopeeLojasListar().find((l) => `shopee-${l.shop_id}` === externa) : null;
+  const nome = marcaLer('nome', contaId) || (externa === 'amazon' ? D.configLer('amazon_vendedor') || 'Amazon'
+    : externa ? (loja?.nome || 'Shopee') : contaId ? D.contaObter(Number(contaId))?.nickname : null);
+  return { conta: externa || (contaId ? Number(contaId) : null), nome: nome || MARCA_PADRAO, personalizado: !!nome,
     nome_proprio: (contaId && D.configLer(chaveMarca('nome', contaId))) || '',
     tem_logo: !!marcaLogo(contaId),
     v: `${contaId || 0}-${marcaLer('v', contaId) || '0'}` };   // muda com a conta e a cada gravação: o navegador busca o logo de novo
@@ -2359,7 +2369,7 @@ async function tratarPainel(req, res, online = false) {
   if (req.method === 'GET' && url.pathname === '/api/marca/logo') {
     // ?conta=ID: o logo de outra conta conectada (tabela "todas as contas" do Dashboard)
     const pedida = Number(url.searchParams.get('conta'));
-    const logo = url.searchParams.get('conta') === 'amazon' ? marcaLogo('amazon')
+    const logo = contaExterna(url.searchParams.get('conta')) ? marcaLogo(contaExterna(url.searchParams.get('conta')))
       : pedida && D.contaObter(pedida) ? marcaLogo(pedida) : marcaLogo();
     if (!logo || !LOGO_ASSINATURA[logo.mime]) return send(404, { error: 'O painel não tem logo.' });
     res.writeHead(200, { 'Content-Type': logo.mime, 'Cache-Control': 'private, max-age=86400', ...SEGURANCA });

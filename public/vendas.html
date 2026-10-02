@@ -83,7 +83,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=9"></script>
+    <script src="/menu.js?v=21"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -171,8 +171,12 @@ async function api(caminho, opts){
 
 // ?conta=amazon: os pedidos da Amazon (escolhida na lista de contas do topo).
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
-if(NA_AMAZON){
-  document.querySelector('#segFiltro [data-f="full"]').textContent = 'FBA';
+const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : 'Shopee';
+if(NA_AMAZON) document.querySelector('#segFiltro [data-f="full"]').textContent = 'FBA';
+if(NA_SHOPEE) document.querySelector('#segFiltro [data-f="full"]').hidden = true;
+if(NA_EXT){
   $('busca').placeholder = 'Buscar por produto, SKU ou nº do pedido';
   $('addConta').hidden = true;
 }
@@ -185,7 +189,7 @@ async function carregarContas(){
       $('addConta').textContent = 'conectar Mercado Livre →'; return; }
     for(const c of contas){
       const o = el('option', null, `${c.nickname} · ${c.site_id}`);
-      o.value = c.ml_user_id; o.selected = !NA_AMAZON && c.ml_user_id === ativa; selConta.appendChild(o);
+      o.value = c.ml_user_id; o.selected = !NA_EXT && c.ml_user_id === ativa; selConta.appendChild(o);
     }
   }catch{ selConta.hidden = true; }
 }
@@ -199,7 +203,7 @@ selConta.onchange = async () => {
 const diasUrl = Number(new URLSearchParams(location.search).get('dias'));
 let dias = [1, 7, 15, 30, 60, 90].includes(diasUrl) ? diasUrl : 30, dados = null, filtro = 'todas', mostrar = 100;
 if(dias === 1){ document.title = 'Vendas Hoje'; }
-function tituloTela(){ $('tituloPagina').textContent = (dias === 1 ? 'Vendas de hoje' : 'Pedidos') + (NA_AMAZON ? ' — Amazon' : ''); }
+function tituloTela(){ $('tituloPagina').textContent = (dias === 1 ? 'Vendas de hoje' : 'Pedidos') + (NA_EXT ? ' — ' + NOME_CANAL : ''); }
 tituloTela();
 for(const b of document.querySelectorAll('#segDias button')) b.setAttribute('aria-pressed', String(b.dataset.dias === String(dias)));
 const marcar = (seg, attr, v) => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(v))); };
@@ -222,7 +226,7 @@ function pintarResumo(r){
 
   const box = $('composicao'); box.innerHTML = '';
   const partes = [
-    [NA_AMAZON ? 'Tarifas da Amazon' : 'Tarifa do Mercado Livre', s.tarifa], ['Frete pago por você', s.frete], ['Imposto', s.imposto],
+    [NA_EXT ? 'Tarifas da ' + NOME_CANAL : 'Tarifa do Mercado Livre', s.tarifa], ['Frete pago por você', s.frete], ['Imposto', s.imposto],
     ['Custo do produto', s.produto], ['Embalagem e outros', s.embalagem], ['Lucro', s.lucro, true],
   ];
   const teto = Math.max(...partes.map((p) => Math.abs(p[1] || 0)), 1);
@@ -239,6 +243,9 @@ function pintarResumo(r){
   if(r.itens_pendentes){
     box.appendChild(el('p', 'sub', `A Amazon ainda está entregando os itens de ${numero(r.itens_pendentes)} pedido(s) (um a cada 2 segundos, limite dela). Atualize a página daqui a pouco: o que já foi lido fica guardado.`));
   }
+  if(r.repasses_pendentes){
+    box.appendChild(el('p', 'sub', `A Shopee ainda vai informar o repasse de ${numero(r.repasses_pendentes)} pedido(s) (mais antigos); ele chega nas próximas leituras.`));
+  }
   if(r.estimadas){
     box.appendChild(el('p', 'sub', `${numero(r.estimadas)} venda(s) com tarifa estimada (≈): a Amazon só lança a tarifa real no envio. Até lá vale a média daquele produto.`));
   }
@@ -247,7 +254,7 @@ function pintarResumo(r){
   const al = $('alerta');
   $('listaAlerta').innerHTML = '';
   if(r.sem_custo.length){
-    $('tAlerta').textContent = `${numero(r.sem_custo.length)} ${NA_AMAZON ? 'SKU(s)' : 'anúncio(s)'} vendidos sem custo do produto`;
+    $('tAlerta').textContent = `${numero(r.sem_custo.length)} ${NA_EXT ? 'SKU(s)' : 'anúncio(s)'} vendidos sem custo do produto`;
     for(const x of r.sem_custo.slice(0, 15)){
       const motivo = !x.sku ? 'anúncio sem SKU' : x.faltando.length ? `sem custo na tabela: ${x.faltando.join(', ')}` : `SKU ${x.sku} sem os números dos produtos`;
       $('listaAlerta').appendChild(el('li', null, `${x.titulo || x.item_id} (${x.item_id}) · ${numero(x.vendas)} venda(s) · ${motivo}`));
@@ -282,7 +289,7 @@ function pintarLista(){
     const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(v.foto) im.src = v.foto;
     const nome = el('span'); nome.appendChild(document.createTextNode(v.titulo || v.item_id));
     const info = el('span', 'pequeno', `${v.full ? (NA_AMAZON ? 'FBA · ' : 'FULL · ') : ''}${v.sku || (NA_AMAZON && !v.itens_lidos ? 'itens ainda não lidos' : 'sem SKU')} · pedido ${v.pedido}`
-      + (v.comprador_nome || v.comprador ? ` · cliente ${v.comprador_nome || v.comprador}${v.comprador_nome && v.comprador ? ' (' + v.comprador + ')' : ''}` : '') + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_AMAZON && v.devolvido ? ' · reembolsada' : ''));
+      + (v.comprador_nome || v.comprador ? ` · cliente ${v.comprador_nome || v.comprador}${v.comprador_nome && v.comprador ? ' (' + v.comprador + ')' : ''}` : '') + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_EXT && v.devolvido ? ' · reembolsada' : '') + (NA_SHOPEE && v.valida && !v.recebido_final ? ' · repasse provisório' : ''));
     const caixa = el('div'); caixa.append(nome, info);
     p.append(im, caixa); td.appendChild(p);
 
@@ -312,11 +319,12 @@ function pintarLista(){
 async function carregar(){
   $('msg').style.display = 'none';
   $('composicao').innerHTML = '';
-  $('composicao').appendChild(el('p', 'carregando', NA_AMAZON ? 'Carregando os pedidos da Amazon… Na primeira vez o painel lê 5 meses de pedidos e os itens chegam aos poucos.'
+  $('composicao').appendChild(el('p', 'carregando', NA_SHOPEE ? 'Carregando os pedidos da Shopee… Na primeira vez o painel lê 5 meses de pedidos (uns 2 minutos).'
+    : NA_AMAZON ? 'Carregando os pedidos da Amazon… Na primeira vez o painel lê 5 meses de pedidos e os itens chegam aos poucos.'
     : 'Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.'));
   $('lista').innerHTML = '';
   try{
-    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : `/api/vendas?dias=${dias}`);
+    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
     dados = r;
     const d = (iso) => new Date(iso).toLocaleDateString('pt-BR');
     $('periodoTxt').textContent = dias === 1 ? 'Vendas de hoje, com todos os custos.'

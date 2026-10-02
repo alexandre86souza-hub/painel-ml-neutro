@@ -45,7 +45,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=9"></script>
+    <script src="/menu.js?v=21"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -115,7 +115,7 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=5"></script>
+<script src="/comum.js?v=7"></script>
 <script>
 const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }

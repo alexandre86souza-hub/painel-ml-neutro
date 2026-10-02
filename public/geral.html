@@ -43,7 +43,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=9"></script>
+    <script src="/menu.js?v=21"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -92,7 +92,7 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=5"></script>
+<script src="/comum.js?v=7"></script>
 <script>
 let dias = 30, geracao = 0;
 const COR = ['#2563eb', '#f59e0b', '#16a34a', '#9333ea', '#dc2626', '#0891b2'];
@@ -120,15 +120,15 @@ function pintarContas(r, cor){
     const img = el('img'); img.alt = ''; img.src = '/api/marca/logo?conta=' + c.ml_user_id;
     img.onerror = () => img.remove();   // conta sem logo: fica só o nome
     const nome = el('div', 'nome', c.nickname);
-    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : 'Abrir o Dashboard'); bt.type = 'button';
-    bt.onclick = () => (c.amazon ? (location.href = '/amazon.html') : abrirConta(c.ml_user_id));
+    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : c.shopee ? 'Abrir os pedidos' : 'Abrir o Dashboard'); bt.type = 'button';
+    bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
     topo.append(img, nome, bt); k.appendChild(topo);
     if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); box.appendChild(k); continue; }
     const p = c.periodo, dl = el('dl');
     const bloco = (rot, valor, nota) => { const d = el('div'); const dd = el('dd', null, valor); if(nota) dd.appendChild(el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
     bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
     bloco(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`);
-    bloco('Lucro', real(p.lucro), `margem ${pct(p.margem)}` + (c.sem_custo ? ` · ${numero(c.sem_custo)} ${c.amazon ? 'SKU(s)' : 'anúncio(s)'} sem custo` : ''));
+    bloco('Lucro', real(p.lucro), `margem ${pct(p.margem)}` + (c.sem_custo ? ` · ${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo` : ''));
     bloco('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), p.cancelados ? `${numero(p.cancelados)} cancelado(s)` : null);
     k.appendChild(dl);
     const parte = total > 0 ? p.faturamento / total : 0;
@@ -238,33 +238,46 @@ function juntarProdutos(ml, amz){
   return [...m.values()].map((x) => ({ ...x, margem: x.lucro != null && x.faturamento > 0 ? x.lucro / x.faturamento : null }))
     .sort((a, b) => b.faturamento - a.faturamento).slice(0, 30);
 }
-function comAmazon(r, a){
-  const linha = { ml_user_id: 'amazon', nickname: 'Amazon', amazon: true, hoje: a.hoje, periodo: a.resumo, dias: a.por_dia,
-    sem_custo: a.sem_custo.length, fretes_pendentes: 0 };
+// Conta de outro marketplace (Amazon ou loja da Shopee) somada às do ML, aqui no navegador.
+function comExterna(r, x, linhaBase){
+  const linha = { ...linhaBase, externa: true, hoje: x.hoje, periodo: x.resumo, dias: x.por_dia, sem_custo: x.sem_custo.length, fretes_pendentes: 0 };
   const contas = [...r.contas, linha];
-  return { ...r, contas, total: somar(contas.filter((c) => !c.erro)), produtos: juntarProdutos(r.produtos, a.produtos) };
+  return { ...r, contas, total: somar(contas.filter((c) => !c.erro)), produtos: juntarProdutos(r.produtos, x.produtos) };
 }
+const comAmazon = (r, a) => comExterna(r, a, { ml_user_id: 'amazon', nickname: 'Amazon', amazon: true, tela: '/amazon.html' });
 
 async function carregar(){
   const minha = ++geracao;
   erroTela('');
   $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Somando as vendas de cada conta…'));
   const amz = api(`/api/amazon/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+  // lojas da Shopee: uma chamada por loja (a primeira leitura de uma loja leva uns 2 minutos)
+  const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
   try{
     const r = await api(`/api/contas/resumo?dias=${dias}`);
     if(minha !== geracao) return;
     pintar(r, false);
+    let tudo = r; const erros = [];
     const a = await amz;
     if(minha !== geracao) return;
-    if(a.conectada === false) return pintar(r, true);
-    if(a.erro){ pintar(r, true); erroTela('Amazon: ' + a.erro); return; }
-    pintar(comAmazon(r, a), true);
+    if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false) tudo = comAmazon(tudo, a);
+    pintar(tudo, false);
+    for(const l of await lojas){
+      const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&dias=${dias}`).catch((e) => ({ erro: e.message }));
+      if(minha !== geracao) return;
+      if(s.erro){ erros.push('Shopee: ' + s.erro); continue; }
+      tudo = comExterna(tudo, s, { ml_user_id: 'shopee-' + l.shop_id, nickname: (s.nome || 'Loja') + ' · Shopee', shopee: true,
+        tela: `/vendas.html?conta=shopee-${l.shop_id}` });
+      pintar(tudo, false);
+    }
+    pintar(tudo, true);
+    if(erros.length) erroTela(erros.join(' · '));
   }catch(e){ if(minha === geracao){ erroTela(e.message); $('cartoes').innerHTML = ''; } }
 }
 
 function pintar(r, temAmazon){
   {
-    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : COR[i % COR.length]]));
+    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : c.shopee ? '#ee4d2d' : COR[i % COR.length]]));
     const t = r.total, boas = r.contas.filter((c) => !c.erro).length;
     $('topoTxt').textContent = `${boas} conta(s) somada(s)` + (r.contas.length > boas ? ` · ${r.contas.length - boas} com erro` : '')
       + `. Hoje e os últimos ${dias} dias.` + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');
@@ -278,7 +291,7 @@ function pintar(r, temAmazon){
       cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
     );
     pintarContas(r, cor); pintarTabela(r, cor); pintarGrafico(r, cor); pintarProdutos(r, cor);
-    if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando a Amazon…'));
+    if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando Amazon e Shopee…'));
   }
 }
 periodo('segDias', dias, (d) => { dias = d; carregar(); });

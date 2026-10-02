@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ads Shopee</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#ee4d2d,#c2410c);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#ffe4dc}
+  .barras{display:flex;align-items:flex-end;gap:3px;height:150px;margin-top:8px;border-bottom:1px solid var(--line)}
+  .barras .col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+  .barras .col i{display:block;background:#ee4d2d;border-radius:3px 3px 0 0;min-height:1px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=21"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Ads — Shopee</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">Anúncios pagos da loja na Shopee: quanto foi investido, o que voltou em vendas e o retorno (ROAS) dia a dia.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+    </div>
+  </div>
+  <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+  <section class="bloco">
+    <h2>Investimento por dia</h2>
+    <p class="sub" id="subGrafico"></p>
+    <div class="barras" id="grafico"></div>
+    <div class="eixo" id="eixo"></div>
+  </section>
+  <section class="bloco">
+    <h2>Dia a dia</h2>
+    <div class="tabela-rolagem" id="tabela"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
+let dias = 30;
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const vezes = (n) => (n == null ? '—' : n.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x');
+async function carregar(){
+  erroTela('');
+  if(!LOJA){ erroTela('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
+  try{
+    const r = await api(`/api/shopee/ads?loja=${LOJA}&dias=${dias}`);
+    const t = r.total;
+    const box = $('cartoes'); box.innerHTML = '';
+    box.append(
+      cartao(`Investido em ${dias} dias`, real(t.gasto), t.cpc != null ? `CPC médio ${real(t.cpc)}` : 'nenhum clique pago'),
+      cartao('Vendas pelos anúncios', real(t.vendas), `${numero(t.pedidos)} pedido(s) · ${numero(t.unidades)} un.`, true),
+      cartao('ROAS', vezes(t.roas), t.acos != null ? `ACOS ${pct(t.acos)}` : 'sem vendas atribuídas'),
+      cartao('Cliques', numero(t.cliques), `${numero(t.impressoes)} impressões · CTR ${pct(t.ctr)}`),
+      cartao('Saldo de anúncios', real(r.saldo), r.campanhas != null ? `${numero(r.campanhas)} campanha(s) de produto` : ''),
+    );
+    $('topoTxt').textContent = t.gasto > 0
+      ? 'Anúncios pagos da loja na Shopee: quanto foi investido, o que voltou em vendas e o retorno (ROAS) dia a dia. Vendas = pedidos atribuídos ao anúncio (o produto anunciado ou outro da loja).'
+      : 'A loja não teve investimento em anúncios da Shopee no período. Quando houver campanhas, o desempenho aparece aqui, e o detalhe por campanha entra no painel a partir dos dados reais.';
+    const g = $('grafico'); g.innerHTML = '';
+    const teto = Math.max(1, ...r.dias.map((d) => d.gasto));
+    for(const d of r.dias){ const col = el('div', 'col'); const i = el('i'); i.style.height = (d.gasto / teto * 100) + '%'; col.title = `${data(d.dia)}: ${real(d.gasto)} investidos · ${real(d.vendas)} em vendas`; col.appendChild(i); g.appendChild(col); }
+    $('eixo').innerHTML = '';
+    if(r.dias.length) $('eixo').append(el('span', null, data(r.dias[0].dia)), el('span', null, data(r.dias.at(-1).dia)));
+    $('subGrafico').textContent = t.gasto > 0 ? 'Passe o mouse para ver o valor de cada dia.' : 'Sem investimento no período.';
+    const tab = el('table'); const cab = el('tr');
+    for(const h of ['Dia', 'Investido', 'Impressões', 'Cliques', 'Pedidos', 'Vendas', 'ROAS']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+    for(const d of [...r.dias].reverse()){
+      const tr = el('tr');
+      tr.append(el('td', null, data(d.dia)), el('td', null, real(d.gasto)), el('td', null, numero(d.impressoes)), el('td', null, numero(d.cliques)),
+        el('td', null, numero(d.pedidos)), el('td', null, real(d.vendas)), el('td', null, d.gasto > 0 ? vezes(d.vendas / d.gasto) : '—'));
+      tb.appendChild(tr);
+    }
+    tab.appendChild(tb); $('tabela').innerHTML = ''; $('tabela').appendChild(tab);
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>
