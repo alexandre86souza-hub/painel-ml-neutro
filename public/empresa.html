@@ -72,7 +72,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -123,6 +123,10 @@
       <div class="grade">
         <label>Embalagem padrão por unidade (R$)
           <input id="inEmbPadrao" type="number" step="0.01" min="0" placeholder="usada quando o anúncio não tem uma própria"></label>
+        <label id="rotFlex" hidden>Custo por entrega Flex do Mercado Livre (R$)
+          <input id="inFlex" type="number" step="0.01" min="0" placeholder="o que você paga à empresa de entrega por envio Flex"></label>
+        <label id="rotEntrega" hidden>Custo por entrega própria — Entrega Direta (R$)
+          <input id="inEntrega" type="number" step="0.01" min="0" placeholder="o que você paga à empresa de entrega por pedido"></label>
       </div>
       <button class="bt primario">Salvar dados da empresa</button>
     </form>
@@ -221,6 +225,8 @@ async function carregarEmpresa(){
     const e = await api('/api/empresa' + QA);
     $('inRazao').value = e.razao_social; $('inCnpj').value = e.cnpj; $('inRegime').value = e.regime;
     $('inEmbPadrao').value = e.embalagem_padrao ?? '';
+    $('rotEntrega').hidden = !NA_SHOPEE; $('inEntrega').value = e.entrega_propria ?? '';
+    $('rotFlex').hidden = NA_EXT; $('inFlex').value = e.entrega_flex ?? '';
     $('impostos').innerHTML = '';
     if(e.impostos.length) for(const i of e.impostos) linhaImposto(i.nome, i.pct);
     else linhaImposto('Simples Nacional', '');
@@ -235,7 +241,8 @@ $('formEmpresa').onsubmit = async (ev) => {
     .filter((i) => i.nome.trim() || i.pct !== '');
   try{
     const e = await enviar('PUT', '/api/empresa' + QA, { razao_social: $('inRazao').value, cnpj: $('inCnpj').value,
-      regime: $('inRegime').value, impostos, embalagem_padrao: $('inEmbPadrao').value });
+      regime: $('inRegime').value, impostos, embalagem_padrao: $('inEmbPadrao').value,
+      ...(NA_SHOPEE ? { entrega_propria: $('inEntrega').value } : {}), ...(!NA_EXT ? { entrega_flex: $('inFlex').value } : {}) });
     aviso(`Dados salvos. Imposto total: ${String(e.imposto_total).replace('.', ',')}% sobre o faturamento.`, 'ok');
   }catch(err){ aviso(err.message); }
 };

@@ -12,6 +12,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
 - `npm run atualizar` — traz as correções do repositório da aula (fork não recebe sozinho).
 - `npm run mcp` — servidor MCP por stdio (só para depurar; o Claude Code sobe sozinho pelo
   `.mcp.json` de quem abre esta pasta). Confira com `/mcp`.
+- `npm run backup` — cópia de segurança do banco agora (`-- --pasta "C:..."` grava a pasta, ex.: OneDrive).
+  O painel também copia sozinho 1x/dia (`backup.js`, ligado por iniciar.js). `npm run restaurar -- <arquivo>`
+  volta uma cópia com o painel PARADO (o banco atual fica ao lado). A ML_DB_KEY do .env não vai na cópia.
 - `npm test` — testes do painel. Scraper: `cd scraper && uv run python test_api.py`.
 - Logs: `logs/scraper.log`, `logs/tunel.log`.
 
@@ -66,14 +69,34 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   "shipment" = envio da venda (`envio_id`), "payment" = pagamento da venda (`ref_pagamento`);
   "coverage" não abre em nenhuma rota (404). O external_reference "cashback_…" não serve. O que
   sobra fica "a conferir" com o motivo; o vendedor liga à mão, anota e marca (`mp_conferencia`).
+- Reputação (`reputacao.js`, tela `public/reputacao.html`, MCP `ml_reputacao`): termômetro e métricas
+  de 60 dias de `/users/{id}.seller_reputation`; cada reclamação (mediations + returns, 90 dias) é
+  perguntada em `/post-purchase/v1/claims/{id}/affects-reputation` (cache `rep_reclamacoes` pelo
+  last_updated; medido: as "affected" batem com metrics.claims.value). Afetaram + abertas (em risco)
+  ganham detalhe do ML, ações do vendedor (`available_actions`), produto e `sugestaoDe` (por
+  categoria do `reason.name`: broken_item, different_than_published…) com mensagem pronta.
+  Cancelamentos: só `cancel_detail.requested_by/group = seller`. Atrasos: a API só dá o número.
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
+- Flex do ML (`custos.js#freteFlex`): o Mercado Pago NÃO cobra o frete do `/costs` em venda Flex;
+  o ML paga um bônus por envio (`bonificaciones_flex`, ligado pelo envio) = tarifa Flex − custo do
+  vendedor no /costs. Com `empresa.entrega_flex` (o que o vendedor paga à empresa de entrega)
+  informado: frete = entrega − bônus (sem bônus ainda: média da conta para o caso, estimado).
+  Sem ele, vale o /costs (comportamento antigo).
 - Custo por anúncio: `custos.outros` = embalagem (NULL = padrão da empresa) e `custos.extra` =
   outro custo; `custosDe().outros_total` é a soma para as contas que usam `A.economia`.
 - Mudanças nas campanhas do Ads: o ML não tem histórico; `server.js#registrarCampanhas` compara
   com a última configuração vista (`ads_campanhas`) e grava em `ads_mudancas`. Acompanha
   `budget` (orçamento do vendedor), não `daily_budget` (oscila sozinho). Confere a cada 30 min
   junto com `/api/avisos`.
+- Publicar na Shopee e na Amazon (`publicar-canais.js`, tela `publicar-canais.html`; o menu
+  Publicar abre ela com a conta Shopee/Amazon): COPIA um anúncio do ML. Shopee: categoria por
+  `category_recommend`, atributos por `get_attribute_tree`, marca da loja, fotos do ML (só
+  *.mlstatic.com) por `shopee.js#subirImagem`, `add_item`. Amazon: oferta (LISTING_OFFER_ONLY) num
+  ASIN achado pelo EAN; prévia com `mode=VALIDATION_PREVIEW`; SKU que já existe é RECUSADO (o PUT
+  sobrescreveria o anúncio). Escrita só no clique da tela.
+- Troca de SKU (Produtos): a tela também busca os anúncios do produto NOVO e marca em amarelo (e
+  deixa desmarcado) o anúncio que ficaria com SKU igual ao de outro — o vendedor decide.
 - Atacado em massa (`precos.js`, bloco na tela Produtos): `GET /api/atacado` lista os anúncios
   ativos com o atacado de cada um (uma chamada por anúncio, guardada em `anuncio_atacado`);
   `POST /api/atacado/aplicar` e `/remover` usam o mesmo `gravarAtacado` do anúncio individual.
@@ -98,6 +121,18 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   50 por chamada; repasse `get_escrow_detail` 200 por leitura). Lucro EXATO: o repasse
   (`escrow_amount`) já vem sem comissão, taxas, frete e cupons; tarifa+frete = faturamento −
   recebido, rateado entre os itens. Sem repasse ainda = proporção média da loja (`estimado`).
+  Frete da Shopee: o repasse INCLUI o frete que a Shopee paga ao vendedor (`final_shipping_fee` +
+  `buyer_paid_shipping_fee` = `frete_shopee`). "Entrega Direta" (`shipping_carrier`, guardado em
+  `transportadora`) = o vendedor entrega e paga a empresa de entrega: custo por pedido em
+  `empresa.entrega_propria` (tela Empresa da conta Shopee; sem ele o lucro fica pendente).
+  Tarifa = faturamento − recebido + frete_shopee; frete = entrega própria − frete_shopee.
+  Taxa por item da Shopee (`taxa_item`, mostrada separada como "taxa fixa"): a regra da
+  `net_service_fee_info_list` que passa de 3% do preço (R$ 4,00 → R$ 4,50 desde 01/10/2026 em itens
+  baratos; ~R$ 16–26 nos caros; rule_id muda). Já está DENTRO da tarifa.
+  Campanhas e devoluções da Shopee (`shopee-campanhas.js`, telas `shopee-campanhas.html` e
+  `shopee-devolucoes.html`; o menu troca Campanhas/Devoluções por elas): descontos, ofertas
+  relâmpago e cupons da loja (com as vendas dos itens no período); devoluções em janelas de 15 dias
+  (`returns/get_return_list`), sem o campo `user`. Campanhas da própria Shopee não têm API.
   Cada loja é uma conta externa `shopee-{loja}` (como `amazon`): na lista do topo
   (`menu.js#TELAS`), identidade `marca_*:shopee-{loja}`, empresa `empresa:shopee-{loja}`
   (sem salvar = a da 1ª conta do ML) e em "Todas as contas". As respostas das telas são

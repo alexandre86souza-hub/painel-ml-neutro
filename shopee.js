@@ -122,6 +122,21 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     }
   }
 
+  // Foto de anúncio (media_space/upload_image): chamada pública, assinada só com o parceiro, em
+  // multipart (campo "image"). Devolve o image_id que o add_item usa.
+  async function subirImagem(buffer, tipo = 'image/jpeg') {
+    const c = exigeConfig();
+    const caminho = '/api/v2/media_space/upload_image';
+    const ts = agoraS();
+    const qs = new URLSearchParams({ partner_id: c.partner_id, timestamp: String(ts), sign: assinar(c.partner_key, c.partner_id, caminho, ts) });
+    const fd = new FormData();
+    fd.append('image', new Blob([buffer], { type: tipo }), tipo === 'image/png' ? 'foto.png' : 'foto.jpg');
+    const j = await pedir(`${c.host}${caminho}?${qs}`, { method: 'POST', body: fd });
+    const id = j.response?.image_info?.image_id || j.response?.image_info_list?.[0]?.image_info?.image_id;
+    if (!id) throw erro('A Shopee não devolveu o código da foto.', 502);
+    return id;
+  }
+
   // De onde o painel foi aberto, para voltar ao mesmo lugar depois da autorização.
   const origemDe = (url) => {
     if (url?.origin === 'https://painel') return new URL(urlPublica()).origin;                 // painel online (túnel)
@@ -219,7 +234,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     } catch (e) { return falha('A Shopee não entregou o acesso', e.message, 502); }
   }
 
-  return { rotas, rotasParam, callback, daLoja };
+  return { rotas, rotasParam, callback, daLoja, subirImagem };
 }
 
 module.exports = { criar, assinar, urlAutorizacao, validarConfig, AMBIENTES };

@@ -64,6 +64,7 @@ const EXEMPLOS = {
   ml_abc: { dias: 30 },
   ml_ads_historico: { dias: 30 },
   ml_full: {},
+  ml_reputacao: {},
   ml_qualidade_anuncios: { filtro: 'incompletos' },
   ml_avisos: {},
   ml_devolucao_defeito: { reclamacao: 5584487665, defeito: true },

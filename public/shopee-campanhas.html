@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campanhas Shopee</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#ee4d2d,#c2410c);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#ffe4dc}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.azul{background:#dbeafe;color:#1d4ed8}
+  td.dinheiro{white-space:nowrap;text-align:right}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=24"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Campanhas — Shopee</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">Promoções da loja na Shopee — descontos, ofertas relâmpago e cupons — com as vendas dos itens de cada uma no período dela.</p>
+    <button type="button" class="bt" id="btReler">Atualizar da Shopee</button>
+  </div>
+  <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+  <section class="bloco">
+    <h2>Promoções</h2>
+    <p class="sub" id="nota"></p>
+    <div class="tabela-rolagem" id="lista"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+async function carregar(recarregar){
+  erroTela('');
+  if(!LOJA){ erroTela('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
+  try{
+    const r = await api(`/api/shopee/campanhas?loja=${LOJA}${recarregar ? '&recarregar=1' : ''}`);
+    const comVendas = r.campanhas.filter((c) => c.vendas);
+    const s = comVendas.reduce((a, c) => ({ un: a.un + c.vendas.unidades, fat: a.fat + c.vendas.faturamento }), { un: 0, fat: 0 });
+    const box = $('cartoes'); box.innerHTML = '';
+    box.append(
+      cartao('Em andamento', numero(r.em_andamento), r.em_andamento ? 'promoções ativas agora' : 'nenhuma promoção ativa agora', true),
+      cartao('Promoções na lista', numero(r.campanhas.length), `${numero(r.campanhas.filter((c) => c.tipo === 'Desconto').length)} desconto(s) · ${numero(r.campanhas.filter((c) => c.tipo === 'Oferta relâmpago').length)} relâmpago · ${numero(r.campanhas.filter((c) => c.tipo === 'Cupom').length)} cupom(ns)`),
+      cartao('Vendido nos descontos', real(s.fat), `${numero(s.un)} unidade(s) dos itens em desconto, no período de cada um`),
+    );
+    $('nota').textContent = r.nota;
+    const tab = el('table'); const cab = el('tr');
+    for(const h of ['Promoção', 'Situação', 'Período', 'Itens', 'Exemplo de preço', 'Vendas no período']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+    for(const c of r.campanhas){
+      const tr = el('tr');
+      const t0 = el('td'); t0.appendChild(document.createTextNode(c.nome || c.tipo)); t0.appendChild(el('span', 'pequeno', `${c.tipo} · ${c.id}`));
+      const t1 = el('td'); t1.appendChild(el('span', 'chip ' + (c.situacao === 'em andamento' ? 'verde' : c.situacao === 'agendada' ? 'azul' : ''), c.situacao));
+      const ex = c.exemplos?.[0];
+      const t4 = el('td'); if(ex){ t4.appendChild(document.createTextNode(`${real(ex.preco_original)} → ${real(ex.preco_promo)}`)); t4.appendChild(el('span', 'pequeno', ex.nome || '')); } else t4.textContent = c.cliques != null ? `${numero(c.cliques)} clique(s)` : c.usados != null ? `${numero(c.usados)} de ${numero(c.limite)} usados` : '—';
+      const t5 = el('td', 'dinheiro');
+      if(c.vendas){ t5.appendChild(document.createTextNode(real(c.vendas.faturamento))); t5.appendChild(el('span', 'pequeno', `${numero(c.vendas.unidades)} un. · ${numero(c.vendas.pedidos)} pedido(s)`)); } else t5.textContent = '—';
+      tr.append(t0, t1, el('td', null, `${dataBR(c.inicio)} a ${dataBR(c.fim)}`), el('td', null, c.itens_ativos != null ? `${numero(c.itens_ativos)} de ${numero(c.itens)}` : numero(c.itens)), t4, t5);
+      tb.appendChild(tr);
+    }
+    if(!r.campanhas.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma promoção da loja.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
+    tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+$('btReler').onclick = () => carregar(true);
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

@@ -369,6 +369,13 @@ const FERRAMENTAS = [
     schema: obj({}),
     rota: () => ['GET', '/api/full'] },
 
+  { nome: 'ml_reputacao', titulo: 'Reputação da conta',
+    descricao: 'Termômetro e MercadoLíder, métricas de 60 dias (reclamações, atrasos, cancelamentos), as vendas '
+      + 'cujas reclamações afetaram a reputação, as reclamações abertas em risco (com prazo e ações possíveis) e '
+      + 'os cancelamentos feitos pelo vendedor, cada caso com sugestão de solução ou contestação.',
+    schema: obj({}),
+    rota: () => ['GET', '/api/reputacao'] },
+
   { nome: 'ml_qualidade_anuncios', titulo: 'Qualidade dos anúncios',
     descricao: 'Nota de qualidade do ML (0-100) dos anúncios ativos e os objetivos pendentes. '
       + 'filtro: incompletos (ficha, fotos, GTIN…), ruins (nota < 70) ou objetivos (qualquer pendência).',

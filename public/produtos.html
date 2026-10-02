@@ -68,6 +68,9 @@
   .troca-barra label{display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer}
   .troca-barra .bt{margin-left:auto}
   #trocaLista input[type=checkbox]{width:16px;height:16px}
+  .dup{font-weight:400;white-space:normal;font-size:12px;color:#7a5600;margin-top:4px}
+  .dup a{font-weight:600}
+  tr.duplica td{background:#fffbeb}
   .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
 </style>
@@ -80,7 +83,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -480,8 +483,13 @@ function trocarNoSku(sku, de, para){
   const s = String(sku || ''); const i = s.indexOf('-');
   const prefixo = i >= 0 ? s.slice(0, i + 1) : '', resto = i >= 0 ? s.slice(i + 1) : s;
   const novo = String(para).padStart(3, '0');
-  return prefixo + resto.replace(/(^|[.\s+/])(\d+)(?=$|[.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
+  return prefixo + resto.replace(/(^|[-.\s+/])(\d+)(?=$|[-.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
 }
+// Comparação de SKUs: igual (ignorando maiúsculas e o separador . ou -) ou com os mesmos produtos
+// em outra ordem.
+const skuNorm = (s) => String(s || '').toUpperCase().replace(/\s/g, '').replace(/[-.+/]/g, '.');
+const skuProdutos = (s) => { const t = String(s || ''); const i = t.indexOf('-');
+  return (t.slice(i + 1).match(/\d+/g) || []).map(Number).sort((a, b) => a - b).join('.') + '|' + (i >= 0 ? t.slice(0, i).toUpperCase() : ''); };
 const SITUACAO = { active: 'ativo', paused: 'pausado', closed: 'encerrado', under_review: 'em revisão' };
 $('formTroca').onsubmit = async (ev) => {
   ev.preventDefault();
@@ -491,7 +499,14 @@ $('formTroca').onsubmit = async (ev) => {
   if(de === para) return aviso('O produto novo é igual ao atual.');
   box.appendChild(el('p', 'sub', 'Buscando os anúncios com esse produto…'));
   try{
-    const r = await api(`/api/produtos/${de}/anuncios`);
+    // os anúncios do produto atual e os que JÁ usam o produto novo (para avisar de SKU repetido)
+    const [r, jaNovo] = await Promise.all([api(`/api/produtos/${de}/anuncios`), api(`/api/produtos/${para}/anuncios`).catch(() => ({ anuncios: [] }))]);
+    const existentes = jaNovo.anuncios.flatMap((a) => a.skus.map((s) => ({ ...a, sku: s.sku, variacao: s.variacao })));
+    const repetidos = (id, skuNovo) => {
+      const iguais = existentes.filter((x) => x.id !== id && skuNorm(x.sku) === skuNorm(skuNovo));
+      const mesmos = existentes.filter((x) => x.id !== id && !iguais.includes(x) && skuProdutos(x.sku) === skuProdutos(skuNovo));
+      return { iguais, mesmos };
+    };
     box.innerHTML = '';
     const novoProd = produtos.find((p) => p.numero === para);
     if(!novoProd) box.appendChild(el('p', 'alerta-troca', `O produto ${$('tPara').value.trim().toUpperCase()} ainda não está na tabela: cadastre-o abaixo com o custo, senão os anúncios trocados ficam sem custo.`));
@@ -514,12 +529,31 @@ $('formTroca').onsubmit = async (ev) => {
       const c1 = el('td'); const lk = el('a', null, a.titulo || a.id); lk.href = a.link || '#'; lk.target = '_blank'; lk.rel = 'noopener';
       c1.append(lk, el('br'), el('span', 'chip cinza', a.id));
       const skus = [...new Set(a.skus.map((s) => s.sku))];
+      const novos = skus.map((s) => trocarNoSku(s, de, para));
       const res = el('td', 'salvo');
-      tr.append(c0, c1, el('td', null, SITUACAO[a.status] || a.status), el('td', 'sku', skus.join(', ')),
-        el('td', 'sku', skus.map((s) => trocarNoSku(s, de, para)).join(', ')), res);
+      const cNovo = el('td', 'sku', novos.join(', '));
+      // já existe outro anúncio com o SKU que vai ficar? mostra e deixa desmarcado: o vendedor decide
+      const rep = novos.map((s) => repetidos(a.id, s)).reduce((x, y) => ({ iguais: [...x.iguais, ...y.iguais], mesmos: [...x.mesmos, ...y.mesmos] }), { iguais: [], mesmos: [] });
+      const avisar = (lista, txt) => {
+        if(!lista.length) return;
+        const p = el('div', 'dup'); p.appendChild(el('b', null, txt + ' '));
+        [...new Map(lista.map((x) => [x.id, x])).values()].forEach((x, k) => {
+          if(k) p.appendChild(document.createTextNode(' · '));
+          const l = el('a', null, `${x.id}${x.status !== 'active' ? ' (' + (SITUACAO[x.status] || x.status) + ')' : ''}`); l.href = x.link || '#'; l.target = '_blank'; l.rel = 'noopener'; l.title = x.titulo || '';
+          p.appendChild(l);
+        });
+        cNovo.appendChild(p);
+      };
+      avisar(rep.iguais, '⚠ Já existe anúncio com este SKU:');
+      avisar(rep.mesmos, '⚠ Já existe anúncio com os mesmos produtos (outra ordem):');
+      const duplica = rep.iguais.length + rep.mesmos.length > 0;
+      if(duplica) tr.classList.add('duplica');
+      tr.append(c0, c1, el('td', null, SITUACAO[a.status] || a.status), el('td', 'sku', skus.join(', ')), cNovo, res);
       tb.appendChild(tr);
-      return { a, ck, tr, res };
+      return { a, ck, tr, res, duplica };
     });
+    const nDup = linhas.filter((l) => l.duplica).length;
+    if(nDup) box.appendChild(el('p', 'alerta-troca', `${nDup} anúncio(s) ficariam com o mesmo SKU de outro anúncio da conta (marcados em amarelo). Eles começam desmarcados: marque só se quiser mesmo os dois anúncios com o mesmo SKU.`));
     t.appendChild(tb);
     const contar = () => {
       const n = linhas.filter((l) => l.ck.checked && !l.ck.disabled).length;
@@ -527,12 +561,15 @@ $('formTroca').onsubmit = async (ev) => {
       ok.textContent = n ? `Trocar SKU em ${numero(n)} anúncio(s)` : 'Trocar SKU nos selecionados';
     };
     for(const l of linhas) l.ck.onchange = contar;
-    ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled) l.ck.checked = ckTodos.checked; contar(); };
+    // "todos" não marca os que repetiriam SKU: esses só um a um
+    ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled && !l.duplica) l.ck.checked = ckTodos.checked; contar(); };
     contar();
     ok.onclick = async () => {
       const escolhidos = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
       const nomeDe = $('tDe').value.trim().toUpperCase(), nomePara = $('tPara').value.trim().toUpperCase();
-      if(!confirm(`Trocar ${nomeDe} por ${nomePara} no SKU de ${escolhidos.length} anúncio(s)?\n\nMuda o SKU no Mercado Livre. O preço, o estoque e o resto do SKU não mudam.`)) return;
+      const dup = escolhidos.filter((l) => l.duplica).length;
+      if(!confirm(`Trocar ${nomeDe} por ${nomePara} no SKU de ${escolhidos.length} anúncio(s)?\n\nMuda o SKU no Mercado Livre. O preço, o estoque e o resto do SKU não mudam.`
+        + (dup ? `\n\nAtenção: ${dup} deles vão ficar com o mesmo SKU de outro anúncio da conta.` : ''))) return;
       ok.disabled = true; ok.textContent = 'Trocando…';
       let feitos = 0, falhas = 0;
       // de 50 em 50, para mostrar o andamento

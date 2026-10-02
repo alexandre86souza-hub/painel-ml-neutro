@@ -1029,7 +1029,7 @@ function criar({ D, janela }) {
     },
   });
 
-  return { rotas, rotasParam: [], sp };
+  return { rotas, rotasParam: [], sp, idVendedor };
 }
 
 module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, contaDoLancamento, resumoAmazon,

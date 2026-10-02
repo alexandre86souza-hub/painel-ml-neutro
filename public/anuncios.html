@@ -85,9 +85,6 @@
   #paginacao{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:20px;font-size:14px}
   .vazio{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);
     padding:40px 20px;text-align:center;color:var(--muted)}
-  #ads{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px;margin-bottom:20px;font-size:14px}
-  #ads h2{font-size:14px;margin:0 0 8px}
   @media (max-width:760px){
     .item{grid-template-columns:56px 1fr;gap:10px}
     .item img{width:56px;height:56px}
@@ -310,7 +307,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -343,11 +340,6 @@
       <button type="button" class="ghost" id="qAnt">← anteriores</button><span id="qPag"></span>
       <button type="button" class="ghost" id="qProx">próximos →</button>
     </div>
-  </section>
-
-  <section id="ads" hidden>
-    <h2>Mercado Ads</h2>
-    <div id="adsCorpo"></div>
   </section>
 
   <div class="painel">
@@ -613,73 +605,6 @@ selConta.onchange = async () => {
 // Razão vazia é '—' e não 0: investir sem vender não é "ACOS zero", é ACOS indefinido.
 const razao = (v, casas = 2) => (v == null ? '—' : v.toFixed(casas));
 const vezes = (v) => (v == null ? '—' : v.toFixed(2).replace('.', ',') + '×');
-
-async function carregarAds(){
-  const corpo = $('adsCorpo');
-  $('ads').hidden = false;
-  corpo.textContent = 'consultando o Mercado Ads…';
-  corpo.style.color = '';
-  try{
-    const a = await api(`/api/ads/metricas?dias=${$('fDias').value || 30}`);
-    corpo.replaceChildren();
-
-    if(!a.habilitado){
-      corpo.textContent = a.motivo;
-      corpo.style.color = 'var(--muted)';
-      return;
-    }
-
-    const t = a.total;
-    const kpis = document.createElement('div');
-    kpis.className = 'kpis';
-    kpis.append(
-      kpi(`Investimento ${a.dias} dias`, dinheiro(t.investimento), `${num(t.campanhas)} campanha(s)`),
-      kpi('Receita do anúncio', dinheiro(t.receita), 'direta + indireta'),
-      kpi('ROAS', vezes(t.roas), 'receita ÷ investimento', 'destaque'),
-      kpi('ACOS', t.acos == null ? '—' : pct(t.acos), 'investimento ÷ receita do anúncio',
-        t.acos != null && t.acos > 0.3 ? 'aviso' : ''),
-      kpi('TACOS', t.tacos == null ? '—' : pct(t.tacos), 'investimento ÷ receita da loja'),
-      kpi('Cliques', num(t.cliques), `${num(t.impressoes)} impressões`),
-      kpi('CPC', t.cpc == null ? '—' : dinheiro(t.cpc), `CTR ${t.ctr == null ? '—' : pct(t.ctr)}`),
-      kpi('Conversão do clique', t.cvr == null ? '—' : pct(t.cvr), `${num(t.unidades)} unidade(s)`),
-    );
-    corpo.appendChild(kpis);
-
-    if(a.campanhas.length){
-      const tab = document.createElement('table');
-      tab.className = 'tabPos';
-      const thead = document.createElement('thead');
-      const tr = document.createElement('tr');
-      for(const h of ['Campanha', 'Situação', 'Investido', 'Receita', 'ROAS', 'ACOS', 'Cliques']){
-        const th = document.createElement('th'); th.scope = 'col'; th.textContent = h; tr.appendChild(th);
-      }
-      thead.appendChild(tr); tab.appendChild(thead);
-
-      const tb = document.createElement('tbody');
-      for(const c of a.campanhas){
-        const l = document.createElement('tr');
-        for(const v of [c.nome || c.id, c.status, dinheiro(c.investimento), dinheiro(c.receita),
-          vezes(c.roas), c.acos == null ? '—' : pct(c.acos), num(c.cliques)]){
-          const td = document.createElement('td'); td.textContent = v; l.appendChild(td);
-        }
-        tb.appendChild(l);
-      }
-      tab.appendChild(tb);
-      const rolagem = document.createElement('div');
-      rolagem.style.overflowX = 'auto';
-      rolagem.appendChild(tab);
-      corpo.appendChild(rolagem);
-    }
-
-    const pe = document.createElement('p');
-    pe.className = 'nota';
-    pe.textContent = `Janela de ${a.date_from} a ${a.date_to}. ${a.nota}`;
-    corpo.appendChild(pe);
-  }catch(e){
-    corpo.textContent = 'Não consultou o Ads: ' + e.message;
-    corpo.style.color = 'var(--muted)';
-  }
-}
 
 // ---------- anúncios ----------
 let offset = 0, limite = 20, total = 0;
@@ -2841,7 +2766,7 @@ $('qProx').onclick = () => { qPagina++; carregarQualidade(); };
 // Vindo de um aviso (?q=MLB…): já abre buscando o anúncio.
 try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('fBusca').value = q; }catch{}
 
-carregarContas(); carregarAds(); carregar(); carregarQualidade();
+carregarContas(); carregar(); carregarQualidade();
 </script>
 <script src="/aviso.js" defer></script>
 <script src="/sino.js?v=1" defer></script>

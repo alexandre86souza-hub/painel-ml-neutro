@@ -14,6 +14,7 @@
     ads: '<path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/>',
     full: '<path d="M3 8h11v9H3zM14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
     devolucoes: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-3"/>',
+    reputacao: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4l-5.2 2.7 1-5.8L3.5 9.2l5.9-.9z"/>',
     financeiro: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9v.01M17 15v.01"/>',
     empresa: '<path d="M4 20V8l6-3v15M10 20V10l10 3v7M4 20h16"/>',
     shopee: '<path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
@@ -37,6 +38,7 @@
     null,
     ['/devolucoes.html', 'Devoluções', 'devolucoes'],
     ['/financeiro.html', 'Financeiro', 'financeiro'],
+    ['/reputacao.html', 'Reputação', 'reputacao'],
     ['/empresa.html', 'Empresa e custos', 'empresa'],
     ['/shopee.html', 'Shopee', 'shopee'],
     ['/amazon.html', 'Amazon', 'amazon'],
@@ -93,15 +95,20 @@
       if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
       if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
       if (u.pathname === '/ads.html') return '/amazon-ads.html';
+      if (u.pathname === '/publicar.html') return '/publicar-canais.html?conta=amazon';
     } else if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
     else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
     else if (u.pathname === '/ads.html') return `/shopee-ads.html?conta=${ext}`;
+    else if (u.pathname === '/promocoes.html') return `/shopee-campanhas.html?conta=${ext}`;
+    else if (u.pathname === '/devolucoes.html') return `/shopee-devolucoes.html?conta=${ext}`;
+    else if (u.pathname === '/publicar.html') return `/publicar-canais.html?conta=${ext}`;
     if (!TELAS[tipo(ext)].includes(u.pathname)) return href;
     u.searchParams.set('conta', ext);
     return u.pathname + u.search;
   };
   const telaDaConta = (ext) => {
-    const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html'].includes(location.pathname);
+    const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html', '/publicar.html'].includes(location.pathname)
+      || (tipo(ext) === 'shopee' && ['/promocoes.html', '/devolucoes.html'].includes(location.pathname));
     if (aquiTem) { const u = new URL(location.href); u.searchParams.delete('conta'); return comConta(u.pathname + u.search, ext); }
     return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;
   };
@@ -110,6 +117,9 @@
     if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
     if (location.pathname === '/amazon-ads.html' || location.pathname === '/shopee-ads.html') return '/ads.html';
     if (location.pathname === '/shopee-anuncios.html') return '/anuncios.html';
+    if (location.pathname === '/shopee-campanhas.html') return '/promocoes.html';
+    if (location.pathname === '/shopee-devolucoes.html') return '/devolucoes.html';
+    if (location.pathname === '/publicar-canais.html') return '/publicar.html';
     const u = new URL(location.href); u.searchParams.delete('conta');
     return u.pathname + u.search;
   };
@@ -171,7 +181,8 @@
     const [caminho, query] = href.split('?');
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
       || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html'].includes(aqui))
-      || (caminho === '/ads.html' && ['/amazon-ads.html', '/shopee-ads.html'].includes(aqui)))
+      || (caminho === '/ads.html' && ['/amazon-ads.html', '/shopee-ads.html'].includes(aqui))
+      || (caminho === '/promocoes.html' && aqui === '/shopee-campanhas.html') || (caminho === '/devolucoes.html' && aqui === '/shopee-devolucoes.html') || (caminho === '/publicar.html' && aqui === '/publicar-canais.html'))
       && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;

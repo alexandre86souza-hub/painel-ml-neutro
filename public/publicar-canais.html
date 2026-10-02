@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publicar</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .passo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 14px}
+  .passo h2{margin:0 0 10px;font-size:16px}
+  .passo[hidden]{display:none}
+  .grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
+  .grade label,.campo{display:block;font-size:12px;color:var(--muted)}
+  .grade input,.grade select,.campo input,.campo textarea,.campo select{display:block;width:100%;box-sizing:border-box;margin-top:3px;font:inherit;font-size:14px;color:var(--ink);padding:7px 9px;border:1px solid #d5dbe5;border-radius:8px;background:#fff}
+  .campo{margin:0 0 10px}
+  .campo textarea{min-height:160px;resize:vertical}
+  .conta-txt{font-size:11px;color:var(--muted);text-align:right}
+  .resultados{display:grid;gap:8px;margin-top:10px}
+  .res{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;background:#fff;text-align:left;font:inherit}
+  .res:hover,.res[aria-pressed="true"]{border-color:var(--brand);background:#f5f8ff}
+  .res img{width:48px;height:48px;object-fit:cover;border-radius:6px;background:#f1f5f9}
+  .fotos{display:flex;gap:8px;flex-wrap:wrap}
+  .foto{position:relative;width:86px}
+  .foto img{width:86px;height:86px;object-fit:cover;border-radius:8px;border:2px solid transparent}
+  .foto input{position:absolute;top:4px;left:4px}
+  .foto.fora img{opacity:.35}
+  .canais label{display:inline-flex;gap:6px;align-items:center;margin:0 14px 6px 0;font-size:14px;color:var(--ink)}
+  .aviso{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
+  .ok{background:#e6f4ea;color:#0b6b33;border:1px solid #b7dfc3;border-radius:9px;padding:10px 12px;font-size:14px;margin:10px 0 0}
+  .falhou{background:#fde2e1;color:#8c1d18;border:1px solid #f3b4b0;border-radius:9px;padding:10px 12px;font-size:14px;margin:10px 0 0}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569}
+  .chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}
+  .acoes{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=24"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1 id="titulo">Publicar</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <p class="sub" id="sub"></p>
+
+  <section class="passo" id="p1">
+    <h2>1. Escolha o anúncio do Mercado Livre para copiar</h2>
+    <p class="sub">Da conta do ML escolhida por último. Busque pelo título, pelo SKU exato ou cole o código MLB.</p>
+    <form id="formBusca" class="grade" style="grid-template-columns:1fr auto">
+      <label>Anúncio do ML <input id="q" placeholder="ex.: ducha autolimpante, KIT-770.791.795 ou MLB123…" autocomplete="off"></label>
+      <button class="bt primario" style="align-self:end">Buscar</button>
+    </form>
+    <div class="resultados" id="resultados"></div>
+  </section>
+
+  <section class="passo" id="p2" hidden>
+    <h2>2. Confira e ajuste o anúncio</h2>
+    <div id="avisos2"></div>
+    <div class="campo"><label for="fTitulo">Título <span class="conta-txt" id="contaTitulo"></span></label><input id="fTitulo"></div>
+    <div class="grade">
+      <label>Preço (R$)<input id="fPreco" type="number" step="0.01" min="0"></label>
+      <label>Estoque<input id="fEstoque" type="number" step="1" min="0"></label>
+      <label>SKU<input id="fSku"></label>
+      <label id="rotEan">EAN / código de barras<input id="fEan" inputmode="numeric"></label>
+    </div>
+    <div id="soShopee">
+      <div class="campo" style="margin-top:10px"><label for="fDesc">Descrição <span class="conta-txt" id="contaDesc"></span></label><textarea id="fDesc"></textarea></div>
+      <p class="sub" style="margin:0 0 6px">Fotos (marque as que vão; até 9, na ordem):</p>
+      <div class="fotos" id="fotos"></div>
+      <div class="grade" style="margin-top:12px">
+        <label>Categoria da Shopee<select id="fCat"></select></label>
+        <label>Marca<select id="fMarca"></select></label>
+        <label>Peso da embalagem (kg)<input id="fPeso" type="number" step="0.001" min="0"></label>
+        <label>Comprimento (cm)<input id="fComp" type="number" step="1" min="1"></label>
+        <label>Largura (cm)<input id="fLarg" type="number" step="1" min="1"></label>
+        <label>Altura (cm)<input id="fAlt" type="number" step="1" min="1"></label>
+      </div>
+      <p class="sub" style="margin:12px 0 6px">Formas de envio:</p>
+      <div class="canais" id="canais"></div>
+      <details id="detAtrib" style="margin-top:8px"><summary>Atributos da categoria (<span id="nAtrib">0</span>; os obrigatórios aparecem abertos)</summary><div class="grade" id="atributos" style="margin-top:10px"></div></details>
+    </div>
+    <div id="soAmazon">
+      <p class="sub" style="margin:12px 0 6px">Produto no catálogo da Amazon (achado pelo EAN): escolha em qual oferecer.</p>
+      <div class="resultados" id="catalogo"></div>
+    </div>
+    <div class="acoes" id="acoes"></div>
+    <div id="resultado"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const CONTA = new URLSearchParams(location.search).get('conta') || '';
+const LOJA = (/^shopee-(\d+)$/.exec(CONTA) || [])[1] || null;
+const AMAZON = CONTA === 'amazon';
+let origem = null, prep = null, asinEscolhido = null;
+const enviar = (metodo, url, corpo) => api(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+const aviso = (box, txt, cls = 'aviso') => { const p = el('p', cls, txt); $(box).appendChild(p); return p; };
+
+if(!LOJA && !AMAZON){
+  $('titulo').textContent = 'Publicar na Shopee ou na Amazon';
+  erroTela('Escolha a loja da Shopee ou a Amazon na lista "Conta" do topo. Para publicar no Mercado Livre, use o Publicar com uma conta do ML.');
+  $('p1').hidden = true;
+} else {
+  $('titulo').textContent = AMAZON ? 'Publicar na Amazon' : 'Publicar na Shopee';
+  $('sub').textContent = AMAZON
+    ? 'Copia um anúncio seu do Mercado Livre para a Amazon como OFERTA num produto que já existe no catálogo (achado pelo código de barras). Antes de publicar, a Amazon confere tudo numa prévia.'
+    : 'Copia um anúncio seu do Mercado Livre para a sua loja na Shopee: título, descrição, fotos, preço, estoque e SKU. Você confere e ajusta antes de publicar.';
+  $('soShopee').hidden = AMAZON; $('soAmazon').hidden = !AMAZON;
+}
+
+$('formBusca').onsubmit = async (ev) => {
+  ev.preventDefault(); erroTela('');
+  const box = $('resultados'); box.innerHTML = ''; box.appendChild(el('p', 'sub', 'Buscando no Mercado Livre…'));
+  try{
+    const r = await api('/api/publicar/anuncios-ml?q=' + encodeURIComponent($('q').value.trim()));
+    box.innerHTML = '';
+    if(!r.anuncios.length) box.appendChild(el('p', 'sub', 'Nenhum anúncio ativo encontrado. Tente outra palavra do título ou o MLB.'));
+    for(const a of r.anuncios){
+      const b = el('button', 'res'); b.type = 'button';
+      const im = el('img'); im.alt = ''; if(a.foto) im.src = a.foto;
+      const t = el('div'); t.appendChild(el('b', null, a.titulo)); t.appendChild(el('span', 'pequeno', `${a.mlb} · ${real(a.preco)} · estoque ${numero(a.estoque)}${a.sku ? ' · ' + a.sku : ''}`));
+      b.append(im, t); b.onclick = () => escolher(a.mlb, b); box.appendChild(b);
+    }
+  }catch(e){ box.innerHTML = ''; erroTela(e.message); }
+};
+
+async function escolher(mlb, botao){
+  for(const b of $('resultados').querySelectorAll('.res')) b.setAttribute('aria-pressed', String(b === botao));
+  erroTela(''); $('p2').hidden = false; $('resultado').innerHTML = ''; $('avisos2').innerHTML = ''; $('acoes').innerHTML = '';
+  aviso('avisos2', 'Preparando…', 'sub');
+  try{
+    prep = AMAZON ? await api(`/api/amazon/publicar/preparar?mlb=${mlb}`) : await api(`/api/shopee/publicar/preparar?loja=${LOJA}&mlb=${mlb}`);
+    origem = prep.origem;
+    $('avisos2').innerHTML = '';
+    if(origem.variacoes) aviso('avisos2', `Esse anúncio tem ${origem.variacoes} variações no ML. Aqui ele é copiado como um anúncio simples (sem variações).`);
+    $('fTitulo').value = origem.titulo; $('fPreco').value = origem.preco; $('fEstoque').value = origem.estoque; $('fSku').value = origem.sku || '';
+    $('fEan').value = AMAZON ? (prep.ean || '') : (origem.gtin || '');
+    const contar = (inp, out, max) => { const f = () => { $(out).textContent = `${inp.value.length}/${max}`; $(out).style.color = inp.value.length > max ? '#b91c1c' : ''; }; inp.oninput = f; f(); };
+    if(AMAZON) prepararAmazon(); else prepararShopee(contar);
+  }catch(e){ $('avisos2').innerHTML = ''; erroTela(e.message); }
+}
+
+// ---------- Shopee ----------
+function prepararShopee(contar){
+  contar($('fTitulo'), 'contaTitulo', prep.limites.titulo);
+  $('fDesc').value = origem.descricao; contar($('fDesc'), 'contaDesc', prep.limites.descricao);
+  if(prep.mesmo_sku.length) aviso('avisos2', `Atenção: a loja já tem anúncio com o SKU ${origem.sku} (${prep.mesmo_sku.map((x) => x.item_id).join(', ')}). Publicar cria outro.`);
+  // fotos
+  const fb = $('fotos'); fb.innerHTML = '';
+  origem.fotos.forEach((u, i) => {
+    const d = el('label', 'foto'); const im = el('img'); im.src = u; im.alt = `Foto ${i + 1}`;
+    const ck = el('input'); ck.type = 'checkbox'; ck.checked = i < prep.limites.fotos; ck.value = u;
+    ck.onchange = () => d.classList.toggle('fora', !ck.checked); d.classList.toggle('fora', !ck.checked);
+    d.append(im, ck); fb.appendChild(d);
+  });
+  // categoria, marca, medidas, envio
+  const sc = $('fCat'); sc.innerHTML = '';
+  for(const c of prep.categorias){ const o = el('option', null, c.nome); o.value = c.id; sc.appendChild(o); }
+  const outra = el('option', null, 'Outra (digitar o número da categoria)…'); outra.value = 'outra'; sc.appendChild(outra);
+  sc.onchange = async () => { if(sc.value === 'outra'){ const v = prompt('Número da categoria da Shopee:'); if(!v || !/^\d+$/.test(v)) { sc.selectedIndex = 0; return; } const o = el('option', null, 'Categoria ' + v); o.value = v; sc.insertBefore(o, outra); sc.value = v; } carregarAtributos(); };
+  const sm = $('fMarca'); sm.innerHTML = '';
+  for(const m of prep.marcas){ const o = el('option', null, m.nome); o.value = m.id; sm.appendChild(o); }
+  const sem = el('option', null, 'Sem marca'); sem.value = '0'; sm.appendChild(sem);
+  $('fPeso').value = origem.peso_kg ?? ''; $('fComp').value = origem.comprimento ?? ''; $('fLarg').value = origem.largura ?? ''; $('fAlt').value = origem.altura ?? '';
+  if(origem.medidas_de) aviso('avisos2', `Peso e medidas sugeridos do ${origem.medidas_de}. Confira.`, 'sub');
+  else if(origem.peso_kg == null) aviso('avisos2', 'O anúncio do ML não tem peso e medidas da embalagem: preencha (a Shopee calcula o frete por eles).');
+  const cb = $('canais'); cb.innerHTML = '';
+  for(const c of prep.canais){ const l = el('label'); const ck = el('input'); ck.type = 'checkbox'; ck.value = c.id; ck.checked = true; l.append(ck, document.createTextNode(c.nome)); cb.appendChild(l); }
+  carregarAtributos();
+  const bt = el('button', 'bt primario', 'Publicar na Shopee'); bt.type = 'button'; bt.onclick = () => publicarShopee(bt);
+  $('acoes').appendChild(bt);
+}
+async function carregarAtributos(){
+  const box = $('atributos'); box.innerHTML = ''; $('nAtrib').textContent = '…';
+  try{
+    const r = await api(`/api/shopee/publicar/atributos?loja=${LOJA}&categoria=${$('fCat').value}`);
+    $('nAtrib').textContent = r.atributos.length;
+    if(r.categoria.folha === false) erroTela('Essa categoria tem subcategorias: a Shopee só aceita a categoria final. Escolha outra.');
+    for(const a of r.atributos){
+      const l = el('label', null, a.nome + (a.obrigatorio ? ' *' : ''));
+      let inp;
+      if(a.livre){ inp = el('input'); }
+      else { inp = el('select'); inp.appendChild(Object.assign(el('option', null, '—'), { value: '' })); for(const o of a.opcoes){ const op = el('option', null, o.nome); op.value = o.id; inp.appendChild(op); } }
+      inp.dataset.attr = a.id; inp.dataset.livre = a.livre ? '1' : ''; l.appendChild(inp); box.appendChild(l);
+    }
+    $('detAtrib').open = r.atributos.some((a) => a.obrigatorio);
+  }catch(e){ $('nAtrib').textContent = '?'; erroTela(e.message); }
+}
+async function publicarShopee(bt){
+  const fotos = [...$('fotos').querySelectorAll('input:checked')].map((x) => x.value).slice(0, 9);
+  const corpo = { loja: LOJA, mlb: origem.mlb, titulo: $('fTitulo').value, descricao: $('fDesc').value, preco: $('fPreco').value, estoque: $('fEstoque').value,
+    sku: $('fSku').value, gtin: $('fEan').value, categoria: $('fCat').value, marca_id: $('fMarca').value, marca_nome: $('fMarca').selectedOptions[0]?.textContent === 'Sem marca' ? 'NoBrand' : $('fMarca').selectedOptions[0]?.textContent,
+    peso_kg: $('fPeso').value, comprimento: $('fComp').value, largura: $('fLarg').value, altura: $('fAlt').value, condicao: origem.condicao,
+    canais: [...$('canais').querySelectorAll('input:checked')].map((x) => x.value), fotos,
+    atributos: [...$('atributos').querySelectorAll('[data-attr]')].filter((x) => x.value).map((x) => (x.dataset.livre ? { attribute_id: x.dataset.attr, valor: x.value } : { attribute_id: x.dataset.attr, value_id: x.value })) };
+  if(!confirm(`Publicar na Shopee?\n\n${corpo.titulo}\n${real(Number(corpo.preco))} · estoque ${corpo.estoque} · ${fotos.length} foto(s)\n\nO anúncio é criado na sua loja.`)) return;
+  bt.disabled = true; bt.textContent = 'Publicando… (subindo as fotos)'; $('resultado').innerHTML = '';
+  try{
+    const r = await enviar('POST', '/api/shopee/publicar', corpo);
+    const p = el('p', 'ok'); p.appendChild(document.createTextNode(`Publicado na Shopee: anúncio ${r.item_id}. `));
+    const a = el('a', null, 'Abrir no Seller Centre'); a.href = r.link; a.target = '_blank'; a.rel = 'noopener'; p.appendChild(a);
+    $('resultado').appendChild(p); bt.textContent = 'Publicado';
+  }catch(e){ $('resultado').appendChild(el('p', 'falhou', 'Não publicou: ' + e.message)); bt.disabled = false; bt.textContent = 'Publicar na Shopee'; }
+}
+
+// ---------- Amazon ----------
+function prepararAmazon(){
+  $('fTitulo').disabled = true;   // na oferta, o título é o do catálogo da Amazon
+  if(prep.aviso) aviso('avisos2', prep.aviso);
+  const box = $('catalogo'); box.innerHTML = ''; asinEscolhido = null;
+  for(const c of prep.candidatos){
+    const b = el('button', 'res'); b.type = 'button';
+    const im = el('img'); im.alt = ''; if(c.foto) im.src = c.foto;
+    const t = el('div'); t.appendChild(el('b', null, c.titulo || c.asin));
+    t.appendChild(el('span', 'pequeno', `${c.asin} · ${c.marca || 'sem marca'} · tipo ${c.tipo || '?'}`));
+    if(c.ja_anunciado) t.appendChild(el('span', 'chip amarelo', 'você já anuncia este produto'));
+    if(c.restricoes.length) t.appendChild(el('span', 'chip vermelho', 'restrito: ' + c.restricoes.join('; ')));
+    b.append(im, t); b.onclick = () => { asinEscolhido = c; for(const x of box.querySelectorAll('.res')) x.setAttribute('aria-pressed', String(x === b)); };
+    box.appendChild(b);
+  }
+  const reler = el('button', 'bt', 'Buscar de novo pelo EAN digitado'); reler.type = 'button';
+  reler.onclick = async () => { try{ prep = await api(`/api/amazon/publicar/preparar?mlb=${origem.mlb}&ean=${encodeURIComponent($('fEan').value)}`); $('avisos2').innerHTML = ''; $('acoes').innerHTML = ''; prepararAmazon(); }catch(e){ erroTela(e.message); } };
+  const previa = el('button', 'bt', 'Conferir com a Amazon (prévia)'); previa.type = 'button';
+  const pub = el('button', 'bt primario', 'Publicar na Amazon'); pub.type = 'button'; pub.disabled = true;
+  const corpo = (p) => ({ asin: asinEscolhido?.asin, tipo: asinEscolhido?.tipo, sku: $('fSku').value, preco: $('fPreco').value, estoque: $('fEstoque').value, previa: p });
+  const mostrar = (r) => {
+    $('resultado').innerHTML = '';
+    const ok = r.status !== 'INVALID' && !r.problemas.some((x) => x.gravidade === 'ERROR');
+    const p = el('p', ok ? 'ok' : 'falhou', r.previa ? (ok ? 'Prévia aprovada pela Amazon: pode publicar.' : 'A Amazon recusaria:') : (ok ? `Publicado na Amazon com o SKU ${r.sku}. Em alguns minutos aparece nos seus anúncios.` : 'A Amazon recusou:'));
+    for(const x of r.problemas) p.appendChild(el('span', 'pequeno', `${x.gravidade}: ${x.mensagem}`));
+    $('resultado').appendChild(p);
+    return ok;
+  };
+  previa.onclick = async () => {
+    if(!asinEscolhido) return erroTela('Escolha o produto do catálogo.');
+    if(asinEscolhido.ja_anunciado && !confirm('Você já anuncia esse produto na Amazon. Criar outra oferta com outro SKU?')) return;
+    erroTela(''); previa.disabled = true;
+    try{ pub.disabled = !mostrar(await enviar('POST', '/api/amazon/publicar', corpo(true))); }
+    catch(e){ $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'falhou', e.message)); }
+    finally{ previa.disabled = false; }
+  };
+  pub.onclick = async () => {
+    if(!confirm(`Publicar na Amazon?\n\n${asinEscolhido.titulo || asinEscolhido.asin}\nSKU ${$('fSku').value} · ${real(Number($('fPreco').value))} · estoque ${$('fEstoque').value}\n\nA oferta é criada na sua conta (envio por você).`)) return;
+    pub.disabled = true; pub.textContent = 'Publicando…';
+    try{ mostrar(await enviar('POST', '/api/amazon/publicar', corpo(false))); pub.textContent = 'Publicado'; }
+    catch(e){ $('resultado').appendChild(el('p', 'falhou', 'Não publicou: ' + e.message)); pub.disabled = false; pub.textContent = 'Publicar na Amazon'; }
+  };
+  $('acoes').append(reler, previa, pub);
+}
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devoluções Shopee</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#ee4d2d,#c2410c);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#ffe4dc}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}
+  td.dinheiro{white-space:nowrap;text-align:right}
+  .prod{display:flex;gap:8px;align-items:center}.prod img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:#f1f5f9}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=24"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Devoluções — Shopee</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Devoluções e reembolsos da loja na Shopee, com o motivo, a situação e o valor devolvido ao comprador.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="30">30 dias</button>
+      <button type="button" data-dias="60">60 dias</button>
+      <button type="button" data-dias="90">90 dias</button>
+      <button type="button" data-dias="150">150 dias</button>
+    </div>
+  </div>
+  <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+  <section class="bloco">
+    <h2>Por motivo</h2>
+    <div class="tabela-rolagem" id="motivos"></div>
+  </section>
+  <section class="bloco">
+    <h2>Devoluções</h2>
+    <div class="filtros"><input id="busca" type="search" placeholder="Buscar por pedido, devolução, produto ou SKU" aria-label="Buscar devolução"></div>
+    <div class="tabela-rolagem" id="lista"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
+let dias = 90, dados = null;
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+const COR = { ACCEPTED: 'vermelho', CANCELLED: 'verde', CLOSED: '' };
+function pintarLista(){
+  const qv = $('busca').value.trim().toLowerCase();
+  const itens = dados.devolucoes.filter((d) => !qv || [d.pedido, d.devolucao, ...d.itens.map((i) => i.nome), ...d.itens.map((i) => i.sku)].some((x) => String(x || '').toLowerCase().includes(qv)));
+  const tab = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Data', 'Motivo', 'Situação', 'Reembolso', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+  for(const d of itens){
+    const tr = el('tr');
+    const t0 = el('td'); const p = el('div', 'prod'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(d.itens[0]?.imagem) im.src = d.itens[0].imagem;
+    const cx = el('div'); cx.appendChild(document.createTextNode(d.itens.map((i) => i.nome).filter(Boolean).join(' + ') || 'item'));
+    cx.appendChild(el('span', 'pequeno', `${d.itens.map((i) => `${i.sku || 'sem SKU'} × ${i.quantidade}`).join(', ')} · pedido ${d.pedido}`));
+    p.append(im, cx); t0.appendChild(p);
+    const t2 = el('td'); t2.appendChild(document.createTextNode(d.motivo_nome)); if(d.texto) t2.appendChild(el('span', 'pequeno', d.texto));
+    const t3 = el('td'); t3.appendChild(el('span', 'chip ' + (COR[d.status] ?? 'amarelo'), d.situacao));
+    if(d.prazo_vendedor && !['ACCEPTED', 'CANCELLED', 'CLOSED'].includes(d.status)) t3.appendChild(el('span', 'pequeno', `responder até ${new Date(d.prazo_vendedor).toLocaleString('pt-BR')}`));
+    const t4 = el('td', 'dinheiro'); t4.appendChild(document.createTextNode(real(d.reembolso))); if(d.valor_original != null && d.valor_original !== d.reembolso) t4.appendChild(el('span', 'pequeno', `de ${real(d.valor_original)}`));
+    const t5 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t5.appendChild(a);
+    tr.append(t0, el('td', null, dataBR(d.data)), t2, t3, t4, t5); tb.appendChild(tr);
+  }
+  if(!itens.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma devolução por aqui.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
+  tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
+}
+async function carregar(){
+  erroTela('');
+  if(!LOJA){ erroTela('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
+  try{
+    dados = await api(`/api/shopee/devolucoes?loja=${LOJA}&dias=${dias}`);
+    const r = dados.resumo;
+    const box = $('cartoes'); box.innerHTML = '';
+    box.append(
+      cartao(`Reembolsado em ${dias} dias`, real(r.reembolsado), `${numero(r.aceitas)} devolução(ões) aceita(s)`, true),
+      cartao('Pedidos de devolução', numero(r.total), `${numero(r.canceladas)} cancelada(s) · ${numero(r.abertas)} em aberto`),
+      cartao('Motivo mais comum', r.por_motivo[0]?.motivo || '—', r.por_motivo[0] ? `${numero(r.por_motivo[0].qtd)} caso(s)` : ''),
+    );
+    const tab = el('table'); const cab = el('tr'); for(const h of ['Motivo', 'Casos', 'Reembolsado']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+    for(const m of r.por_motivo){ const tr = el('tr'); tr.append(el('td', null, m.motivo), el('td', null, numero(m.qtd)), el('td', 'dinheiro', real(m.reembolso))); tb.appendChild(tr); }
+    tab.appendChild(tb); $('motivos').innerHTML = ''; $('motivos').appendChild(tab);
+    pintarLista();
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+$('busca').oninput = () => dados && pintarLista();
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

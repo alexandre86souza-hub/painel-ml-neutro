@@ -10,6 +10,8 @@ notificacoes.jsonl
 # Gerados ao rodar
 node_modules/
 logs/
+# Cópias de segurança do banco (npm run backup): os mesmos dados do dados.sqlite
+backups/
 
 # Sessão do navegador do scraper = cookies logados da conta do Mercado Livre
 scraper/.sessao_ml/

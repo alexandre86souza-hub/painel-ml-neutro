@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -207,6 +207,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div class="cfg-service-grid">
           <article class="cfg-service-card" aria-labelledby="t4"><div class="cfg-service-icon">◎</div><div class="cfg-service-main"><div class="cfg-service-title"><div><h4 id="t4">Scraper</h4><p>Navegador autenticado para dados que a API oficial não entrega.</p></div><span class="cfg-service-badge">LOCAL</span></div><dl class="status cfg-status-list"><dt>Estado</dt><dd id="scrEstado">—</dd><dt>Endereço</dt><dd id="scrUrl" class="mono">—</dd><dt>Sessão no ML</dt><dd id="scrSessao">não testada</dd></dl><div class="acoes"><button type="button" class="ghost" id="btnTestarSessao">Testar sessão</button><a class="botao" href="/navegador.html">Fazer login</a><button type="button" class="ghost" id="btnReiniciar">Reiniciar</button></div></div></article>
 
+          <article class="cfg-service-card" aria-labelledby="tBackup"><div class="cfg-service-icon">⛁</div><div class="cfg-service-main"><div class="cfg-service-title"><div><h4 id="tBackup">Cópia de segurança</h4><p>Todos os dados do painel (vendas, pagamentos, custos, métricas e configurações) num só arquivo, copiado sozinho uma vez por dia.</p></div><span class="cfg-service-badge">DIÁRIA</span></div><dl class="status cfg-status-list"><dt>Última cópia</dt><dd id="bkUltima">—</dd><dt>Pasta</dt><dd id="bkPasta" class="mono">—</dd><dt>Cópias guardadas</dt><dd id="bkCopias">—</dd></dl><div class="acoes"><button type="button" class="ghost" id="btnBackup">Fazer cópia agora</button></div><details class="cfg-details"><summary>Guardar fora deste computador e restaurar</summary><ol class="guia"><li>Para a cópia ir para a nuvem, escolha uma pasta do OneDrive (ou Google Drive). No Terminal, na pasta do painel: <code>npm run backup -- --pasta "C:\Users\VOCÊ\OneDrive\Painel-ML"</code></li><li>Guarde junto, num lugar seguro (gerenciador de senhas), uma cópia do arquivo <code>.env</code>: ele tem a chave que abre os segredos do banco. Sem ela a cópia volta inteira, mas é preciso reconectar as contas.</li><li>Para voltar uma cópia: pare o painel (Ctrl+C) e rode <code>npm run restaurar -- painel-AAAAMMDD-HHMM.sqlite</code>. O banco atual fica guardado ao lado, com outro nome.</li><li>A guarda mantém as 7 últimas cópias diárias, 1 por semana por 8 semanas e 1 por mês por 2 anos.</li></ol></details></div></article>
           <article class="cfg-service-card cfg-service-featured" aria-labelledby="t6"><div class="cfg-service-icon">⌘</div><div class="cfg-service-main"><div class="cfg-service-title"><div><h4 id="t6">Claude Code</h4><p>Pergunte em linguagem natural e consulte seus dados sem procurar tela por tela.</p></div><span class="cfg-service-badge">MCP</span></div><dl class="status cfg-status-list"><dt>Estado</dt><dd id="mcpEstado">—</dd><dt>Pasta do projeto</dt><dd id="mcpPasta" class="mono">—</dd></dl><label for="mcpComando">Comando para o Terminal</label><div class="linha"><input id="mcpComando" readonly value="—"><button type="button" class="ghost" data-copiar="mcpComando">Copiar</button></div><details class="cfg-details"><summary>Como ligar o Claude Code aos seus dados</summary><ol class="guia"><li>Conecte a sua conta do Mercado Livre no <strong>passo 3</strong>.</li><li>Abra o <strong>Terminal</strong> e cole a linha acima.</li><li>Na primeira vez, permita o servidor <strong>HN-Gestor-ML</strong>.</li><li>Digite <code>/mcp</code> e confirme que <code>HN-Gestor-ML</code> aparece como <em>connected</em>.</li><li>Pronto — é só perguntar em português.</li></ol><p class="sub"><strong>Exemplos:</strong> “quais foram meus 10 melhores produtos nos últimos 30 dias?” · “quem está na curva A?” · “o MLB123… está perdendo visitas?”</p><p class="sub">Para deixar a ponte somente em consulta, escreva <code>ML_MCP_ESCRITA=0</code> no arquivo <code>.env</code> e reinicie.</p></details></div></article>
         </div>
       </section>
@@ -515,6 +516,25 @@ $('btnReiniciar').onclick = async () => {
   try{ await post('/api/scraper/reiniciar'); await carregar(false); }
   catch(e){ $('aviso').replaceChildren(caixa('err', 'Não reiniciou.', [e.message])); }
 };
+
+// Cópia de segurança
+async function carregarBackup(){
+  try{
+    const b = await api('/api/backup');
+    const u = b.ultimo;
+    $('bkUltima').textContent = b.erro && (!u || b.erro.em > u.em) ? `falhou em ${new Date(b.erro.em).toLocaleString('pt-BR')}: ${b.erro.erro}`
+      : u ? `${new Date(u.em).toLocaleString('pt-BR')} · ${(u.tamanho / 1048576).toFixed(1)} MB · conferida` : 'ainda nenhuma (a primeira sai 2 minutos depois de ligar o painel)';
+    $('bkPasta').textContent = b.pasta + (b.padrao ? ' (dentro da pasta do painel)' : '');
+    $('bkCopias').textContent = b.copias.length ? `${b.copias.length} · a mais antiga de ${new Date(b.copias.at(-1).data).toLocaleDateString('pt-BR')}` : 'nenhuma';
+  }catch(e){ $('bkUltima').textContent = e.message; }
+}
+$('btnBackup').onclick = async () => {
+  $('btnBackup').disabled = true;
+  try{ const r = await post('/api/backup'); $('aviso').replaceChildren(caixa('ok', 'Cópia feita e conferida.', [`${r.arquivo} · ${(r.tamanho / 1048576).toFixed(1)} MB`])); }
+  catch(e){ $('aviso').replaceChildren(caixa('err', 'A cópia falhou.', [e.message])); }
+  finally{ $('btnBackup').disabled = false; carregarBackup(); }
+};
+carregarBackup();
 
 // Validade da senha e situação do 2FA
 api('/api/seguranca').then((s) => {

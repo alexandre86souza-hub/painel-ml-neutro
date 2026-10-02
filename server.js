@@ -1978,6 +1978,7 @@ Object.assign(routes, shopeeVendasMod.rotas);
 Object.assign(routes, require('./shopee-anuncios.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
 // Ads da Shopee (shopee-ads.js): saldo e desempenho diário da loja.
 Object.assign(routes, require('./shopee-ads.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
+Object.assign(routes, require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
 
 // ---------- Amazon Ads: conexão da conta de anúncios (amazon-ads.js) ----------
 // Retorno da autorização em /amazon-ads/callback, pela porta pública (ver tratarPublico).
@@ -1989,6 +1990,12 @@ Object.assign(routes, amazonAdsMod.rotas);
 rotasParam.push(...amazonAdsMod.rotasParam);
 
 // ---------- Financeiro: o dinheiro das vendas pelo Mercado Pago (financeiro.js) ----------
+// ---------- Cópia de segurança do banco (backup.js): rotas da Configuração; a cópia diária é
+// ligada por iniciar.js (npm start) e por "npm run painel", não pelos testes ----------
+const backupMod = require('./backup.js').criar({ D });
+Object.assign(routes, backupMod.rotas);
+// ---------- Reputação: termômetro e vendas que afetaram a reputação (reputacao.js) ----------
+Object.assign(routes, require('./reputacao.js').criar({ D, ml, emLotes, contaOuErro }).rotas);
 const finMod = require('./financeiro.js').criar({ D, ml });
 Object.assign(routes, finMod.rotas);
 rotasParam.push(...finMod.rotasParam);
@@ -2004,6 +2011,8 @@ rotasParam.push(...concMod.rotasParam);
 const amazonMod = require('./amazon.js').criar({ D, janela });
 Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
+// ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
+Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
 // ---------- identidade do painel: nome e logo da empresa ----------
 // O código não carrega a marca de ninguém: nome e logo são digitados na tela Empresa e ficam
@@ -2057,7 +2066,11 @@ const marcaAtual = (contaId = D.contaAtivaId()) => {
     tem_logo: !!marcaLogo(contaId),
     v: `${contaId || 0}-${marcaLer('v', contaId) || '0'}` };   // muda com a conta e a cada gravação: o navegador busca o logo de novo
 };
-routes['GET /api/marca'] = async (url) => marcaAtual(contaDaMarca(url));
+// ?conta=ID de uma conta do ML conectada (tela "Todas as contas"): só LER a identidade dela
+routes['GET /api/marca'] = async (url) => {
+  const pedida = Number(url?.searchParams?.get('conta'));
+  return marcaAtual(pedida && D.contaObter(pedida) ? pedida : contaDaMarca(url));
+};
 // Grava a identidade da conta ativa (sem conta conectada ainda, a geral); ?conta=amazon, a da Amazon.
 routes['PUT /api/marca'] = async (url, body) => {
   const m = validarMarca(body);
@@ -2502,9 +2515,10 @@ if (require.main === module) {
     console.log(`→ público http://127.0.0.1:${portaPublica}   (aponte o túnel para cá: /callback, /webhook`
       + `${painelOnline() ? ' e o painel online' : ''})`);
     console.log('  Dica: "npm start" sobe também o túnel e o scraper.');
+    backupMod.agendar();
   }).catch((e) => { console.error(`Não subiu: ${e.message}`); process.exit(1); });
 }
 // `ml` sai daqui para o mcp.js fazer o repasse à API do Mercado Livre com o token da conta
 // ativa. De propósito NÃO existe rota HTTP de repasse: pela porta pública ela viraria
 // "faça qualquer coisa na conta do vendedor" para quem descobrisse a URL do túnel.
-module.exports = { buildItem, buildEdicao, iniciar, situacaoAtual, resumoConfig, despachar, temRota, ml, comparativoAds, mudancasDaCampanha, validarMarca };
+module.exports = { agendarBackup: () => backupMod.agendar(), buildItem, buildEdicao, iniciar, situacaoAtual, resumoConfig, despachar, temRota, ml, comparativoAds, mudancasDaCampanha, validarMarca };

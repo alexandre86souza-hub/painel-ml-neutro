@@ -100,6 +100,11 @@ function lerEmpresa(txt) {
     razao_social: e.razao_social || '', cnpj: e.cnpj || '', regime: e.regime || '',
     impostos: Array.isArray(e.impostos) ? e.impostos : [],
     embalagem_padrao: e.embalagem_padrao ?? null,
+    // custo por entrega feita pelo próprio vendedor (Shopee "Entrega Direta"): o que ele paga à
+    // empresa de entrega por pedido. NULL = não informado (o lucro desses pedidos fica pendente).
+    entrega_propria: e.entrega_propria ?? null,
+    // custo por entrega Flex do ML (o que o vendedor paga à empresa de entrega). NULL = usa o /costs.
+    entrega_flex: e.entrega_flex ?? null,
   };
 }
 function validarEmpresa(b) {
@@ -116,8 +121,14 @@ function validarEmpresa(b) {
   let emb = b.embalagem_padrao;
   emb = emb === '' || emb == null ? null : Number(String(emb).replace(',', '.'));
   if (emb != null && (!Number.isFinite(emb) || emb < 0 || emb > 1e5)) throw erro('Embalagem padrão inválida.');
+  let ent = b.entrega_propria;
+  ent = ent === '' || ent == null ? null : Number(String(ent).replace(',', '.'));
+  if (ent != null && (!Number.isFinite(ent) || ent < 0 || ent > 1e4)) throw erro('Custo por entrega inválido.');
+  let flex = b.entrega_flex;
+  flex = flex === '' || flex == null ? null : Number(String(flex).replace(',', '.'));
+  if (flex != null && (!Number.isFinite(flex) || flex < 0 || flex > 1e4)) throw erro('Custo por entrega Flex inválido.');
   return { razao_social: texto(b.razao_social, 120), cnpj: texto(b.cnpj, 20), regime: texto(b.regime, 40),
-    impostos, embalagem_padrao: emb };
+    impostos, embalagem_padrao: emb, entrega_propria: ent, entrega_flex: flex };
 }
 const impostoTotal = (empresa) => Math.round(empresa.impostos.reduce((s, i) => s + (i.pct || 0), 0) * 100) / 100;
 
@@ -166,6 +177,18 @@ function somarContas(linhas) {
     return { ...t, margem: comCusto > 0 ? t.lucro / comCusto : null, cobertura: t.faturamento > 0 ? comCusto / t.faturamento : null };
   };
   return { contas: linhas.length, hoje: de('hoje'), periodo: de('periodo') };
+}
+
+// Frete de um envio Flex do ML. Medido em 02/10/2026 (99 envios): o Mercado Pago NÃO cobra o
+// frete do /costs nas vendas Flex; o ML paga um bônus por envio (bonificaciones_flex) = a tarifa
+// Flex menos o custo de envio do vendedor no /costs (frete grátis para o comprador: custo R$ 9,89
+// e bônus R$ 1,10; comprador pagou: custo 0 e bônus R$ 9,99–10,99). O vendedor paga a empresa de
+// entrega (empresa.entrega_flex). Frete = entrega − bônus; sem o bônus creditado ainda, a média
+// da conta para aquele caso (estimado). Função pura: testada.
+function freteFlex({ custoMl, bonus, entrega, medias = {} }) {
+  if (bonus != null) return { frete: entrega - bonus, bonus, estimado: false };
+  const media = (custoMl > 0 ? medias.com_custo : medias.sem_custo) ?? null;
+  return { frete: entrega - (media || 0), bonus: media, estimado: true };
 }
 
 // Uma linha de venda com todos os custos. `ctx` traz o custo do SKU, a embalagem do
@@ -418,6 +441,26 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const ids = [...new Set(linhas.map((l) => l.item_id))];
       const custos = D.custosDe(ids);
       const empresa = empresaDe(conta);
+
+      // Flex com custo de entrega informado (tela Empresa): frete = entrega − bônus Flex do ML.
+      // O tipo do envio é uma chamada por envio (a mesma da Performance): até 300 por abertura.
+      const flexInfo = new Map();
+      if (empresa.entrega_flex != null) {
+        const semTipo = D.enviosSemLogistica(conta.ml_user_id, j.de, j.ate, 300);
+        await emLotes(semTipo, 6, async (envio) => {
+          const s = await ml(`/shipments/${envio}`, {}, conta.ml_user_id).catch(() => null);
+          if (s) D.logisticaGravar(conta.ml_user_id, envio, s.logistic_type || s.logistic?.type || 'desconhecido');
+        });
+        const envios = [...new Set(linhas.map((l) => l.envio_id).filter(Boolean))];
+        const flex = D.flexDosEnvios(envios);
+        const bonus = D.bonusFlexDosEnvios([...flex]);
+        const medias = D.bonusFlexMedias(conta.ml_user_id);
+        for (const e of flex) {
+          const custoMl = linhas.find((l) => l.envio_id === e)?.frete_envio;
+          flexInfo.set(e, freteFlex({ custoMl, bonus: bonus[e] ?? null, entrega: empresa.entrega_flex, medias }));
+        }
+        for (const l of linhas) { const f = flexInfo.get(l.envio_id); if (f) l.frete_envio = f.frete; }
+      }
       const impostoPct = impostoTotal(empresa) || D.impostoLer(conta.ml_user_id) || 0;
       const info = {};
       for (let i = 0; titulos && i < ids.length; i += 20) {
@@ -451,6 +494,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           full: !!l.origem && !/^BRP\d+$/.test(l.origem),   // saiu do armazém do ML
           componentes: cSku.componentes.map((c) => ({ sku: c.sku || String(c.numero), custo: c.custo })),
           custo_unit: custoUnit, embalagem_unit: emb, ...conta_,
+          ...(flexInfo.has(l.envio_id) ? { flex: true, bonus_flex: flexInfo.get(l.envio_id).bonus, frete_estimado: flexInfo.get(l.envio_id).estimado } : {}),
           link: `https://www.mercadolivre.com.br/vendas/${l.order_id}/detalhe`,
         });
         if (!valida) { tot.cancelados++; continue; }
@@ -682,5 +726,5 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa };
 }
 
-module.exports = { criar, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, somarContas, topPorSku, validarEmpresa, lerEmpresa,
+module.exports = { criar, freteFlex, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, somarContas, topPorSku, validarEmpresa, lerEmpresa,
   impostoTotal, contaDaLinha, dinheiro };

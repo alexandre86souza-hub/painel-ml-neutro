@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reputação</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#16a34a,#15803d);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dcfce7}
+  .cartao.alerta .valor{color:#b45309}
+  .termo{display:flex;gap:4px;margin:10px 0 4px}
+  .termo i{flex:1;height:12px;border-radius:4px;opacity:.25}
+  .termo i.on{opacity:1;outline:2px solid #0f172a33;outline-offset:1px}
+  .termo .vermelha{background:#dc2626}.termo .laranja{background:#f97316}.termo .amarela{background:#eab308}
+  .termo .verde-claro{background:#84cc16}.termo .verde{background:#16a34a}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}.chip.azul{background:#dbeafe;color:#1d4ed8}
+  .caso{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 12px;background:#fff}
+  .caso.afetou{border-left:4px solid #dc2626}.caso.risco{border-left:4px solid #eab308}
+  .caso h3{margin:0 0 4px;font-size:15px}
+  .caso .linha{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+  .caso .ml{margin:8px 0 0;font-size:13px}
+  .sugestao{margin-top:10px;background:#f8fafc;border-radius:10px;padding:10px 12px}
+  .sugestao b{display:block;margin-bottom:6px}
+  .sugestao ol{margin:0 0 8px 18px;padding:0;font-size:13px}
+  .sugestao textarea{width:100%;box-sizing:border-box;min-height:84px;font:inherit;font-size:13px;padding:8px;border:1px solid #d5dbe5;border-radius:8px;resize:vertical}
+  .acoes-ml{font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=24"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Reputação</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <p class="sub" id="sub">A reputação da conta no Mercado Livre e as vendas que a afetaram (ou podem afetar), com uma sugestão de solução ou contestação para cada uma.</p>
+  <div class="cartoes" id="cartoes"><p class="carregando">Lendo a reputação e as reclamações no Mercado Livre…</p></div>
+
+  <section class="bloco">
+    <h2>Vendas que afetaram a reputação</h2>
+    <p class="sub">Reclamações que o Mercado Livre conta contra a reputação (a métrica é dos últimos 60 dias). Cada uma com o que dá para fazer.</p>
+    <div id="afetaram"></div>
+  </section>
+  <section class="bloco">
+    <h2>Em risco: reclamações abertas</h2>
+    <p class="sub">Ainda não contam. Resolvidas a tempo (resposta, troca, reembolso ou devolução aceita), normalmente não chegam a afetar.</p>
+    <div id="risco"></div>
+  </section>
+  <section class="bloco">
+    <h2>Cancelamentos feitos por você</h2>
+    <p class="sub">Só o cancelamento pedido pelo vendedor pesa na reputação (o do comprador e o da mediação do ML não).</p>
+    <div id="cancelamentos"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const NIVEIS = ['vermelha', 'laranja', 'amarela', 'verde-claro', 'verde'];
+const ACOES = { send_message_to_complainant: 'responder ao comprador', refund: 'reembolsar', open_dispute: 'abrir disputa (pedir mediação)',
+  return_review_ok: 'aprovar a devolução recebida', return_review_fail: 'reprovar a devolução recebida', allow_return: 'aceitar a devolução',
+  send_potential_shipping: 'informar o envio', add_shipping_evidence: 'enviar comprovante de entrega' };
+function cartao(rot, valor, nota, cls){
+  const c = el('div', 'cartao' + (cls ? ' ' + cls : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+const prazoBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null);
+function metrica(nome, m, nota){
+  if(!m) return cartao(nome, '—', 'sem dados');
+  return cartao(nome, String(m.valor), `${pct(m.taxa, 2)} das vendas · ${nota}`, m.valor ? 'alerta' : '');
+}
+function caso(c, tipo){
+  const box = el('div', 'caso ' + tipo);
+  box.appendChild(el('h3', null, `${c.categoria_nome} — ${c.produto || (c.pedido ? 'pedido ' + c.pedido : c.tipo)}`));
+  const l = el('div', 'linha');
+  l.append(el('span', 'chip ' + (c.aberta ? 'amarelo' : 'vermelho'), c.aberta ? 'aberta' : 'fechada'),
+    el('span', 'chip', c.tipo), el('span', null, `aberta em ${dataBR(c.criada)}`));
+  if(c.afeta && !c.na_metrica) l.appendChild(el('span', 'chip azul', 'fora dos 60 dias da métrica'));
+  if(c.prazo && c.aberta) l.appendChild(el('span', 'chip amarelo', `prazo ${prazoBR(c.prazo)}${c.vez_de === 'respondent' ? ' · sua vez' : ''}`));
+  if(c.link){ const a = el('a', null, `Pedido ${c.pedido}`); a.href = c.link; a.target = '_blank'; a.rel = 'noopener'; l.appendChild(a); }
+  box.appendChild(l);
+  const ml = el('p', 'ml');
+  ml.textContent = [c.problema, c.titulo_ml, c.descricao_ml].filter(Boolean).join(' · ');
+  box.appendChild(ml);
+  if(c.acoes.length){
+    const a = el('p', 'acoes-ml');
+    a.textContent = 'No ML você pode: ' + c.acoes.map((x) => (ACOES[x.acao] || x.acao) + (x.prazo ? ` (até ${prazoBR(x.prazo)})` : '')).join(' · ');
+    box.appendChild(a);
+  }
+  const s = el('div', 'sugestao');
+  s.appendChild(el('b', null, 'Sugestão: ' + c.sugestao.titulo));
+  const ol = el('ol'); for(const p of c.sugestao.passos) ol.appendChild(el('li', null, p)); s.appendChild(ol);
+  const lab = el('label', 'pequeno', 'Mensagem pronta (revise antes de enviar no ML):');
+  const ta = el('textarea'); ta.value = c.sugestao.mensagem; ta.id = 'msg-' + c.claim_id; lab.htmlFor = ta.id;
+  const bt = el('button', 'bt', 'Copiar mensagem'); bt.type = 'button';
+  bt.onclick = async () => { try{ await navigator.clipboard.writeText(ta.value); bt.textContent = 'Copiada ✓'; setTimeout(() => (bt.textContent = 'Copiar mensagem'), 2000); }catch{ ta.select(); } };
+  s.append(lab, ta, bt);
+  box.appendChild(s);
+  return box;
+}
+async function carregar(){
+  erroTela('');
+  try{
+    const r = await api('/api/reputacao');
+    const n = NIVEIS.indexOf(r.nivel.cor);
+    const box = $('cartoes'); box.innerHTML = '';
+    const termo = cartao('Termômetro', r.nivel.nome, r.nivel.lider || 'sem MercadoLíder', 'destaque');
+    const t = el('div', 'termo'); NIVEIS.forEach((c, i) => t.appendChild(el('i', c + (i === n ? ' on' : ''))));
+    termo.insertBefore(t, termo.querySelector('.nota'));
+    box.append(termo,
+      metrica('Reclamações', r.metricas.reclamacoes, 'últimos 60 dias'),
+      metrica('Atrasos no despacho', r.metricas.atrasos, 'últimos 60 dias'),
+      metrica('Cancelamentos por você', r.metricas.cancelamentos, 'últimos 60 dias'),
+      cartao('Vendas concluídas', numero(r.metricas.vendas?.valor), 'base das taxas (60 dias)'));
+    $('sub').textContent = `${r.conta.nickname}: a reputação no Mercado Livre e as vendas que a afetaram (ou podem afetar), com uma sugestão de solução ou contestação para cada uma. ${numero(r.reclamacoes_lidas)} reclamações e devoluções lidas (${r.dias} dias).`
+      + (r.metricas.atrasos?.valor ? ' Atrasos: o Mercado Livre informa só o número, não quais vendas — confira os envios despachados depois do prazo.' : '');
+    const pintar = (id, lista, tipo, vazio) => { const b = $(id); b.innerHTML = ''; if(!lista.length) b.appendChild(el('p', 'vazio', vazio)); for(const c of lista) b.appendChild(caso(c, tipo)); };
+    pintar('afetaram', r.afetaram, 'afetou', 'Nenhuma reclamação afetando a reputação. 🎉');
+    pintar('risco', r.em_risco, 'risco', 'Nenhuma reclamação aberta.');
+    const cb = $('cancelamentos'); cb.innerHTML = '';
+    if(!r.cancelamentos.length) cb.appendChild(el('p', 'vazio', 'Nenhum cancelamento feito por você nos últimos 60 dias.'));
+    else {
+      const tab = el('table'); const cab = el('tr'); for(const h of ['Data', 'Pedido', 'Produto', 'Motivo']) cab.appendChild(el('th', null, h));
+      const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+      for(const c of r.cancelamentos){ const tr = el('tr'); const td = el('td'); const a = el('a', null, String(c.pedido)); a.href = c.link; a.target = '_blank'; a.rel = 'noopener'; td.appendChild(a);
+        tr.append(el('td', null, dataBR(c.data)), td, el('td', null, c.produto || '—'), el('td', null, c.motivo || '—')); tb.appendChild(tr); }
+      tab.appendChild(tb); cb.appendChild(tab);
+    }
+  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+}
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

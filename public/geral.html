@@ -17,7 +17,8 @@
   .conta-topo{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:48px}
   .conta-topo img{max-width:120px;max-height:48px;object-fit:contain}
   .conta-topo .nome{font-weight:700;font-size:15px;line-height:1.2}
-  .conta-topo .nome small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+  .conta-topo .marca-nome{text-align:left;font-size:17px}
+  .conta-topo .nome small{letter-spacing:0;display:block;font-weight:400;font-size:12px;color:var(--muted)}
   .conta-topo .bt{margin-left:auto;white-space:nowrap}
   .conta dl{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin:0}
   .conta dt{font-size:12px;color:var(--muted)}
@@ -43,7 +44,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -111,6 +112,18 @@ async function abrirConta(id){
   location.href = '/';
 }
 
+// Identidade de cada conta (nome e logo cadastrados em Empresa e custos)
+const marcas = {};
+async function lerMarcas(ids){
+  await Promise.all(ids.filter((id) => !(id in marcas)).map(async (id) => { try{ marcas[id] = await api('/api/marca?conta=' + encodeURIComponent(id)); }catch{ marcas[id] = null; } }));
+}
+// nome repetido entre contas (ex.: as duas do ML com o mesmo nome): acrescenta o apelido
+const nomeDe = (c) => {
+  const n = marcas[c.ml_user_id]?.nome || c.nickname;
+  const repetido = Object.entries(marcas).filter(([id, m]) => m?.nome === n && String(id) !== String(c.ml_user_id)).length;
+  return repetido && c.nickname && c.nickname !== n ? n + ' · ' + c.nickname : n;
+};
+
 function pintarContas(r, cor){
   const box = $('contas'); box.innerHTML = '';
   const total = r.total.periodo.faturamento;
@@ -119,7 +132,9 @@ function pintarContas(r, cor){
     const topo = el('div', 'conta-topo');
     const img = el('img'); img.alt = ''; img.src = '/api/marca/logo?conta=' + c.ml_user_id;
     img.onerror = () => img.remove();   // conta sem logo: fica só o nome
-    const nome = el('div', 'nome', c.nickname);
+    // nome e logo da tela Empresa e custos de cada conta, no mesmo estilo do menu
+    const nome = el('div', 'nome marca-nome', nomeDe(c));
+    nome.appendChild(el('small', null, c.amazon ? 'Amazon' : c.shopee ? 'Shopee' : 'Mercado Livre' + (c.nickname && !nomeDe(c).includes(c.nickname) ? ' · ' + c.nickname : '')));
     const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : c.shopee ? 'Abrir os pedidos' : 'Abrir o Dashboard'); bt.type = 'button';
     bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
     topo.append(img, nome, bt); k.appendChild(topo);
@@ -155,7 +170,7 @@ function pintarTabela(r, cor){
       el('td', p.lucro < 0 ? 'neg' : 'pos', real(p.lucro)), el('td', null, pct(p.margem)));
     tb.appendChild(tr);
   };
-  for(const c of r.contas) if(!c.erro) linha(c.nickname, c.periodo, cor[c.ml_user_id]);
+  for(const c of r.contas) if(!c.erro) linha(nomeDe(c), c.periodo, cor[c.ml_user_id]);
   linha('Total', r.total.periodo, null, 'total');
   t.appendChild(tb); box.appendChild(t);
 }
@@ -171,7 +186,7 @@ function pintarGrafico(r, cor){
     boas.forEach((c, i) => {
       const v = porConta[i][d] || 0; if(!v) return;
       const seg = el('i'); seg.style.height = (v / teto * 100) + '%'; seg.style.background = cor[c.ml_user_id];
-      col.appendChild(seg); partes.push(`${c.nickname} ${real(v)}`); soma += v;
+      col.appendChild(seg); partes.push(`${nomeDe(c)} ${real(v)}`); soma += v;
     });
     col.title = `${diaMes(d)}: ${real(soma)}` + (partes.length ? ` (${partes.join(' · ')})` : '');
     g.appendChild(col);
@@ -179,7 +194,7 @@ function pintarGrafico(r, cor){
   $('eixo').innerHTML = '';
   if(datas.length) $('eixo').append(el('span', null, diaMes(datas[0])), el('span', null, diaMes(datas.at(-1))));
   const leg = $('legenda'); leg.innerHTML = '';
-  for(const c of boas){ const s = el('span'); const b = el('i'); b.style.background = cor[c.ml_user_id]; s.append(b, c.nickname); leg.appendChild(s); }
+  for(const c of boas){ const s = el('span'); const b = el('i'); b.style.background = cor[c.ml_user_id]; s.append(b, nomeDe(c)); leg.appendChild(s); }
 }
 
 function pintarProdutos(r, cor){
@@ -187,7 +202,7 @@ function pintarProdutos(r, cor){
   if(!r.produtos.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda no período.')); return; }
   const boas = r.contas.filter((c) => !c.erro);
   const t = el('table'); const cab = el('tr');
-  for(const h of ['Produto', 'Unidades', 'Faturamento', 'Lucro', 'Margem', ...boas.map((c) => c.nickname), 'Divisão']) cab.appendChild(el('th', null, h));
+  for(const h of ['Produto', 'Unidades', 'Faturamento', 'Lucro', 'Margem', ...boas.map((c) => nomeDe(c)), 'Divisão']) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
   for(const p of r.produtos){
@@ -201,7 +216,7 @@ function pintarProdutos(r, cor){
       tr.appendChild(td);
     }
     const div = el('td'); const barra = el('div', 'mini-part');
-    for(const c of boas){ const x = p.por_conta[c.ml_user_id]; if(!x || !p.faturamento) continue; const i = el('i'); i.style.width = (x.faturamento / p.faturamento * 100) + '%'; i.style.background = cor[c.ml_user_id]; i.title = `${c.nickname}: ${pct(x.faturamento / p.faturamento, 0)}`; barra.appendChild(i); }
+    for(const c of boas){ const x = p.por_conta[c.ml_user_id]; if(!x || !p.faturamento) continue; const i = el('i'); i.style.width = (x.faturamento / p.faturamento * 100) + '%'; i.style.background = cor[c.ml_user_id]; i.title = `${nomeDe(c)}: ${pct(x.faturamento / p.faturamento, 0)}`; barra.appendChild(i); }
     div.appendChild(barra); tr.appendChild(div);
     tb.appendChild(tr);
   }
@@ -255,17 +270,19 @@ async function carregar(){
   const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
   try{
     const r = await api(`/api/contas/resumo?dias=${dias}`);
+    await lerMarcas(r.contas.map((c) => c.ml_user_id));
     if(minha !== geracao) return;
     pintar(r, false);
     let tudo = r; const erros = [];
     const a = await amz;
     if(minha !== geracao) return;
-    if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false) tudo = comAmazon(tudo, a);
+    if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false){ await lerMarcas(['amazon']); tudo = comAmazon(tudo, a); }
     pintar(tudo, false);
     for(const l of await lojas){
       const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&dias=${dias}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(s.erro){ erros.push('Shopee: ' + s.erro); continue; }
+      await lerMarcas(['shopee-' + l.shop_id]);
       tudo = comExterna(tudo, s, { ml_user_id: 'shopee-' + l.shop_id, nickname: (s.nome || 'Loja') + ' · Shopee', shopee: true,
         tela: `/vendas.html?conta=shopee-${l.shop_id}` });
       pintar(tudo, false);

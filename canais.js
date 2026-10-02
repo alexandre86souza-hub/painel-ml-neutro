@@ -34,8 +34,10 @@ function somaLinhas(ls) {
     t.unidades += l.quantidade || 0;
     for (const k of ['faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto']) t[k] += l[k] || 0;
     if (l.lucro != null) { t.lucro += l.lucro; t.com_lucro += l.faturamento || 0; }
+    if (l.taxa_fixa != null) t.taxa_fixa = (t.taxa_fixa || 0) + l.taxa_fixa;   // Shopee: já dentro da tarifa
   }
   for (const k of ['faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto', 'lucro']) t[k] = r2(t[k]);
+  if (t.taxa_fixa != null) t.taxa_fixa = r2(t.taxa_fixa);
   t.margem = t.com_lucro > 0 ? t.lucro / t.com_lucro : null;
   t.cobertura = t.faturamento > 0 ? Math.min(1, t.com_lucro / t.faturamento) : null;
   delete t.com_lucro;

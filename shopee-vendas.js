@@ -19,7 +19,7 @@ const n = (v) => Number(v) || 0;
 function detalheDe(o) {
   return {
     pedido: { order_sn: o.order_sn, data: o.create_time ? new Date(o.create_time * 1000).toISOString() : null,
-      status: o.order_status || null, atualizado: o.update_time || null },
+      status: o.order_status || null, atualizado: o.update_time || null, transportadora: o.shipping_carrier || null },
     itens: (o.item_list || []).map((i) => ({ sku: (i.model_sku || i.item_sku || '').trim() || null, item_id: i.item_id ?? null,
       model_id: i.model_id ?? null, nome: [i.item_name, i.model_name].filter(Boolean).join(' — ') || null,
       quantidade: n(i.model_quantity_purchased), preco_unit: i.model_discounted_price ?? i.model_original_price ?? null,
@@ -38,12 +38,50 @@ function repasseDe(e, status) {
     // frete que ficou com o vendedor: o cobrado menos o que o comprador pagou e o subsídio da Shopee
     frete_vendedor: Math.max(0, n(oi.actual_shipping_fee) - n(oi.buyer_paid_shipping_fee) - n(oi.shopee_shipping_rebate)),
     cupom_vendedor: n(oi.voucher_from_seller), devolucao: n(oi.seller_return_refund),
+    // frete que a Shopee REPASSA ao vendedor dentro do escrow_amount (medido em 100 pedidos de
+    // 02/10/2026: repasse = preço − cupom − comissão − serviço − transação − proteção de envio +
+    // final_shipping_fee + buyer_paid_shipping_fee). "Entrega Direta": a Shopee paga o frete ao
+    // vendedor, que paga a empresa de entrega; Shopee Xpress: a soma dá ~0.
+    frete_shopee: n(oi.final_shipping_fee) + n(oi.buyer_paid_shipping_fee),
+    taxa_item: taxaPorItemDe(oi),
   };
 }
 
+// Taxa por item vendido (dentro da taxa de serviço). Medido em 70 pedidos de set/out 2026: a
+// net_service_fee_info_list traz uma regra de ~2% do preço (1,4% desde 01/10) e outra POR ITEM:
+// R$ 4,00 (R$ 4,50 desde 01/10) em itens até ~R$ 80, ~R$ 16–20 de R$ 100 a 200, R$ 26 de 230 a 290.
+// Os rule_id mudam com o tempo (100640, 1000064, 1000075…): a de item é a que passa de 3% do
+// preço. Função pura: testada.
+function taxaPorItemDe(oi) {
+  const preco = n(oi.order_discounted_price);
+  const lista = oi.net_service_fee_info_list;
+  if (!Array.isArray(lista) || !lista.length || preco <= 0) return null;
+  return Math.round(lista.filter((s) => n(s.fee_amount) / preco > 0.03).reduce((a, s) => a + n(s.fee_amount), 0) * 100) / 100;
+}
+
+// Pedido entregue pelo próprio vendedor (ele paga a empresa de entrega: custo na tela Empresa).
+const entregaPropria = (transportadora) => /entrega direta/i.test(transportadora || '');
+
+// Frete médio que a Shopee repassou por pedido, por transportadora (repasses finais): estima o
+// frete dos pedidos ainda sem repasse. Função pura: testada.
+function freteMedioDe(rows) {
+  const soma = new Map();
+  const vistos = new Set();
+  for (const r of rows) {
+    if (vistos.has(r.order_sn) || !r.escrow_final || r.frete_shopee == null || INVALIDAS.has(r.status)) continue;
+    vistos.add(r.order_sn);
+    const k = r.transportadora || '';
+    const s = soma.get(k) || { v: 0, n: 0 };
+    s.v += n(r.frete_shopee); s.n++; soma.set(k, s);
+  }
+  return Object.fromEntries([...soma].map(([k, s]) => [k, s.v / s.n]));
+}
+
 // Linhas de venda de uma janela, no formato de canais.js. Com repasse: o que a Shopee tirou do
-// pedido (faturamento − recebido) vira tarifa + frete, rateado entre os itens pelo valor. Sem
-// repasse ainda: a proporção média da loja (marcada como estimada). Função pura: testada.
+// pedido (faturamento − recebido) + o frete que ela repassou = tarifa; frete = custo da entrega
+// própria (Entrega Direta) − frete repassado pela Shopee. Lucro = recebido − entrega − custos
+// (exato). Sem repasse ainda: a proporção média da loja e o frete médio da transportadora
+// (marcado como estimado). Função pura: testada.
 function linhasDe(rows, ctx) {
   const porPedido = new Map();
   for (const r of rows) { const a = porPedido.get(r.order_sn) || []; a.push(r); porPedido.set(r.order_sn, a); }
@@ -53,17 +91,20 @@ function linhasDe(rows, ctx) {
     const valida = !INVALIDAS.has(p.status);
     const fatPedido = itens.reduce((s, i) => s + n(i.preco_unit) * n(i.quantidade), 0);
     const temRepasse = p.recebido != null;
-    const tirado = temRepasse ? fatPedido - n(p.recebido) : null;
-    const fretePedido = temRepasse ? Math.min(Math.max(0, n(p.frete_vendedor)), Math.max(0, tirado)) : null;
+    const propria = entregaPropria(p.transportadora);
+    const custoEntrega = propria ? (ctx.entrega_propria ?? null) : 0;
     const devolvido = temRepasse && n(p.recebido) <= 0 && n(p.devolucao) > 0;
+    let tarifaPedido = null, freteShopee = null, estimado = false;
+    if (temRepasse) { freteShopee = p.frete_shopee != null ? n(p.frete_shopee) : 0; tarifaPedido = fatPedido - n(p.recebido) + freteShopee; }
+    else if (ctx.proporcao != null) { tarifaPedido = fatPedido * ctx.proporcao; freteShopee = n(ctx.frete_medio?.[p.transportadora || '']); estimado = true; }
+    // pedido devolvido: a entrega aconteceu (custo continua), o repasse diz o resto
+    const fretePedido = freteShopee == null || custoEntrega == null ? null : custoEntrega - freteShopee;
     for (const i of itens) {
       const q = n(i.quantidade);
       const fat = n(i.preco_unit) * q;
       const parte = fatPedido > 0 ? fat / fatPedido : 0;
-      let tarifa, frete, estimado = false;
-      if (temRepasse) { frete = fretePedido * parte; tarifa = (tirado - fretePedido) * parte; }
-      else if (ctx.proporcao != null) { tarifa = fat * ctx.proporcao; frete = 0; estimado = true; }
-      else { tarifa = null; frete = null; }
+      const tarifa = tarifaPedido == null ? null : tarifaPedido * parte;
+      const frete = !valida ? 0 : fretePedido == null ? null : fretePedido * parte;
       const cs = i.sku ? C.custoDoSku(i.sku, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_unit || 0) * q : 0;
@@ -71,6 +112,7 @@ function linhasDe(rows, ctx) {
       const falta = [];
       if (produto == null) falta.push('custo');
       if (tarifa == null) falta.push('tarifa');
+      if (valida && custoEntrega == null) falta.push('entrega');
       const lucro = !valida ? 0 : falta.length ? null : fat - tarifa - frete - produto - embalagem - imposto;
       const x = (v) => (v == null ? null : r2(v));
       out.push({ pedido: sn, data: p.data, status: p.status, valida, sku: i.sku, item_id: i.sku || String(i.item_id || sn),
@@ -80,7 +122,9 @@ function linhasDe(rows, ctx) {
         custo_unit: cs.custo, embalagem_unit: ctx.embalagem_unit || 0,
         faturamento: x(fat), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem), imposto: x(imposto),
         lucro: x(lucro), margem: lucro != null && fat > 0 && valida ? lucro / fat : null, falta: valida ? falta : [], estimado,
-        devolvido, recebido_final: !!p.escrow_final,
+        devolvido, recebido_final: !!p.escrow_final, transportadora: p.transportadora || null, entrega_propria: propria,
+        frete_shopee: freteShopee == null ? null : x(freteShopee * parte), custo_entrega: custoEntrega == null ? null : x(custoEntrega * parte),
+        taxa_fixa: temRepasse && p.taxa_item != null && valida ? x(n(p.taxa_item) * parte) : null,
         link: `https://seller.shopee.com.br/portal/sale/order?search=${encodeURIComponent(sn)}` });
     }
   }
@@ -99,7 +143,7 @@ function proporcaoDe(rows) {
     vistos.add(sn);
     const f = itens.reduce((s, i) => s + n(i.preco_unit) * n(i.quantidade), 0);
     if (f <= 0 || n(p.devolucao) > 0) continue;
-    fat += f; tirado += f - n(p.recebido);
+    fat += f; tirado += f - n(p.recebido) + n(p.frete_shopee);   // só a tarifa: o frete repassado não conta
   }
   return fat > 0 ? tirado / fat : null;
 }
@@ -138,7 +182,7 @@ function criar({ D, daLoja, janela }) {
       }
       for (let lote = D.shopeeSemDetalhe(shopId, 50), voltas = 0; lote.length && voltas < 100; lote = D.shopeeSemDetalhe(shopId, 50), voltas++) {
         const r = await daLoja(shopId, '/api/v2/order/get_order_detail', { order_sn_list: lote,
-          response_optional_fields: ['item_list', 'total_amount', 'pay_time', 'actual_shipping_fee'] });
+          response_optional_fields: ['item_list', 'total_amount', 'pay_time', 'actual_shipping_fee', 'shipping_carrier'] });
         const vieram = new Set();
         for (const o of r.response?.order_list || []) { const d = detalheDe(o); if (d.pedido.data) { D.shopeeDetalheGravar(d.pedido, d.itens); vieram.add(o.order_sn); } }
         if (!vieram.size) break;   // a Shopee não devolveu nada deste lote: tenta na próxima leitura
@@ -172,8 +216,10 @@ function criar({ D, daLoja, janela }) {
     const empresa = empresaDe(shopId);
     const impostoPct = C.impostoTotal(empresa);
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
-    const proporcao = proporcaoDe(D.shopeeVendasPeriodo(shopId, new Date(Date.now() - 90 * 864e5).toISOString(), '9999'));
-    const ls = linhasDe(D.shopeeVendasPeriodo(shopId, de, ate), { mapa, imposto_pct: impostoPct, embalagem_unit: empresa.embalagem_padrao || 0, proporcao });
+    const base90 = D.shopeeVendasPeriodo(shopId, new Date(Date.now() - 90 * 864e5).toISOString(), '9999');
+    const proporcao = proporcaoDe(base90);
+    const ls = linhasDe(D.shopeeVendasPeriodo(shopId, de, ate), { mapa, imposto_pct: impostoPct, embalagem_unit: empresa.embalagem_padrao || 0, proporcao,
+      entrega_propria: empresa.entrega_propria, frete_medio: freteMedioDe(base90) });
     return { linhas: ls, impostoPct, erroLeitura, pendentes: D.shopeePendentes(shopId) };
   }
 
@@ -230,4 +276,4 @@ function criar({ D, daLoja, janela }) {
   return { rotas, rotasParam: [], sincronizar };
 }
 
-module.exports = { criar, detalheDe, repasseDe, linhasDe, proporcaoDe };
+module.exports = { criar, taxaPorItemDe, detalheDe, repasseDe, linhasDe, proporcaoDe, freteMedioDe, entregaPropria };

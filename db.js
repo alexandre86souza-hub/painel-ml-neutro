@@ -957,12 +957,22 @@ function shopeePedidosGravar(shopId, lista) {
   catch (e) { db.exec('ROLLBACK'); throw e; }
   return lista.length;
 }
+// Transportadora do pedido (shipping_carrier: "Shopee Xpress", "Entrega Direta" = o vendedor
+// entrega e paga a empresa de entrega) e o frete que a Shopee repassou ao vendedor
+// (final_shipping_fee + buyer_paid_shipping_fee; medido: fecha o repasse em 94 de 100 pedidos).
+// Colunas novas: relê o detalhe e o repasse dos pedidos que já estavam guardados.
+const shopeeSemTransportadora = !db.prepare('PRAGMA table_info(shopee_pedidos)').all().some((c) => c.name === 'transportadora');
+colunaNova('shopee_pedidos', 'transportadora TEXT');
+colunaNova('shopee_pedidos', 'frete_shopee REAL');
+colunaNova('shopee_pedidos', 'taxa_item REAL');   // taxa por item vendido (shopee-vendas.js#taxaPorItemDe)
+if (shopeeSemTransportadora) db.exec('UPDATE shopee_pedidos SET detalhe_lido=0');
 const shopeeSemDetalhe = (shopId, limite) =>
   db.prepare('SELECT order_sn FROM shopee_pedidos WHERE shop_id=? AND detalhe_lido=0 LIMIT ?').all(shopId, limite).map((r) => r.order_sn);
 function shopeeDetalheGravar(p, itens) {
   db.exec('BEGIN');
   try {
-    db.prepare('UPDATE shopee_pedidos SET data=?, status=?, atualizado=?, detalhe_lido=1 WHERE order_sn=?').run(p.data, p.status, p.atualizado ?? null, p.order_sn);
+    db.prepare('UPDATE shopee_pedidos SET data=?, status=?, atualizado=?, detalhe_lido=1, transportadora=? WHERE order_sn=?')
+      .run(p.data, p.status, p.atualizado ?? null, p.transportadora ?? null, p.order_sn);
     db.prepare('DELETE FROM shopee_itens WHERE order_sn=?').run(p.order_sn);
     const st = db.prepare('INSERT INTO shopee_itens (order_sn, linha, sku, item_id, model_id, nome, quantidade, preco_unit, imagem) VALUES (?,?,?,?,?,?,?,?,?)');
     itens.forEach((i, k) => st.run(p.order_sn, k, i.sku, i.item_id ?? null, i.model_id ?? null, i.nome ?? null, i.quantidade, i.preco_unit ?? null, i.imagem ?? null));
@@ -971,11 +981,11 @@ function shopeeDetalheGravar(p, itens) {
 }
 // Repasse a ler: pedido pago e não cancelado, sem repasse ou com repasse ainda provisório (12 h).
 const shopeeSemEscrow = (shopId, limite) => db.prepare(`SELECT order_sn FROM shopee_pedidos WHERE shop_id=? AND detalhe_lido=1
-  AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') AND escrow_final=0
-  AND (escrow_em IS NULL OR escrow_em < ?) ORDER BY data DESC LIMIT ?`).all(shopId, new Date(Date.now() - 12 * 3600e3).toISOString(), limite).map((r) => r.order_sn);
+  AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID')
+  AND ((escrow_final=0 AND (escrow_em IS NULL OR escrow_em < ?)) OR (escrow_em IS NOT NULL AND (frete_shopee IS NULL OR taxa_item IS NULL))) ORDER BY data DESC LIMIT ?`).all(shopId, new Date(Date.now() - 12 * 3600e3).toISOString(), limite).map((r) => r.order_sn);
 const shopeeEscrowGravar = (orderSn, e) => db.prepare(`UPDATE shopee_pedidos SET escrow_em=?, escrow_final=?, recebido=?, comissao=?, servico=?,
-  transacao=?, frete_vendedor=?, cupom_vendedor=?, devolucao=? WHERE order_sn=?`)
-  .run(agora(), e.final ? 1 : 0, e.recebido, e.comissao, e.servico, e.transacao, e.frete_vendedor, e.cupom_vendedor, e.devolucao, orderSn);
+  transacao=?, frete_vendedor=?, cupom_vendedor=?, devolucao=?, frete_shopee=?, taxa_item=? WHERE order_sn=?`)
+  .run(agora(), e.final ? 1 : 0, e.recebido, e.comissao, e.servico, e.transacao, e.frete_vendedor, e.cupom_vendedor, e.devolucao, e.frete_shopee ?? 0, e.taxa_item ?? 0, orderSn);
 // Anúncios da Shopee (cópia local por loja, relida a cada 6 h): um registro por anúncio sem
 // variação (model_id 0) ou por variação. Preço atual (com promoção) e original (o que o
 // vendedor define), estoque, vendas do anúncio e visitas.
@@ -1020,7 +1030,7 @@ const shopeePrecoGravar = (itemId, modelId, preco, original) =>
 // Linhas de venda de uma loja na janela (pedido sem detalhe ainda não tem data: fica de fora).
 const shopeeVendasPeriodo = (shopId, de, ate) => db.prepare(`
   SELECT p.order_sn, p.data, p.status, p.escrow_em, p.escrow_final, p.recebido, p.comissao, p.servico, p.transacao,
-         p.frete_vendedor, p.cupom_vendedor, p.devolucao, i.linha, i.sku, i.item_id, i.nome, i.quantidade, i.preco_unit, i.imagem
+         p.frete_vendedor, p.cupom_vendedor, p.devolucao, p.transportadora, p.frete_shopee, p.taxa_item, i.linha, i.sku, i.item_id, i.nome, i.quantidade, i.preco_unit, i.imagem
   FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
   WHERE p.shop_id=? AND p.data >= ? AND p.data < ? ORDER BY p.data DESC, i.linha`).all(shopId, de, ate);
 const shopeePendentes = (shopId) => db.prepare(`SELECT
@@ -1085,6 +1095,21 @@ colunaNova('mp_pagamentos', 'referencia TEXT');
 colunaNova('mp_pagamentos', 'envio_id INTEGER');
 colunaNova('mp_pagamentos', 'ref_pagamento INTEGER');
 if (mpSemReferencia) db.prepare("DELETE FROM estado WHERE chave LIKE 'mp_lido_em:%'").run();
+// Flex do ML: quais envios são Flex (envio_logistica) e o bônus Flex creditado por envio.
+const lista_ = (xs) => xs.map(() => '?').join(',');
+const flexDosEnvios = (envios) => (envios.length ? new Set(db.prepare(`SELECT envio_id FROM envio_logistica
+  WHERE tipo='self_service' AND envio_id IN (${lista_(envios)})`).all(...envios).map((r) => r.envio_id)) : new Set());
+const bonusFlexDosEnvios = (envios) => (envios.length ? Object.fromEntries(db.prepare(`SELECT envio_id, SUM(bruto) AS v FROM mp_pagamentos
+  WHERE descricao='bonificaciones_flex' AND status='approved' AND envio_id IN (${lista_(envios)}) GROUP BY envio_id`).all(...envios)
+  .map((r) => [r.envio_id, r.v])) : {});
+// Bônus médio dos envios Flex da conta (90 dias), separado por "o vendedor tinha custo de envio
+// no /costs" (frete grátis para o comprador: bônus ≈ R$ 1,10) ou não (comprador pagou: ≈ R$ 10).
+const bonusFlexMedias = (mlUserId) => {
+  const r = db.prepare(`SELECT (f.custo > 0) AS com_custo, AVG(p.bruto) AS media, COUNT(*) AS n FROM mp_pagamentos p
+    JOIN fretes f ON f.envio_id = p.envio_id WHERE p.ml_user_id=? AND p.descricao='bonificaciones_flex' AND p.status='approved'
+    AND p.criado >= ? GROUP BY 1`).all(mlUserId, new Date(Date.now() - 90 * 864e5).toISOString());
+  return { com_custo: r.find((x) => x.com_custo === 1)?.media ?? null, sem_custo: r.find((x) => x.com_custo === 0)?.media ?? null };
+};
 // pedido de cada envio (bônus do Flex e frete pago à parte não trazem o pedido)
 const mpPedidosDosEnvios = (envios) => (envios.length ? Object.fromEntries(db.prepare(`SELECT envio_id, MIN(order_id) AS order_id FROM vendas
   WHERE envio_id IN (${envios.map(() => '?').join(',')}) GROUP BY envio_id`).all(...envios).map((r) => [r.envio_id, r.order_id])) : {});
@@ -1550,7 +1575,7 @@ module.exports = {
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
-  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios,
+  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
 };

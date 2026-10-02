@@ -124,6 +124,7 @@ async function main() {
     porta, portaPublica,
     servicos: { tunel: () => tunel.info(), scraper: () => scraper.info(), reiniciarScraper: () => scraper.reiniciar() },
   });
+  S.agendarBackup();   // cópia de segurança diária do banco (backup.js)
 
   const salvarPids = () => {
     try { fs.writeFileSync(PIDS, JSON.stringify({ painel: process.pid, porta, scraper: scraper.pid, tunel: tunel.pid })); } catch {}

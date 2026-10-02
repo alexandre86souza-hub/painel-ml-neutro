@@ -116,4 +116,10 @@ assert.strictEqual(misto.length, 1, 'mesmo kit, três jeitos de escrever');
 assert.deepStrictEqual([misto[0].unidades, misto[0].faturamento, misto[0].skus], [4, 750, ['KIT-769.790.816', '769.790.816.', '816.769.790']]);
 assert.strictEqual(C.topPorSku(top.map((p, i) => ({ conta: 1, sku: 's' + i, faturamento: i })), 2).length, 2);
 
+// Flex do ML: frete = entrega paga pelo vendedor − bônus Flex (creditado ou médio do caso)
+assert.deepStrictEqual(C.freteFlex({ custoMl: 9.89, bonus: 1.1, entrega: 12 }), { frete: 10.9, bonus: 1.1, estimado: false });
+assert.deepStrictEqual(C.freteFlex({ custoMl: 0, bonus: null, entrega: 12, medias: { com_custo: 1.1, sem_custo: 10.5 } }), { frete: 1.5, bonus: 10.5, estimado: true });
+assert.deepStrictEqual(C.freteFlex({ custoMl: 9.89, bonus: null, entrega: 12 }), { frete: 12, bonus: null, estimado: true });
+assert.deepStrictEqual([C.lerEmpresa('{}').entrega_flex, C.validarEmpresa({ entrega_flex: '12,00' }).entrega_flex, C.validarEmpresa({}).entrega_flex], [null, 12, null]);
+assert.throws(() => C.validarEmpresa({ entrega_flex: '-1' }), /Flex inválido/);
 console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma das contas: ok');

@@ -83,7 +83,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=22"></script>
+    <script src="/menu.js?v=24"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -229,6 +229,8 @@ function pintarResumo(r){
     [NA_EXT ? 'Tarifas da ' + NOME_CANAL : 'Tarifa do Mercado Livre', s.tarifa], ['Frete pago por você', s.frete], ['Imposto', s.imposto],
     ['Custo do produto', s.produto], ['Embalagem e outros', s.embalagem], ['Lucro', s.lucro, true],
   ];
+  // Shopee: a taxa por item vendido aparece separada (ela já está dentro das tarifas)
+  if(s.taxa_fixa != null) partes.splice(1, 0, ['   ↳ dentro: taxa fixa por item', s.taxa_fixa]);
   const teto = Math.max(...partes.map((p) => Math.abs(p[1] || 0)), 1);
   for(const [rot, v, ehLucro] of partes){
     const l = el('div', 'comp' + (ehLucro ? ' lucro' : ''));
@@ -306,8 +308,11 @@ function pintarLista(){
     const link = el('td'); const a = el('a', null, 'Ver'); a.href = v.link; a.target = '_blank'; a.rel = 'noopener'; link.appendChild(a);
     const fat = el('td'); fat.appendChild(document.createTextNode(real(v.faturamento)));
     if(v.quantidade > 1) fat.appendChild(el('span', 'pequeno', `${real(v.preco_unit)}/un.`));
-    tr.append(td, el('td', null, dataHora(v.data)), el('td', null, numero(v.quantidade)), fat,
-      el('td', v.estimado ? 'estimado' : null, (v.estimado && v.tarifa != null ? '≈ ' : '') + real(v.tarifa)), freteTd, el('td', null, real(v.imposto)), prodTd,
+    // tarifa e a porcentagem dela sobre o valor da venda (ex.: R$ 15,23 de R$ 53,64 = 28,4%)
+    const tarifaTd = el('td', v.estimado ? 'estimado' : null, (v.estimado && v.tarifa != null ? '≈ ' : '') + real(v.tarifa));
+    if(v.tarifa != null && v.faturamento > 0) tarifaTd.appendChild(el('span', 'pequeno', `${pct(v.tarifa / v.faturamento)} da venda`));
+    if(v.taxa_fixa) tarifaTd.appendChild(el('span', 'pequeno', `inclui ${real(v.taxa_fixa)} de taxa fixa`));
+    tr.append(td, el('td', null, dataHora(v.data)), el('td', null, numero(v.quantidade)), fat, tarifaTd, freteTd, el('td', null, real(v.imposto)), prodTd,
       el('td', null, real(v.embalagem)), lucroTd, el('td', v.margem != null && v.margem < 0 ? 'neg' : null, pct(v.margem)), link);
     tb.appendChild(tr);
   }
