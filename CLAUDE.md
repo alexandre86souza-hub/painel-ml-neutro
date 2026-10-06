@@ -97,7 +97,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   ML editável no cartão: `t_{conta}=` (só aquele cálculo) › padrão da conta (`calc_tarifa_ml:{id}` em
   `estado`, `POST /api/calculadora/tarifa`, null volta à da categoria) › listing_prices. Frete editável
   em todos os cartões (`comFrete`): `f_{canal}=` › padrão `calc_frete:{ml:id:me|flex | shopee:loja |
-  amazon:FBA|proprio}` (`POST /api/calculadora/frete`) › o calculado. Amazon: a calculadora lê o
+  amazon:FBA|proprio}` (`POST /api/calculadora/frete`) › o calculado. Embalagem igual (`comEmbalagem`,
+  `e_{canal}=`, `calc_embalagem:{ml:id | shopee:loja | amazon:FBA|proprio}`, `POST /api/calculadora/embalagem`). Amazon: a calculadora lê o
   financeiro antes (até 8 s) e o frete do FBA = tarifa de envio por unidade + armazenagem; Flex =
   entrega_flex − bônus médio. Shopee: tabela medida (`tarifaShopee`). Amazon: média real do
   financeiro (`taxasDosLancamentos`). Sem ferramenta MCP (tem dado da Amazon).

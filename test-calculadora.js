@@ -28,4 +28,7 @@ assert.deepStrictEqual([K.comFrete(cf, null, null), K.comFrete(cf, null, 8), K.c
   [[0, 'calculado', 0], [8, 'padrao', 0], [12, 'editado', 0]]);
 assert.match(K.comFrete(cf, 12, null).frete_fonte, /digitado neste cálculo · calculado pelo painel: R\$ 0,00 \(Shopee paga\)/);
 
-console.log('Calculadora reversa: faixas da Shopee, conta reversa, custo atual, tarifa e frete digitados: ok');
+const ce = K.comEmbalagem({ id: 'ml:1', embalagem: 1.5, frete: 9 }, 3, null);
+assert.deepStrictEqual([ce.embalagem, ce.embalagem_origem, ce.embalagem_calculado, ce.frete], [3, 'editado', 1.5, 9], 'embalagem digitada não mexe no frete');
+
+console.log('Calculadora reversa: faixas da Shopee, conta reversa, custo atual, tarifa, frete e embalagem digitados: ok');

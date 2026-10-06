@@ -63,15 +63,19 @@ function freteValido(v) {
 
 // Frete do cartão: o digitado neste cálculo › o padrão salvo para o canal › o calculado pelo painel
 // (que fica em frete_calculado para comparar). Função pura: testada.
-function comFrete(c, digitado, padrao) {
+// O mesmo vale para a embalagem (comEmbalagem). Funções puras: testadas.
+function comDigitado(c, campo, digitado, padrao) {
   const valor = digitado ?? padrao;
-  const base = { frete_calculado: r2(c.frete ?? 0), frete_padrao: padrao,
-    frete_origem: digitado != null ? 'editado' : padrao != null ? 'padrao' : 'calculado' };
+  const base = { [`${campo}_calculado`]: r2(c[campo] ?? 0), [`${campo}_padrao`]: padrao,
+    [`${campo}_origem`]: digitado != null ? 'editado' : padrao != null ? 'padrao' : 'calculado' };
   if (valor == null) return { ...c, ...base };
-  const antes = `calculado pelo painel: R$ ${(c.frete ?? 0).toFixed(2).replace('.', ',')}`;
-  return { ...c, ...base, frete: valor,
-    frete_fonte: `${digitado != null ? 'digitado neste cálculo' : 'padrão salvo'} · ${antes}${c.frete_fonte ? ` (${c.frete_fonte})` : ''}` };
+  const antes = `calculado pelo painel: R$ ${(c[campo] ?? 0).toFixed(2).replace('.', ',')}`;
+  const fonte = c[`${campo}_fonte`];
+  return { ...c, ...base, [campo]: valor,
+    [`${campo}_fonte`]: `${digitado != null ? 'digitado neste cálculo' : 'padrão salvo'} · ${antes}${fonte ? ` (${fonte})` : ''}` };
 }
+const comFrete = (c, digitado, padrao) => comDigitado(c, 'frete', digitado, padrao);
+const comEmbalagem = (c, digitado, padrao) => comDigitado(c, 'embalagem', digitado, padrao);
 
 function criar({ D, ml, amazon = null }) {
   const empresaDe = (chave, reserva) => C.lerEmpresa(D.configLer(`empresa:${chave}`) || (reserva ? D.configLer(`empresa:${reserva}`) : null));
@@ -267,6 +271,9 @@ function criar({ D, ml, amazon = null }) {
       for (const [i, c] of canais.entries()) {
         const chave = chaveFrete(c);
         canais[i] = { ...comFrete(c, freteValido(q.get(`f_${c.id}`)), freteValido(D.configLer(`calc_frete:${chave}`))), frete_chave: chave };
+        // embalagem: padrão por canal (na Amazon, por FBA ou envio próprio)
+        const chaveEmb = c.canal === 'amazon' ? `amazon:${p.amazon === 'FBA' ? 'FBA' : 'proprio'}` : c.id;
+        canais[i] = { ...comEmbalagem(canais[i], freteValido(q.get(`e_${c.id}`)), freteValido(D.configLer(`calc_embalagem:${chaveEmb}`))), embalagem_chave: chaveEmb };
       }
       return { preco, margem, outros, sku, produto: nome, custo_atual: custoAtual, faltando: cs?.faltando || [],
         canais: canais.map((c) => ({ ...c, conta: c.tarifa ? contaReversa({ preco, margemPct: margem, tarifa: c.tarifa.valor, frete: c.frete || 0,
@@ -297,8 +304,17 @@ function criar({ D, ml, amazon = null }) {
       D.configGravar(`calc_frete:${chave}`, valor);
       return { ok: true, chave, valor };
     },
+    // Embalagem padrão de um canal na calculadora (chave = embalagem_chave do cartão; null = volta à calculada).
+    'POST /api/calculadora/embalagem': async (_u, b) => {
+      const chave = String(b?.chave || '');
+      if (!/^(ml:\d+|shopee:\d+|amazon:(FBA|proprio))$/.test(chave)) throw erro('Canal inválido.');
+      const valor = b?.valor == null || b.valor === '' ? null : freteValido(b.valor);
+      if (b?.valor != null && b.valor !== '' && valor == null) throw erro('Embalagem entre R$ 0 e R$ 10.000.');
+      D.configGravar(`calc_embalagem:${chave}`, valor);
+      return { ok: true, chave, valor };
+    },
   };
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, tarifaShopee, contaReversa, pctValido, freteValido, comFrete };
+module.exports = { criar, tarifaShopee, contaReversa, pctValido, freteValido, comFrete, comEmbalagem };

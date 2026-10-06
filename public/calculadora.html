@@ -159,23 +159,26 @@ function linhaTarifaML(c, k){
 }
 // Frete editável em todos os marketplaces: mudar vale só para este cálculo; "Salvar como padrão"
 // grava para aquele canal e tipo de envio; "Usar o calculado" volta ao que o painel mede.
-const freteEditados = {};
-function linhaFrete(c, k){
+// A embalagem segue a mesma regra.
+const freteEditados = {}, embalagemEditadas = {};
+function linhaEditavel(c, k, campoNome, rotulo, editados){
   const tr = el('tr'), a = el('td');
   const campo = el('input'); campo.type = 'number'; campo.step = '0.01'; campo.min = '0';
-  campo.value = k.frete; campo.style.cssText = 'width:80px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid #d5d7db;border-radius:7px';
-  campo.setAttribute('aria-label', `Frete por venda em R$ — ${c.nome}`);
-  campo.onchange = () => { freteEditados[c.id] = campo.value; calcular(); };
-  const rot = el('span', null, 'Frete R$ '); rot.appendChild(campo);
-  a.append(rot, el('small', null, c.frete_fonte || ''));
+  campo.value = k[campoNome]; campo.style.cssText = 'width:80px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid #d5d7db;border-radius:7px';
+  campo.setAttribute('aria-label', `${rotulo} por venda em R$ — ${c.nome}`);
+  campo.onchange = () => { editados[c.id] = campo.value; calcular(); };
+  const rot = el('span', null, `${rotulo} R$ `); rot.appendChild(campo);
+  a.append(rot, el('small', null, c[`${campoNome}_fonte`] || ''));
   const bt = (txt, fn) => { const b = el('button', 'bt', txt); b.type = 'button'; b.style.cssText = 'font-size:12px;padding:3px 8px;margin:4px 6px 0 0'; b.onclick = fn; return b; };
   const gravar = async (valor) => {
-    try{ await post('/api/calculadora/frete', { chave: c.frete_chave, valor }); delete freteEditados[c.id]; calcular(); }catch(e){ aviso(e.message); }
+    try{ await post(`/api/calculadora/${campoNome}`, { chave: c[`${campoNome}_chave`], valor }); delete editados[c.id]; calcular(); }catch(e){ aviso(e.message); }
   };
-  if(c.frete_origem !== 'padrao') a.appendChild(bt('Salvar como padrão', () => gravar(campo.value)));
-  if(c.frete_padrao != null) a.appendChild(bt('Usar o calculado', () => gravar(null)));
-  tr.append(a, el('td', 'v', `− ${real(k.frete)}`)); return tr;
+  if(c[`${campoNome}_origem`] !== 'padrao') a.appendChild(bt('Salvar como padrão', () => gravar(campo.value)));
+  if(c[`${campoNome}_padrao`] != null) a.appendChild(bt('Usar o calculado', () => gravar(null)));
+  tr.append(a, el('td', 'v', `− ${real(k[campoNome])}`)); return tr;
 }
+const linhaFrete = (c, k) => linhaEditavel(c, k, 'frete', 'Frete', freteEditados);
+const linhaEmbalagem = (c, k) => linhaEditavel(c, k, 'embalagem', 'Embalagem', embalagemEditadas);
 function cartaoCanal(c, r){
   const d = el('div', 'canal'); d.appendChild(el('h3', null, c.nome));
   if(!c.conta){ d.appendChild(el('p', 'avisos', (c.avisos || []).join(' ') || 'Não foi possível calcular.')); return d; }
@@ -184,7 +187,7 @@ function cartaoCanal(c, r){
     c.canal === 'ml' ? linhaTarifaML(c, k) : linha('Tarifa do marketplace', k.tarifa, c.tarifa_txt),
     linhaFrete(c, k),
     linha(`Imposto (${String(k.imposto_pct).replace('.', ',')}%)`, k.imposto),
-    linha('Embalagem', k.embalagem));
+    linhaEmbalagem(c, k));
   if(k.outros) tb.appendChild(linha('Outros custos', k.outros));
   const s1 = linha('Sobra antes do lucro', k.sobra_sem_lucro, null, '='); s1.className = 'soma'; tb.appendChild(s1);
   tb.appendChild(linha(`Lucro desejado (${String(r.margem).replace('.', ',')}%)`, k.lucro_desejado));
@@ -212,6 +215,7 @@ async function calcular(){
   if($('canal').value) q.set('canal', $('canal').value);
   for(const [id, v] of Object.entries(tarifasEditadas)) if(String(v).trim() !== '') q.set(`t_${id}`, v);
   for(const [id, v] of Object.entries(freteEditados)) if(String(v).trim() !== '') q.set(`f_${id}`, v);
+  for(const [id, v] of Object.entries(embalagemEditadas)) if(String(v).trim() !== '') q.set(`e_${id}`, v);
   $('blocoResultado').hidden = false; $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'carregando', 'Calculando…'));
   try{
     const r = await api('/api/calculadora?' + q);
