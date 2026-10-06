@@ -79,6 +79,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   ganham detalhe do ML, ações do vendedor (`available_actions`), produto e `sugestaoDe` (por
   categoria do `reason.name`: broken_item, different_than_published…) com mensagem pronta.
   Cancelamentos: só `cancel_detail.requested_by/group = seller`. Atrasos: a API só dá o número.
+- Central de mensagens (`mensagens.js`, tela `public/mensagens.html`, item "Mensagens" do menu): o que
+  espera resposta em TODAS as contas — ML: perguntas (UNANSWERED), pós-venda (`/messages/unread` +
+  packs vistos guardados em `msg_packs` por 15 dias, lidos com mark_as_read=false) e reclamações em que
+  a conta é a vendedora, pode mandar mensagem (`send_message_to_complainant|mediator`) e o último a
+  falar não foi ela (ou o detail diz que a vez é dela); Shopee: sellerchat em que o comprador falou
+  por último. Amazon: só o link do Seller Central (a SP-API não lê mensagens de comprador).
+  Responder = escrita só pela tela, com confirmação (limites: pergunta 2.000, pós-venda 350, chat
+  1.000). Mensagens padrão em `mensagens_modelos`, com {comprador} {produto} {pedido}; a tela coloca
+  o texto no campo e o vendedor edita antes de enviar. Mensagem de comprador é dado pessoal: nada no MCP.
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
 - Flex do ML (`custos.js#freteFlex`): o Mercado Pago NÃO cobra o frete do `/costs` em venda Flex;

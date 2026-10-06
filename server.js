@@ -1996,6 +1996,7 @@ const backupMod = require('./backup.js').criar({ D });
 Object.assign(routes, backupMod.rotas);
 // ---------- Reputação: termômetro e vendas que afetaram a reputação (reputacao.js) ----------
 Object.assign(routes, require('./reputacao.js').criar({ D, ml, emLotes, contaOuErro }).rotas);
+Object.assign(routes, require('./mensagens.js').criar({ D, ml, emLotes, daLoja: shopeeMod.daLoja }).rotas);
 const finMod = require('./financeiro.js').criar({ D, ml });
 Object.assign(routes, finMod.rotas);
 rotasParam.push(...finMod.rotasParam);

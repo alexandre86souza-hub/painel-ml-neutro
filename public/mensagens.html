@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mensagens</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dbeafe}
+  #msg.ok{background:#e6f4ea;color:#0b6b33;border-color:#b7e1c4}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.ml{background:#fff6cc;color:#7a5b00}.chip.shopee{background:#ffe4dc;color:#c2410c}
+  .chip.rec{background:#fde8e8;color:#b42318}.chip.perg{background:#dbeafe;color:#1d4ed8}.chip.msg{background:#e6f4ea;color:#0b6b33}
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:10px;overflow:hidden;flex-wrap:wrap}
+  .seg button{font:inherit;font-size:13px;padding:7px 12px;border:0;background:#fff;cursor:pointer;color:#334155}
+  .seg button[aria-pressed="true"]{background:#2563eb;color:#fff}
+  .filtros select{font:inherit;font-size:13px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .caixa{display:grid;grid-template-columns:minmax(260px,380px) 1fr;gap:14px;align-items:start}
+  @media (max-width:900px){.caixa{grid-template-columns:1fr}}
+  .lista{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;max-height:70vh;overflow-y:auto;background:#fff}
+  .item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f1f3f6;background:#fff;padding:10px 12px;cursor:pointer;font:inherit}
+  .item:hover{background:#f8fafc}.item[aria-current="true"]{background:#eff6ff;box-shadow:inset 3px 0 0 #2563eb}
+  .item .top{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:#64748b}
+  .item .tx{margin:4px 0 0;font-size:14px;color:#0f172a;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .item .pr{margin:2px 0 0;font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conversa{border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px;min-height:300px}
+  .conversa h3{margin:0 0 4px;font-size:16px}
+  .conversa .meta{font-size:13px;color:#64748b;margin:0 0 10px}
+  .situacao{font-size:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;padding:8px 10px;margin:0 0 10px}
+  .fio{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow-y:auto;padding:6px 2px;margin-bottom:12px}
+  .bolha{max-width:80%;padding:8px 11px;border-radius:12px;font-size:14px;white-space:pre-wrap;word-wrap:break-word}
+  .bolha small{display:block;font-size:11px;opacity:.7;margin-top:3px}
+  .bolha.comprador{align-self:flex-start;background:#f1f5f9}
+  .bolha.voce{align-self:flex-end;background:#dbeafe}
+  .bolha.ml{align-self:center;background:#fff7ed;border:1px solid #fed7aa;max-width:92%}
+  .resp label{font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px}
+  .resp select,.resp textarea,.modelos input,.modelos select,.modelos textarea{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .resp textarea{min-height:120px;resize:vertical}
+  .resp .linha{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px}
+  .resp .linha label{flex:1 1 220px}
+  .conta-car{font-size:12px;color:#64748b;text-align:right}.conta-car.passou{color:#b42318;font-weight:600}
+  .acoes{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .modelos .form{display:grid;grid-template-columns:1fr 200px;gap:10px;margin-bottom:12px}
+  .modelos .form textarea{grid-column:1/-1;min-height:90px}
+  @media (max-width:640px){.modelos .form{grid-template-columns:1fr}}
+  .modelo{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff}
+  .modelo b{font-size:14px}.modelo p{margin:4px 0 6px;font-size:13px;color:#334155;white-space:pre-wrap}
+  .bt.pequeno{padding:4px 10px;font-size:12px}
+  .vazio{color:#64748b;padding:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=25"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Mensagens</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">Tudo o que está esperando a sua resposta, em todas as contas: perguntas, mensagens pós-venda e reclamações do Mercado Livre e o chat da Shopee.</p>
+    <button type="button" class="bt" id="btReler">Atualizar</button>
+  </div>
+  <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+
+  <section class="bloco">
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Tipo" id="segTipo">
+        <button type="button" data-tipo="" aria-pressed="true">Todas</button>
+        <button type="button" data-tipo="pergunta" aria-pressed="false">Perguntas</button>
+        <button type="button" data-tipo="mensagem" aria-pressed="false">Pós-venda</button>
+        <button type="button" data-tipo="reclamacao" aria-pressed="false">Reclamações</button>
+        <button type="button" data-tipo="chat" aria-pressed="false">Chat Shopee</button>
+      </div>
+      <select id="selFiltroConta" aria-label="Conta"><option value="">Todas as contas</option></select>
+    </div>
+    <div class="caixa">
+      <div class="lista" id="lista"><p class="vazio">Carregando…</p></div>
+      <div class="conversa" id="conversa"><p class="vazio">Escolha uma conversa à esquerda.</p></div>
+    </div>
+    <p class="sub" id="erros"></p>
+  </section>
+
+  <section class="bloco modelos">
+    <h2>Mensagens padrão</h2>
+    <p class="sub">Salve as respostas que você usa sempre. Na hora de responder, escolha uma: ela entra no campo de resposta e você pode editar antes de enviar.
+      Use <b>{comprador}</b>, <b>{produto}</b> e <b>{pedido}</b> para o painel preencher sozinho.</p>
+    <form class="form" id="formModelo">
+      <input id="mTitulo" maxlength="80" placeholder="Nome (ex.: Prazo de entrega)" aria-label="Nome da mensagem padrão" required>
+      <select id="mTipo" aria-label="Usar em">
+        <option value="">Usar em qualquer conversa</option>
+        <option value="pergunta">Perguntas</option>
+        <option value="mensagem">Pós-venda</option>
+        <option value="reclamacao">Reclamações</option>
+        <option value="chat">Chat Shopee</option>
+      </select>
+      <textarea id="mTexto" maxlength="2000" placeholder="Olá {comprador}! …" aria-label="Texto da mensagem padrão" required></textarea>
+      <div class="acoes"><button class="bt primario" id="mSalvar">Salvar mensagem padrão</button>
+        <button type="button" class="bt" id="mCancelar" hidden>Cancelar edição</button></div>
+    </form>
+    <div id="listaModelos"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+const TIPOS = { pergunta: ['Pergunta', 'perg'], mensagem: ['Pós-venda', 'msg'], reclamacao: ['Reclamação', 'rec'], chat: ['Chat', 'shopee'] };
+let dados = null, filtroTipo = '', aberto = null, modelos = [], editando = null;
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => {
+  if(!iso) return '';
+  const d = new Date(iso), dia = (x) => x.toLocaleDateString('pt-BR'), hora = d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  if(dia(d) === dia(new Date())) return 'hoje ' + hora;
+  if(dia(d) === dia(new Date(Date.now() - 864e5))) return 'ontem ' + hora;
+  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+};
+const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(corpo) });
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  const n = el('p', 'nota'); if(nota instanceof Node) n.appendChild(nota); else n.textContent = nota || '';
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), n); return c;
+}
+
+async function carregar(recarregar){
+  aviso('');
+  $('lista').innerHTML = '<p class="vazio">Perguntando aos marketplaces…</p>';
+  try{
+    dados = await api('/api/mensagens' + (recarregar ? '?recarregar=1' : ''));
+    const p = dados.por_tipo, box = $('cartoes'); box.innerHTML = '';
+    box.append(cartao('Esperando resposta', numero(dados.itens.length), 'em todas as contas', true),
+      cartao('Perguntas', numero(p.pergunta), 'antes da compra (ML)'),
+      cartao('Pós-venda', numero(p.mensagem), 'mensagens de quem comprou (ML)'),
+      cartao('Reclamações', numero(p.reclamacao), 'em que a vez é sua (ML)'),
+      cartao('Chat Shopee', numero(p.chat), 'conversas sem resposta'));
+    if(dados.amazon){ const a = el('a', null, 'Abrir no Seller Central'); a.href = dados.amazon.link; a.target = '_blank'; a.rel = 'noopener';
+      const n = el('span'); n.append(document.createTextNode(dados.amazon.nota + ' '), a); box.appendChild(cartao('Amazon', '—', n)); }
+    const contas = new Map(dados.itens.map((i) => [i.canal + ':' + i.conta, i.conta_nome]));
+    const sel = $('selFiltroConta'), atual = sel.value; sel.innerHTML = '<option value="">Todas as contas</option>';
+    for(const [k, n] of contas){ const o = el('option', null, n); o.value = k; sel.appendChild(o); }
+    sel.value = [...contas.keys()].includes(atual) ? atual : '';
+    $('erros').textContent = dados.erros.length ? 'Não foi possível ler: ' + dados.erros.join(' · ') : `Atualizado às ${new Date(dados.gerado_em).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}.`;
+    pintarLista();
+  }catch(e){ $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
+}
+function pintarLista(){
+  const box = $('lista'); box.innerHTML = '';
+  const fc = $('selFiltroConta').value;
+  const ls = dados.itens.filter((i) => (!filtroTipo || i.tipo === filtroTipo) && (!fc || i.canal + ':' + i.conta === fc));
+  for(const i of ls){
+    const b = el('button', 'item'); b.type = 'button';
+    if(aberto && aberto.canal === i.canal && aberto.conta === i.conta && aberto.tipo === i.tipo && aberto.id === i.id) b.setAttribute('aria-current', 'true');
+    const top = el('div', 'top');
+    top.append(el('span', 'chip ' + (i.canal === 'ml' ? 'ml' : 'shopee'), i.conta_nome), el('span', 'chip ' + TIPOS[i.tipo][1], TIPOS[i.tipo][0]), document.createTextNode(quando(i.data)));
+    if(i.prazo) top.appendChild(el('span', 'chip rec', 'prazo ' + new Date(i.prazo).toLocaleDateString('pt-BR')));
+    b.append(top, el('p', 'tx', i.texto || ''), el('p', 'pr', [i.produto, i.comprador].filter(Boolean).join(' · ')));
+    b.onclick = () => abrir(i);
+    box.appendChild(b);
+  }
+  if(!ls.length) box.appendChild(el('p', 'vazio', dados.itens.length ? 'Nada com esse filtro.' : 'Tudo respondido. Nenhuma mensagem esperando você.'));
+}
+
+async function abrir(i){
+  aberto = i; pintarLista();
+  const box = $('conversa'); box.innerHTML = '';
+  const cab = el('h3', null, i.produto || (i.tipo === 'chat' ? 'Conversa na Shopee' : TIPOS[i.tipo][0]));
+  const meta = el('p', 'meta', [i.conta_nome, TIPOS[i.tipo][0], i.pedido && `pedido ${i.pedido}`, i.comprador && `comprador ${i.comprador}`].filter(Boolean).join(' · ') + ' · ');
+  const ln = el('a', null, 'abrir no site'); ln.href = i.link; ln.target = '_blank'; ln.rel = 'noopener'; meta.appendChild(ln);
+  box.append(cab, meta);
+  const fio = el('div', 'fio'); fio.appendChild(el('p', 'vazio', 'Carregando a conversa…')); box.appendChild(fio);
+  let conv = null;
+  try{
+    conv = await api(`/api/mensagens/conversa?canal=${i.canal}&conta=${i.conta}&tipo=${i.tipo}&id=${i.id}`);
+    if(aberto !== i) return;
+    if(conv.produto && !i.produto) cab.textContent = conv.produto;
+    if(conv.situacao){ box.insertBefore(el('p', 'situacao', conv.situacao), fio); }
+    fio.innerHTML = '';
+    for(const m of conv.mensagens){
+      const c = m.de === 'voce' ? 'voce' : m.de === 'comprador' ? 'comprador' : 'ml';
+      const b = el('div', 'bolha ' + c, m.texto || '');
+      b.appendChild(el('small', null, `${m.de === 'voce' ? 'Você' : m.de === 'comprador' ? 'Comprador' : m.de} · ${quando(m.data)}` + (m.anexos ? ` · ${m.anexos} anexo(s)` : '')));
+      fio.appendChild(b);
+    }
+    if(!conv.mensagens.length) fio.appendChild(el('p', 'vazio', 'Ainda não há mensagens nesta conversa.'));
+    fio.scrollTop = fio.scrollHeight;
+  }catch(e){ fio.innerHTML = ''; fio.appendChild(el('p', 'vazio', 'Não foi possível ler a conversa: ' + e.message)); }
+  box.appendChild(formResposta(i, conv));
+}
+
+function formResposta(i, conv){
+  const limite = conv?.limite || 1000;
+  const f = el('form', 'resp');
+  const linha = el('div', 'linha');
+  const lm = el('label', null, 'Mensagem padrão'); const sm = el('select', 'sel-modelo'); sm.dataset.tipo = i.tipo;
+  opcoesModelos(sm);
+  lm.appendChild(sm); linha.appendChild(lm);
+  let sd = null;
+  const destinos = conv?.destinos || i.destinos || [];
+  if(i.tipo === 'reclamacao' && destinos.length){
+    const ld = el('label', null, 'Enviar para'); sd = el('select');
+    for(const d of destinos){ const o = el('option', null, d === 'mediator' ? 'Mercado Livre (mediação)' : 'Comprador'); o.value = d; sd.appendChild(o); }
+    ld.appendChild(sd); linha.appendChild(ld);
+  }
+  f.appendChild(linha);
+  const lt = el('label', null, 'Sua resposta'); const ta = el('textarea'); ta.maxLength = limite; ta.required = true; lt.appendChild(ta); f.appendChild(lt);
+  const cont = el('div', 'conta-car'); f.appendChild(cont);
+  const contar = () => { cont.textContent = `${ta.value.length} de ${limite} caracteres`; cont.className = 'conta-car' + (ta.value.length > limite ? ' passou' : ''); };
+  ta.oninput = contar; contar();
+  let modeloUsado = null;
+  sm.onchange = () => {
+    const m = modelos.find((x) => String(x.id) === sm.value); if(!m) return;
+    if(ta.value.trim() && !confirm('Trocar o texto que você já escreveu pela mensagem padrão?')){ sm.value = ''; return; }
+    ta.value = m.texto.replace(/\{(produto|pedido|comprador)\}/g, (x, k) => ({ produto: i.produto, pedido: i.pedido, comprador: i.comprador }[k] || x));
+    modeloUsado = m.id; contar(); ta.focus();
+  };
+  const acoes = el('div', 'acoes');
+  const env = el('button', 'bt primario', 'Enviar resposta');
+  const salvar = el('button', 'bt', 'Salvar como mensagem padrão'); salvar.type = 'button';
+  salvar.onclick = async () => {
+    const t = ta.value.trim(); if(!t){ aviso('Escreva o texto antes de salvar.'); return; }
+    const titulo = prompt('Nome para esta mensagem padrão:', ''); if(!titulo) return;
+    try{ modelos = (await post('/api/mensagens/modelos', { titulo, texto: t, tipo: i.tipo })).modelos; pintarModelos(); aviso('Mensagem padrão salva.', 'ok'); abrirDeNovo(); }
+    catch(e){ aviso(e.message); }
+  };
+  acoes.append(env, salvar); f.appendChild(acoes);
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const texto = ta.value.trim(); if(!texto) return;
+    const para = sd ? sd.value : i.para;
+    const alvo = i.tipo === 'reclamacao' ? (para === 'mediator' ? 'ao Mercado Livre (mediação)' : 'ao comprador da reclamação') : i.tipo === 'pergunta' ? 'como resposta pública da pergunta' : 'ao comprador';
+    if(!confirm(`Enviar esta mensagem ${alvo}, pela conta ${i.conta_nome}?\n\n${texto}`)) return;
+    env.disabled = true;
+    try{
+      await post('/api/mensagens/responder', { canal: i.canal, conta: i.conta, tipo: i.tipo, id: i.id, para, texto, modelo: modeloUsado });
+      aviso('Resposta enviada.', 'ok');
+      dados.itens = dados.itens.filter((x) => x !== i); aberto = null; pintarLista();
+      $('conversa').innerHTML = '<p class="vazio">Resposta enviada. Escolha outra conversa.</p>';
+      if(modeloUsado) carregarModelos();
+    }catch(e){ aviso('Não foi enviada: ' + e.message); env.disabled = false; }
+  };
+  return f;
+}
+function opcoesModelos(sm){
+  const doTipo = modelos.filter((m) => !m.tipo || m.tipo === sm.dataset.tipo);
+  sm.innerHTML = '';
+  const o0 = el('option', null, doTipo.length ? 'Escolha para usar (você edita depois)' : 'Nenhuma salva ainda'); o0.value = ''; sm.appendChild(o0);
+  for(const m of doTipo){ const o = el('option', null, m.titulo); o.value = m.id; sm.appendChild(o); }
+}
+const abrirDeNovo = () => { const sm = $('conversa').querySelector('select.sel-modelo'); if(sm) opcoesModelos(sm); };
+
+// ---------- mensagens padrão ----------
+async function carregarModelos(){ try{ modelos = (await api('/api/mensagens/modelos')).modelos; pintarModelos(); }catch(e){ $('listaModelos').textContent = e.message; } }
+function pintarModelos(){
+  const box = $('listaModelos'); box.innerHTML = '';
+  for(const m of modelos){
+    const d = el('div', 'modelo');
+    const t = el('div'); t.append(el('b', null, m.titulo), document.createTextNode(' '), el('span', 'chip', m.tipo ? TIPOS[m.tipo][0] : 'qualquer conversa'),
+      document.createTextNode(m.usos ? `  usada ${m.usos} vez(es)` : ''));
+    const ed = el('button', 'bt pequeno', 'Editar'); ed.type = 'button';
+    ed.onclick = () => { editando = m.id; $('mTitulo').value = m.titulo; $('mTipo').value = m.tipo || ''; $('mTexto').value = m.texto; $('mCancelar').hidden = false; $('mSalvar').textContent = 'Salvar alterações'; $('mTitulo').focus(); };
+    const ap = el('button', 'bt pequeno', 'Apagar'); ap.type = 'button';
+    ap.onclick = async () => { if(!confirm(`Apagar a mensagem padrão "${m.titulo}"?`)) return; modelos = (await post('/api/mensagens/modelos/apagar', { id: m.id })).modelos; pintarModelos(); };
+    const ac = el('div', 'acoes'); ac.append(ed, ap);
+    d.append(t, el('p', null, m.texto), ac); box.appendChild(d);
+  }
+  if(!modelos.length) box.appendChild(el('p', 'vazio', 'Nenhuma mensagem padrão ainda.'));
+}
+const limparForm = () => { editando = null; $('formModelo').reset(); $('mCancelar').hidden = true; $('mSalvar').textContent = 'Salvar mensagem padrão'; };
+$('mCancelar').onclick = limparForm;
+$('formModelo').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    modelos = (await post('/api/mensagens/modelos', { id: editando, titulo: $('mTitulo').value, tipo: $('mTipo').value, texto: $('mTexto').value })).modelos;
+    limparForm(); pintarModelos(); aviso('Mensagem padrão salva.', 'ok'); abrirDeNovo();
+  }catch(e){ aviso(e.message); }
+};
+
+for(const b of $('segTipo').querySelectorAll('button')){
+  b.onclick = () => { filtroTipo = b.dataset.tipo; for(const x of $('segTipo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); if(dados) pintarLista(); };
+}
+$('selFiltroConta').onchange = () => { if(dados) pintarLista(); };
+$('btReler').onclick = () => carregar(true);
+carregarModelos();
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>
