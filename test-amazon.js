@@ -187,6 +187,11 @@ assert.strictEqual(txS.porPedido.get('Q2|S1').frete, 20, 'pedido lançado: a eti
 assert.strictEqual(A.linhaDoPedido({ pedido: 'Q1', sku: 'S1', canal: 'FBA', status: 'Shipped', quantidade: 3, preco: 300 },
   { taxas: txS, custo_unit: 10, imposto_pct: 0 }).frete, 6, 'pedido FBA leva a parte da armazenagem');
 
+// pedido "Pending" sem preço: último preço do SKU, marcado como estimado
+const lPend = A.linhaDoPedido({ pedido: 'X1', sku: 'S1', canal: 'FBA', status: 'Pending', quantidade: 2, preco: null }, { ...ctxP, preco_unit_sku: 54.8 });
+assert.deepStrictEqual({ fat: lPend.faturamento, est: lPend.estimado, pe: lPend.preco_estimado }, { fat: 109.6, est: true, pe: true });
+assert.strictEqual(A.linhaDoPedido({ pedido: 'X1', sku: 'S1', canal: 'FBA', status: 'Pending', quantidade: 2, preco: null }, ctxP).faturamento, 0, 'sem preço conhecido: 0');
+
 // ---------- concorrentes de um ASIN ----------
 const of = A.ofertasDe({ ASIN: 'B0TESTE001', Summary: { TotalOfferCount: 3 }, Offers: [
   { SellerId: 'OUTRO1', ListingPrice: { Amount: 99.9 }, Shipping: { Amount: 0 }, IsFulfilledByAmazon: true, IsBuyBoxWinner: true,

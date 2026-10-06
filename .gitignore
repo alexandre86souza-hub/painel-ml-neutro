@@ -27,3 +27,6 @@ Thumbs.db
 .idea/
 .impeccable/
 .kilo/
+
+# conciliação financeira (extratos e planilhas com dados bancários)
+conciliacao/

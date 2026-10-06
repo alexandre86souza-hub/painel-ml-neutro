@@ -306,7 +306,9 @@ function pintarLista(){
     if(v.frete == null) freteTd.title = 'Frete ainda não consultado';
     const lucroTd = el('td', v.lucro == null ? null : v.lucro < 0 ? 'neg' : 'pos', v.lucro == null ? '—' : real(v.lucro));
     const link = el('td'); const a = el('a', null, 'Ver'); a.href = v.link; a.target = '_blank'; a.rel = 'noopener'; link.appendChild(a);
-    const fat = el('td'); fat.appendChild(document.createTextNode(real(v.faturamento)));
+    // Amazon "Pending": sem preço até confirmar o pagamento -> último preço do SKU, com ≈
+    const fat = el('td', v.preco_estimado ? 'estimado' : null); fat.appendChild(document.createTextNode((v.preco_estimado ? '≈ ' : '') + real(v.faturamento)));
+    if(v.preco_estimado) fat.title = 'Pagamento ainda não confirmado pela Amazon: valor estimado pelo último preço deste SKU';
     if(v.quantidade > 1) fat.appendChild(el('span', 'pequeno', `${real(v.preco_unit)}/un.`));
     // tarifa e a porcentagem dela sobre o valor da venda (ex.: R$ 15,23 de R$ 53,64 = 28,4%)
     const tarifaTd = el('td', v.estimado ? 'estimado' : null, (v.estimado && v.tarifa != null ? '≈ ' : '') + real(v.tarifa));

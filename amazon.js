@@ -276,13 +276,17 @@ function taxasDosLancamentos(lancs) {
     mediaSku: (s, c) => media((c && sku.get(`${s}|${c}`)) || sku.get(s)), mediaCanal: (c) => media(canal.get(c)) };
 }
 
-// Uma linha de venda no formato da tela Pedidos (custos.js#vendasDaConta). Função pura: testada.
+// Uma linha de venda no formato da tela Pedidos (custos.js#vendasDaConta). Pedido "Pending": a
+// Amazon só informa o preço depois de confirmar o pagamento (medido em 06/10/2026: 15 de 16
+// pendentes sem ItemPrice) — vale o último preço por unidade do mesmo SKU (ctx.preco_unit_sku),
+// marcado como estimado. Função pura: testada.
 function linhaDoPedido(v, ctx) {
   const valida = v.status !== 'Canceled';
   const q = v.quantidade || 0;
-  const fat = v.preco == null ? 0 : v.preco + (v.frete_cobrado || 0) - (v.desconto || 0);
+  const precoEstimado = v.preco == null && valida && ctx.preco_unit_sku != null;
+  const fat = v.preco == null ? (precoEstimado ? ctx.preco_unit_sku * q : 0) : v.preco + (v.frete_cobrado || 0) - (v.desconto || 0);
   const t = ctx.taxas.porPedido.get(`${v.pedido}|${v.sku || ''}`);
-  let tarifa, frete, estimado = false;
+  let tarifa, frete, estimado = precoEstimado;
   if (t?.lancado) { tarifa = t.tarifa; frete = t.frete; }
   else {
     const m = ctx.taxas.mediaSku(v.sku, v.canal) || ctx.taxas.mediaCanal(v.canal);
@@ -304,7 +308,7 @@ function linhaDoPedido(v, ctx) {
   const x = (n) => (n == null ? null : r2(n));
   return { faturamento: x(faturamento), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem),
     imposto: x(imposto), lucro: x(lucro), margem: lucro != null && faturamento > 0 ? lucro / faturamento : null,
-    falta, estimado, reembolso: x(reembolso), valida, devolvido, preco_unit: q ? x(fat / q) : null };
+    falta, estimado, preco_estimado: precoEstimado, reembolso: x(reembolso), valida, devolvido, preco_unit: q ? x(fat / q) : null };
 }
 
 // Ofertas de um ASIN (resposta do getItemOffers) -> o que a tela mostra, da mais barata
@@ -662,10 +666,12 @@ function criar({ D, janela }) {
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const fotos = D.amazonFotos();
     const taxas = taxasDosLancamentos(D.amazonLancPeriodo(new Date(Date.parse(de) - 92 * 86400e3).toISOString(), '9999'));
+    const precoSku = D.amazonUltimoPrecoPorSku();
     const linhas = D.amazonVendasPeriodo(de, ate).map((v) => {
       const cs = v.sku ? C.custoDoSku(v.sku, mapa) : { custo: null, componentes: [], faltando: [] };
       const emb = empresa.embalagem_padrao || 0;
-      const conta_ = linhaDoPedido(v, { taxas, custo_unit: cs.custo, embalagem_unit: emb, imposto_pct: impostoPct });
+      const conta_ = linhaDoPedido(v, { taxas, custo_unit: cs.custo, embalagem_unit: emb, imposto_pct: impostoPct,
+        preco_unit_sku: precoSku.get(`${v.sku}|${v.canal}`) ?? precoSku.get(v.sku) ?? null });
       return { pedido: v.pedido, data: v.data, status: v.status, item_id: v.sku || v.pedido, sku: v.sku, asin: v.asin,
         quantidade: v.quantidade || 0, itens_lidos: !!v.itens_lidos, canal: v.canal, full: v.canal === 'FBA',
         titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || v.sku || null,

@@ -1341,6 +1341,18 @@ const amazonVendasPeriodo = (de, ate) => db.prepare(`
          i.frete_cobrado, i.desconto
   FROM amazon_pedidos p LEFT JOIN amazon_itens i ON i.pedido = p.pedido
   WHERE p.data >= ? AND p.data < ? ORDER BY p.data DESC`).all(de, ate);
+// Último preço por unidade (já com o desconto) de cada SKU, por canal ("sku|FBA") e geral ("sku"):
+// estima o pedido "Pending", que a Amazon manda sem preço até confirmar o pagamento.
+function amazonUltimoPrecoPorSku() {
+  const m = new Map();
+  for (const r of db.prepare(`SELECT i.sku, p.canal, (i.preco - i.desconto) * 1.0 / i.quantidade AS u FROM amazon_itens i
+      JOIN amazon_pedidos p ON p.pedido = i.pedido WHERE i.preco IS NOT NULL AND i.quantidade > 0 AND i.sku IS NOT NULL
+      AND p.status <> 'Canceled' ORDER BY p.data`).all()) {
+    m.set(`${r.sku}|${r.canal}`, Math.round(r.u * 100) / 100);
+    m.set(r.sku, Math.round(r.u * 100) / 100);
+  }
+  return m;
+}
 // Unidades, faturamento e pedidos por SKU e canal (FBA x próprio) desde uma data (tela Full).
 const amazonUnidadesPorSku = (desde) => db.prepare(`
   SELECT i.sku, p.canal, SUM(i.quantidade) AS u, SUM(COALESCE(i.preco,0) + i.frete_cobrado - i.desconto) AS f,
@@ -1579,7 +1591,7 @@ module.exports = {
   shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
   shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeePrecoGravar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
-  amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonItensSemFoto, amazonUnidadesPorSku,
+  amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
   mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias,
