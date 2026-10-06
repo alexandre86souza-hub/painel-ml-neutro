@@ -18,4 +18,7 @@ const comCusto = K.contaReversa({ preco: 100, margemPct: 20, tarifa: 14, frete: 
 assert.deepStrictEqual({ l: comCusto.lucro_atual, m: comCusto.margem_atual, f: comCusto.folga }, { l: 32, m: 0.32, f: 12 });
 assert.strictEqual(K.contaReversa({ preco: 50, margemPct: 50, tarifa: 20, frete: 10 }).custo_maximo, -5, 'margem impossível: custo máximo negativo');
 
-console.log('Calculadora reversa: faixas da Shopee, conta reversa e custo atual: ok');
+// tarifa do ML digitada (%)
+assert.deepStrictEqual(['11,5', '16.5', 11.5, ' 0 ', '', null, 'abc', -1, 61].map(K.pctValido), [11.5, 16.5, 11.5, 0, null, null, null, null, null]);
+
+console.log('Calculadora reversa: faixas da Shopee, conta reversa, custo atual e tarifa digitada: ok');

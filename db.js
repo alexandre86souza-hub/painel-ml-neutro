@@ -1247,7 +1247,7 @@ const concResumo = (ids) => {
 db.exec(`
   CREATE TABLE IF NOT EXISTS amazon_lancamentos (
     chave      TEXT PRIMARY KEY,
-    tipo       TEXT NOT NULL,      -- venda | reembolso | ajuste
+    tipo       TEXT NOT NULL,      -- venda | reembolso | ajuste | etiqueta | servico
     pedido     TEXT,
     sku        TEXT,
     quantidade INTEGER NOT NULL DEFAULT 0,
@@ -1266,15 +1266,22 @@ if (!db.prepare('PRAGMA table_info(amazon_lancamentos)').all().some((c) => c.nam
   db.exec('ALTER TABLE amazon_lancamentos ADD COLUMN tarifa_fixa REAL NOT NULL DEFAULT 0');
   db.prepare("DELETE FROM estado WHERE chave='amazon_lanc_lido_em'").run();
 }
+// descricao = nome da cobrança avulsa (tipo 'etiqueta' | 'servico', amazon.js#servicosDe). Coluna nova:
+// junto com ela a cópia dos 92 dias é relida — a chave das vendas com 2+ unidades do mesmo item
+// mudou (amazon.js#lancamentosDe) e a leitura antiga gravava uma por cima da outra.
+if (!db.prepare('PRAGMA table_info(amazon_lancamentos)').all().some((c) => c.name === 'descricao')) {
+  db.exec('ALTER TABLE amazon_lancamentos ADD COLUMN descricao TEXT');
+  db.prepare("DELETE FROM estado WHERE chave='amazon_lanc_lido_em'").run();
+}
 function amazonLancGravar(linhas) {
-  const st = db.prepare(`INSERT INTO amazon_lancamentos (chave, tipo, pedido, sku, quantidade, data, canal, receita, tarifa, frete, imposto_cobrado, tarifa_fixa)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  const st = db.prepare(`INSERT INTO amazon_lancamentos (chave, tipo, pedido, sku, quantidade, data, canal, receita, tarifa, frete, imposto_cobrado, tarifa_fixa, descricao)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(chave) DO UPDATE SET tipo=excluded.tipo, pedido=excluded.pedido, sku=excluded.sku, quantidade=excluded.quantidade,
       data=excluded.data, canal=excluded.canal, receita=excluded.receita, tarifa=excluded.tarifa, frete=excluded.frete,
-      imposto_cobrado=excluded.imposto_cobrado, tarifa_fixa=excluded.tarifa_fixa`);
+      imposto_cobrado=excluded.imposto_cobrado, tarifa_fixa=excluded.tarifa_fixa, descricao=excluded.descricao`);
   db.exec('BEGIN');
   try {
-    for (const l of linhas) st.run(l.chave, l.tipo, l.pedido, l.sku, l.quantidade, l.data, l.canal, l.receita, l.tarifa, l.frete, l.imposto_cobrado, l.tarifa_fixa || 0);
+    for (const l of linhas) st.run(l.chave, l.tipo, l.pedido, l.sku, l.quantidade, l.data, l.canal, l.receita, l.tarifa, l.frete, l.imposto_cobrado, l.tarifa_fixa || 0, l.descricao || null);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return linhas.length;

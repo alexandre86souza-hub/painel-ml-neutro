@@ -119,11 +119,11 @@ const tx = A.taxasDosLancamentos([
   { tipo: 'venda', pedido: 'P3', sku: 'S2', canal: 'proprio', quantidade: 2, receita: 200, tarifa: 30, frete: 20 },
   { tipo: 'reembolso', pedido: 'P3', sku: 'S2', canal: 'proprio', quantidade: 2, receita: -200, tarifa: -25, frete: 0 },
   { tipo: 'ajuste', pedido: null, sku: null, quantidade: 0, receita: 50, tarifa: 0, frete: 0 }]);
-assert.deepStrictEqual(tx.mediaSku('S1'), { tarifa_pct: 0.15, fixa_un: 0, frete_un: 0 });
-assert.deepStrictEqual(tx.mediaCanal('proprio'), { tarifa_pct: 0.15, fixa_un: 0, frete_un: 10 });
+assert.deepStrictEqual(tx.mediaSku('S1'), { tarifa_pct: 0.15, fixa_un: 0, frete_un: 0, armazem_un: 0 });
+assert.deepStrictEqual(tx.mediaCanal('proprio'), { tarifa_pct: 0.15, fixa_un: 0, frete_un: 10, armazem_un: 0 });
 // tarifa do FBA é por unidade: não vira porcentagem do preço
 const txF = A.taxasDosLancamentos([{ tipo: 'venda', pedido: 'F1', sku: 'SF', canal: 'FBA', quantidade: 2, receita: 200, tarifa: 50, tarifa_fixa: 20, frete: 0 }]);
-assert.deepStrictEqual(txF.mediaSku('SF'), { tarifa_pct: 0.15, fixa_un: 10, frete_un: 0 });
+assert.deepStrictEqual(txF.mediaSku('SF'), { tarifa_pct: 0.15, fixa_un: 10, frete_un: 0, armazem_un: 0 });
 assert.strictEqual(A.linhaDoPedido({ pedido: 'F9', sku: 'SF', canal: 'FBA', status: 'Unshipped', quantidade: 1, preco: 300, frete_cobrado: 0, desconto: 0 },
   { taxas: txF, custo_unit: 10, imposto_pct: 0 }).tarifa, 300 * 0.15 + 10, 'estimada = comissão % + FBA por unidade');
 assert.strictEqual(tx.mediaSku('nenhum'), null);
@@ -145,6 +145,47 @@ const lC = A.linhaDoPedido({ pedido: 'P7', sku: 'S1', canal: 'FBA', status: 'Can
 assert.deepStrictEqual({ valida: lC.valida, fat: lC.faturamento, prod: lC.produto }, { valida: false, fat: 0, prod: 0 });
 // sem custo: sem lucro
 assert.deepStrictEqual(A.linhaDoPedido({ pedido: 'P1', sku: 'S1', canal: 'FBA', status: 'Shipped', quantidade: 1, preco: 100 }, { ...ctxP, custo_unit: null }).falta, ['custo']);
+
+// ---------- pedido FBA de 2 unidades: uma linha por unidade, mesmo item e mesma data ----------
+const duas = A.lancamentosDe({ ShipmentEventList: [{ AmazonOrderId: '702-D', PostedDate: '2026-07-14T11:03:06Z', ShipmentItemList: [
+  { SellerSKU: 'S1', OrderItemId: '5', QuantityShipped: 1, ItemChargeList: [{ ChargeType: 'Principal', ChargeAmount: BRL(59.39) }],
+    ItemFeeList: [{ FeeType: 'FBAPerUnitFulfillmentFee', FeeAmount: BRL(-6.05) }, { FeeType: 'Commission', FeeAmount: BRL(-13.06) }] },
+  { SellerSKU: 'S1', OrderItemId: '5', QuantityShipped: 1, ItemChargeList: [{ ChargeType: 'Principal', ChargeAmount: BRL(59.39) }],
+    ItemFeeList: [{ FeeType: 'FBAPerUnitFulfillmentFee', FeeAmount: BRL(-6.05) }] }] }] });
+assert.strictEqual(new Set(duas.map((l) => l.chave)).size, 2, 'a 2ª unidade não grava por cima da 1ª');
+assert.strictEqual(duas[0].chave, 'venda|702-D|5|2026-07-14T11:03:06.000Z', 'a 1ª mantém a chave antiga');
+assert.deepStrictEqual(duas.map((l) => l.receita + l.tarifa), [59.39 + 19.11, 59.39 + 6.05]);
+
+// ---------- cobranças avulsas (API de transações) ----------
+const T$ = (v) => ({ currencyAmount: v, currencyCode: 'BRL' });
+const serv = A.servicosDe([
+  { transactionType: 'ServiceFee', transactionId: 't1', description: 'MfnPostageFee', postedDate: '2026-09-21T10:00:00Z', totalAmount: T$(-22.95),
+    relatedIdentifiers: [{ relatedIdentifierName: 'SETTLEMENT_ID', relatedIdentifierValue: '9' }, { relatedIdentifierName: 'ORDER_ID', relatedIdentifierValue: '701-B' }] },
+  { transactionType: 'ServiceFee', transactionId: 't2', description: 'FBAStorageBilling', postedDate: '2026-10-03T19:34:09Z', totalAmount: T$(-29.7), relatedIdentifiers: [] },
+  { transactionType: 'ServiceFee', transactionId: 't3', description: 'Subscription', postedDate: '2026-09-17T20:35:22Z', totalAmount: T$(-19) },
+  { transactionType: 'Shipment', transactionId: 't4', description: 'Order Payment', postedDate: '2026-09-21T10:00:00Z', totalAmount: T$(50) }]);
+assert.deepStrictEqual(serv.map((l) => [l.chave, l.tipo, l.pedido, l.canal, l.tarifa, l.frete]), [
+  ['servico|t1', 'etiqueta', '701-B', 'proprio', 0, 22.95], ['servico|t2', 'servico', null, 'FBA', 29.7, 0], ['servico|t3', 'servico', null, null, 19, 0]],
+  'só ServiceFee; etiqueta é frete do pedido; armazenagem e mensalidade são da conta');
+assert.strictEqual(A.contaDoLancamento(serv[1], ctx).lucro, -29.7, 'cobrança da conta: só custo, sem imposto');
+// etiqueta entra no frete da venda do mesmo pedido; sem a venda, fica solta
+const comE = A.comEtiquetas([vB, serv[0], { ...serv[0], chave: 'servico|t9', pedido: '701-Z' }]);
+assert.deepStrictEqual(comE.map((l) => [l.tipo, l.frete]), [['venda', 18 + 22.95], ['etiqueta', 22.95]]);
+const resE = A.resumoAmazon([...comE, serv[1], serv[2]].map((l) => ({ ...l, ...A.contaDoLancamento(l, { ...ctx, custo_unit: 30 }) })));
+assert.deepStrictEqual({ frete: resE.frete, servicos: resE.servicos, pedidos: resE.pedidos }, { frete: 18 + 22.95 * 2, servicos: 48.7, pedidos: 1 });
+// médias: etiqueta no frete do envio próprio; armazenagem do FBA por unidade vendida no FBA
+const txS = A.taxasDosLancamentos([
+  { tipo: 'venda', pedido: 'Q1', sku: 'S1', canal: 'FBA', quantidade: 3, receita: 300, tarifa: 60, tarifa_fixa: 18, frete: 0 },
+  { tipo: 'venda', pedido: 'Q2', sku: 'S1', canal: 'proprio', quantidade: 1, receita: 100, tarifa: 15, frete: 0 },
+  { tipo: 'etiqueta', pedido: 'Q2', sku: null, canal: 'proprio', quantidade: 0, receita: 0, tarifa: 0, frete: 20 },
+  { tipo: 'servico', pedido: null, sku: null, canal: 'FBA', quantidade: 0, receita: 0, tarifa: 6, frete: 0 },
+  { tipo: 'servico', pedido: null, sku: null, canal: null, quantidade: 0, receita: 0, tarifa: 19, frete: 0 }]);
+assert.strictEqual(txS.armazemUn, 2, 'mensalidade não entra; armazenagem ÷ unidades do FBA');
+assert.deepStrictEqual(txS.mediaSku('S1', 'FBA'), { tarifa_pct: 0.14, fixa_un: 6, frete_un: 0, armazem_un: 2 });
+assert.deepStrictEqual(txS.mediaSku('S1', 'proprio'), { tarifa_pct: 0.15, fixa_un: 0, frete_un: 20, armazem_un: 0 });
+assert.strictEqual(txS.porPedido.get('Q2|S1').frete, 20, 'pedido lançado: a etiqueta é o frete real');
+assert.strictEqual(A.linhaDoPedido({ pedido: 'Q1', sku: 'S1', canal: 'FBA', status: 'Shipped', quantidade: 3, preco: 300 },
+  { taxas: txS, custo_unit: 10, imposto_pct: 0 }).frete, 6, 'pedido FBA leva a parte da armazenagem');
 
 // ---------- concorrentes de um ASIN ----------
 const of = A.ofertasDe({ ASIN: 'B0TESTE001', Summary: { TotalOfferCount: 3 }, Offers: [

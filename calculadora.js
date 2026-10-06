@@ -16,7 +16,8 @@
 //     de Devolução Fácil por pedido. Frete: Shopee Xpress a Shopee paga; Entrega Direta ela repassa
 //     o que o vendedor paga (medido: R$ 8 em 208 de 215 pedidos) — custo líquido 0.
 //   - Amazon: a média real do financeiro dela (taxasDosLancamentos, 92 dias) do SKU, ou do canal
-//     (envio próprio ou FBA) quando o SKU não vendeu.
+//     (envio próprio ou FBA) quando o SKU não vendeu. Envio próprio: frete = etiqueta média comprada na
+//     Amazon; FBA: tarifa por unidade na tarifa e, no frete, a parte da armazenagem e do envio ao armazém.
 // Dados da Amazon não vão para o MCP: esta rota não tem ferramenta MCP.
 const C = require('./custos.js');
 const A = require('./amazon.js');
@@ -44,6 +45,13 @@ function contaReversa({ preco, margemPct = 0, tarifa = 0, frete = 0, impostoPct 
       folga: r2(custoMaximo - custoAtual) });
   }
   return out;
+}
+
+// Tarifa digitada (%): "11,5", "11.5" ou 11.5, de 0 a 60; fora disso null. Função pura: testada.
+function pctValido(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).trim().replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 60 ? r2(n) : null;
 }
 
 function criar({ D, ml }) {
@@ -125,7 +133,16 @@ function criar({ D, ml }) {
       const pct = x?.sale_fee_details?.percentage_fee, fixa = x?.sale_fee_details?.fixed_fee || 0;
       if (pct != null) tarifa = { pct, fixa, valor: r2(p.preco * pct / 100 + fixa) };
     }
-    if (!tarifa) avisos.push('Sem a tarifa do ML: escolha um anúncio ou informe a categoria.');
+    // Tarifa digitada: a desta conta (campo do cartão, só neste cálculo) › a padrão salva da conta
+    // (`calc_tarifa_ml:{id}`) › a da categoria no ML. A da categoria fica como referência.
+    const categoriaPct = tarifa?.pct ?? null;
+    const digitada = p.tarifas?.[id] ?? pctValido(D.configLer(`calc_tarifa_ml:${id}`));
+    if (digitada != null) {
+      tarifa = { pct: digitada, fixa: 0, valor: r2(p.preco * digitada / 100) };
+      tarifa.origem = p.tarifas?.[id] != null ? 'editada' : 'padrao';
+    } else if (tarifa) tarifa.origem = 'categoria';
+    if (tarifa) { tarifa.categoria_pct = categoriaPct; tarifa.padrao_pct = pctValido(D.configLer(`calc_tarifa_ml:${id}`)); }
+    if (!tarifa) avisos.push('Sem a tarifa do ML: escolha um anúncio, informe a categoria ou digite a tarifa.');
     // frete
     let frete = 0, fonte;
     if (p.envio === 'flex') {
@@ -150,7 +167,10 @@ function criar({ D, ml }) {
     }
     const custosAnuncio = item ? D.custosDe([item.id])[item.id] : null;
     const embalagem = (custosAnuncio?.outros ?? empresa.embalagem_padrao ?? 0) + (custosAnuncio?.extra || 0);
-    return { id: `ml:${id}`, canal: 'ml', nome: `Mercado Livre — ${conta.nickname}`, tarifa, tarifa_txt: tarifa ? `${String(tarifa.pct).replace('.', ',')}%${tarifa.fixa ? ` + R$ ${tarifa.fixa.toFixed(2).replace('.', ',')}` : ''} (${tipo === 'gold_pro' ? 'Premium' : 'Clássico'})` : null,
+    const origemTxt = { editada: 'digitada neste cálculo', padrao: 'padrão da conta', categoria: tipo === 'gold_pro' ? 'Premium' : 'Clássico' };
+    return { id: `ml:${id}`, canal: 'ml', conta_ml: id, nome: `Mercado Livre — ${conta.nickname}`, tarifa,
+      tarifa_txt: tarifa ? `${String(tarifa.pct).replace('.', ',')}%${tarifa.fixa ? ` + R$ ${tarifa.fixa.toFixed(2).replace('.', ',')}` : ''} (${origemTxt[tarifa.origem]})`
+        + (tarifa.origem !== 'categoria' && categoriaPct != null ? ` · na categoria o ML cobra ${String(categoriaPct).replace('.', ',')}%` : '') : null,
       frete: r2(frete), frete_fonte: fonte, imposto_pct: C.impostoTotal(empresa), embalagem, categoria, categoria_nome: nomeCat,
       anuncio: item ? { id: item.id, titulo: item.title } : null, avisos };
   }
@@ -170,7 +190,7 @@ function criar({ D, ml }) {
     const empresa = C.lerEmpresa(proprio || D.configLer(`empresa:${Number(D.configLer('amazon_empresa_conta')) || primeiraConta()}`));
     const taxas = A.taxasDosLancamentos(D.amazonLancPeriodo(new Date(Date.now() - 92 * 864e5).toISOString(), '9999'));
     const canal = p.amazon === 'FBA' ? 'FBA' : 'proprio';
-    let m = p.sku ? taxas.mediaSku(p.sku) : null, fonte = 'média deste SKU nas vendas da Amazon (92 dias)';
+    let m = p.sku ? taxas.mediaSku(p.sku, canal) : null, fonte = 'média deste SKU nas vendas da Amazon (92 dias)';
     if (!m) { m = taxas.mediaCanal(canal); fonte = `média das vendas ${canal === 'FBA' ? 'FBA' : 'com envio próprio'} da Amazon (92 dias)`; }
     if (!m) return { id: 'amazon', canal: 'amazon', nome: 'Amazon', tarifa: null, frete: 0, imposto_pct: C.impostoTotal(empresa), embalagem: 0,
       avisos: ['Ainda sem vendas na Amazon para medir as taxas.'] };
@@ -178,8 +198,12 @@ function criar({ D, ml }) {
     return { id: 'amazon', canal: 'amazon', nome: `Amazon — ${canal === 'FBA' ? 'FBA' : 'envio próprio'}`,
       tarifa: { pct, fixa: r2(m.fixa_un), valor: r2(p.preco * m.tarifa_pct + m.fixa_un) },
       tarifa_txt: `${String(pct).replace('.', ',')}%${m.fixa_un ? ` + R$ ${m.fixa_un.toFixed(2).replace('.', ',')}` : ''} (${fonte})`,
-      frete: r2(m.frete_un), frete_fonte: fonte, imposto_pct: C.impostoTotal(empresa), embalagem: canal === 'proprio' ? (empresa.embalagem_padrao || 0) : 0,
-      avisos: canal === 'proprio' ? ['Envio próprio: o frete que você paga à transportadora não passa pela Amazon. Some em "Outros custos".'] : [] };
+      frete: r2(m.frete_un + (m.armazem_un || 0)),
+      frete_fonte: canal === 'FBA'
+        ? `armazenagem e envio ao armazém, R$ ${(m.armazem_un || 0).toFixed(2).replace('.', ',')} por unidade (a tarifa de envio do FBA está na tarifa) — ${fonte}`
+        : `etiqueta comprada na Amazon — ${fonte}`,
+      imposto_pct: C.impostoTotal(empresa), embalagem: canal === 'proprio' ? (empresa.embalagem_padrao || 0) : 0,
+      avisos: canal === 'proprio' && !m.frete_un ? ['Envio próprio sem etiqueta da Amazon: o frete que você paga à transportadora não passa por ela. Some em "Outros custos".'] : [] };
   }
 
   const rotas = {
@@ -198,7 +222,8 @@ function criar({ D, ml }) {
       const nome = cs?.componentes?.map((c) => c.nome).filter(Boolean).join(' + ') || (q.get('nome') || '').trim() || null;
       const item = /^MLB\d+$/i.test(q.get('item') || '') ? q.get('item').toUpperCase() : null;
       const categoria = /^MLB\d+$/i.test(q.get('categoria') || '') ? q.get('categoria').toUpperCase() : null;
-      const p = { preco, sku, nome, item, categoria, tipo: q.get('tipo'), envio: q.get('envio') === 'flex' ? 'flex' : 'me', amazon: q.get('amazon') };
+      const p = { preco, sku, nome, item, categoria, tipo: q.get('tipo'), envio: q.get('envio') === 'flex' ? 'flex' : 'me', amazon: q.get('amazon'),
+        tarifas: Object.fromEntries(D.contasListar().map((c) => [c.ml_user_id, pctValido(q.get(`t_${c.ml_user_id}`))]).filter(([, v]) => v != null)) };
       const so = q.get('canal');   // opcional: um canal só (ml:{id}, shopee:{loja}, amazon)
       const canais = [];
       for (const c of D.contasListar()) if (!so || so === `ml:${c.ml_user_id}`) canais.push(await canalML(c, p).catch((e) => ({ id: `ml:${c.ml_user_id}`, canal: 'ml', nome: `Mercado Livre — ${c.nickname}`, tarifa: null, avisos: [e.message] })));
@@ -216,8 +241,17 @@ function criar({ D, ml }) {
       return { produtos: D.catalogoListar().filter((p) => String(p.numero) === t || (p.nome || '').toLowerCase().includes(t) || (p.sku || '').toLowerCase().includes(t))
         .slice(0, 15).map((p) => ({ numero: p.numero, sku: p.sku, nome: p.nome, custo: p.custo })) };
     },
+    // Tarifa padrão de uma conta do ML na calculadora (null = volta a usar a da categoria).
+    'POST /api/calculadora/tarifa': async (_u, b) => {
+      const conta = D.contasListar().find((c) => String(c.ml_user_id) === String(b?.conta));
+      if (!conta) throw erro('Conta do Mercado Livre não encontrada.');
+      const pct = b?.pct == null || b.pct === '' ? null : pctValido(b.pct);
+      if (b?.pct != null && b.pct !== '' && pct == null) throw erro('Tarifa entre 0% e 60%.');
+      D.configGravar(`calc_tarifa_ml:${conta.ml_user_id}`, pct);
+      return { ok: true, conta: conta.ml_user_id, pct };
+    },
   };
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, tarifaShopee, contaReversa };
+module.exports = { criar, tarifaShopee, contaReversa, pctValido };

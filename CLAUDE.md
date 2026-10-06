@@ -93,7 +93,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   preço − tarifa − frete − imposto − embalagem − outros − margem). ML: tarifa de listing_prices na
   categoria do anúncio da conta com os MESMOS produtos do SKU (senão um que os contenha, a prevista
   pelo nome ou a categoria que mais vende); frete médio Mercado Envios (sem Flex) do anúncio ou da
-  conta na faixa abaixo/acima de R$ 79 — medido: o vendedor paga frete também abaixo de R$ 79; Flex =
+  conta na faixa abaixo/acima de R$ 79 — medido: o vendedor paga frete também abaixo de R$ 79. Tarifa do
+  ML editável no cartão: `t_{conta}=` (só aquele cálculo) › padrão da conta (`calc_tarifa_ml:{id}` em
+  `estado`, `POST /api/calculadora/tarifa`, null volta à da categoria) › listing_prices; Flex =
   entrega_flex − bônus médio. Shopee: tabela medida (`tarifaShopee`). Amazon: média real do
   financeiro (`taxasDosLancamentos`). Sem ferramenta MCP (tem dado da Amazon).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
@@ -186,7 +188,14 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Vendas e lucro (`GET /api/amazon/vendas`): pelos lançamentos financeiros
   (`finances/v0/financialEvents`, data = PostedDate), copiados em `amazon_lancamentos` (no
   máximo a cada 10 min; 1ª leitura = 92 dias). Custo pelo SKU (`produtos_custo`; hífen também
-  separa os produtos: `KIT-795-615-746-698`). A Amazon é uma "conta" própria na lista do topo
+  separa os produtos: `KIT-795-615-746-698`). Pedido FBA de 2+ unidades vem em uma linha por
+  unidade com o MESMO OrderItemId e data: a 2ª em diante ganha `|2`, `|3` na chave (`lancamentosDe`).
+  Cobranças avulsas vêm da API de transações (`/finances/2024-06-19/transactions`, ServiceFee, com
+  data e id; a v0 as manda sem data), leitura própria (`amazon_serv_lido_em`): `servicosDe` grava
+  a etiqueta do envio próprio (MfnPostageFee, com ORDER_ID) como tipo `etiqueta` e armazenagem,
+  envio ao armazém, remoção do FBA e mensalidade como `servico` (custo da conta). `comEtiquetas`
+  põe a etiqueta no frete das vendas do mesmo pedido; `taxasDosLancamentos` dá `armazem_un` (FBA)
+  e soma ela ao frete dos pedidos FBA, aos anúncios e à calculadora. A Amazon é uma "conta" própria na lista do topo
   (`menu.js` acrescenta a opção): identidade `marca_*:amazon` e empresa `empresa:amazon`
   (`/api/marca?conta=amazon`, `/api/empresa?conta=amazon`, tela `empresa.html?conta=amazon`);
   sem empresa salva, vale a da conta do ML em `amazon_empresa_conta`.

@@ -159,7 +159,7 @@ async function carregarVendas(recarregar){
       cartao('Hoje', real(h.faturamento), `${numero(h.pedidos)} pedido(s) · ${numero(h.unidades)} un.`),
       cartao(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
       cartao(`Lucro em ${dias} dias`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
-      cartao('Tarifas da Amazon', real(p.tarifa), p.faturamento ? `${pct(p.tarifa / p.faturamento)} do faturamento · frete ${real(p.frete)}` : ''),
+      cartao('Tarifas da Amazon', real(p.tarifa), p.faturamento ? `${pct(p.tarifa / p.faturamento)} do faturamento · frete ${real(p.frete)}` + (p.servicos ? ` · armazenagem e mensalidade ${real(p.servicos)}` : '') : ''),
       cartao('Custo dos produtos', real(p.produto), `impostos ${real(p.imposto)} · embalagem ${real(p.embalagem)}`),
       cartao('Reembolsos e ajustes', real(p.reembolsos + p.ajustes), `reembolsos ${real(p.reembolsos)} · ajustes da Amazon ${real(p.ajustes)}`),
     );
@@ -193,6 +193,9 @@ function pintarProdutos(lista){
   t.appendChild(tb); box.appendChild(t);
 }
 
+const TIPOS = { etiqueta: 'etiqueta', servico: 'cobrança da conta' };
+const NOMES_SERV = { FBAStorageBilling: 'armazenagem FBA', FBAPostInboundTransportation: 'envio ao armazém FBA', FBARemoval: 'remoção FBA',
+  Subscription: 'mensalidade', MfnPostageFee: 'etiqueta de envio' };
 async function carregarLancamentos(){
   const box = $('lancamentos'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Carregando…'));
   try{
@@ -204,7 +207,7 @@ async function carregarLancamentos(){
     const tb = el('tbody');
     for(const l of [...r.lancamentos].reverse()){
       const tr = el('tr');
-      tr.append(el('td', null, quando(l.data)), el('td', null, l.tipo), el('td', null, l.pedido || '—'), el('td', null, l.sku || '—'),
+      tr.append(el('td', null, quando(l.data)), el('td', null, TIPOS[l.tipo] || l.tipo), el('td', null, l.pedido || '—'), el('td', null, l.sku || NOMES_SERV[l.descricao] || l.descricao || '—'),
         el('td', null, l.canal === 'FBA' ? 'FBA' : l.canal ? 'próprio' : '—'), el('td', null, numero(l.quantidade)), el('td', null, real(l.faturamento)),
         el('td', null, menos(l.tarifa)), el('td', null, menos(l.frete)), el('td', null, l.produto == null ? 'sem custo' : menos(l.produto)),
         el('td', null, menos(l.imposto)), el('td', l.lucro == null ? null : l.lucro < 0 ? 'neg' : 'pos', l.lucro == null ? '—' : real(l.lucro)));

@@ -131,12 +131,38 @@ function linha(rot, valor, nota, sinal = '−'){
   const tr = el('tr'); const a = el('td'); a.appendChild(document.createTextNode(rot)); if(nota) a.appendChild(el('small', null, nota));
   tr.append(a, el('td', 'v', valor == null ? '—' : `${sinal} ${real(valor)}`)); return tr;
 }
+// Mercado Livre: a tarifa (%) é editável. Mudar vale só para este cálculo; "Salvar como padrão"
+// grava para a conta (volta sozinha nos próximos cálculos).
+const tarifasEditadas = {};
+const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(corpo) });
+function linhaTarifaML(c, k){
+  const tr = el('tr'), a = el('td'), id = c.conta_ml;
+  const campo = el('input'); campo.type = 'number'; campo.step = '0.1'; campo.min = '0'; campo.max = '60';
+  campo.value = c.tarifa.pct; campo.style.cssText = 'width:70px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid #d5d7db;border-radius:7px';
+  campo.setAttribute('aria-label', `Tarifa do Mercado Livre em % — ${c.nome}`);
+  campo.onchange = () => { tarifasEditadas[id] = campo.value; calcular(); };
+  const rot = el('span', null, 'Tarifa do ML '); rot.append(campo, document.createTextNode(' %'));
+  a.append(rot, el('small', null, c.tarifa_txt));
+  const salvar = el('button', 'bt', 'Salvar como padrão'); salvar.type = 'button'; salvar.style.cssText = 'font-size:12px;padding:3px 8px;margin-top:4px';
+  salvar.hidden = c.tarifa.origem === 'padrao';
+  salvar.onclick = async () => {
+    try{ await post('/api/calculadora/tarifa', { conta: id, pct: campo.value }); delete tarifasEditadas[id]; calcular(); }catch(e){ aviso(e.message); }
+  };
+  a.appendChild(salvar);
+  if(c.tarifa.padrao_pct != null && c.tarifa.categoria_pct != null){
+    const voltar = el('button', 'bt', 'Usar a da categoria'); voltar.type = 'button'; voltar.style.cssText = 'font-size:12px;padding:3px 8px;margin:4px 0 0 6px';
+    voltar.title = 'Apaga a tarifa padrão desta conta e usa a que o ML cobra na categoria do produto';
+    voltar.onclick = async () => { try{ await post('/api/calculadora/tarifa', { conta: id, pct: null }); delete tarifasEditadas[id]; calcular(); }catch(e){ aviso(e.message); } };
+    a.appendChild(voltar);
+  }
+  tr.append(a, el('td', 'v', `− ${real(k.tarifa)}`)); return tr;
+}
 function cartaoCanal(c, r){
   const d = el('div', 'canal'); d.appendChild(el('h3', null, c.nome));
   if(!c.conta){ d.appendChild(el('p', 'avisos', (c.avisos || []).join(' ') || 'Não foi possível calcular.')); return d; }
   const k = c.conta, t = el('table'), tb = el('tbody');
   tb.append(linha('Preço de venda', k.preco, null, ''),
-    linha('Tarifa do marketplace', k.tarifa, c.tarifa_txt),
+    c.canal === 'ml' ? linhaTarifaML(c, k) : linha('Tarifa do marketplace', k.tarifa, c.tarifa_txt),
     linha('Frete', k.frete, c.frete_fonte),
     linha(`Imposto (${String(k.imposto_pct).replace('.', ',')}%)`, k.imposto),
     linha('Embalagem', k.embalagem));
@@ -165,6 +191,7 @@ async function calcular(){
   const q = new URLSearchParams({ preco, margem, outros: $('outros').value || '0', envio: $('envio').value, amazon: $('amazon').value });
   for(const k of ['sku', 'tipo', 'item']) if($(k).value.trim()) q.set(k, $(k).value.trim());
   if($('canal').value) q.set('canal', $('canal').value);
+  for(const [id, v] of Object.entries(tarifasEditadas)) if(String(v).trim() !== '') q.set(`t_${id}`, v);
   $('blocoResultado').hidden = false; $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'carregando', 'Calculando…'));
   try{
     const r = await api('/api/calculadora?' + q);

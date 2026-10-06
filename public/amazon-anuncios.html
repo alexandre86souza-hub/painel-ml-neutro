@@ -77,9 +77,10 @@ let dados = null, filtro = '';
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
 
 // Margem estimada num preço: comissão média do SKU na Amazon (% do preço) + a parte fixa por
-// unidade (tarifa do FBA), frete médio por unidade, custo do SKU, embalagem (envio próprio)
-// e impostos da Amazon. Sem custo ou sem histórico de tarifa: null.
-const fixos = (i) => (i.fixa_un || 0) + (i.frete_un || 0) + i.custo_unit + (i.embalagem_unit || 0);
+// unidade (tarifa do FBA), frete médio por unidade (etiqueta no envio próprio), armazenagem e
+// envio ao armazém por unidade (FBA), custo do SKU, embalagem (envio próprio) e impostos da
+// Amazon. Sem custo ou sem histórico de tarifa: null.
+const fixos = (i) => (i.fixa_un || 0) + (i.frete_un || 0) + (i.armazem_un || 0) + i.custo_unit + (i.embalagem_unit || 0);
 function estimar(i, preco){
   if(preco == null || i.custo_unit == null || i.tarifa_pct == null) return null;
   const lucro = preco - preco * i.tarifa_pct - fixos(i) - preco * (dados.imposto_pct || 0) / 100;

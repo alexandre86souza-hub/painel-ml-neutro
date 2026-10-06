@@ -98,16 +98,21 @@ const listasCheias = (fe) => Object.fromEntries(Object.entries(fe || {}).filter(
 // real (diagnóstico, últimos 30 dias): ShipmentEventList, RefundEventList, ServiceFeeEventList
 // e AdjustmentEventList; ChargeType Principal, ShippingCharge, GiftWrap e os *Tax; FeeType
 // Commission, FBAPerUnitFulfillmentFee, MFNPostageFee, ShippingChargeback, ShippingHB etc.
+// A etiqueta do envio próprio (MFNPostageFee) NÃO vem no item: vem na ServiceFeeEventList, sem
+// data — ver servicosDe. Medido em 06/10/2026: 204 etiquetas, R$ 4.412 em 92 dias.
 const FEE_FRETE = /^(MFNPostageFee|ShippingChargeback|ShippingHB)$/;
 // Tarifas por unidade (não acompanham o preço): as do FBA e as taxas fixas de fechamento.
 const FEE_FIXA = /^FBA|ClosingFee$/;
-const valor = (m) => Number(m?.CurrencyAmount ?? m?.Amount ?? 0) || 0;
+const valor = (m) => Number(m?.CurrencyAmount ?? m?.currencyAmount ?? m?.Amount ?? 0) || 0;
 const dataIso = (d) => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
 const r2 = (v) => Math.round(v * 100) / 100;
 
 // Função pura: testada.
+// Pedido com 2+ unidades do mesmo item (FBA): a Amazon manda uma linha por unidade, com o MESMO
+// OrderItemId e a mesma data (a comissão de todas vem só na primeira). A 2ª em diante ganha
+// "|2", "|3" na chave — antes uma gravava por cima da outra (medido: 51 unidades em 92 dias).
 function lancamentosDe(fe) {
-  const out = [];
+  const out = [], vistas = new Map();
   const item = (tipo, ev, it, cargas, taxas, promos) => {
     let receita = 0, imposto = 0, tarifa = 0, frete = 0, fixa = 0, fba = false;
     for (const c of cargas || []) { const v = valor(c.ChargeAmount); if (/Tax$/i.test(c.ChargeType || '')) imposto += v; else receita += v; }
@@ -120,7 +125,10 @@ function lancamentosDe(fe) {
     const data = dataIso(ev.PostedDate);
     if (!data) return;
     const idItem = it.OrderItemId || it.OrderAdjustmentItemId || it.SellerSKU || '';
-    out.push({ chave: `${tipo}|${ev.AmazonOrderId || ''}|${idItem}|${data}`, tipo, pedido: ev.AmazonOrderId || null,
+    const base = `${tipo}|${ev.AmazonOrderId || ''}|${idItem}|${data}`;
+    const n = (vistas.get(base) || 0) + 1;
+    vistas.set(base, n);
+    out.push({ chave: n > 1 ? `${base}|${n}` : base, tipo, pedido: ev.AmazonOrderId || null,
       sku: it.SellerSKU || null, quantidade: Number(it.QuantityShipped) || 0, data, canal: fba ? 'FBA' : 'proprio',
       receita: r2(receita), tarifa: r2(tarifa), frete: r2(frete), imposto_cobrado: r2(imposto), tarifa_fixa: r2(fixa) });
   };
@@ -142,10 +150,49 @@ function lancamentosDe(fe) {
   return out;
 }
 
+// Cobranças avulsas, pela API de transações (Finances 2024-06-19), que tem data e um id por
+// cobrança (a v0 manda a ServiceFeeEventList sem data). Medido em 06/10/2026 na conta real:
+// MfnPostageFee = etiqueta do envio próprio comprada na Amazon, com o ORDER_ID (já com o estorno
+// de frete); FBAStorageBilling, FBAPostInboundTransportation (envio ao armazém), FBARemoval e
+// Subscription (mensalidade) = custos da conta, sem pedido de venda. Função pura: testada.
+function servicosDe(transacoes) {
+  const out = [];
+  for (const t of transacoes || []) {
+    if (t?.transactionType !== 'ServiceFee' || !t.transactionId) continue;
+    const data = dataIso(t.postedDate);
+    if (!data) continue;
+    const desc = String(t.description || '');
+    const custo = r2(-valor(t.totalAmount));
+    const etiqueta = /^MfnPostage/i.test(desc);
+    const pedido = (t.relatedIdentifiers || []).find((r) => r.relatedIdentifierName === 'ORDER_ID')?.relatedIdentifierValue || null;
+    out.push({ chave: `servico|${t.transactionId}`, tipo: etiqueta ? 'etiqueta' : 'servico', pedido: etiqueta ? pedido : null,
+      sku: null, quantidade: 0, data, canal: etiqueta ? 'proprio' : /^FBA/i.test(desc) ? 'FBA' : null, receita: 0,
+      tarifa: etiqueta ? 0 : custo, frete: etiqueta ? custo : 0, imposto_cobrado: 0, tarifa_fixa: 0, descricao: desc || null });
+  }
+  return out;
+}
+
+// A etiqueta entra no frete das vendas do MESMO pedido (rateada pelo faturamento; sem faturamento,
+// em partes iguais). Sem a venda na lista (lançada fora da janela) fica como linha própria.
+// Função pura: testada.
+function comEtiquetas(lancs) {
+  const vendas = new Map();
+  for (const l of lancs) if (l.tipo === 'venda' && l.pedido) { if (!vendas.has(l.pedido)) vendas.set(l.pedido, []); vendas.get(l.pedido).push(l); }
+  const extra = new Map(), out = [];
+  for (const l of lancs) {
+    const vs = l.tipo === 'etiqueta' ? vendas.get(l.pedido) : null;
+    if (!vs) { out.push(l); continue; }
+    const base = vs.reduce((a, v) => a + Math.max(0, v.receita), 0);
+    for (const v of vs) extra.set(v, (extra.get(v) || 0) + l.frete * (base > 0 ? Math.max(0, v.receita) / base : 1 / vs.length));
+  }
+  return out.map((l) => (extra.has(l) ? { ...l, frete: r2(l.frete + extra.get(l)), etiqueta: r2(extra.get(l)) } : l));
+}
+
 // Lucro de cada lançamento: o mesmo cálculo das contas do Mercado Livre (custo pelo SKU,
 // embalagem padrão da empresa no envio próprio, impostos da empresa sobre o faturamento).
 // Reembolso devolve a receita e as taxas estornadas; o produto volta para o estoque (sem
-// custo). Ajuste não tem produto nem imposto. Função pura: testada.
+// custo). Ajuste não tem produto nem imposto. Etiqueta solta e cobrança da conta ('servico':
+// armazenagem, envio ao armazém, mensalidade) são só custo. Função pura: testada.
 function contaDoLancamento(l, ctx) {
   const venda = l.tipo === 'venda';
   const produto = venda ? (ctx.custo_unit == null ? null : ctx.custo_unit * l.quantidade) : 0;
@@ -161,11 +208,12 @@ function contaDoLancamento(l, ctx) {
 // unidades contam só as vendas. Função pura: testada.
 function resumoAmazon(linhas) {
   const t = { pedidos: new Set(), unidades: 0, faturamento: 0, tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0,
-    lucro: 0, com_lucro_fat: 0, reembolsos: 0, ajustes: 0 };
+    lucro: 0, com_lucro_fat: 0, reembolsos: 0, ajustes: 0, servicos: 0 };
   for (const l of linhas) {
     if (l.tipo === 'venda') { if (l.pedido) t.pedidos.add(l.pedido); t.unidades += l.quantidade; }
     if (l.tipo === 'reembolso') t.reembolsos += l.faturamento;
     if (l.tipo === 'ajuste') t.ajustes += l.faturamento;
+    if (l.tipo === 'servico') t.servicos += l.tarifa || 0;
     for (const k of ['faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto']) t[k] += l[k] || 0;
     if (l.lucro != null) { t.lucro += l.lucro; t.com_lucro_fat += l.faturamento; }
   }
@@ -173,7 +221,7 @@ function resumoAmazon(linhas) {
     produto: r2(t.produto), embalagem: r2(t.embalagem), imposto: r2(t.imposto), lucro: r2(t.lucro),
     margem: t.com_lucro_fat > 0 ? t.lucro / t.com_lucro_fat : null,
     cobertura: t.faturamento > 0 ? Math.min(1, t.com_lucro_fat / t.faturamento) : null,
-    reembolsos: r2(t.reembolsos), ajustes: r2(t.ajustes), cancelados: 0 };
+    reembolsos: r2(t.reembolsos), ajustes: r2(t.ajustes), servicos: r2(t.servicos), cancelados: 0 };
 }
 
 // ---------- pedidos (data da compra) com as taxas do financeiro ----------
@@ -198,23 +246,34 @@ function janelaVendas(dias, janela, agora = Date.now()) {
   return { ...janela(dias), ate: new Date(agora + 60e3).toISOString() };
 }
 
-// Taxas lançadas, por pedido+SKU, e as médias para estimar o que ainda não foi lançado.
-// Função pura: testada.
+// Taxas lançadas, por pedido+SKU, e as médias para estimar o que ainda não foi lançado. O frete
+// já traz a etiqueta do envio próprio (comEtiquetas). armazem_un = armazenagem + envio ao
+// armazém + remoção do FBA (cobranças da conta) ÷ unidades vendidas pelo FBA na janela.
+// mediaSku(sku, canal): a do SKU naquele envio; sem venda nele, a do SKU. Função pura: testada.
 function taxasDosLancamentos(lancs) {
   const porPedido = new Map(), sku = new Map(), canal = new Map();
-  const soma = (m, k, l) => { const x = m.get(k) || { receita: 0, tarifa: 0, fixa: 0, frete: 0, unidades: 0 };
-    x.receita += l.receita; x.tarifa += l.tarifa; x.fixa += l.tarifa_fixa || 0; x.frete += l.frete; x.unidades += l.quantidade; m.set(k, x); };
-  for (const l of lancs) {
-    if (l.tipo === 'ajuste' || !l.pedido) continue;
+  let armazem = 0, unFba = 0;
+  const soma = (m, k, l) => { const x = m.get(k) || { receita: 0, tarifa: 0, fixa: 0, frete: 0, unidades: 0, unidades_fba: 0 };
+    x.receita += l.receita; x.tarifa += l.tarifa; x.fixa += l.tarifa_fixa || 0; x.frete += l.frete; x.unidades += l.quantidade;
+    if (l.canal === 'FBA') x.unidades_fba += l.quantidade;
+    m.set(k, x); };
+  for (const l of comEtiquetas(lancs)) {
+    if (l.tipo === 'servico') { if (l.canal === 'FBA') armazem += l.tarifa; continue; }
+    if (l.tipo === 'ajuste' || l.tipo === 'etiqueta' || !l.pedido) continue;
     const k = `${l.pedido}|${l.sku || ''}`;
     const x = porPedido.get(k) || { tarifa: 0, frete: 0, reembolso: 0, tarifa_reembolso: 0, lancado: false };
-    if (l.tipo === 'venda') { x.tarifa += l.tarifa; x.frete += l.frete; x.lancado = true; soma(sku, l.sku, l); soma(canal, l.canal, l); }
-    else { x.reembolso += l.receita; x.tarifa_reembolso += l.tarifa; }
+    if (l.tipo === 'venda') {
+      x.tarifa += l.tarifa; x.frete += l.frete; x.lancado = true;
+      soma(sku, l.sku, l); soma(sku, `${l.sku}|${l.canal}`, l); soma(canal, l.canal, l);
+      if (l.canal === 'FBA') unFba += l.quantidade;
+    } else { x.reembolso += l.receita; x.tarifa_reembolso += l.tarifa; }
     porPedido.set(k, x);
   }
+  const armazemUn = unFba ? armazem / unFba : 0;
   const media = (x) => (x && x.receita > 0 ? { tarifa_pct: (x.tarifa - x.fixa) / x.receita, fixa_un: x.unidades ? x.fixa / x.unidades : 0,
-    frete_un: x.unidades ? x.frete / x.unidades : 0 } : null);
-  return { porPedido, mediaSku: (s) => media(sku.get(s)), mediaCanal: (c) => media(canal.get(c)) };
+    frete_un: x.unidades ? x.frete / x.unidades : 0, armazem_un: x.unidades ? armazemUn * x.unidades_fba / x.unidades : 0 } : null);
+  return { porPedido, armazemUn,
+    mediaSku: (s, c) => media((c && sku.get(`${s}|${c}`)) || sku.get(s)), mediaCanal: (c) => media(canal.get(c)) };
 }
 
 // Uma linha de venda no formato da tela Pedidos (custos.js#vendasDaConta). Função pura: testada.
@@ -226,9 +285,11 @@ function linhaDoPedido(v, ctx) {
   let tarifa, frete, estimado = false;
   if (t?.lancado) { tarifa = t.tarifa; frete = t.frete; }
   else {
-    const m = ctx.taxas.mediaSku(v.sku) || ctx.taxas.mediaCanal(v.canal);
+    const m = ctx.taxas.mediaSku(v.sku, v.canal) || ctx.taxas.mediaCanal(v.canal);
     tarifa = m ? m.tarifa_pct * fat + (m.fixa_un || 0) * q : null; frete = m ? m.frete_un * q : null; estimado = true;
   }
+  // FBA: a parte da unidade na armazenagem e no envio ao armazém (cobranças da conta, rateadas).
+  if (frete != null && valida && v.canal === 'FBA') frete += (ctx.taxas.armazemUn || 0) * q;
   const reembolso = t?.reembolso || 0;
   const devolvido = reembolso < 0 && -reembolso >= 0.99 * fat;   // reembolso total: o produto volta
   const faturamento = fat + reembolso;
@@ -415,27 +476,53 @@ function criar({ D, janela }) {
   // ---------- vendas e lucro: cópia local dos lançamentos ----------
   // A cada consulta (no máximo a cada 10 min) lê o que a Amazon lançou desde a última leitura,
   // com 3 dias de folga; a primeira leitura traz 92 dias. Uma leitura de cada vez.
+  // Cobranças avulsas (etiqueta, armazenagem, mensalidade) vêm da API de transações, com a sua
+  // própria marca de leitura: uma falha nela não atrasa as vendas.
   let lendo = null;
   function sincronizar(forcar = false) {
     const ultima = D.configLer('amazon_lanc_lido_em');
-    if (!forcar && ultima && Date.now() - Date.parse(ultima) < 10 * 60e3) return Promise.resolve(0);
+    const ultimaServ = D.configLer('amazon_serv_lido_em');
+    const vencida = (u) => forcar || !u || Date.now() - Date.parse(u) >= 10 * 60e3;
+    if (!vencida(ultima) && !vencida(ultimaServ)) return Promise.resolve(0);
     if (lendo) return lendo;
     lendo = (async () => {
-      const inicio = new Date();
-      const desde = ultima ? new Date(Date.parse(ultima) - 3 * 86400e3) : new Date(Date.now() - 92 * 86400e3);
-      let params = { PostedAfter: desde.toISOString(), MaxResultsPerPage: 100 }, total = 0;
-      for (let pagina = 0; pagina < 200; pagina++) {
-        const r = await sp('/finances/v0/financialEvents', params);
-        total += D.amazonLancGravar(lancamentosDe(r.payload?.FinancialEvents));
-        const prox = r.payload?.NextToken;
-        if (!prox) break;
-        params = { NextToken: prox };
-        await new Promise((ok) => setTimeout(ok, 2100));   // limite da Amazon: 0,5 chamada/s
-      }
-      D.configGravar('amazon_lanc_lido_em', inicio.toISOString());
+      let total = 0;
+      if (vencida(ultima)) total += await lerLancamentos(ultima);
+      if (vencida(ultimaServ)) total += await lerServicos(ultimaServ);
       return total;
     })().finally(() => { lendo = null; });
     return lendo;
+  }
+  async function lerServicos(ultima) {
+    const inicio = new Date();
+    const desde = ultima ? new Date(Date.parse(ultima) - 3 * 86400e3) : new Date(Date.now() - 92 * 86400e3);
+    const base = { postedAfter: desde.toISOString(), marketplaceId: BR };
+    let params = base, total = 0;
+    for (let pagina = 0; pagina < 200; pagina++) {
+      const r = await sp('/finances/2024-06-19/transactions', params);
+      total += D.amazonLancGravar(servicosDe(r.payload?.transactions));
+      const prox = r.payload?.nextToken;
+      if (!prox) break;
+      params = { ...base, nextToken: prox };
+      await new Promise((ok) => setTimeout(ok, 2100));   // limite da Amazon: 0,5 chamada/s
+    }
+    D.configGravar('amazon_serv_lido_em', inicio.toISOString());
+    return total;
+  }
+  async function lerLancamentos(ultima) {
+    const inicio = new Date();
+    const desde = ultima ? new Date(Date.parse(ultima) - 3 * 86400e3) : new Date(Date.now() - 92 * 86400e3);
+    let params = { PostedAfter: desde.toISOString(), MaxResultsPerPage: 100 }, total = 0;
+    for (let pagina = 0; pagina < 200; pagina++) {
+      const r = await sp('/finances/v0/financialEvents', params);
+      total += D.amazonLancGravar(lancamentosDe(r.payload?.FinancialEvents));
+      const prox = r.payload?.NextToken;
+      if (!prox) break;
+      params = { NextToken: prox };
+      await new Promise((ok) => setTimeout(ok, 2100));   // limite da Amazon: 0,5 chamada/s
+    }
+    D.configGravar('amazon_lanc_lido_em', inicio.toISOString());
+    return total;
   }
 
   // Fotos: o lançamento financeiro não traz ASIN. Para cada SKU sem foto, o item de um pedido
@@ -489,7 +576,7 @@ function criar({ D, janela }) {
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const semCusto = new Map();
     const fotos = D.amazonFotos();
-    const linhas = D.amazonLancPeriodo(j.de, j.ate).map((l) => {
+    const linhas = comEtiquetas(D.amazonLancPeriodo(j.de, j.ate)).map((l) => {
       const cs = l.sku ? C.custoDoSku(l.sku, mapa) : { custo: null, componentes: [], faltando: [] };
       const conta_ = contaDoLancamento(l, { custo_unit: cs.custo, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct });
       if (l.tipo === 'venda' && cs.custo == null) {
@@ -869,13 +956,13 @@ function criar({ D, janela }) {
       const fba = disp.some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT');
       const estoque = disp.reduce((a, d) => a + (Number(d.quantity) || 0), 0);
       const cs = C.custoDoSku(it.sku, mapa);
-      const m = taxas.mediaSku(it.sku) || taxas.mediaCanal(fba ? 'FBA' : 'proprio');
+      const m = taxas.mediaSku(it.sku, fba ? 'FBA' : 'proprio') || taxas.mediaCanal(fba ? 'FBA' : 'proprio');
       return { sku: it.sku, asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
         nome_amazon: s.itemName || null, foto: s.mainImage?.link || fotos.get(it.sku)?.foto || null, status: s.status || [],
         tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null,
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',
         vendas_30: v30.get(it.sku)?.u || 0, faturamento_30: r2(v30.get(it.sku)?.f || 0),
-        custo_unit: cs.custo, tarifa_pct: m?.tarifa_pct ?? null, fixa_un: m?.fixa_un ?? null, frete_un: m?.frete_un ?? null,
+        custo_unit: cs.custo, tarifa_pct: m?.tarifa_pct ?? null, fixa_un: m?.fixa_un ?? null, frete_un: m?.frete_un ?? null, armazem_un: m?.armazem_un ?? 0,
         embalagem_unit: fba ? 0 : (empresa.embalagem_padrao || 0), link: s.asin ? `https://www.amazon.com.br/dp/${s.asin}` : null };
     }).sort((a, b) => (b.vendas_30 - a.vendas_30) || String(a.titulo).localeCompare(String(b.titulo)));
     const dados = { itens, imposto_pct: impostoPct, em: new Date().toISOString() };
@@ -1032,5 +1119,5 @@ function criar({ D, janela }) {
   return { rotas, rotasParam: [], sp, idVendedor };
 }
 
-module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, contaDoLancamento, resumoAmazon,
+module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
   pedidoDe, itemDe, janelaVendas, taxasDosLancamentos, linhaDoPedido, ofertasDe, BR, HOST };
