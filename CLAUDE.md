@@ -36,6 +36,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   que o `server.js` registra no mesmo `routes`/`rotasParam`. A venda é ligada à promoção por
   `/orders/{id}/discounts` → oferta → promoção, com cache no SQLite (`promo_*`, `devolucoes`).
   Custo de devolução = frete de ida + `return-cost` (o `receiver.cost` é o valor cheio, fora da soma).
+  Promoções por anúncio: `desconto_max` / `lucro_min` (%) deixam só as promoções DISPONÍVEIS
+  (candidate) dentro do limite (`promoNoFiltro`); o lucro de cada uma é calculado na hora
+  (`lucroDe`, preço = do ML › sugerido › maior aceito) e fica no cache de 10 min.
 - Custos (`custos.js`): SKU do anúncio `KIT-407.408` = produtos 407 + 408 da tabela
   `produtos_custo` (importada colando a planilha na tela Empresa). `custos.origem` 'sku' é
   recalculado; 'manual' nunca é sobrescrito. Imposto da empresa = soma dos impostos cadastrados.
@@ -136,6 +139,14 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `shopee-devolucoes.html`; o menu troca Campanhas/Devoluções por elas): descontos, ofertas
   relâmpago e cupons da loja (com as vendas dos itens no período); devoluções em janelas de 15 dias
   (`returns/get_return_list`), sem o campo `user`. Campanhas da própria Shopee não têm API.
+  Itens (e vendas) só dos descontos ativos, agendados ou encerrados há até 60 dias, 4 por vez.
+  Criar (escrita só pela tela, com confirmação; nada no MCP): `POST /api/shopee/campanhas/desconto`
+  (add_discount + add_discount_item; sem nenhum item aceito apaga a campanha vazia), `/relampago`
+  (horários de `GET …/horarios` = get_time_slot_id, 1 por dia 00h–24h; até 50 itens com estoque da
+  oferta) e `/cupom` (add_voucher; código 1–5 letras/números, loja toda ou produtos). Resultado:
+  `GET /api/shopee/campanhas/metricas?tipo=desconto|relampago|cupom&id=` = vendas e lucro dos itens
+  da campanha no período (cupom: pedidos com `cupom_vendedor`) contra os mesmos dias antes, e os
+  anúncios que mais venderam (`metricasDe`, sobre `shopee-vendas.js#linhasDe`).
   Cada loja é uma conta externa `shopee-{loja}` (como `amazon`): na lista do topo
   (`menu.js#TELAS`), identidade `marca_*:shopee-{loja}`, empresa `empresa:shopee-{loja}`
   (sem salvar = a da 1ª conta do ML) e em "Todas as contas". As respostas das telas são

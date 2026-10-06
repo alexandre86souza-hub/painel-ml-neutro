@@ -165,6 +165,23 @@ function lucroNoPreco({ preco, precoOriginal, meliPct = 0, tarifa, custo, embala
   return { lucro: r(lucro), margem: lucro / preco, tarifa: r(tarifaPaga), parte_ml: r(parteML), imposto: r(imposto), falta };
 }
 
+// Preço de uma promoção disponível para o anúncio (o mesmo que a tela usa no lucro): o do ML,
+// senão o sugerido, senão o maior aceito. Desconto = sobre o preço original. Função pura: testada.
+function precoDaPromo(p) { return p.preco || p.preco_sugerido || p.preco_max || null; }
+function descontoDaPromo(p, precoAtual) {
+  const preco = precoDaPromo(p), orig = p.preco_original ?? precoAtual;
+  return preco && orig > 0 ? Math.max(0, 1 - preco / orig) : null;
+}
+// Filtro "desconto até X%" e "lucro mínimo Y%" (margem no preço da promoção). Promoção sem o
+// número pedido (sem preço, sem custo) não passa. Função pura: testada.
+function promoNoFiltro(p, precoAtual, { descontoMax = null, lucroMin = null } = {}) {
+  if (p.status !== 'candidate') return false;
+  const d = descontoDaPromo(p, precoAtual);
+  if (descontoMax != null && (d == null || d * 100 > descontoMax + 1e-9)) return false;
+  if (lucroMin != null && (p.margem == null || p.margem * 100 < lucroMin - 1e-9)) return false;
+  return true;
+}
+
 // Campanha do vendedor (SELLER_CAMPAIGN, sub_type FLEXIBLE_PERCENTAGE): corpo do POST
 // /seller-promotions/promotions. Regras da documentação: até 14 dias, início a partir de
 // hoje, datas no formato local sem fuso (o ML trata o início como 00h e o fim como 23h59).
@@ -324,8 +341,9 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
         vendas_90: qtd90[id] || 0, ultima_venda: ultimas[id]?.[0] || null });
       const ordem = { started: 0, pending: 1, candidate: 2 };
       a.promocoes.sort((x, y) => (ordem[x.status] ?? 3) - (ordem[y.status] ?? 3));
+      for (const p of a.promocoes) p.desconto = descontoDaPromo(p, a.preco);
     }
-    cachePorAnuncio = { conta: conta.ml_user_id, em: Date.now(), mapa,
+    cachePorAnuncio = { conta: conta.ml_user_id, em: Date.now(), mapa, info,
       promocoes: promos.map((p) => ({ id: p.id, nome: p.name || tipoNome(p.type), tipo_nome: tipoNome(p.type) })) };
     return mapa;
   }
@@ -452,6 +470,28 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
       if (promo) lista = lista.filter((a) => a.promocoes.some((p) => p.id === promo));
       const busca = (q.get('q') || '').trim().toLowerCase();
       if (busca) lista = lista.filter((a) => a.id.toLowerCase().includes(busca) || (a.titulo || '').toLowerCase().includes(busca));
+      // Só as promoções disponíveis (podem entrar) com desconto até X% e/ou lucro de pelo menos Y%.
+      // O lucro é calculado uma vez por promoção disponível e fica no cache (10 min).
+      const numQ = (k) => { const v = (q.get(k) || '').trim().replace(',', '.'); const x = v === '' ? NaN : Number(v); return Number.isFinite(x) ? x : null; };
+      const descontoMax = numQ('desconto_max'), lucroMin = numQ('lucro_min');
+      if (descontoMax != null || lucroMin != null) {
+        if (lucroMin != null) {
+          const faltam = [];
+          for (const a of lista) for (const p of a.promocoes) if (p.margem === undefined && promoNoFiltro(p, a.preco, { descontoMax })) faltam.push([a, p]);
+          const info = cachePorAnuncio.info;
+          const semInfo = [...new Set(faltam.map(([a]) => a.id))].filter((id) => !info[id]);
+          if (semInfo.length) Object.assign(info, await infoItens(semInfo));
+          const ctx = { custos: D.custosDe([...new Set(faltam.map(([a]) => a.id))]), empresa: empresaDe(conta),
+            impostoPct: D.impostoLer(conta.ml_user_id) || 0 };
+          await emLotes(faltam, 6, async ([a, p]) => {
+            const it = info[a.id], preco = precoDaPromo(p);
+            const r = it && preco ? await lucroDe(conta, it, Math.round(preco * 100) / 100, p.ml_pct || 0, ctx).catch(() => null) : null;
+            p.lucro = r?.promo?.lucro ?? null; p.margem = r?.promo?.margem ?? null;
+          });
+        }
+        lista = lista.map((a) => ({ ...a, promocoes: a.promocoes.filter((p) => promoNoFiltro(p, a.preco, { descontoMax, lucroMin })) }))
+          .filter((a) => a.promocoes.length);
+      }
       lista.sort((a, b) => (b.vendas_90 - a.vendas_90) || (b.promocoes.length - a.promocoes.length));
       const porPagina = 20;
       const pagina = Math.max(0, Number(q.get('pagina')) || 0);
@@ -565,4 +605,4 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
   return { rotas, rotasParam };
 }
 
-module.exports = { criar, lucroNoPreco, corpoCampanha, corpoAdesao, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };
+module.exports = { criar, lucroNoPreco, precoDaPromo, descontoDaPromo, promoNoFiltro, corpoCampanha, corpoAdesao, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };

@@ -258,8 +258,11 @@ const FERRAMENTAS = [
       filtro: { type: 'string', enum: ['participando', 'podem_entrar', 'fora'] },
       promocao: { type: 'string', description: 'id da promoção (de ml_promocoes)' },
       pagina: { type: 'integer', minimum: 0, default: 0 },
+      desconto_max: { type: 'number', description: 'só promoções disponíveis com desconto de até este % (ex.: 10)' },
+      lucro_min: { type: 'number', description: 'só promoções disponíveis com margem de pelo menos este % (ex.: 15); a 1ª vez demora' },
     }),
-    rota: (a) => ['GET', `/api/promocoes/por-anuncio${qs({ q: a.q, filtro: a.filtro, promocao: a.promocao, pagina: a.pagina })}`] },
+    rota: (a) => ['GET', `/api/promocoes/por-anuncio${qs({ q: a.q, filtro: a.filtro, promocao: a.promocao, pagina: a.pagina,
+      desconto_max: a.desconto_max, lucro_min: a.lucro_min })}`] },
 
   { nome: 'ml_promocao_aderir', titulo: 'Colocar anúncio numa promoção', escrita: true,
     descricao: 'Coloca o anúncio na promoção. MUDA O PREÇO DE VENDA de verdade: confirme com o '

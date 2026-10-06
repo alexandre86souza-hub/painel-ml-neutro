@@ -86,6 +86,19 @@ assert.strictEqual(lp.lucro, 51.69);   // 214,05 − 19,93 − 21,41 − 27,05 �
 assert.deepStrictEqual(P.lucroNoPreco({ preco: 100, tarifa: { pct: 12 }, custo: null, frete: 5 }).falta, ['custo']);
 assert.strictEqual(P.lucroNoPreco({ preco: 100, tarifa: { pct: 12 }, custo: 10, frete: null }).lucro, null, 'sem frete não inventa lucro');
 
+// ---------- filtro "desconto até X%" e "lucro mínimo Y%" (Promoções por anúncio) ----------
+const cand = { status: 'candidate', preco: 90, preco_original: 100, margem: 0.2 };
+assert.strictEqual(P.descontoDaPromo(cand, 100).toFixed(2), '0.10');
+assert.strictEqual(P.descontoDaPromo({ preco_sugerido: 80 }, 100).toFixed(2), '0.20', 'sem preço do ML: o sugerido sobre o preço atual');
+assert.strictEqual(P.descontoDaPromo({}, 100), null);
+assert.strictEqual(P.promoNoFiltro(cand, 100, { descontoMax: 10 }), true, '10% cabe em "até 10%"');
+assert.strictEqual(P.promoNoFiltro(cand, 100, { descontoMax: 9.5 }), false);
+assert.strictEqual(P.promoNoFiltro(cand, 100, { lucroMin: 20 }), true);
+assert.strictEqual(P.promoNoFiltro(cand, 100, { lucroMin: 25 }), false);
+assert.strictEqual(P.promoNoFiltro({ ...cand, margem: null }, 100, { lucroMin: 5 }), false, 'sem lucro calculado não passa');
+assert.strictEqual(P.promoNoFiltro({ ...cand, status: 'started' }, 100, { descontoMax: 50 }), false, 'só as disponíveis');
+assert.strictEqual(P.promoNoFiltro({ status: 'candidate' }, 100, { descontoMax: 50 }), false, 'sem preço: desconto desconhecido');
+
 // ---------- dinheiro da devolução (pagamento real do Mercado Pago, 24/09/2026, resumido) ----------
 // O reembolso vem com source "bpp" mesmo no "não quero mais": sai da venda, não do ML.
 const mpDevol = {

@@ -119,14 +119,14 @@ function linhasDe(rows, ctx) {
       const x = (v) => (v == null ? null : r2(v));
       out.push({ pedido: sn, data: p.data, status: p.status, valida, sku: i.sku, item_id: i.sku || String(i.item_id || sn),
         titulo: cs.componentes.map((c) => c.nome).filter(Boolean).join(' + ') || i.nome || i.sku, foto: i.imagem || null,
-        quantidade: q, preco_unit: x(i.preco_unit), full: false, canal: 'shopee',
+        quantidade: q, preco_unit: x(i.preco_unit), full: false, canal: 'shopee', shopee_item: i.item_id ?? null,
         componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), custo: c.custo })), faltando: cs.faltando,
         custo_unit: cs.custo, embalagem_pedido: ctx.embalagem_pedido || 0,
         faturamento: x(fat), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem), imposto: x(imposto),
         lucro: x(lucro), margem: lucro != null && fat > 0 && valida ? lucro / fat : null, falta: valida ? falta : [], estimado,
         devolvido, recebido_final: !!p.escrow_final, transportadora: p.transportadora || null, entrega_propria: propria,
         frete_shopee: freteShopee == null ? null : x(freteShopee * parte), custo_entrega: custoEntrega == null ? null : x(custoEntrega * parte),
-        taxa_fixa: taxaFixa == null ? null : x(taxaFixa * parte),
+        taxa_fixa: taxaFixa == null ? null : x(taxaFixa * parte), cupom: temRepasse ? x(n(p.cupom_vendedor) * parte) : null,
         link: `https://seller.shopee.com.br/portal/sale/order?search=${encodeURIComponent(sn)}` });
     }
   }
@@ -275,7 +275,7 @@ function criar({ D, daLoja, janela }) {
         ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe: K.janelaVendas(1, janela).de, conta: `shopee-${shopId}`, topPorSku: C.topPorSku }) };
     },
   };
-  return { rotas, rotasParam: [], sincronizar };
+  return { rotas, rotasParam: [], sincronizar, linhas: async (shopId, de, ate) => (await linhas(shopId, de, ate)).linhas };
 }
 
 module.exports = { criar, taxaFixaDe, detalheDe, repasseDe, linhasDe, proporcaoDe, freteMedioDe, entregaPropria };

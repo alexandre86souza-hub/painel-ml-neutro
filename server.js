@@ -1978,7 +1978,7 @@ Object.assign(routes, shopeeVendasMod.rotas);
 Object.assign(routes, require('./shopee-anuncios.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
 // Ads da Shopee (shopee-ads.js): saldo e desempenho diário da loja.
 Object.assign(routes, require('./shopee-ads.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
-Object.assign(routes, require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
+Object.assign(routes, require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja, vendas: shopeeVendasMod.linhas }).rotas);
 
 // ---------- Amazon Ads: conexão da conta de anúncios (amazon-ads.js) ----------
 // Retorno da autorização em /amazon-ads/callback, pela porta pública (ver tratarPublico).

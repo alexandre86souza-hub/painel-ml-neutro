@@ -128,6 +128,8 @@
   .pa-filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .pa-filtros input,.pa-filtros select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
   .pa-filtros input{flex:1 1 240px}
+  .pa-filtros .pa-num{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:#475569;white-space:nowrap}
+  .pa-filtros .pa-num input{flex:0 0 auto;width:84px}
   .pa-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
   .pa-card .cab-item{margin:0 0 6px;position:relative}
   .pa-card .cab-item > div{flex:1;min-width:0}
@@ -265,6 +267,10 @@
         <option value="sem_nenhuma">Sem campanha ativa nem programada</option>
       </select>
       <select id="paPromo" aria-label="Promoção"><option value="">Qualquer promoção</option></select>
+      <label class="pa-num" title="Só as promoções disponíveis com desconto de até este % sobre o preço atual">Desconto até
+        <input id="paDesc" type="number" min="0" max="90" step="0.5" placeholder="—" inputmode="decimal">%</label>
+      <label class="pa-num" title="Só as promoções disponíveis em que o lucro (margem) fica em pelo menos este %">Lucro mínimo
+        <input id="paLucro" type="number" min="-50" max="90" step="0.5" placeholder="—" inputmode="decimal">%</label>
       <button class="bt primario">Filtrar</button>
       <button type="button" class="bt" id="paRecarregar">Atualizar do Mercado Livre</button>
     </form>
@@ -834,6 +840,7 @@ function cartaoAnuncio(a, promocoes){
     li.querySelector('.s').textContent = [p.tipo_nome,
       { candidate:'Pode entrar', started:'Participando', pending:'Programado' }[p.status] || p.status,
       p.inicio ? `${data(p.inicio)} a ${data(p.fim)}` : '',
+      p.desconto != null ? `desconto ${pct(p.desconto)}` : '',
       p.vendedor_pct != null ? `você paga ${p.vendedor_pct}%, o ML ${p.ml_pct}%` : ''].filter(Boolean).join(' · ');
     li.querySelector('img').replaceWith(el('span', 'chip ' + ({ started:'verde', pending:'azul', candidate:'amarelo' }[p.status] || ''),
       { started:'Ativa', pending:'Agendada', candidate:'Pode entrar' }[p.status] || p.status));
@@ -902,6 +909,9 @@ async function carregarPorAnuncio(recarregar){
   if($('paBusca').value.trim()) q.set('q', $('paBusca').value.trim());
   if($('paFiltro').value) q.set('filtro', $('paFiltro').value);
   if($('paPromo').value) q.set('promocao', $('paPromo').value);
+  if($('paDesc').value !== '') q.set('desconto_max', $('paDesc').value);
+  if($('paLucro').value !== '') q.set('lucro_min', $('paLucro').value);
+  if($('paLucro').value !== '') box.firstChild.textContent = 'Calculando o lucro de cada promoção disponível… (na primeira vez pode levar alguns minutos)';
   if(recarregar) q.set('recarregar', '1');
   try{
     const r = await api('/api/promocoes/por-anuncio?' + q);

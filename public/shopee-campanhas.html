@@ -13,7 +13,29 @@
   .cartao.destaque .rotulo,.cartao.destaque .nota{color:#ffe4dc}
   .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
   .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.azul{background:#dbeafe;color:#1d4ed8}
+  .chip.sobe{background:#e6f4ea;color:#0b6b33}.chip.desce{background:#fde8e8;color:#b42318}
   td.dinheiro{white-space:nowrap;text-align:right}
+  #msg.ok{background:#e6f4ea;color:#0b6b33;border-color:#b7e1c4}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:10px;overflow:hidden}
+  .seg button{font:inherit;font-size:14px;padding:8px 14px;border:0;background:#fff;cursor:pointer;color:#334155}
+  .seg button[aria-pressed="true"]{background:#ee4d2d;color:#fff}
+  .form-camp{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:14px 0}
+  .form-camp label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#475569}
+  .form-camp input,.form-camp select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;min-width:0}
+  .busca-an{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .busca-an input{flex:1 1 260px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .achados{max-height:260px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px}
+  .achados .linha,.escolhidos .linha{display:flex;gap:10px;align-items:center;padding:6px 10px;border-bottom:1px solid #f1f3f6}
+  .linha img{width:38px;height:38px;object-fit:cover;border-radius:6px;flex:0 0 auto;background:#f1f3f6}
+  .linha .tx{flex:1 1 auto;min-width:0}
+  .linha .tx b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .linha .tx span{font-size:12px;color:#64748b}
+  .escolhidos table input{width:86px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:7px}
+  .pos{color:#0b6b33}.neg{color:#b42318}
+  .acoes-camp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  .recusas{margin-top:8px;font-size:13px;color:#b42318}
+  .bt.pequeno{padding:4px 10px;font-size:12px}
+  #resultado[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -34,14 +56,62 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
-    <p id="topoTxt">Promoções da loja na Shopee — descontos, ofertas relâmpago e cupons — com as vendas dos itens de cada uma no período dela.</p>
+    <p id="topoTxt">Promoções da loja na Shopee — descontos, ofertas relâmpago e cupons — com as vendas e o lucro dos itens de cada uma.</p>
     <button type="button" class="bt" id="btReler">Atualizar da Shopee</button>
   </div>
   <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+
+  <section class="bloco">
+    <div class="topo-bloco">
+      <div>
+        <h2>Criar campanha</h2>
+        <p class="sub">Cria na sua loja da Shopee. Nada muda até você confirmar.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Tipo de campanha" id="segTipo">
+        <button type="button" data-tipo="desconto" aria-pressed="false">Desconto</button>
+        <button type="button" data-tipo="relampago" aria-pressed="false">Oferta relâmpago</button>
+        <button type="button" data-tipo="cupom" aria-pressed="false">Cupom do vendedor</button>
+      </div>
+    </div>
+    <form id="formCamp" hidden>
+      <div class="form-camp" id="campos"></div>
+      <div id="blocoAnuncios">
+        <p class="sub" id="dicaAnuncios"></p>
+        <div class="busca-an">
+          <input id="buscaAn" placeholder="Buscar anúncio por nome ou SKU…" autocomplete="off" aria-label="Buscar anúncio">
+          <label class="sub" style="display:flex;align-items:center;gap:6px">Desconto para todos
+            <input id="pctTodos" type="number" min="1" max="90" step="0.5" value="5" style="width:80px;font:inherit;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px">%</label>
+        </div>
+        <div class="achados" id="achados"><p class="carregando" style="padding:10px">Carregando os anúncios…</p></div>
+        <h3 style="margin:16px 0 6px;font-size:15px">Anúncios escolhidos <span class="chip" id="qtdEsc">0</span></h3>
+        <div class="tabela-rolagem escolhidos" id="escolhidos"></div>
+      </div>
+      <div class="acoes-camp">
+        <button class="bt primario" id="btCriar">Criar na Shopee</button>
+        <button type="button" class="bt" id="btCancelar">Cancelar</button>
+        <span class="sub" id="resumoCriar"></span>
+      </div>
+      <div class="recusas" id="recusas"></div>
+    </form>
+  </section>
+
   <section class="bloco">
     <h2>Promoções</h2>
     <p class="sub" id="nota"></p>
     <div class="tabela-rolagem" id="lista"></div>
+  </section>
+
+  <section class="bloco" id="resultado" hidden>
+    <div class="topo-bloco">
+      <div>
+        <h2 id="resTitulo">Resultado da campanha</h2>
+        <p class="sub" id="resSub"></p>
+      </div>
+      <button type="button" class="bt" id="resFechar">Fechar</button>
+    </div>
+    <div class="cartoes" id="resCartoes"></div>
+    <h3 style="margin:16px 0 6px;font-size:15px">Anúncios que mais venderam na campanha</h3>
+    <div class="tabela-rolagem" id="resAnuncios"></div>
   </section>
 </main>
   </div>
@@ -49,15 +119,21 @@
 <script src="/comum.js?v=7"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
+const TIPO_API = { 'Desconto': 'desconto', 'Oferta relâmpago': 'relampago', 'Cupom': 'cupom' };
 function cartao(rot, valor, nota, destaque){
   const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
-  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  const n = el('p', 'nota'); if(nota instanceof Node) n.appendChild(nota); else n.textContent = nota || '';
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), n);
   return c;
 }
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—');
+const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ loja: LOJA, ...corpo }) });
+
+// ---------- lista ----------
 async function carregar(recarregar){
-  erroTela('');
-  if(!LOJA){ erroTela('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
+  if(!LOJA){ aviso('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
   $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
   try{
     const r = await api(`/api/shopee/campanhas?loja=${LOJA}${recarregar ? '&recarregar=1' : ''}`);
@@ -67,11 +143,11 @@ async function carregar(recarregar){
     box.append(
       cartao('Em andamento', numero(r.em_andamento), r.em_andamento ? 'promoções ativas agora' : 'nenhuma promoção ativa agora', true),
       cartao('Promoções na lista', numero(r.campanhas.length), `${numero(r.campanhas.filter((c) => c.tipo === 'Desconto').length)} desconto(s) · ${numero(r.campanhas.filter((c) => c.tipo === 'Oferta relâmpago').length)} relâmpago · ${numero(r.campanhas.filter((c) => c.tipo === 'Cupom').length)} cupom(ns)`),
-      cartao('Vendido nos descontos', real(s.fat), `${numero(s.un)} unidade(s) dos itens em desconto, no período de cada um`),
+      cartao('Vendido nos descontos recentes', real(s.fat), `${numero(s.un)} unidade(s) dos itens em desconto, no período de cada um`),
     );
-    $('nota').textContent = r.nota;
+    $('nota').textContent = r.nota + ' Clique em "Ver resultado" para ver vendas, lucro e os anúncios que mais venderam.';
     const tab = el('table'); const cab = el('tr');
-    for(const h of ['Promoção', 'Situação', 'Período', 'Itens', 'Exemplo de preço', 'Vendas no período']) cab.appendChild(el('th', null, h));
+    for(const h of ['Promoção', 'Situação', 'Período', 'Itens', 'Exemplo de preço', 'Vendas no período', '']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
     for(const c of r.campanhas){
       const tr = el('tr');
@@ -81,13 +157,246 @@ async function carregar(recarregar){
       const t4 = el('td'); if(ex){ t4.appendChild(document.createTextNode(`${real(ex.preco_original)} → ${real(ex.preco_promo)}`)); t4.appendChild(el('span', 'pequeno', ex.nome || '')); } else t4.textContent = c.cliques != null ? `${numero(c.cliques)} clique(s)` : c.usados != null ? `${numero(c.usados)} de ${numero(c.limite)} usados` : '—';
       const t5 = el('td', 'dinheiro');
       if(c.vendas){ t5.appendChild(document.createTextNode(real(c.vendas.faturamento))); t5.appendChild(el('span', 'pequeno', `${numero(c.vendas.unidades)} un. · ${numero(c.vendas.pedidos)} pedido(s)`)); } else t5.textContent = '—';
-      tr.append(t0, t1, el('td', null, `${dataBR(c.inicio)} a ${dataBR(c.fim)}`), el('td', null, c.itens_ativos != null ? `${numero(c.itens_ativos)} de ${numero(c.itens)}` : numero(c.itens)), t4, t5);
+      const t6 = el('td'); const bt = el('button', 'bt pequeno', 'Ver resultado'); bt.type = 'button';
+      bt.onclick = () => verResultado(c); t6.appendChild(bt);
+      tr.append(t0, t1, el('td', null, `${dataBR(c.inicio)} a ${dataBR(c.fim)}`), el('td', null, c.itens_ativos != null ? `${numero(c.itens_ativos)} de ${numero(c.itens)}` : numero(c.itens)), t4, t5, t6);
       tb.appendChild(tr);
     }
-    if(!r.campanhas.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma promoção da loja.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
+    if(!r.campanhas.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma promoção da loja.'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); }
     tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
-  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+  }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
 }
+
+// ---------- resultado de uma campanha ----------
+function variacao(atual, antes){
+  if(!antes) return el('span', 'chip', 'sem base antes');
+  const d = (atual - antes) / Math.abs(antes);
+  return el('span', 'chip ' + (Math.abs(d) < 0.005 ? '' : d > 0 ? 'sobe' : 'desce'), `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${pct(Math.abs(d), 0)} vs antes`);
+}
+async function verResultado(c){
+  const sec = $('resultado'); sec.hidden = false;
+  $('resTitulo').textContent = `Resultado: ${c.nome || c.tipo}`;
+  $('resSub').textContent = 'Lendo a campanha e as vendas…';
+  $('resCartoes').innerHTML = ''; $('resAnuncios').innerHTML = '';
+  sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  try{
+    const r = await api(`/api/shopee/campanhas/metricas?loja=${LOJA}&tipo=${TIPO_API[c.tipo]}&id=${c.id}`);
+    const s = r.resumo, a = r.antes;
+    $('resSub').textContent = `${c.tipo} de ${dataHora(r.inicio)} a ${dataHora(r.fim)}` + (r.itens != null ? ` · ${numero(r.itens)} anúncio(s)` : ' · loja toda')
+      + `. "Antes" = os mesmos anúncios nos ${numero(Math.round(r.dias))} dia(s) anteriores. Lucro com custo, tarifas reais da Shopee, frete, embalagem e imposto.`
+      + (c.tipo === 'Cupom' ? ' Cupom: pedidos que usaram cupom do vendedor no período.' : '');
+    const box = $('resCartoes');
+    box.append(
+      cartao('Faturamento', real(s.faturamento), variacao(s.faturamento, a?.faturamento), true),
+      cartao('Pedidos', numero(s.pedidos), variacao(s.pedidos, a?.pedidos)),
+      cartao('Unidades', numero(s.unidades), `antes: ${numero(a?.unidades)}`),
+      cartao('Lucro', real(s.lucro), s.margem != null ? `margem ${pct(s.margem)} · antes ${pct(a?.margem)}` : 'sem custo cadastrado'),
+    );
+    if(r.cliques != null) box.appendChild(cartao('Cliques', numero(r.cliques), r.itens_ativos != null ? `${numero(r.itens_ativos)} item(ns) ativo(s)` : ''));
+    if(r.usados != null) box.appendChild(cartao('Cupons usados', numero(r.usados), `de ${numero(r.limite)} · código ${r.codigo || ''}` + (s.cupom ? ` · ${real(s.cupom)} de desconto` : '')));
+    const tab = el('table'); const cab = el('tr');
+    for(const h of ['#', 'Anúncio', 'Pedidos', 'Unid.', 'Faturamento', 'Lucro', 'Margem']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+    r.anuncios.forEach((x, i) => {
+      const tr = el('tr');
+      const td = el('td'); const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(x.foto) im.src = x.foto;
+      const tx = el('div', 'tx'); tx.append(el('b', null, x.titulo || x.sku || String(x.shopee_item)), el('span', null, x.sku || ''));
+      ln.append(im, tx); td.appendChild(ln);
+      tr.append(el('td', null, String(i + 1)), td, el('td', null, numero(x.pedidos)), el('td', null, numero(x.unidades)), el('td', 'dinheiro', real(x.faturamento)),
+        el('td', 'dinheiro ' + (x.lucro < 0 ? 'neg' : ''), real(x.lucro)), el('td', null, pct(x.margem)));
+      tb.appendChild(tr);
+    });
+    if(!r.anuncios.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma venda dos anúncios desta campanha no período.'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); }
+    tab.appendChild(tb); $('resAnuncios').appendChild(tab);
+  }catch(e){ $('resSub').textContent = 'Não foi possível ler o resultado: ' + e.message; }
+}
+$('resFechar').onclick = () => { $('resultado').hidden = true; };
+
+// ---------- criar campanha ----------
+let tipo = null, anuncios = null, imposto = 0, horarios = null;
+const escolhidos = new Map();   // chave item:model -> { a, preco, estoque, limite }
+const chave = (a) => `${a.item_id}:${a.model_id || 0}`;
+function estimar(a, preco){
+  if(!(preco > 0) || a.custo_unit == null || a.taxa_pct == null) return null;
+  const lucro = preco - preco * a.taxa_pct - a.custo_unit - (a.embalagem_unit || 0) - preco * imposto / 100;
+  return { lucro, margem: lucro / preco };
+}
+const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+function campo(id, rot, attrs, opcoes){
+  const l = el('label', null, rot);
+  const i = el(opcoes ? 'select' : 'input'); i.id = id;
+  if(opcoes) for(const [v, t] of opcoes){ const o = el('option', null, t); o.value = v; i.appendChild(o); }
+  Object.assign(i, attrs || {}); l.appendChild(i); $('campos').appendChild(l); return i;
+}
+function montarCampos(){
+  const c = $('campos'); c.innerHTML = ''; $('recusas').textContent = '';
+  const agora = new Date(), inicio = new Date(agora.getTime() + 2 * 3600e3); inicio.setMinutes(0, 0, 0);
+  const fim = new Date(inicio.getTime() + 7 * 864e5);
+  const relampago = tipo === 'relampago', cupom = tipo === 'cupom';
+  if(!relampago) campo('cNome', 'Nome da campanha', { required: true, maxLength: 100, placeholder: cupom ? 'Ex.: Cupom de outubro' : 'Ex.: Promoção Outubro' });
+  if(relampago){
+    const sel = campo('cHorario', 'Horário da oferta relâmpago', { required: true }, [['', horarios ? 'Escolha um horário' : 'Carregando os horários…']]);
+    carregarHorarios(sel);
+  }else{
+    campo('cInicio', 'Começa em', { type: 'datetime-local', required: true, value: local(inicio) });
+    campo('cFim', 'Termina em', { type: 'datetime-local', required: true, value: local(fim) });
+  }
+  if(cupom){
+    campo('cCodigo', 'Código (1 a 5 letras/números)', { required: true, maxLength: 5, placeholder: 'Ex.: OUT10' });
+    const tp = campo('cTipo', 'Vale para', {}, [['loja', 'A loja toda'], ['produtos', 'Só os anúncios escolhidos']]);
+    const ds = campo('cDesc', 'Tipo de desconto', {}, [['valor', 'Valor fixo (R$)'], ['pct', 'Porcentagem (%)']]);
+    campo('cValor', 'Desconto', { type: 'number', min: '1', step: '0.01', required: true, placeholder: 'Ex.: 10' });
+    const mx = campo('cMax', 'Desconto máximo (R$, só para %)', { type: 'number', min: '0', step: '0.01', placeholder: 'sem limite' });
+    campo('cMin', 'Compra mínima (R$)', { type: 'number', min: '0', step: '0.01', value: '0' });
+    campo('cQtd', 'Quantidade de cupons', { type: 'number', min: '1', step: '1', value: '100', required: true });
+    const atualizar = () => { $('blocoAnuncios').hidden = tp.value !== 'produtos'; mx.disabled = ds.value !== 'pct'; atualizarResumo(); };
+    tp.onchange = atualizar; ds.onchange = atualizar; atualizar();
+  }else $('blocoAnuncios').hidden = false;
+  $('pctTodos').parentElement.hidden = cupom;
+  $('dicaAnuncios').textContent = relampago
+    ? 'Até 50 anúncios. Defina o preço da oferta, quantas unidades entram nela (estoque da oferta) e o limite por comprador. Lucro estimado com o que a Shopee tira em média de cada produto.'
+    : cupom ? 'Escolha os anúncios em que o cupom vale (até 100).'
+    : 'Defina o preço promocional de cada anúncio (ou um desconto para todos). Lucro estimado com o que a Shopee tira em média de cada produto.';
+  pintarEscolhidos();
+}
+async function carregarHorarios(sel){
+  try{
+    if(!horarios) horarios = (await api(`/api/shopee/campanhas/horarios?loja=${LOJA}`)).horarios;
+    sel.innerHTML = '';
+    const o0 = el('option', null, horarios.length ? 'Escolha um horário' : 'Nenhum horário livre nos próximos 7 dias'); o0.value = ''; sel.appendChild(o0);
+    for(const h of horarios){ const o = el('option', null, `${dataHora(h.inicio)} até ${dataHora(h.fim)}`); o.value = h.id; sel.appendChild(o); }
+  }catch(e){ sel.innerHTML = ''; const o = el('option', null, 'Não foi possível ler os horários: ' + e.message); o.value = ''; sel.appendChild(o); }
+}
+async function carregarAnuncios(){
+  if(anuncios) return pintarAchados();
+  try{
+    const r = await api(`/api/shopee/anuncios?loja=${LOJA}`);
+    anuncios = r.itens.filter((a) => a.status === 'NORMAL' || !a.status); imposto = r.imposto_pct || 0;
+    if(!anuncios.length && r.lendo){ $('achados').innerHTML = '<p class="carregando" style="padding:10px">Lendo os anúncios da Shopee… tente de novo em 1 minuto.</p>'; anuncios = null; return; }
+    pintarAchados();
+  }catch(e){ $('achados').innerHTML = ''; $('achados').appendChild(el('p', 'vazio', 'Não foi possível carregar os anúncios: ' + e.message)); }
+}
+function pintarAchados(){
+  const q = $('buscaAn').value.trim().toLowerCase();
+  const lista = anuncios.filter((a) => !q || (a.titulo || '').toLowerCase().includes(q) || (a.nome_shopee || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q)).slice(0, 40);
+  const box = $('achados'); box.innerHTML = '';
+  for(const a of lista){
+    const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(a.foto) im.src = a.foto;
+    const tx = el('div', 'tx'); tx.append(el('b', null, (a.nome_shopee || a.titulo) + (a.variacao ? ` — ${a.variacao}` : '')),
+      el('span', null, `${a.sku || 'sem SKU'} · ${real(a.preco_original)} · estoque ${numero(a.estoque)} · ${numero(a.vendas_30)} vendido(s) em 30 dias`));
+    const ja = escolhidos.has(chave(a));
+    const bt = el('button', 'bt pequeno' + (ja ? '' : ' primario'), ja ? 'Escolhido' : '+ Escolher'); bt.type = 'button'; bt.disabled = ja;
+    bt.onclick = () => { escolher(a); bt.disabled = true; bt.textContent = 'Escolhido'; bt.className = 'bt pequeno'; };
+    ln.append(im, tx, bt); box.appendChild(ln);
+  }
+  if(!lista.length) box.appendChild(el('p', 'vazio', 'Nenhum anúncio com essa busca.'));
+}
+function escolher(a){
+  const p = Number($('pctTodos').value) || 0;
+  escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p / 100) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0 });
+  pintarEscolhidos();
+}
+function pintarEscolhidos(){
+  const box = $('escolhidos'); box.innerHTML = '';
+  $('qtdEsc').textContent = numero(escolhidos.size);
+  const relampago = tipo === 'relampago', cupom = tipo === 'cupom';
+  if(!escolhidos.size){ box.appendChild(el('p', 'vazio', 'Nenhum anúncio escolhido ainda.')); atualizarResumo(); return; }
+  const tab = el('table'); const cab = el('tr');
+  const hs = cupom ? ['Anúncio', 'Preço', ''] : ['Anúncio', 'Preço', 'Desconto %', 'Preço na promoção', 'Lucro estimado', ...(relampago ? ['Unid. na oferta'] : []), 'Limite por comprador', ''];
+  for(const h of hs) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+  for(const [k, x] of escolhidos){
+    const a = x.a, tr = el('tr');
+    const td = el('td'); const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; if(a.foto) im.src = a.foto;
+    const tx = el('div', 'tx'); tx.append(el('b', null, (a.nome_shopee || a.titulo) + (a.variacao ? ` — ${a.variacao}` : '')), el('span', null, a.sku || ''));
+    ln.append(im, tx); td.appendChild(ln); tr.append(td, el('td', 'dinheiro', real(a.preco_original)));
+    const rm = el('button', 'bt pequeno', 'Tirar'); rm.type = 'button'; rm.onclick = () => { escolhidos.delete(k); pintarEscolhidos(); if(anuncios) pintarAchados(); };
+    if(!cupom){
+      const inPct = el('input'); inPct.type = 'number'; inPct.step = '0.5'; inPct.min = '0'; inPct.max = '90';
+      const inPreco = el('input'); inPreco.type = 'number'; inPreco.step = '0.01'; inPreco.min = '0.01';
+      const lucro = el('td', 'dinheiro');
+      const pintar = () => {
+        inPreco.value = x.preco; inPct.value = a.preco_original ? Math.round((1 - x.preco / a.preco_original) * 1000) / 10 : '';
+        const e = estimar(a, x.preco); lucro.className = 'dinheiro ' + (e && e.lucro < 0 ? 'neg' : 'pos');
+        lucro.textContent = e ? `${real(e.lucro)} (${pct(e.margem)})` : 'sem custo';
+      };
+      inPct.oninput = () => { x.preco = Math.round(a.preco_original * (1 - (Number(inPct.value) || 0) / 100) * 100) / 100; const s = inPct.value; pintar(); inPct.value = s; };
+      inPreco.oninput = () => { x.preco = Number(inPreco.value) || 0; const s = inPreco.value; pintar(); inPreco.value = s; };
+      pintar();
+      const c1 = el('td'); c1.appendChild(inPct); const c2 = el('td'); c2.appendChild(inPreco);
+      tr.append(c1, c2, lucro);
+      if(relampago){ const inE = el('input'); inE.type = 'number'; inE.min = '1'; inE.step = '1'; inE.value = x.estoque; inE.oninput = () => { x.estoque = Number(inE.value) || 0; }; const c = el('td'); c.appendChild(inE); tr.appendChild(c); }
+      const inL = el('input'); inL.type = 'number'; inL.min = '0'; inL.step = '1'; inL.value = x.limite; inL.title = '0 = sem limite'; inL.oninput = () => { x.limite = Number(inL.value) || 0; };
+      const cl = el('td'); cl.appendChild(inL); tr.appendChild(cl);
+    }
+    const cr = el('td'); cr.appendChild(rm); tr.appendChild(cr);
+    tb.appendChild(tr);
+  }
+  tab.appendChild(tb); box.appendChild(tab);
+  atualizarResumo();
+}
+function atualizarResumo(){
+  const n = escolhidos.size;
+  $('resumoCriar').textContent = tipo === 'cupom' && $('cTipo')?.value !== 'produtos' ? 'O cupom vale para a loja toda.' : `${numero(n)} anúncio(s) escolhido(s).`;
+}
+$('pctTodos').onchange = () => {
+  const p = Number($('pctTodos').value) || 0;
+  for(const x of escolhidos.values()) x.preco = Math.round(x.a.preco_original * (1 - p / 100) * 100) / 100;
+  pintarEscolhidos();
+};
+$('buscaAn').oninput = () => { if(anuncios) pintarAchados(); };
+for(const b of $('segTipo').querySelectorAll('button')){
+  b.onclick = () => {
+    tipo = b.dataset.tipo;
+    for(const x of $('segTipo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+    $('formCamp').hidden = false; montarCampos(); carregarAnuncios();
+  };
+}
+$('btCancelar').onclick = () => { $('formCamp').hidden = true; tipo = null; for(const x of $('segTipo').querySelectorAll('button')) x.setAttribute('aria-pressed', 'false'); };
+const iso = (id) => new Date($(id).value).toISOString();
+$('formCamp').onsubmit = async (ev) => {
+  ev.preventDefault(); aviso(''); $('recusas').textContent = '';
+  const itens = [...escolhidos.values()].map((x) => ({ item_id: x.a.item_id, model_id: x.a.model_id || 0, preco: x.preco, estoque: x.estoque, limite: x.limite }));
+  let caminho, corpo, texto;
+  try{
+    if(tipo === 'desconto'){
+      corpo = { nome: $('cNome').value, inicio: iso('cInicio'), fim: iso('cFim'), itens };
+      texto = `Criar o desconto "${corpo.nome}" com ${itens.length} anúncio(s), de ${dataHora(corpo.inicio)} a ${dataHora(corpo.fim)}?`;
+      caminho = '/api/shopee/campanhas/desconto';
+    }else if(tipo === 'relampago'){
+      corpo = { horario: $('cHorario').value, itens };
+      const h = (horarios || []).find((x) => x.id === corpo.horario);
+      texto = `Criar a oferta relâmpago de ${h ? dataHora(h.inicio) + ' até ' + dataHora(h.fim) : ''} com ${itens.length} anúncio(s)?`;
+      caminho = '/api/shopee/campanhas/relampago';
+    }else{
+      corpo = { nome: $('cNome').value, codigo: $('cCodigo').value, inicio: iso('cInicio'), fim: iso('cFim'), tipo: $('cTipo').value, desconto: $('cDesc').value,
+        valor: $('cValor').value, maximo: $('cMax').value, minimo: $('cMin').value, quantidade: $('cQtd').value, itens: [...new Set(itens.map((x) => x.item_id))] };
+      texto = `Criar o cupom "${corpo.nome}" (${corpo.codigo.toUpperCase()}): ${corpo.desconto === 'pct' ? corpo.valor + '%' : real(Number(corpo.valor))} de desconto, `
+        + `${corpo.tipo === 'produtos' ? 'em ' + corpo.itens.length + ' anúncio(s)' : 'na loja toda'}, ${corpo.quantidade} cupom(ns)?`;
+      caminho = '/api/shopee/campanhas/cupom';
+    }
+  }catch(e){ aviso('Confira as datas: ' + e.message); return; }
+  if(!confirm(texto + '\n\nIsso cria a campanha de verdade na sua loja da Shopee.')) return;
+  $('btCriar').disabled = true;
+  try{
+    const r = await post(caminho, corpo);
+    if(r.recusados?.length){
+      $('recusas').innerHTML = '';
+      $('recusas').appendChild(el('b', null, `A Shopee recusou ${r.recusados.length} anúncio(s):`));
+      const ul = el('ul');
+      for(const x of r.recusados){ const a = anuncios?.find((y) => y.item_id === x.item_id); ul.appendChild(el('li', null, `${a ? (a.nome_shopee || a.titulo) : x.item_id}: ${x.motivo}`)); }
+      $('recusas').appendChild(ul);
+    }
+    if(r.apagada) aviso('A Shopee recusou todos os anúncios; a campanha vazia foi apagada. Veja os motivos abaixo.');
+    else{
+      aviso(tipo === 'cupom' ? 'Cupom criado na Shopee.' : `Campanha criada na Shopee com ${r.aceitos} anúncio(s).`, 'ok');
+      if(!r.recusados?.length){ escolhidos.clear(); pintarEscolhidos(); }
+      carregar(true);
+    }
+  }catch(e){ aviso('A Shopee recusou: ' + e.message); }
+  finally{ $('btCriar').disabled = false; }
+};
+
 $('btReler').onclick = () => carregar(true);
 carregar();
 </script>

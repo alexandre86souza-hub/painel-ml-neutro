@@ -62,6 +62,40 @@ assert.strictEqual(K.somaLinhas([tf]).taxa_fixa, 20);
 // proporção média: só pedidos com repasse final e sem devolução
 assert.strictEqual(SV.proporcaoDe([{ ...base, linha: 0, quantidade: 2, preco_unit: 50 }, { ...base, order_sn: 'SN2', escrow_final: 0, linha: 0, quantidade: 1, preco_unit: 100 }]), 0.3);
 
+// ---------- Shopee: criar campanhas (só os corpos; nada chama a Shopee) ----------
+const SCx = require('./shopee-campanhas.js');
+const agoraT = Date.parse('2026-10-06T12:00:00Z');
+const daqui = (h) => new Date(agoraT + h * 3600e3).toISOString();
+assert.deepStrictEqual(SCx.periodoValido(daqui(2), daqui(26), { maxDias: 180, agora: agoraT }), { start_time: agoraT / 1000 + 7200, end_time: agoraT / 1000 + 26 * 3600 });
+assert.throws(() => SCx.periodoValido(daqui(0.5), daqui(26), { maxDias: 180, agora: agoraT }), /1 hora a partir de agora/);
+assert.throws(() => SCx.periodoValido(daqui(2), daqui(2.5), { maxDias: 180, agora: agoraT }), /1 hora depois/);
+assert.throws(() => SCx.periodoValido(daqui(2), daqui(2 + 24 * 181), { maxDias: 180, agora: agoraT }), /180 dias/);
+const grupos = SCx.agruparItens([{ item_id: 1, preco: 10.004, limite: 2 }, { item_id: 2, model_id: 21, preco: 20 }, { item_id: 2, model_id: 22, preco: 25 }]);
+assert.deepStrictEqual(SCx.itensDesconto(grupos), [
+  { item_id: 1, purchase_limit: 2, item_promotion_price: 10 },
+  { item_id: 2, purchase_limit: 0, model_list: [{ model_id: 21, model_promotion_price: 20 }, { model_id: 22, model_promotion_price: 25 }] }]);
+assert.throws(() => SCx.agruparItens([{ item_id: 1, preco: 0 }]), /preço promocional/);
+assert.throws(() => SCx.agruparItens([]), /pelo menos um/);
+assert.throws(() => SCx.itensRelampago(grupos), /estoque/);
+assert.deepStrictEqual(SCx.itensRelampago(SCx.agruparItens([{ item_id: 1, preco: 9, estoque: 5, limite: 1 }])),
+  [{ item_id: 1, purchase_limit: 1, item_input_promo_price: 9, item_stock: 5 }]);
+const cup = SCx.corpoCupom({ nome: 'Volta', codigo: 'kit10', inicio: daqui(2), fim: daqui(48), desconto: 'pct', valor: '10', maximo: '30', minimo: '100', quantidade: 50 }, agoraT);
+assert.deepStrictEqual({ c: cup.voucher_code, t: cup.voucher_type, r: cup.reward_type, p: cup.percentage, m: cup.max_price, b: cup.min_basket_price, q: cup.usage_quantity, ch: cup.display_channel_list },
+  { c: 'KIT10', t: 1, r: 2, p: 10, m: 30, b: 100, q: 50, ch: [1] });
+const cupP = SCx.corpoCupom({ nome: 'X', codigo: 'A1', inicio: daqui(2), fim: daqui(48), tipo: 'produtos', itens: [5, '5', 6], desconto: 'valor', valor: '15', minimo: '50', quantidade: 10 }, agoraT);
+assert.deepStrictEqual({ t: cupP.voucher_type, i: cupP.item_id_list, r: cupP.reward_type, d: cupP.discount_amount }, { t: 2, i: [5, 6], r: 1, d: 15 });
+assert.throws(() => SCx.corpoCupom({ nome: 'X', codigo: 'LONGO1', inicio: daqui(2), fim: daqui(48), valor: 5, quantidade: 1 }, agoraT), /1 a 5/);
+assert.throws(() => SCx.corpoCupom({ nome: 'X', codigo: 'A', inicio: daqui(2), fim: daqui(48), valor: 60, minimo: 50, quantidade: 1 }, agoraT), /menor que a compra mínima/);
+// métricas: só as linhas da campanha, por anúncio
+const lm = [
+  { valida: true, pedido: 'P1', shopee_item: 7, sku: 'S7', titulo: 'A', quantidade: 2, faturamento: 100, lucro: 20, data: '2026-09-02', cupom: 0 },
+  { valida: true, pedido: 'P2', shopee_item: 8, sku: 'S8', titulo: 'B', quantidade: 1, faturamento: 300, lucro: null, data: '2026-09-03', cupom: 5 },
+  { valida: true, pedido: 'P3', shopee_item: 7, sku: 'S7', titulo: 'A', quantidade: 1, faturamento: 50, lucro: 10, data: '2026-09-04', cupom: 0 },
+  { valida: false, pedido: 'P4', shopee_item: 7, sku: 'S7', quantidade: 9, faturamento: 999, lucro: 0, data: '2026-09-04' }];
+const mt = SCx.metricasDe(lm, () => true);
+assert.deepStrictEqual(mt.resumo, { pedidos: 3, unidades: 4, faturamento: 450, lucro: 30, margem: 0.2, cupom: 5 });
+assert.deepStrictEqual(mt.anuncios.map((a) => [a.sku, a.pedidos, a.faturamento, a.lucro]), [['S8', 1, 300, null], ['S7', 2, 150, 30]]);
+
 // ---------- Shopee: devoluções (nada do comprador) ----------
 const SC = require('./shopee-campanhas.js');
 const dv = SC.devolucaoDe({ return_sn: 123, order_sn: 'SN1', create_time: 1790000000, reason: 'CHANGE_MIND', status: 'ACCEPTED', refund_amount: 27.37,
