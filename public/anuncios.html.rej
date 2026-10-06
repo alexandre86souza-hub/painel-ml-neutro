@@ -1,0 +1,10 @@
+diff a/public/anuncios.html b/public/anuncios.html	(rejected hunks)
+@@ -307,7 +307,7 @@
+   <aside class="lateral">
+     <div class="marca" id="marcaPainel"></div>
+     <nav id="menuPainel" aria-label="Telas do painel"></nav>
+-    <script src="/menu.js?v=16"></script>
++    <script src="/menu.js?v=17"></script>
+   </aside>
+   <div class="conteudo">
+ <header>

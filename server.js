@@ -2013,6 +2013,7 @@ const amazonMod = require('./amazon.js').criar({ D, janela });
 Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
 Object.assign(routes, require('./calculadora.js').criar({ D, ml, amazon: amazonMod }).rotas);
+Object.assign(routes, require('./leroy.js').criar({ D }).rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 

@@ -218,6 +218,13 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `amazon_concorrencia`). A API só dá o código do vendedor: o nome NÃO é raspado do site
   (declaramos à Amazon que os dados vêm só da SP-API) — a tela tem o link da loja pública e o
   vendedor digita o nome (`amazon_vendedores`). Venda de concorrente não existe; só o BSR.
+- Leroy Merlin (`leroy.js`, tela `public/leroy.html`): por enquanto só a conexão. Plataforma Mirakl:
+  endereço do portal (*.mirakl.net, a API mora no mesmo host) + chave de API de um USUÁRIO da loja
+  (header Authorization, sem Bearer; cifrada em `estado`) + ID da loja opcional. Gerar chave nova
+  invalida a anterior daquele usuário: usar um usuário só do painel (o Bling usa outro). Diagnóstico
+  (A01 conta, OR11 pedidos, IV01 documentos, TL02 transações) mostra a forma, sem dado de comprador
+  (`semPessoais`). Nada da Leroy no MCP (`test-leroy.js` reprova). Vendas/repasses: construir a
+  partir do diagnóstico com a loja real (via `canais.js`).
 - Amazon Ads (`amazon-ads.js`, tela `public/amazon-ads.html`; no modo Amazon o menu troca
   `/ads.html` por ela): por enquanto só a conexão. Perfil de segurança do Login with Amazon
   (Client ID/Secret na tela, segredo e refresh cifrados), autorização em amazon.com/ap/oa com

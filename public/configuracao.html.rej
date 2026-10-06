@@ -1,0 +1,10 @@
+diff a/public/configuracao.html b/public/configuracao.html	(rejected hunks)
+@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded',()=>{
+   <aside class="lateral">
+     <div class="marca" id="marcaPainel"></div>
+     <nav id="menuPainel" aria-label="Telas do painel"></nav>
+-    <script src="/menu.js?v=16"></script>
++    <script src="/menu.js?v=17"></script>
+   </aside>
+   <div class="conteudo">
+ <header>

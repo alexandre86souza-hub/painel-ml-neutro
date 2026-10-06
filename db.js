@@ -1475,7 +1475,7 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // O que antes vivia no .env e o aluno teria de editar à mão: senha do painel, App ID e
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
 const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
-  'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token']);
+  'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token', 'leroy_api_key']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;
