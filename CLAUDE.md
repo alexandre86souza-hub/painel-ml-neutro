@@ -126,9 +126,12 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `transportadora`) = o vendedor entrega e paga a empresa de entrega: custo por pedido em
   `empresa.entrega_propria` (tela Empresa da conta Shopee; sem ele o lucro fica pendente).
   Tarifa = faturamento − recebido + frete_shopee; frete = entrega própria − frete_shopee.
-  Taxa por item da Shopee (`taxa_item`, mostrada separada como "taxa fixa"): a regra da
-  `net_service_fee_info_list` que passa de 3% do preço (R$ 4,00 → R$ 4,50 desde 01/10/2026 em itens
-  baratos; ~R$ 16–26 nos caros; rule_id muda). Já está DENTRO da tarifa.
+  Taxa fixa por unidade da Shopee (mostrada separada; já está DENTRO da tarifa): `taxaFixaDe` =
+  `service_fee` − transação × preço (2%; 1,4% desde 01/10/2026, data da compra em Brasília). Medido
+  em 562 pedidos: R$ 4 (R$ 4,50 desde 01/10) até R$ 79,99, R$ 16 de 80 a 99,99, R$ 20 de 100 a
+  199,99, R$ 26 de 200 em diante; comissão 18% abaixo de R$ 80 e 12% acima (+0,6 p.p. desde 01/10).
+  NÃO use a `net_service_fee_info_list`: em metade dos pedidos ela mistura a taxa fixa na regra de %.
+  Embalagem na Shopee = uma por PEDIDO (`embalagem_padrao` da empresa da loja), rateada pelo valor.
   Campanhas e devoluções da Shopee (`shopee-campanhas.js`, telas `shopee-campanhas.html` e
   `shopee-devolucoes.html`; o menu troca Campanhas/Devoluções por elas): descontos, ofertas
   relâmpago e cupons da loja (com as vendas dos itens no período); devoluções em janelas de 15 dias

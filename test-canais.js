@@ -16,17 +16,17 @@ assert.ok(!JSON.stringify(d).includes('nao-guardar'), 'nada do comprador');
 // ---------- Shopee: repasse ----------
 const rep = SV.repasseDe({ order_income: { escrow_amount: 70, commission_fee: 14, service_fee: 6, seller_transaction_fee: 2,
   actual_shipping_fee: 20, buyer_paid_shipping_fee: 12, shopee_shipping_rebate: 0, voucher_from_seller: 0, seller_return_refund: 0 } }, 'COMPLETED');
-assert.deepStrictEqual(rep, { final: true, recebido: 70, comissao: 14, servico: 6, transacao: 2, frete_vendedor: 8, cupom_vendedor: 0, devolucao: 0, frete_shopee: 12, taxa_item: null });
+assert.deepStrictEqual(rep, { final: true, recebido: 70, comissao: 14, servico: 6, transacao: 2, frete_vendedor: 8, cupom_vendedor: 0, devolucao: 0, frete_shopee: 12 });
 assert.strictEqual(SV.repasseDe({ order_income: { escrow_amount: 10 } }, 'SHIPPED').final, false, 'antes de concluído: provisório');
 
 // ---------- Shopee: linhas de venda ----------
 const mapa = new Map([[407, { numero: 407, sku: 'DQ-407', nome: 'Ducha', custo: 10 }], [408, { numero: 408, sku: 'BR-408', nome: 'Braço', custo: 5 }]]);
 const base = { order_sn: 'SN1', data: '2026-09-30T12:00:00.000Z', status: 'COMPLETED', escrow_final: 1, recebido: 70, frete_vendedor: 8, devolucao: 0 };
-const ctx = { mapa, imposto_pct: 10, embalagem_unit: 1, proporcao: 0.25 };
+const ctx = { mapa, imposto_pct: 10, embalagem_pedido: 1, proporcao: 0.25 };
 const [l1] = SV.linhasDe([{ ...base, linha: 0, sku: 'KIT-407.408', quantidade: 2, preco_unit: 50, nome: 'Kit' }], ctx);
 assert.deepStrictEqual({ fat: l1.faturamento, tarifa: l1.tarifa, frete: l1.frete, produto: l1.produto, emb: l1.embalagem, imp: l1.imposto, lucro: l1.lucro, est: l1.estimado },
-  { fat: 100, tarifa: 30, frete: 0, produto: 30, emb: 2, imp: 10, lucro: 28, est: false }, 'lucro = recebido − produto − embalagem − imposto');
-assert.strictEqual(l1.lucro, 70 - 30 - 2 - 10);
+  { fat: 100, tarifa: 30, frete: 0, produto: 30, emb: 1, imp: 10, lucro: 29, est: false }, 'lucro = recebido − produto − embalagem − imposto');
+assert.strictEqual(l1.lucro, 70 - 30 - 1 - 10, 'embalagem: uma por pedido, não por unidade');
 // dois itens: o que a Shopee tirou é rateado pelo valor
 const dois = SV.linhasDe([{ ...base, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 75 }, { ...base, linha: 1, sku: 'BR-408', quantidade: 1, preco_unit: 25 }], ctx);
 assert.deepStrictEqual(dois.map((l) => l.tarifa + l.frete), [22.5, 7.5]);
@@ -42,19 +42,23 @@ assert.deepStrictEqual(SV.linhasDe([{ ...base, linha: 0, sku: 'XX-999', quantida
 const ed = { ...base, transportadora: 'Entrega Direta', frete_shopee: 7.89, recebido: 77.89, linha: 0, sku: 'KIT-407.408', quantidade: 2, preco_unit: 50 };
 const [e1] = SV.linhasDe([ed], { ...ctx, entrega_propria: 8 });
 assert.deepStrictEqual({ tarifa: e1.tarifa, frete: e1.frete, lucro: e1.lucro, propria: e1.entrega_propria, fs: e1.frete_shopee, ce: e1.custo_entrega },
-  { tarifa: 30, frete: 0.11, lucro: 27.89, propria: true, fs: 7.89, ce: 8 }, 'lucro = recebido − entrega − custos');
+  { tarifa: 30, frete: 0.11, lucro: 28.89, propria: true, fs: 7.89, ce: 8 }, 'lucro = recebido − entrega − custos');
 const [e2] = SV.linhasDe([ed], ctx);
 assert.deepStrictEqual({ falta: e2.falta, lucro: e2.lucro }, { falta: ['entrega'], lucro: null }, 'sem o custo da entrega: lucro pendente');
 const [e3] = SV.linhasDe([{ ...ed, recebido: null, escrow_final: 0 }], { ...ctx, entrega_propria: 8, frete_medio: { 'Entrega Direta': 7.5 } });
 assert.deepStrictEqual({ tarifa: e3.tarifa, frete: e3.frete, est: e3.estimado }, { tarifa: 25, frete: 0.5, est: true }, 'sem repasse: frete médio da transportadora');
 assert.deepStrictEqual(SV.freteMedioDe([{ ...ed }, { ...ed, order_sn: 'SN9', frete_shopee: 8.11 }, { ...ed, order_sn: 'SN8', escrow_final: 0, frete_shopee: 99 }]), { 'Entrega Direta': 8 });
-// taxa por item (Shopee): a regra da taxa de serviço que passa de 3% do preço
-assert.strictEqual(SV.taxaPorItemDe({ order_discounted_price: 53.64, net_service_fee_info_list: [{ rule_id: 1000074, fee_amount: 0.75 }, { rule_id: 1000075, fee_amount: 4.06 }] }), 4.06);
-assert.strictEqual(SV.taxaPorItemDe({ order_discounted_price: 686.44, net_service_fee_info_list: [{ fee_amount: 13.73 }, { fee_amount: 80 }] }), 80);
-assert.strictEqual(SV.taxaPorItemDe({ order_discounted_price: 10 }), null);
-const [tf] = SV.linhasDe([{ ...base, taxa_item: 4.5, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 100 }], ctx);
-assert.strictEqual(tf.taxa_fixa, 4.5);
-assert.strictEqual(K.somaLinhas([tf]).taxa_fixa, 4.5);
+// taxa fixa (Shopee) = taxa de serviço − transação (2%; 1,4% desde 01/10/2026 em Brasília). Pedidos reais:
+assert.strictEqual(SV.taxaFixaDe(93.73, 686.44, '2026-09-30T10:47:31.000Z'), 80, '4 unidades de R$ 171,61: 4 × R$ 20');
+assert.strictEqual(SV.taxaFixaDe(22.09, 104.54, '2026-05-18T12:00:00.000Z'), 20, 'a lista da Shopee dizia 14,86');
+assert.strictEqual(SV.taxaFixaDe(23.33, 166.71, '2026-10-01T01:12:17.000Z'), 20, '30/09 22h em Brasília: ainda 2%');
+assert.strictEqual(SV.taxaFixaDe(5.31, 58.18, '2026-10-01T18:37:51.000Z'), 4.5, '01/10: 1,4% e R$ 4,50');
+assert.strictEqual(SV.taxaFixaDe(29.33, 237.94, '2026-10-04T12:00:00.000Z'), 26);
+assert.strictEqual(SV.taxaFixaDe(null, 100, '2026-10-04T12:00:00.000Z'), null);
+assert.strictEqual(SV.taxaFixaDe(0, 100, '2026-10-04T12:00:00.000Z'), 0, 'reembolsado: sem taxa');
+const [tf] = SV.linhasDe([{ ...base, servico: 22, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 100 }], ctx);
+assert.strictEqual(tf.taxa_fixa, 20);
+assert.strictEqual(K.somaLinhas([tf]).taxa_fixa, 20);
 // proporção média: só pedidos com repasse final e sem devolução
 assert.strictEqual(SV.proporcaoDe([{ ...base, linha: 0, quantidade: 2, preco_unit: 50 }, { ...base, order_sn: 'SN2', escrow_final: 0, linha: 0, quantidade: 1, preco_unit: 100 }]), 0.3);
 

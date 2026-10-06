@@ -107,7 +107,7 @@ function criar({ D, daLoja }) {
       if (url.searchParams.get('recarregar') === '1' || !lidoEm || Date.now() - Date.parse(lidoEm) > 6 * 3600e3) ler(shopId).catch(() => null);
       const empresa = empresaDe(shopId);
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
-      const ctx = { mapa, imposto_pct: 0, embalagem_unit: 0 };
+      const ctx = { mapa, imposto_pct: 0, embalagem_pedido: 0 };
       const rows90 = D.shopeeVendasPeriodo(shopId, new Date(Date.now() - 90 * 864e5).toISOString(), '9999');
       const linhas90 = SV.linhasDe(rows90, { ...ctx, proporcao: null });
       const taxas = taxasPorSku(linhas90);
