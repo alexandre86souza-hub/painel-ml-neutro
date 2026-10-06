@@ -95,7 +95,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   pelo nome ou a categoria que mais vende); frete médio Mercado Envios (sem Flex) do anúncio ou da
   conta na faixa abaixo/acima de R$ 79 — medido: o vendedor paga frete também abaixo de R$ 79. Tarifa do
   ML editável no cartão: `t_{conta}=` (só aquele cálculo) › padrão da conta (`calc_tarifa_ml:{id}` em
-  `estado`, `POST /api/calculadora/tarifa`, null volta à da categoria) › listing_prices; Flex =
+  `estado`, `POST /api/calculadora/tarifa`, null volta à da categoria) › listing_prices. Frete editável
+  em todos os cartões (`comFrete`): `f_{canal}=` › padrão `calc_frete:{ml:id:me|flex | shopee:loja |
+  amazon:FBA|proprio}` (`POST /api/calculadora/frete`) › o calculado. Amazon: a calculadora lê o
+  financeiro antes (até 8 s) e o frete do FBA = tarifa de envio por unidade + armazenagem; Flex =
   entrega_flex − bônus médio. Shopee: tabela medida (`tarifaShopee`). Amazon: média real do
   financeiro (`taxasDosLancamentos`). Sem ferramenta MCP (tem dado da Amazon).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito

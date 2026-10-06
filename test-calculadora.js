@@ -21,4 +21,11 @@ assert.strictEqual(K.contaReversa({ preco: 50, margemPct: 50, tarifa: 20, frete:
 // tarifa do ML digitada (%)
 assert.deepStrictEqual(['11,5', '16.5', 11.5, ' 0 ', '', null, 'abc', -1, 61].map(K.pctValido), [11.5, 16.5, 11.5, 0, null, null, null, null, null]);
 
-console.log('Calculadora reversa: faixas da Shopee, conta reversa, custo atual e tarifa digitada: ok');
+// frete digitado (R$): digitado › padrão salvo › calculado
+assert.deepStrictEqual(['12,50', 8, '0', '', null, 'x', -1].map(K.freteValido), [12.5, 8, 0, null, null, null, null]);
+const cf = { id: 'shopee:1', frete: 0, frete_fonte: 'Shopee paga' };
+assert.deepStrictEqual([K.comFrete(cf, null, null), K.comFrete(cf, null, 8), K.comFrete(cf, 12, 8)].map((x) => [x.frete, x.frete_origem, x.frete_calculado]),
+  [[0, 'calculado', 0], [8, 'padrao', 0], [12, 'editado', 0]]);
+assert.match(K.comFrete(cf, 12, null).frete_fonte, /digitado neste cálculo · calculado pelo painel: R\$ 0,00 \(Shopee paga\)/);
+
+console.log('Calculadora reversa: faixas da Shopee, conta reversa, custo atual, tarifa e frete digitados: ok');

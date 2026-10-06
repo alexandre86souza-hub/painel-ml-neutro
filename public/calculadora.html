@@ -157,13 +157,32 @@ function linhaTarifaML(c, k){
   }
   tr.append(a, el('td', 'v', `− ${real(k.tarifa)}`)); return tr;
 }
+// Frete editável em todos os marketplaces: mudar vale só para este cálculo; "Salvar como padrão"
+// grava para aquele canal e tipo de envio; "Usar o calculado" volta ao que o painel mede.
+const freteEditados = {};
+function linhaFrete(c, k){
+  const tr = el('tr'), a = el('td');
+  const campo = el('input'); campo.type = 'number'; campo.step = '0.01'; campo.min = '0';
+  campo.value = k.frete; campo.style.cssText = 'width:80px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid #d5d7db;border-radius:7px';
+  campo.setAttribute('aria-label', `Frete por venda em R$ — ${c.nome}`);
+  campo.onchange = () => { freteEditados[c.id] = campo.value; calcular(); };
+  const rot = el('span', null, 'Frete R$ '); rot.appendChild(campo);
+  a.append(rot, el('small', null, c.frete_fonte || ''));
+  const bt = (txt, fn) => { const b = el('button', 'bt', txt); b.type = 'button'; b.style.cssText = 'font-size:12px;padding:3px 8px;margin:4px 6px 0 0'; b.onclick = fn; return b; };
+  const gravar = async (valor) => {
+    try{ await post('/api/calculadora/frete', { chave: c.frete_chave, valor }); delete freteEditados[c.id]; calcular(); }catch(e){ aviso(e.message); }
+  };
+  if(c.frete_origem !== 'padrao') a.appendChild(bt('Salvar como padrão', () => gravar(campo.value)));
+  if(c.frete_padrao != null) a.appendChild(bt('Usar o calculado', () => gravar(null)));
+  tr.append(a, el('td', 'v', `− ${real(k.frete)}`)); return tr;
+}
 function cartaoCanal(c, r){
   const d = el('div', 'canal'); d.appendChild(el('h3', null, c.nome));
   if(!c.conta){ d.appendChild(el('p', 'avisos', (c.avisos || []).join(' ') || 'Não foi possível calcular.')); return d; }
   const k = c.conta, t = el('table'), tb = el('tbody');
   tb.append(linha('Preço de venda', k.preco, null, ''),
     c.canal === 'ml' ? linhaTarifaML(c, k) : linha('Tarifa do marketplace', k.tarifa, c.tarifa_txt),
-    linha('Frete', k.frete, c.frete_fonte),
+    linhaFrete(c, k),
     linha(`Imposto (${String(k.imposto_pct).replace('.', ',')}%)`, k.imposto),
     linha('Embalagem', k.embalagem));
   if(k.outros) tb.appendChild(linha('Outros custos', k.outros));
@@ -192,6 +211,7 @@ async function calcular(){
   for(const k of ['sku', 'tipo', 'item']) if($(k).value.trim()) q.set(k, $(k).value.trim());
   if($('canal').value) q.set('canal', $('canal').value);
   for(const [id, v] of Object.entries(tarifasEditadas)) if(String(v).trim() !== '') q.set(`t_${id}`, v);
+  for(const [id, v] of Object.entries(freteEditados)) if(String(v).trim() !== '') q.set(`f_${id}`, v);
   $('blocoResultado').hidden = false; $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'carregando', 'Calculando…'));
   try{
     const r = await api('/api/calculadora?' + q);
@@ -221,7 +241,9 @@ async function calcular(){
   }catch(e){ $('resultado').innerHTML = ''; aviso(e.message); }
 }
 $('form').onsubmit = (ev) => { ev.preventDefault(); calcular(); };
-for(const id of ['canal', 'tipo', 'envio', 'amazon']) $(id).onchange = calcular;
+for(const id of ['canal', 'tipo']) $(id).onchange = calcular;
+// trocar o tipo de envio muda o frete calculado: o digitado antes deixa de valer
+for(const id of ['envio', 'amazon']) $(id).onchange = () => { for(const k of Object.keys(freteEditados)) delete freteEditados[k]; calcular(); };
 for(const id of ['preco', 'margem', 'outros', 'sku', 'item']) $(id).addEventListener('change', calcular);
 </script>
 <script src="/sino.js?v=1" defer></script>

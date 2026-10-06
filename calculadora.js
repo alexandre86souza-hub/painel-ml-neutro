@@ -17,7 +17,7 @@
 //     o que o vendedor paga (medido: R$ 8 em 208 de 215 pedidos) — custo líquido 0.
 //   - Amazon: a média real do financeiro dela (taxasDosLancamentos, 92 dias) do SKU, ou do canal
 //     (envio próprio ou FBA) quando o SKU não vendeu. Envio próprio: frete = etiqueta média comprada na
-//     Amazon; FBA: tarifa por unidade na tarifa e, no frete, a parte da armazenagem e do envio ao armazém.
+//     Amazon; FBA: frete = tarifa de envio do FBA por unidade + a parte da armazenagem e do envio ao armazém.
 // Dados da Amazon não vão para o MCP: esta rota não tem ferramenta MCP.
 const C = require('./custos.js');
 const A = require('./amazon.js');
@@ -54,7 +54,26 @@ function pctValido(v) {
   return Number.isFinite(n) && n >= 0 && n <= 60 ? r2(n) : null;
 }
 
-function criar({ D, ml }) {
+// Frete digitado (R$ por venda): "12,50" ou 12.5, de 0 a 10.000; fora disso null. Função pura: testada.
+function freteValido(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).trim().replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 10000 ? r2(n) : null;
+}
+
+// Frete do cartão: o digitado neste cálculo › o padrão salvo para o canal › o calculado pelo painel
+// (que fica em frete_calculado para comparar). Função pura: testada.
+function comFrete(c, digitado, padrao) {
+  const valor = digitado ?? padrao;
+  const base = { frete_calculado: r2(c.frete ?? 0), frete_padrao: padrao,
+    frete_origem: digitado != null ? 'editado' : padrao != null ? 'padrao' : 'calculado' };
+  if (valor == null) return { ...c, ...base };
+  const antes = `calculado pelo painel: R$ ${(c.frete ?? 0).toFixed(2).replace('.', ',')}`;
+  return { ...c, ...base, frete: valor,
+    frete_fonte: `${digitado != null ? 'digitado neste cálculo' : 'padrão salvo'} · ${antes}${c.frete_fonte ? ` (${c.frete_fonte})` : ''}` };
+}
+
+function criar({ D, ml, amazon = null }) {
   const empresaDe = (chave, reserva) => C.lerEmpresa(D.configLer(`empresa:${chave}`) || (reserva ? D.configLer(`empresa:${reserva}`) : null));
   const primeiraConta = () => D.contasListar()[0]?.ml_user_id || null;
 
@@ -184,8 +203,15 @@ function criar({ D, ml }) {
       imposto_pct: C.impostoTotal(empresa), embalagem: empresa.embalagem_padrao || 0, avisos: [] };
   }
 
-  function canalAmazon(p) {
+  // Lê as novidades do financeiro da Amazon antes (no máximo 8 s; a 1ª leitura de 92 dias leva ~1 min
+  // e continua em segundo plano — o aviso pede para calcular de novo).
+  async function canalAmazon(p) {
     if (!D.configLer('amazon_lwa_client_id')) return null;
+    let lendo = false;
+    if (amazon?.sincronizar) {
+      const leitura = amazon.sincronizar().then(() => false, () => false);
+      lendo = await Promise.race([leitura, new Promise((ok) => setTimeout(() => ok(true), 8000))]);
+    }
     const proprio = D.configLer('empresa:amazon');
     const empresa = C.lerEmpresa(proprio || D.configLer(`empresa:${Number(D.configLer('amazon_empresa_conta')) || primeiraConta()}`));
     const taxas = A.taxasDosLancamentos(D.amazonLancPeriodo(new Date(Date.now() - 92 * 864e5).toISOString(), '9999'));
@@ -193,17 +219,23 @@ function criar({ D, ml }) {
     let m = p.sku ? taxas.mediaSku(p.sku, canal) : null, fonte = 'média deste SKU nas vendas da Amazon (92 dias)';
     if (!m) { m = taxas.mediaCanal(canal); fonte = `média das vendas ${canal === 'FBA' ? 'FBA' : 'com envio próprio'} da Amazon (92 dias)`; }
     if (!m) return { id: 'amazon', canal: 'amazon', nome: 'Amazon', tarifa: null, frete: 0, imposto_pct: C.impostoTotal(empresa), embalagem: 0,
-      avisos: ['Ainda sem vendas na Amazon para medir as taxas.'] };
+      avisos: [lendo ? 'Lendo o financeiro da Amazon agora: calcule de novo em 1 minuto.' : 'Ainda sem vendas na Amazon para medir as taxas.'] };
     const pct = r2(m.tarifa_pct * 100);
-    return { id: 'amazon', canal: 'amazon', nome: `Amazon — ${canal === 'FBA' ? 'FBA' : 'envio próprio'}`,
-      tarifa: { pct, fixa: r2(m.fixa_un), valor: r2(p.preco * m.tarifa_pct + m.fixa_un) },
-      tarifa_txt: `${String(pct).replace('.', ',')}%${m.fixa_un ? ` + R$ ${m.fixa_un.toFixed(2).replace('.', ',')}` : ''} (${fonte})`,
-      frete: r2(m.frete_un + (m.armazem_un || 0)),
-      frete_fonte: canal === 'FBA'
-        ? `armazenagem e envio ao armazém, R$ ${(m.armazem_un || 0).toFixed(2).replace('.', ',')} por unidade (a tarifa de envio do FBA está na tarifa) — ${fonte}`
+    const din = (v) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+    // FBA: a tarifa de envio por unidade (FBAPerUnitFulfillmentFee) é o frete do FBA — mostrada no
+    // frete, com a armazenagem e o envio ao armazém. Envio próprio: a etiqueta média.
+    const fba = canal === 'FBA';
+    const avisos = [];
+    if (lendo) avisos.push('Lendo o financeiro da Amazon agora: calcule de novo em 1 minuto para ver as taxas atualizadas.');
+    if (!fba && !m.frete_un) avisos.push('Envio próprio sem etiqueta da Amazon: o frete que você paga à transportadora não passa por ela. Some em "Outros custos".');
+    return { id: 'amazon', canal: 'amazon', nome: `Amazon — ${fba ? 'FBA' : 'envio próprio'}`,
+      tarifa: { pct, fixa: fba ? 0 : r2(m.fixa_un), valor: r2(p.preco * m.tarifa_pct + (fba ? 0 : m.fixa_un)) },
+      tarifa_txt: `${String(pct).replace('.', ',')}%${!fba && m.fixa_un ? ` + ${din(m.fixa_un)}` : ''} (${fonte})`,
+      frete: r2(fba ? m.fixa_un + (m.armazem_un || 0) : m.frete_un),
+      frete_fonte: fba
+        ? `tarifa de envio do FBA ${din(m.fixa_un)} + armazenagem e envio ao armazém ${din(m.armazem_un || 0)} por unidade — ${fonte}`
         : `etiqueta comprada na Amazon — ${fonte}`,
-      imposto_pct: C.impostoTotal(empresa), embalagem: canal === 'proprio' ? (empresa.embalagem_padrao || 0) : 0,
-      avisos: canal === 'proprio' && !m.frete_un ? ['Envio próprio sem etiqueta da Amazon: o frete que você paga à transportadora não passa por ela. Some em "Outros custos".'] : [] };
+      imposto_pct: C.impostoTotal(empresa), embalagem: fba ? 0 : (empresa.embalagem_padrao || 0), avisos };
   }
 
   const rotas = {
@@ -228,8 +260,14 @@ function criar({ D, ml }) {
       const canais = [];
       for (const c of D.contasListar()) if (!so || so === `ml:${c.ml_user_id}`) canais.push(await canalML(c, p).catch((e) => ({ id: `ml:${c.ml_user_id}`, canal: 'ml', nome: `Mercado Livre — ${c.nickname}`, tarifa: null, avisos: [e.message] })));
       for (const l of D.shopeeLojasListar()) if (!so || so === `shopee:${l.shop_id}`) canais.push(canalShopee(l, p));
-      if (!so || so === 'amazon') { const a = canalAmazon(p); if (a) canais.push(a); }
+      if (!so || so === 'amazon') { const a = await canalAmazon(p); if (a) canais.push(a); }
       const custoAtual = cs?.custo ?? null;
+      // frete editável em todos os canais; o padrão é por canal e tipo de envio
+      const chaveFrete = (c) => (c.canal === 'ml' ? `${c.id}:${p.envio}` : c.canal === 'amazon' ? `amazon:${p.amazon === 'FBA' ? 'FBA' : 'proprio'}` : c.id);
+      for (const [i, c] of canais.entries()) {
+        const chave = chaveFrete(c);
+        canais[i] = { ...comFrete(c, freteValido(q.get(`f_${c.id}`)), freteValido(D.configLer(`calc_frete:${chave}`))), frete_chave: chave };
+      }
       return { preco, margem, outros, sku, produto: nome, custo_atual: custoAtual, faltando: cs?.faltando || [],
         canais: canais.map((c) => ({ ...c, conta: c.tarifa ? contaReversa({ preco, margemPct: margem, tarifa: c.tarifa.valor, frete: c.frete || 0,
           impostoPct: c.imposto_pct || 0, embalagem: c.embalagem || 0, outros, custoAtual }) : null })) };
@@ -250,8 +288,17 @@ function criar({ D, ml }) {
       D.configGravar(`calc_tarifa_ml:${conta.ml_user_id}`, pct);
       return { ok: true, conta: conta.ml_user_id, pct };
     },
+    // Frete padrão de um canal na calculadora (chave = frete_chave do cartão; null = volta ao calculado).
+    'POST /api/calculadora/frete': async (_u, b) => {
+      const chave = String(b?.chave || '');
+      if (!/^(ml:\d+:(me|flex)|shopee:\d+|amazon:(FBA|proprio))$/.test(chave)) throw erro('Canal inválido.');
+      const valor = b?.valor == null || b.valor === '' ? null : freteValido(b.valor);
+      if (b?.valor != null && b.valor !== '' && valor == null) throw erro('Frete entre R$ 0 e R$ 10.000.');
+      D.configGravar(`calc_frete:${chave}`, valor);
+      return { ok: true, chave, valor };
+    },
   };
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, tarifaShopee, contaReversa, pctValido };
+module.exports = { criar, tarifaShopee, contaReversa, pctValido, freteValido, comFrete };
