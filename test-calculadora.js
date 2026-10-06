@@ -1,0 +1,21 @@
+'use strict';
+// node test-calculadora.js — calculadora reversa (calculadora.js): só funções puras.
+const assert = require('node:assert');
+const K = require('./calculadora.js');
+
+// Shopee: faixas medidas (comissão + transação; taxa fixa por unidade; Devolução Fácil por pedido)
+assert.deepStrictEqual(K.tarifaShopee(49.9), { pct: 20, fixa_un: 4.5, pedido: 0.49, valor: 14.97 });
+assert.strictEqual(K.tarifaShopee(79.99).pct, 20);
+assert.deepStrictEqual([K.tarifaShopee(80).fixa_un, K.tarifaShopee(99.99).fixa_un, K.tarifaShopee(100).fixa_un, K.tarifaShopee(199.99).fixa_un, K.tarifaShopee(200).fixa_un],
+  [16, 16, 20, 20, 26]);
+assert.strictEqual(K.tarifaShopee(171.61).valor, 44.52, 'a venda real das duchas: 14% de 171,61 + 20 + 0,49');
+
+// conta reversa: custo máximo = preço − despesas − margem
+const c = K.contaReversa({ preco: 100, margemPct: 20, tarifa: 14, frete: 10, impostoPct: 10, embalagem: 1.5, outros: 2.5 });
+assert.deepStrictEqual({ imp: c.imposto, desp: c.despesas, lucro: c.lucro_desejado, max: c.custo_maximo, sobra: c.sobra_sem_lucro },
+  { imp: 10, desp: 38, lucro: 20, max: 42, sobra: 62 });
+const comCusto = K.contaReversa({ preco: 100, margemPct: 20, tarifa: 14, frete: 10, impostoPct: 10, embalagem: 1.5, outros: 2.5, custoAtual: 30 });
+assert.deepStrictEqual({ l: comCusto.lucro_atual, m: comCusto.margem_atual, f: comCusto.folga }, { l: 32, m: 0.32, f: 12 });
+assert.strictEqual(K.contaReversa({ preco: 50, margemPct: 50, tarifa: 20, frete: 10 }).custo_maximo, -5, 'margem impossível: custo máximo negativo');
+
+console.log('Calculadora reversa: faixas da Shopee, conta reversa e custo atual: ok');

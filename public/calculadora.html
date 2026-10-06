@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora reversa</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .form-calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .form-calc label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#475569;position:relative}
+  .form-calc input,.form-calc select{font:inherit;font-size:15px;padding:9px 11px;border:1px solid #d5d7db;border-radius:9px;min-width:0}
+  .form-calc .largo{grid-column:span 2}
+  @media (max-width:560px){.form-calc .largo{grid-column:auto}}
+  .sugestoes{position:absolute;top:100%;left:0;right:0;z-index:5;background:#fff;border:1px solid #d5d7db;border-radius:9px;box-shadow:0 8px 24px rgba(15,23,42,.12);max-height:260px;overflow:auto}
+  .sugestoes button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:8px 11px;font:inherit;font-size:13px;cursor:pointer}
+  .sugestoes button:hover{background:#f1f5f9}
+  .produto-info{font-size:13px;color:#334155;margin:8px 0 0}
+  .opcoes{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .opcoes fieldset{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .opcoes legend{font-size:12px;color:#64748b;padding:0 4px}
+  .opcoes label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#475569}
+  .opcoes select,.opcoes input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px}
+  .grade-canais{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+  .canal{border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px}
+  .canal h3{margin:0 0 8px;font-size:15px}
+  .canal table{width:100%;border-collapse:collapse;font-size:14px}
+  .canal td{padding:4px 0;vertical-align:top}.canal td.v{text-align:right;white-space:nowrap;padding-left:10px}
+  .canal td small{display:block;font-size:11px;color:#64748b}
+  .canal tr.soma td{border-top:1px solid #e5e7eb;font-weight:600}
+  .resultado-max{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe}
+  .resultado-max b{font-size:22px;display:block;color:#1d4ed8}
+  .resultado-max.neg{background:#fef2f2;border-color:#fecaca}.resultado-max.neg b{color:#b42318}
+  .atual{margin-top:8px;font-size:13px}.pos{color:#0b6b33}.neg{color:#b42318}
+  .avisos{margin:8px 0 0;font-size:12px;color:#92400e}
+  td.dinheiro{white-space:nowrap;text-align:right}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=26"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Calculadora reversa</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <section class="bloco">
+    <h2>Quanto posso pagar no produto?</h2>
+    <p class="sub">Coloque o preço de venda e a margem que você quer. O painel desconta as taxas, o frete, o imposto e a embalagem de cada marketplace
+      e mostra o máximo que você pode pagar no produto.</p>
+    <form id="form">
+      <div class="form-calc">
+        <label class="largo">Produto (busque pelo nome ou número; pode juntar vários para um kit)
+          <input id="busca" autocomplete="off" placeholder="Ex.: ducha golden, 694…" aria-label="Buscar produto">
+          <div class="sugestoes" id="sugestoes" hidden></div>
+        </label>
+        <label>SKU / produtos do kit
+          <input id="sku" placeholder="Ex.: 694.831" autocomplete="off"></label>
+        <label>Marketplace
+          <select id="canal"><option value="">Todos (comparar)</option></select></label>
+        <label>Preço de venda (R$)
+          <input id="preco" type="number" step="0.01" min="0.01" required placeholder="Ex.: 171,61"></label>
+        <label>Margem de lucro desejada (%)
+          <input id="margem" type="number" step="0.5" min="-50" max="90" value="20" required></label>
+        <label>Outros custos por venda (R$)
+          <input id="outros" type="number" step="0.01" min="0" value="0" title="Ex.: frete que você paga à transportadora no envio próprio"></label>
+      </div>
+      <p class="produto-info" id="produtoInfo"></p>
+      <div class="opcoes">
+        <fieldset><legend>Mercado Livre</legend>
+          <label>Tipo de anúncio<select id="tipo"><option value="">o do anúncio (ou Clássico)</option><option value="gold_special">Clássico</option><option value="gold_pro">Premium</option></select></label>
+          <label>Envio<select id="envio"><option value="me">Mercado Envios</option><option value="flex">Flex</option></select></label>
+          <label>Anúncio (opcional)<input id="item" placeholder="MLB…" size="14"></label>
+        </fieldset>
+        <fieldset><legend>Amazon</legend>
+          <label>Envio<select id="amazon"><option value="proprio">Envio próprio</option><option value="FBA">FBA (Amazon envia)</option></select></label>
+        </fieldset>
+        <button class="bt primario" style="align-self:center">Calcular</button>
+      </div>
+    </form>
+  </section>
+  <section class="bloco" id="blocoComparar" hidden>
+    <h2>Comparando os marketplaces</h2>
+    <div class="tabela-rolagem" id="comparar"></div>
+  </section>
+  <section class="bloco" id="blocoResultado" hidden>
+    <div class="grade-canais" id="resultado"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=7"></script>
+<script>
+function aviso(t){ const m = $('msg'); m.textContent = t; m.style.display = t ? 'block' : 'none'; }
+let timer = null, canaisCarregados = false;
+
+// ---------- produto ----------
+$('busca').oninput = () => {
+  clearTimeout(timer);
+  const q = $('busca').value.trim();
+  if(q.length < 2){ $('sugestoes').hidden = true; return; }
+  timer = setTimeout(async () => {
+    try{
+      const r = await api('/api/calculadora/produtos?q=' + encodeURIComponent(q));
+      const box = $('sugestoes'); box.innerHTML = '';
+      for(const p of r.produtos){
+        const b = el('button', null, `${p.numero} · ${p.nome || p.sku} — ${real(p.custo)}`); b.type = 'button';
+        b.onclick = () => { const s = $('sku').value.trim(); $('sku').value = s ? `${s}.${p.numero}` : String(p.numero); $('busca').value = ''; box.hidden = true; calcular(); };
+        box.appendChild(b);
+      }
+      if(!r.produtos.length) box.appendChild(el('p', 'vazio', 'Nenhum produto com esse nome.'));
+      box.hidden = false;
+    }catch{ $('sugestoes').hidden = true; }
+  }, 200);
+};
+document.addEventListener('click', (e) => { if(!$('sugestoes').contains(e.target) && e.target !== $('busca')) $('sugestoes').hidden = true; });
+
+// ---------- cálculo ----------
+function linha(rot, valor, nota, sinal = '−'){
+  const tr = el('tr'); const a = el('td'); a.appendChild(document.createTextNode(rot)); if(nota) a.appendChild(el('small', null, nota));
+  tr.append(a, el('td', 'v', valor == null ? '—' : `${sinal} ${real(valor)}`)); return tr;
+}
+function cartaoCanal(c, r){
+  const d = el('div', 'canal'); d.appendChild(el('h3', null, c.nome));
+  if(!c.conta){ d.appendChild(el('p', 'avisos', (c.avisos || []).join(' ') || 'Não foi possível calcular.')); return d; }
+  const k = c.conta, t = el('table'), tb = el('tbody');
+  tb.append(linha('Preço de venda', k.preco, null, ''),
+    linha('Tarifa do marketplace', k.tarifa, c.tarifa_txt),
+    linha('Frete', k.frete, c.frete_fonte),
+    linha(`Imposto (${String(k.imposto_pct).replace('.', ',')}%)`, k.imposto),
+    linha('Embalagem', k.embalagem));
+  if(k.outros) tb.appendChild(linha('Outros custos', k.outros));
+  const s1 = linha('Sobra antes do lucro', k.sobra_sem_lucro, null, '='); s1.className = 'soma'; tb.appendChild(s1);
+  tb.appendChild(linha(`Lucro desejado (${String(r.margem).replace('.', ',')}%)`, k.lucro_desejado));
+  t.appendChild(tb); d.appendChild(t);
+  const res = el('div', 'resultado-max' + (k.custo_maximo <= 0 ? ' neg' : ''));
+  res.append(document.createTextNode('Você pode pagar no produto até'), el('b', null, real(k.custo_maximo)));
+  if(k.custo_maximo <= 0) res.appendChild(el('span', null, 'Com essa margem não sobra nada para o produto: suba o preço ou baixe a margem.'));
+  d.appendChild(res);
+  if(k.custo_atual != null){
+    const a = el('p', 'atual');
+    a.append(document.createTextNode(`Seu custo hoje: ${real(k.custo_atual)} → lucro `),
+      el('b', k.lucro_atual < 0 ? 'neg' : 'pos', `${real(k.lucro_atual)} (${pct(k.margem_atual)})`),
+      document.createTextNode(' · '), el('span', k.folga < 0 ? 'neg' : 'pos', k.folga < 0 ? `passa ${real(-k.folga)} do máximo` : `sobra ${real(k.folga)} de folga`));
+    d.appendChild(a);
+  }
+  if(c.avisos?.length) d.appendChild(el('p', 'avisos', c.avisos.join(' ')));
+  return d;
+}
+async function calcular(){
+  aviso('');
+  const preco = $('preco').value, margem = $('margem').value;
+  if(!(Number(preco) > 0)) return;
+  const q = new URLSearchParams({ preco, margem, outros: $('outros').value || '0', envio: $('envio').value, amazon: $('amazon').value });
+  for(const k of ['sku', 'tipo', 'item']) if($(k).value.trim()) q.set(k, $(k).value.trim());
+  if($('canal').value) q.set('canal', $('canal').value);
+  $('blocoResultado').hidden = false; $('resultado').innerHTML = ''; $('resultado').appendChild(el('p', 'carregando', 'Calculando…'));
+  try{
+    const r = await api('/api/calculadora?' + q);
+    $('produtoInfo').textContent = r.produto ? `${r.produto} · custo hoje ${real(r.custo_atual)}` + (r.faltando?.length ? ` (sem custo: ${r.faltando.join(', ')})` : '') : (r.sku ? 'SKU sem produtos da tabela.' : '');
+    if(!canaisCarregados && !$('canal').value){
+      for(const c of r.canais){ const o = el('option', null, c.nome); o.value = c.id; $('canal').appendChild(o); }
+      canaisCarregados = true;
+    }
+    const box = $('resultado'); box.innerHTML = '';
+    for(const c of r.canais) box.appendChild(cartaoCanal(c, r));
+    // comparação
+    $('blocoComparar').hidden = r.canais.length < 2;
+    if(r.canais.length > 1){
+      const tab = el('table'), cab = el('tr');
+      for(const h of ['Marketplace', 'Tarifa', 'Frete', 'Imposto', 'Embalagem e outros', 'Pode pagar até', ...(r.custo_atual != null ? ['Margem com seu custo'] : [])]) cab.appendChild(el('th', null, h));
+      const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+      const ord = [...r.canais].sort((a, b) => (b.conta?.custo_maximo ?? -1e9) - (a.conta?.custo_maximo ?? -1e9));
+      for(const c of ord){
+        const k = c.conta, tr = el('tr');
+        tr.append(el('td', null, c.nome), el('td', 'dinheiro', k ? real(k.tarifa) : '—'), el('td', 'dinheiro', k ? real(k.frete) : '—'), el('td', 'dinheiro', k ? real(k.imposto) : '—'),
+          el('td', 'dinheiro', k ? real(k.embalagem + (k.outros || 0)) : '—'), el('td', 'dinheiro ' + (k && k.custo_maximo <= 0 ? 'neg' : ''), k ? real(k.custo_maximo) : '—'));
+        if(r.custo_atual != null) tr.appendChild(el('td', 'dinheiro ' + (k?.margem_atual < 0 ? 'neg' : ''), k ? pct(k.margem_atual) : '—'));
+        tb.appendChild(tr);
+      }
+      tab.appendChild(tb); $('comparar').innerHTML = ''; $('comparar').appendChild(tab);
+    }
+  }catch(e){ $('resultado').innerHTML = ''; aviso(e.message); }
+}
+$('form').onsubmit = (ev) => { ev.preventDefault(); calcular(); };
+for(const id of ['canal', 'tipo', 'envio', 'amazon']) $(id).onchange = calcular;
+for(const id of ['preco', 'margem', 'outros', 'sku', 'item']) $(id).addEventListener('change', calcular);
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

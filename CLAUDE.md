@@ -88,6 +88,14 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Responder = escrita só pela tela, com confirmação (limites: pergunta 2.000, pós-venda 350, chat
   1.000). Mensagens padrão em `mensagens_modelos`, com {comprador} {produto} {pedido}; a tela coloca
   o texto no campo e o vendedor edita antes de enviar. Mensagem de comprador é dado pessoal: nada no MCP.
+- Calculadora reversa (`calculadora.js`, tela `public/calculadora.html`, `GET /api/calculadora?preco=&margem=&sku=`):
+  preço de venda + margem -> quanto se pode pagar no produto em cada marketplace (custo máximo =
+  preço − tarifa − frete − imposto − embalagem − outros − margem). ML: tarifa de listing_prices na
+  categoria do anúncio da conta com os MESMOS produtos do SKU (senão um que os contenha, a prevista
+  pelo nome ou a categoria que mais vende); frete médio Mercado Envios (sem Flex) do anúncio ou da
+  conta na faixa abaixo/acima de R$ 79 — medido: o vendedor paga frete também abaixo de R$ 79; Flex =
+  entrega_flex − bônus médio. Shopee: tabela medida (`tarifaShopee`). Amazon: média real do
+  financeiro (`taxasDosLancamentos`). Sem ferramenta MCP (tem dado da Amazon).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
 - Flex do ML (`custos.js#freteFlex`): o Mercado Pago NÃO cobra o frete do `/costs` em venda Flex;
