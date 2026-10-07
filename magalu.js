@@ -194,7 +194,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   }
 
   // GET na API do vendedor. 401 = renova o token uma vez; 429 = espera e tenta de novo.
-  async function mg(caminho, params = {}) {
+  // pessoais: só a tela de comandas (o nome do cliente vai impresso); o resto sai sem.
+  async function mg(caminho, params = {}, { pessoais = false } = {}) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v != null && v !== '') qs.set(k, String(v));
     let r, renovou = false;
@@ -211,7 +212,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     const j = await r.json().catch(() => null);
     if (r.status === 401 || r.status === 403) throw erro(`A Magalu recusou o acesso (${r.status}${j?.message ? ': ' + j.message : ''}). Confira se a loja autorizou todas as permissões.`, 401);
     if (!r.ok) throw erro(`Magalu: ${j?.message || j?.detail?.[0]?.msg || j?.error || `HTTP ${r.status}`}`, r.status >= 500 ? 502 : r.status);
-    return semPessoais(j);
+    return pessoais ? j : semPessoais(j);
   }
 
   // Cópia local: pedidos e análise financeira (1ª leitura 152 dias, em janelas de 15 dias pela data

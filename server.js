@@ -2013,11 +2013,14 @@ const amazonMod = require('./amazon.js').criar({ D, janela });
 Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
 Object.assign(routes, require('./calculadora.js').criar({ D, ml, amazon: amazonMod }).rotas);
-Object.assign(routes, require('./leroy.js').criar({ D, janela }).rotas);
+const leroyMod = require('./leroy.js').criar({ D, janela });
+Object.assign(routes, leroyMod.rotas);
 // Magalu (magalu.js): conexão da loja. Retorno da autorização em localhost (/magalu/callback, ver tratarPainel).
 const magaluMod = require('./magalu.js').criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel: () => portaPainel,
   enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a), pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, magaluMod.rotas);
+// Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
+Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod }).rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 

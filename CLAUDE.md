@@ -258,6 +258,16 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   404), em segundo plano, 3 por vez, relidos a cada 6 h (`magalu_anuncios`). Vários anúncios usam um código numérico da
   Magalu no lugar do SKU: o vendedor digita o "SKU do painel" (`sku_vinculos`, canal `magalu`, `PUT /api/magalu/sku-vinculo`)
   e ele dá o custo nos Anúncios e nos Pedidos (`linhasDe` ctx.vinculos; `sku_magalu` guarda o código original).
+- Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
+  envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
+  VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta) —
+  numeradas por categoria e DIA na 1ª vez que aparecem (`numerar`, tabela `comandas`; o número não muda). ML:
+  /orders/search?shipping.status=ready_to_ship agrupado pelo envio (pack) + /shipments/{id} (tipo, receiver_name) +
+  /shipments/{id}/sla (prazo de despacho); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
+  Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
+  (vai impresso, em letra grande, para as câmeras). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
+  confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Código de barras Code 128 em
+  `public/codigo128.js` (testado). Nada no MCP (`test-comandas.js`).
 - Campanhas da Amazon e da Leroy (`campanhas-canais.js`, tela `public/campanhas-canais.html?conta=amazon|leroy`; o menu
   troca Campanhas por ela): (1) preço promocional com início e fim em cada anúncio, agrupado pelo período,
   com o resultado (vendas e lucro no período contra os mesmos dias antes); criar/encerrar só pelo clique, com

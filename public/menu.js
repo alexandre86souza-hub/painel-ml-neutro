@@ -23,12 +23,14 @@
     amazon: '<path d="M4 9h16v10H4z"/><path d="M8 9V6h8v3"/><path d="M7 14c3 2 7 2 10 0"/>',
     leroy: '<path d="M3 11 12 4l9 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
     magalu: '<path d="M4 7h16v12H4z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12l3 3 3-3"/>',
+    comandas: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     publicar: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 9v6M9 12h6"/>',
     navegador: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.4 2.6 2.4 12.8 0 16M12 4c-2.4 2.6-2.4 12.8 0 16"/>',
     config: '<path d="M5 8h14M5 16h14"/><circle cx="10" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/>',
   };
   const ITENS = [
     ['/geral.html', 'Todas as contas', 'geral'],
+    ['/comandas.html', 'Comandas', 'comandas'],
     ['/', 'Dashboard', 'dashboard'],
     ['/vendas.html?dias=1', 'Vendas Hoje', 'hoje'],
     ['/vendas.html', 'Pedidos', 'pedidos'],

@@ -1748,6 +1748,55 @@ function skuVinculoGravar(canal, sku, skuPainel) {
     ON CONFLICT(canal, sku) DO UPDATE SET sku_painel=excluded.sku_painel, em=excluded.em`).run(canal, sku, skuPainel, new Date().toISOString());
 }
 
+// Comandas de separação (comandas.js): uma por envio pendente, numerada por categoria e dia. Do
+// cliente, só o nome (vai impresso na comanda, para as câmeras da expedição).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS comandas (
+    chave       TEXT PRIMARY KEY,
+    categoria   TEXT NOT NULL,
+    dia         TEXT NOT NULL,
+    numero      INTEGER NOT NULL,
+    dados       TEXT NOT NULL,
+    criada_em   TEXT NOT NULL,
+    impressa_em TEXT,
+    impressoes  INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS comandas_dia ON comandas(dia, categoria);
+`);
+const COMANDA_DADOS = ['canal', 'loja', 'pedido', 'pedidos', 'envio', 'cliente', 'prazo', 'itens', 'etapa'];
+const dadosComanda = (x) => JSON.stringify(Object.fromEntries(COMANDA_DADOS.map((k) => [k, x[k] ?? null])));
+function comandasDe(chaves) {
+  const st = db.prepare('SELECT 1 FROM comandas WHERE chave=?');
+  return new Set(chaves.filter((c) => st.get(c)));
+}
+const comandasDoDia = (dia) => db.prepare('SELECT categoria, dia, numero FROM comandas WHERE dia=?').all(dia);
+function comandasCriar(lista) {
+  const st = db.prepare('INSERT OR IGNORE INTO comandas (chave, categoria, dia, numero, dados, criada_em) VALUES (?,?,?,?,?,?)');
+  const agora = new Date().toISOString();
+  db.exec('BEGIN');
+  try { for (const x of lista) st.run(x.chave, x.categoria, x.dia, x.numero, dadosComanda(x), agora); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+function comandasAtualizar(lista) {
+  const st = db.prepare('UPDATE comandas SET dados=? WHERE chave=?');
+  db.exec('BEGIN');
+  try { for (const x of lista) st.run(dadosComanda(x), x.chave); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+function comandasListar(chaves) {
+  const st = db.prepare('SELECT * FROM comandas WHERE chave=?');
+  return chaves.map((c) => st.get(c)).filter(Boolean).map((r) => ({ chave: r.chave, categoria: r.categoria, dia: r.dia, numero: r.numero,
+    criada_em: r.criada_em, impressa_em: r.impressa_em, impressoes: r.impressoes, ...JSON.parse(r.dados) }));
+}
+function comandasImpressas(chaves, impressa) {
+  const marcar = db.prepare('UPDATE comandas SET impressa_em=?, impressoes=impressoes+1 WHERE chave=?');
+  const desmarcar = db.prepare('UPDATE comandas SET impressa_em=NULL WHERE chave=?');
+  const agora = new Date().toISOString();
+  db.exec('BEGIN');
+  try { for (const c of chaves) { if (impressa) marcar.run(agora, c); else desmarcar.run(c); } db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
 module.exports = {
   db, DB_FILE, cifrar, decifrar,
   configLer, configGravar,
@@ -1782,4 +1831,5 @@ module.exports = {
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar,
+  comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas,
 };
