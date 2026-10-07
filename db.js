@@ -1273,15 +1273,19 @@ if (!db.prepare('PRAGMA table_info(amazon_lancamentos)').all().some((c) => c.nam
   db.exec('ALTER TABLE amazon_lancamentos ADD COLUMN descricao TEXT');
   db.prepare("DELETE FROM estado WHERE chave='amazon_lanc_lido_em'").run();
 }
+// promocoes = JSON [{id, tipo, valor}] das promoções da venda (PromotionList do financeiro; valor =
+// desconto dado ao cliente). A releitura dos 92 dias é pela marca amazon_lanc_promocoes (amazon.js#sincronizar).
+colunaNova('amazon_lancamentos', 'promocoes TEXT');
 function amazonLancGravar(linhas) {
-  const st = db.prepare(`INSERT INTO amazon_lancamentos (chave, tipo, pedido, sku, quantidade, data, canal, receita, tarifa, frete, imposto_cobrado, tarifa_fixa, descricao)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  const st = db.prepare(`INSERT INTO amazon_lancamentos (chave, tipo, pedido, sku, quantidade, data, canal, receita, tarifa, frete, imposto_cobrado, tarifa_fixa, descricao, promocoes)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(chave) DO UPDATE SET tipo=excluded.tipo, pedido=excluded.pedido, sku=excluded.sku, quantidade=excluded.quantidade,
       data=excluded.data, canal=excluded.canal, receita=excluded.receita, tarifa=excluded.tarifa, frete=excluded.frete,
-      imposto_cobrado=excluded.imposto_cobrado, tarifa_fixa=excluded.tarifa_fixa, descricao=excluded.descricao`);
+      imposto_cobrado=excluded.imposto_cobrado, tarifa_fixa=excluded.tarifa_fixa, descricao=excluded.descricao, promocoes=excluded.promocoes`);
   db.exec('BEGIN');
   try {
-    for (const l of linhas) st.run(l.chave, l.tipo, l.pedido, l.sku, l.quantidade, l.data, l.canal, l.receita, l.tarifa, l.frete, l.imposto_cobrado, l.tarifa_fixa || 0, l.descricao || null);
+    for (const l of linhas) st.run(l.chave, l.tipo, l.pedido, l.sku, l.quantidade, l.data, l.canal, l.receita, l.tarifa, l.frete, l.imposto_cobrado, l.tarifa_fixa || 0, l.descricao || null,
+      l.promocoes?.length ? JSON.stringify(l.promocoes) : null);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   return linhas.length;
@@ -1566,6 +1570,91 @@ function urlPublicaRegistrar(url, provedor) {
 const urlsPublicasHistorico = (limite = 10) =>
   db.prepare('SELECT url, provedor, iniciada_em FROM urls_publicas ORDER BY id DESC LIMIT ?').all(limite);
 
+// Leroy Merlin (Mirakl, leroy.js): pedidos já sem dado de comprador (leroy.js#pedidoDe; as linhas
+// vão em JSON), transações do repasse (TL02) e ciclos de pagamento (IV01 AUTO_INVOICE).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS leroy_pedidos (
+    order_id    TEXT PRIMARY KEY,
+    data        TEXT,
+    status      TEXT,
+    atualizado  TEXT,
+    linhas      TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS leroy_ped_data ON leroy_pedidos(data);
+  CREATE TABLE IF NOT EXISTS leroy_transacoes (
+    id       TEXT PRIMARY KEY,
+    data     TEXT,
+    tipo     TEXT,
+    estado   TEXT,
+    valor    REAL,
+    pedido   TEXT,
+    linha    TEXT,
+    ciclo    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS leroy_tr_linha ON leroy_transacoes(linha);
+  CREATE TABLE IF NOT EXISTS leroy_ciclos (
+    id          TEXT PRIMARY KEY,
+    inicio      TEXT,
+    fim         TEXT,
+    previsto    TEXT,
+    valor       REAL,
+    vendas      REAL,
+    comissao    REAL,
+    reembolsos  REAL,
+    assinatura  REAL,
+    estado      TEXT
+  );
+`);
+// Nome do cliente (só nome e sobrenome, para a busca e a lista de Pedidos, como no ML) e foto do
+// produto nas linhas: coluna nova = relê os 152 dias para preencher os pedidos já copiados.
+if (!db.prepare('PRAGMA table_info(leroy_pedidos)').all().some((c) => c.name === 'cliente')) {
+  colunaNova('leroy_pedidos', 'cliente TEXT');
+  db.prepare("DELETE FROM estado WHERE chave='leroy_lido_em'").run();
+}
+function leroyPedidosGravar(lista) {
+  const st = db.prepare(`INSERT INTO leroy_pedidos (order_id, data, status, atualizado, linhas, cliente) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(order_id) DO UPDATE SET data=excluded.data, status=excluded.status, atualizado=excluded.atualizado, linhas=excluded.linhas,
+      cliente=COALESCE(excluded.cliente, leroy_pedidos.cliente)`);
+  db.exec('BEGIN');
+  try { for (const p of lista) st.run(p.order_id, p.data, p.status, p.atualizado, JSON.stringify(p.linhas), p.cliente ?? null); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const leroyPedidosPeriodo = (de, ate) => db.prepare('SELECT * FROM leroy_pedidos WHERE data >= ? AND data < ? ORDER BY data DESC')
+  .all(de, ate).map((p) => ({ ...p, linhas: JSON.parse(p.linhas) }));
+function leroyTransacoesGravar(lista) {
+  const st = db.prepare(`INSERT INTO leroy_transacoes (id, data, tipo, estado, valor, pedido, linha, ciclo) VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET estado=excluded.estado, valor=excluded.valor, ciclo=excluded.ciclo`);
+  db.exec('BEGIN');
+  try { for (const t of lista) st.run(t.id, t.data, t.tipo, t.estado, t.valor, t.pedido, t.linha, t.ciclo); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const leroyTransacoes = (desde = '') => db.prepare('SELECT * FROM leroy_transacoes WHERE data >= ? ORDER BY data').all(desde);
+// a transação mais antiga ainda não paga: a próxima leitura começa nela (pode mudar de situação)
+const leroyMaisAntigaAberta = () => db.prepare("SELECT MIN(data) d FROM leroy_transacoes WHERE estado <> 'PAID'").get()?.d || null;
+function leroyCiclosGravar(lista) {
+  const st = db.prepare(`INSERT INTO leroy_ciclos (id, inicio, fim, previsto, valor, vendas, comissao, reembolsos, assinatura, estado) VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET previsto=excluded.previsto, valor=excluded.valor, vendas=excluded.vendas, comissao=excluded.comissao,
+      reembolsos=excluded.reembolsos, assinatura=excluded.assinatura, estado=excluded.estado`);
+  db.exec('BEGIN');
+  try { for (const c of lista) st.run(c.id, c.inicio, c.fim, c.previsto, c.valor, c.vendas, c.comissao, c.reembolsos, c.assinatura, c.estado); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const leroyCiclos = () => db.prepare('SELECT * FROM leroy_ciclos ORDER BY fim DESC').all();
+// Frete de cada pedido digitado pelo vendedor (o que pagou no Melhor Envio). Fica mesmo se a loja
+// for desconectada: é dado do vendedor, não da Leroy.
+db.exec(`CREATE TABLE IF NOT EXISTS leroy_fretes (order_id TEXT PRIMARY KEY, valor REAL NOT NULL, em TEXT NOT NULL)`);
+function leroyFreteGravar(orderId, valor) {
+  if (valor == null) db.prepare('DELETE FROM leroy_fretes WHERE order_id=?').run(orderId);
+  else db.prepare(`INSERT INTO leroy_fretes (order_id, valor, em) VALUES (?,?,?)
+    ON CONFLICT(order_id) DO UPDATE SET valor=excluded.valor, em=excluded.em`).run(orderId, valor, new Date().toISOString());
+}
+const leroyFretes = () => new Map(db.prepare('SELECT order_id, valor FROM leroy_fretes').all().map((r) => [r.order_id, r.valor]));
+const leroyPedidoExiste = (orderId) => !!db.prepare('SELECT 1 FROM leroy_pedidos WHERE order_id=?').get(orderId);
+function leroyApagarTudo() { db.exec('DELETE FROM leroy_pedidos; DELETE FROM leroy_transacoes; DELETE FROM leroy_ciclos;'); }
+
 module.exports = {
   db, DB_FILE, cifrar, decifrar,
   configLer, configGravar,
@@ -1597,4 +1686,5 @@ module.exports = {
   mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
+  leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
 };

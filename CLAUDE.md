@@ -173,7 +173,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Cada loja é uma conta externa `shopee-{loja}` (como `amazon`): na lista do topo
   (`menu.js#TELAS`), identidade `marca_*:shopee-{loja}`, empresa `empresa:shopee-{loja}`
   (sem salvar = a da 1ª conta do ML) e em "Todas as contas". As respostas das telas são
-  montadas em `canais.js` (o mesmo formato das rotas do ML) — use-o para Magalu e Leroy.
+  montadas em `canais.js` (o mesmo formato das rotas do ML) — use-o para a Magalu (a Leroy já usa).
   Anúncios da Shopee (`shopee-anuncios.js`, tela `public/shopee-anuncios.html`; o menu troca
   `/anuncios.html` por ela): cópia em `shopee_anuncios` (relida a cada 6 h em segundo plano),
   preço muda em `update_price` (original_price). `has_promotion` também vale para ATACADO
@@ -218,13 +218,37 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `amazon_concorrencia`). A API só dá o código do vendedor: o nome NÃO é raspado do site
   (declaramos à Amazon que os dados vêm só da SP-API) — a tela tem o link da loja pública e o
   vendedor digita o nome (`amazon_vendedores`). Venda de concorrente não existe; só o BSR.
-- Leroy Merlin (`leroy.js`, tela `public/leroy.html`): por enquanto só a conexão. Plataforma Mirakl:
+- Leroy Merlin (`leroy.js`, tela `public/leroy.html`): conexão, vendas, lucro e repasses. Plataforma Mirakl:
   endereço do portal (*.mirakl.net, a API mora no mesmo host) + chave de API de um USUÁRIO da loja
   (header Authorization, sem Bearer; cifrada em `estado`) + ID da loja opcional. Gerar chave nova
   invalida a anterior daquele usuário: usar um usuário só do painel (o Bling usa outro). Diagnóstico
   (A01 conta, OR11 pedidos, IV01 documentos, TL02 transações) mostra a forma, sem dado de comprador
-  (`semPessoais`). Nada da Leroy no MCP (`test-leroy.js` reprova). Vendas/repasses: construir a
-  partir do diagnóstico com a loja real (via `canais.js`).
+  (`semPessoais`, que também tira os `order_additional_fields` customer-*/shipping-address-*). Nada
+  da Leroy no MCP (`test-leroy.js` reprova).
+  Vendas e lucro: conta externa `leroy` (lista do topo, `empresa:leroy`, `marca_*:leroy`, "Todas as
+  contas"); `/api/leroy/pedidos|performance|abc|vendas` montadas em `canais.js`. Cópia em
+  `leroy_pedidos` (só o que o lucro usa, `pedidoDe`: do comprador SÓ nome e sobrenome em `cliente`, como o
+  comprador_nome do ML — a leitura dos pedidos é a única com `mk(…, { pessoais: true })`; foto = caminho
+  /media/product/image/{uuid}, pública em {host}/mmp{caminho}; 1ª leitura 152 dias, depois `start_update_date`),
+  `leroy_transacoes` (TL02) e `leroy_ciclos` (IV01 AUTO_INVOICE), no máximo a cada 10 min. Por linha:
+  recebido = price + shipping_price − (total_commission + commission_vat) − reembolsos (amount +
+  shipping_amount) + commission_total_amount devolvida — medido: bate com as transações em 90 de 90
+  linhas. Tarifa = comissão líquida + reembolsos; frete = o que o vendedor pagou pela entrega do pedido
+  (contratada no Melhor Envio, digitada na coluna Frete da tela Pedidos: `POST /api/leroy/frete`, tabela
+  `leroy_fretes`; sem ela vale `empresa.entrega_propria`, marcado ≈) rateado − frete pago pelo cliente
+  (a Leroy o repassa); sem nenhum dos dois o lucro fica pendente.
+  Repasses (`GET /api/leroy/repasses`, tela leroy.html): ciclo fecha dia 10 e 25 (00h Brasília),
+  vencimento = fechamento + 25 dias; PAYABLE = próximo ciclo, PENDING = cliente ainda não recebeu.
+- Campanhas da Amazon e da Leroy (`campanhas-canais.js`, tela `public/campanhas-canais.html?conta=amazon|leroy`; o menu
+  troca Campanhas por ela): (1) preço promocional com início e fim em cada anúncio, agrupado pelo período,
+  com o resultado (vendas e lucro no período contra os mesmos dias antes); criar/encerrar só pelo clique, com
+  confirmação. Amazon: `purchasable_offer.discounted_price` (`amazon.js#mudarOferta`, um PATCH por SKU).
+  Leroy: PRI01 (`/api/offers/pricing/imports`, CSV `csvPrecosMirakl`, 1 por minuto, conferido no PRI02/PRI03)
+  — NUNCA OF24: ele zera os campos não enviados (estoque do Bling). PRI01 apaga os PREÇOS não enviados: oferta
+  com preço por canal/quantidade (`ofertaDe`.complexo) é recusada. (2) Promoções nas vendas, com resultado:
+  Amazon pela PromotionList do financeiro (`amazon_lancamentos.promocoes`, PromotionId = nome da promoção do
+  Seller Central; parte vem sem id); Leroy pelas promotions da linha do pedido e PR01 (/api/promotions).
+  Convites de cupom/oferta relâmpago/Prime da Amazon não têm API (a tela leva ao Seller Central). Nada no MCP.
 - Amazon Ads (`amazon-ads.js`, tela `public/amazon-ads.html`; no modo Amazon o menu troca
   `/ads.html` por ela): por enquanto só a conexão. Perfil de segurança do Login with Amazon
   (Client ID/Secret na tela, segredo e refresh cifrados), autorização em amazon.com/ap/oa com

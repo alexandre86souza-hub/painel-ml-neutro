@@ -72,7 +72,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=27"></script>
+    <script src="/menu.js?v=28"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -182,9 +182,10 @@ function aviso(t, tipo = 'erro'){ const m = $('msg'); m.className = tipo; m.text
 // ?conta=amazon: identidade e impostos da Amazon (escolhida na lista de contas do topo).
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
 const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
-const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE;
-const NOME_CANAL = NA_AMAZON ? 'Amazon' : 'Shopee';
-const EXT = NA_AMAZON ? 'amazon' : NA_SHOPEE ? 'shopee-' + LOJA_SHOPEE : null;
+const NA_LEROY = new URLSearchParams(location.search).get('conta') === 'leroy';
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : 'Shopee';
+const EXT = NA_AMAZON ? 'amazon' : NA_LEROY ? 'leroy' : NA_SHOPEE ? 'shopee-' + LOJA_SHOPEE : null;
 const QA = EXT ? '?conta=' + EXT : '';
 const selConta = $('selConta');
 async function carregarContas(){
@@ -225,8 +226,9 @@ async function carregarEmpresa(){
     const e = await api('/api/empresa' + QA);
     $('inRazao').value = e.razao_social; $('inCnpj').value = e.cnpj; $('inRegime').value = e.regime;
     $('inEmbPadrao').value = e.embalagem_padrao ?? '';
-    if (NA_SHOPEE) $('rotEmb').textContent = 'Embalagem por pedido';   // Shopee: uma caixa por pedido (shopee-vendas.js)
-    $('rotEntrega').hidden = !NA_SHOPEE; $('inEntrega').value = e.entrega_propria ?? '';
+    if (NA_SHOPEE || NA_LEROY) $('rotEmb').textContent = 'Embalagem por pedido';   // Shopee e Leroy: uma caixa por pedido
+    if (NA_LEROY) $('rotEntrega').firstChild.textContent = 'Custo médio da entrega por pedido (R$)';   // a Leroy repassa o frete pago pelo cliente
+    $('rotEntrega').hidden = !(NA_SHOPEE || NA_LEROY); $('inEntrega').value = e.entrega_propria ?? '';
     $('rotFlex').hidden = NA_EXT; $('inFlex').value = e.entrega_flex ?? '';
     $('impostos').innerHTML = '';
     if(e.impostos.length) for(const i of e.impostos) linhaImposto(i.nome, i.pct);
@@ -243,7 +245,7 @@ $('formEmpresa').onsubmit = async (ev) => {
   try{
     const e = await enviar('PUT', '/api/empresa' + QA, { razao_social: $('inRazao').value, cnpj: $('inCnpj').value,
       regime: $('inRegime').value, impostos, embalagem_padrao: $('inEmbPadrao').value,
-      ...(NA_SHOPEE ? { entrega_propria: $('inEntrega').value } : {}), ...(!NA_EXT ? { entrega_flex: $('inFlex').value } : {}) });
+      ...(NA_SHOPEE || NA_LEROY ? { entrega_propria: $('inEntrega').value } : {}), ...(!NA_EXT ? { entrega_flex: $('inFlex').value } : {}) });
     aviso(`Dados salvos. Imposto total: ${String(e.imposto_total).replace('.', ',')}% sobre o faturamento.`, 'ok');
   }catch(err){ aviso(err.message); }
 };
@@ -363,7 +365,7 @@ async function carregarMarca(){
     const m = await api('/api/marca' + QA);
     $('mNome').value = m.nome_proprio || '';
     $('mNome').placeholder = m.nome;
-    if(NA_EXT) $('mSub').textContent = `Nome e logo da ${NA_AMAZON ? 'Amazon' : 'loja da Shopee'}. Aparecem no menu das telas dela e no cartão dela em Todas as contas.`;
+    if(NA_EXT) $('mSub').textContent = `Nome e logo da ${NA_AMAZON ? 'Amazon' : NA_LEROY ? 'loja na Leroy Merlin' : 'loja da Shopee'}. Aparecem no menu das telas dela e no cartão dela em Todas as contas.`;
     else if(m.conta) $('mSub').textContent = `Nome e logo da conta selecionada no topo (${m.nome}). Aparecem no menu e no título das telas enquanto ela estiver selecionada; cada conta conectada tem os seus.`;
     $('mRemover').hidden = !m.tem_logo;
     pintarPrevia(m.tem_logo ? '/api/marca/logo?' + (EXT ? 'conta=' + EXT + '&' : '') + 'v=' + encodeURIComponent(m.v) : null);

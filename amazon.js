@@ -106,6 +106,7 @@ const FEE_FIXA = /^FBA|ClosingFee$/;
 const valor = (m) => Number(m?.CurrencyAmount ?? m?.currencyAmount ?? m?.Amount ?? 0) || 0;
 const dataIso = (d) => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
 const r2 = (v) => Math.round(v * 100) / 100;
+const CC = require('./campanhas-canais.js');
 
 // Função pura: testada.
 // Pedido com 2+ unidades do mesmo item (FBA): a Amazon manda uma linha por unidade, com o MESMO
@@ -116,7 +117,13 @@ function lancamentosDe(fe) {
   const item = (tipo, ev, it, cargas, taxas, promos) => {
     let receita = 0, imposto = 0, tarifa = 0, frete = 0, fixa = 0, fba = false;
     for (const c of cargas || []) { const v = valor(c.ChargeAmount); if (/Tax$/i.test(c.ChargeType || '')) imposto += v; else receita += v; }
-    for (const p of promos || []) receita += valor(p.PromotionAmount);
+    const promocoes = [];
+    for (const p of promos || []) {
+      receita += valor(p.PromotionAmount);
+      // PromotionId = nome da promoção criada no Seller Central (ex.: "Desconto percentual 2026/07/31 …");
+      // medido em 07/10/2026: parte vem sem id (fica "sem identificação" no resultado)
+      if (valor(p.PromotionAmount)) promocoes.push({ id: p.PromotionId || null, tipo: p.PromotionType || null, valor: r2(-valor(p.PromotionAmount)) });
+    }
     for (const f of taxas || []) {
       const v = -valor(f.FeeAmount);   // a Amazon manda taxa negativa; aqui custo é positivo
       if (/^FBA/.test(f.FeeType || '')) fba = true;
@@ -130,7 +137,8 @@ function lancamentosDe(fe) {
     vistas.set(base, n);
     out.push({ chave: n > 1 ? `${base}|${n}` : base, tipo, pedido: ev.AmazonOrderId || null,
       sku: it.SellerSKU || null, quantidade: Number(it.QuantityShipped) || 0, data, canal: fba ? 'FBA' : 'proprio',
-      receita: r2(receita), tarifa: r2(tarifa), frete: r2(frete), imposto_cobrado: r2(imposto), tarifa_fixa: r2(fixa) });
+      receita: r2(receita), tarifa: r2(tarifa), frete: r2(frete), imposto_cobrado: r2(imposto), tarifa_fixa: r2(fixa),
+      ...(promocoes.length ? { promocoes } : {}) });
   };
   for (const ev of fe?.ShipmentEventList || []) {
     for (const it of ev.ShipmentItemList || []) item('venda', ev, it, it.ItemChargeList, it.ItemFeeList, it.PromotionList);
@@ -484,7 +492,10 @@ function criar({ D, janela }) {
   // própria marca de leitura: uma falha nela não atrasa as vendas.
   let lendo = null;
   function sincronizar(forcar = false) {
-    const ultima = D.configLer('amazon_lanc_lido_em');
+    // promoções das vendas (coluna promocoes): a 1ª leitura com este código relê os 92 dias. Marca
+    // própria, não a migração do banco: um painel antigo aberto releria sem gravar as promoções.
+    const comPromocoes = D.configLer('amazon_lanc_promocoes') === '1';
+    const ultima = comPromocoes ? D.configLer('amazon_lanc_lido_em') : null;
     const ultimaServ = D.configLer('amazon_serv_lido_em');
     const vencida = (u) => forcar || !u || Date.now() - Date.parse(u) >= 10 * 60e3;
     if (!vencida(ultima) && !vencida(ultimaServ)) return Promise.resolve(0);
@@ -526,6 +537,7 @@ function criar({ D, janela }) {
       await new Promise((ok) => setTimeout(ok, 2100));   // limite da Amazon: 0,5 chamada/s
     }
     D.configGravar('amazon_lanc_lido_em', inicio.toISOString());
+    D.configGravar('amazon_lanc_promocoes', '1');
     return total;
   }
 
@@ -937,7 +949,7 @@ function criar({ D, janela }) {
     if (!recarregar && cacheAnuncios && Date.now() - cacheAnuncios.em < 10 * 60e3) return cacheAnuncios.dados;
     const vendedor = await idVendedor();
     const lista = [];
-    let params = { marketplaceIds: BR, includedData: 'summaries,offers,fulfillmentAvailability', pageSize: 20 };
+    let params = { marketplaceIds: BR, includedData: 'summaries,offers,fulfillmentAvailability,attributes', pageSize: 20 };
     for (let p = 0; p < 200; p++) {
       const r = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}`, params);
       lista.push(...(r.items || []));
@@ -962,10 +974,14 @@ function criar({ D, janela }) {
       const fba = disp.some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT');
       const estoque = disp.reduce((a, d) => a + (Number(d.quantity) || 0), 0);
       const cs = C.custoDoSku(it.sku, mapa);
+      const po = (it.attributes?.purchasable_offer || []).find((o) => o.marketplace_id === BR && (!o.audience || o.audience === 'ALL'));
+      const dp = po?.discounted_price?.[0]?.schedule?.[0];
+      const desconto = dp?.value_with_tax != null ? { preco: Number(dp.value_with_tax), inicio: dp.start_at || null, fim: dp.end_at || null } : null;
+      const cheio = po?.our_price?.[0]?.schedule?.[0]?.value_with_tax != null ? Number(po.our_price[0].schedule[0].value_with_tax) : null;
       const m = taxas.mediaSku(it.sku, fba ? 'FBA' : 'proprio') || taxas.mediaCanal(fba ? 'FBA' : 'proprio');
       return { sku: it.sku, asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
         nome_amazon: s.itemName || null, foto: s.mainImage?.link || fotos.get(it.sku)?.foto || null, status: s.status || [],
-        tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null,
+        tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null, cheio, desconto,
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',
         vendas_30: v30.get(it.sku)?.u || 0, faturamento_30: r2(v30.get(it.sku)?.f || 0),
         custo_unit: cs.custo, tarifa_pct: m?.tarifa_pct ?? null, fixa_un: m?.fixa_un ?? null, frete_un: m?.frete_un ?? null, armazem_un: m?.armazem_un ?? 0,
@@ -983,6 +999,13 @@ function criar({ D, janela }) {
     const v = Number(String(preco).replace(',', '.'));
     if (!Number.isFinite(v) || v <= 0 || v > 100000) throw erro('Preço inválido.');
     const novo = Math.round(v * 100) / 100;
+    const r = await mudarOferta(sku, (o) => ({ ...o, our_price: [{ schedule: [{ value_with_tax: novo }] }] }),
+      { marketplace_id: BR, currency: 'BRL', our_price: [{ schedule: [{ value_with_tax: novo }] }] });
+    return { sku, preco: novo, ...r };
+  }
+  // Muda a oferta ao consumidor de um SKU (lida na hora): mudar(oferta) devolve a nova; sem oferta
+  // ao consumidor, usa `nova` (ou recusa, se null). Mínimo/máximo e a oferta B2B ficam como estão.
+  async function mudarOferta(sku, mudar, nova = null) {
     const vendedor = await idVendedor();
     const caminho = `/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`;
     const atual = await sp(caminho, { marketplaceIds: BR, includedData: 'summaries,attributes' });
@@ -994,9 +1017,9 @@ function criar({ D, janela }) {
     const valor = ofertas.map((o) => {
       if (o.marketplace_id !== BR || !ehConsumidor(o) || mudou) return o;
       mudou = true;
-      return { ...o, our_price: [{ schedule: [{ value_with_tax: novo }] }] };
+      return mudar(o);
     });
-    if (!mudou) valor.push({ marketplace_id: BR, currency: 'BRL', our_price: [{ schedule: [{ value_with_tax: novo }] }] });
+    if (!mudou) { if (!nova) throw erro(`${sku}: a Amazon não tem oferta ao consumidor para este SKU.`, 409); valor.push(nova); }
     const r = await spEscrever('PATCH', caminho, { marketplaceIds: BR }, {
       productType: tipo, patches: [{ op: 'replace', path: '/attributes/purchasable_offer', value: valor }] });
     cacheAnuncios = null;
@@ -1004,8 +1027,7 @@ function criar({ D, janela }) {
     if (r.status !== 'ACCEPTED' || problemas.length) {
       throw erro('A Amazon recusou: ' + ((problemas[0] || r.issues?.[0])?.message || r.status || 'sem detalhe'), 422);
     }
-    return { sku, preco: novo, status: r.status, envio: r.submissionId || null,
-      avisos: (r.issues || []).map((i) => i.message).slice(0, 5) };
+    return { status: r.status, envio: r.submissionId || null, avisos: (r.issues || []).map((i) => i.message).slice(0, 5) };
   }
 
   // Concorrentes de um ASIN (Product Pricing API, getItemOffers): até 20 ofertas novas, com
@@ -1086,6 +1108,63 @@ function criar({ D, janela }) {
         const c = i.asin ? conc.get(i.asin) : null;
         return { ...i, conc: c ? { outros: c.outros, menor_outro: c.menor_outro, destaque: c.destaque, voce_destaque: !!c.voce_destaque } : null };
       }) };
+    },
+    // Campanhas (tela campanhas-canais.html?conta=amazon): o preço promocional de cada anúncio
+    // (discounted_price, com início e fim) com o resultado, e as promoções que apareceram nas vendas
+    // (PromotionList do financeiro) com o resultado de cada uma. Nunca pelo MCP.
+    'GET /api/amazon/campanhas': async (url) => {
+      const d = await anunciosAmazon(url.searchParams.get('recarregar') === '1');
+      const agora = Date.now();
+      const de = new Date(agora - 152 * 864e5).toISOString();
+      const r = await linhasDePedidos(de, new Date(agora + 60e3).toISOString());
+      const promos = new Map();
+      for (const l of D.amazonLancPeriodo(new Date(agora - 200 * 864e5).toISOString(), '9999')) {
+        if (l.tipo !== 'venda' || !l.promocoes || !l.pedido) continue;
+        const k = `${l.pedido}|${l.sku}`;
+        promos.set(k, [...(promos.get(k) || []), ...JSON.parse(l.promocoes).map((p) => ({ ...p, nome: p.id || 'Promoção sem identificação' }))]);
+      }
+      const linhas = r.linhas.map((l) => ({ ...l, valida: l.valida ?? !['Canceled', 'cancelled'].includes(l.status), promocoes: promos.get(`${l.pedido}|${l.sku}`) || [] }));
+      return {
+        canal: 'amazon', imposto_pct: r.impostoPct, erro_leitura: r.erroLeitura,
+        anuncios: d.itens.map((i) => {
+          const sit = i.desconto ? CC.situacao(i.desconto.inicio, i.desconto.fim, agora) : null;
+          return { sku: i.sku, titulo: i.titulo, foto: i.foto, ativa: (i.status || []).includes('BUYABLE'), estoque: i.estoque,
+            cheio: i.cheio ?? i.preco, desconto: i.desconto, complexo: false, vendas_90: null, vendas_30: i.vendas_30, situacao: sit, canal: i.canal,
+            resultado: i.desconto && sit !== 'agendado' ? CC.resultadoDesconto(linhas, i.sku, i.desconto.inicio, i.desconto.fim, agora) : null };
+        }),
+        promocoes: CC.resultadoPromocoes(linhas), promocoes_loja: null,
+      };
+    },
+    // Preço promocional com início e fim nos SKUs escolhidos (um PATCH por SKU).
+    'POST /api/amazon/campanhas/desconto': async (_u, body) => {
+      const d = await anunciosAmazon(true);
+      const v = CC.validarDesconto(body, new Map(d.itens.filter((i) => (i.cheio ?? i.preco) != null).map((i) => [i.sku, i.cheio ?? i.preco])));
+      const resultados = [];
+      for (const it of v.itens) {
+        const sched = { start_at: v.inicio, end_at: v.fim, value_with_tax: it.preco };
+        try {
+          const r = await mudarOferta(it.sku, (o) => ({ ...o, discounted_price: [{ schedule: [sched] }] }));
+          resultados.push({ sku: it.sku, ok: true, ...r });
+        } catch (e) { resultados.push({ sku: it.sku, ok: false, erro: e.message }); }
+        await new Promise((ok) => setTimeout(ok, 250));
+      }
+      cacheAnuncios = null;
+      return { resultados, ok: resultados.filter((x) => x.ok).length, com_erro: resultados.filter((x) => !x.ok).length };
+    },
+    // Tira o preço promocional (o preço cheio continua).
+    'POST /api/amazon/campanhas/encerrar': async (_u, body) => {
+      const skus = [...new Set((Array.isArray(body?.skus) ? body.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];
+      if (!skus.length || skus.length > 200) throw erro('Escolha de 1 a 200 anúncios.');
+      const resultados = [];
+      for (const sku of skus) {
+        try {
+          const r = await mudarOferta(sku, (o) => { const { discounted_price, ...resto } = o; return resto; });
+          resultados.push({ sku, ok: true, ...r });
+        } catch (e) { resultados.push({ sku, ok: false, erro: e.message }); }
+        await new Promise((ok) => setTimeout(ok, 250));
+      }
+      cacheAnuncios = null;
+      return { resultados, ok: resultados.filter((x) => x.ok).length, com_erro: resultados.filter((x) => !x.ok).length };
     },
     // Muda o preço na Amazon (escrita na conta: só pela tela, com confirmação; nunca pelo MCP).
     'POST /api/amazon/anuncios/preco': async (_u, body) => {

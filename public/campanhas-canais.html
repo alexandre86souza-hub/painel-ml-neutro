@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campanhas</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,var(--cor-canal),var(--cor-canal2));border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#f1f5f9}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.azul{background:#dbeafe;color:#1d4ed8}.chip.cinza{background:#f1f3f6;color:#64748b}
+  .chip.sobe{background:#e6f4ea;color:#0b6b33}.chip.desce{background:#fde8e8;color:#b42318}
+  td.dinheiro{white-space:nowrap;text-align:right}
+  #msg.ok{background:#e6f4ea;color:#0b6b33;border-color:#b7e1c4}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:10px;overflow:hidden;flex-wrap:wrap}
+  .seg button{font:inherit;font-size:13px;padding:7px 12px;border:0;background:#fff;cursor:pointer;color:#334155}
+  .seg button[aria-pressed="true"]{background:var(--cor-canal);color:#fff}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+  .filtros input[type=search]{flex:1 1 240px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .form-camp{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:10px 0}
+  .form-camp label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#475569}
+  .form-camp input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;min-width:0}
+  .acoes-camp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .previa input{width:96px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:7px}
+  .pos{color:#0b6b33}.neg{color:#b42318}
+  .bt.pequeno{padding:4px 10px;font-size:12px}
+  .links-canal{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .links-canal a{font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:10px;padding:7px 14px;color:var(--ink);text-decoration:none;background:#fff}
+  .recusas{margin-top:8px;font-size:13px;color:#b42318;white-space:pre-wrap}
+  td input[type=checkbox]{width:16px;height:16px}
+  .skus{font-size:12px;color:#64748b;margin-top:4px}
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=28"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1 id="titulo">Campanhas</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt"></p>
+    <button type="button" class="bt" id="btReler">Atualizar</button>
+  </div>
+  <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
+
+  <section class="bloco">
+    <h2>Promoções para participar</h2>
+    <div id="participar"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Resultado das promoções</h2>
+    <p class="sub" id="promoSub"></p>
+    <div class="tabela-rolagem" id="promocoes"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Descontos nos anúncios</h2>
+    <p class="sub" id="descSub"></p>
+    <div class="tabela-rolagem" id="grupos"></div>
+  </section>
+
+  <section class="bloco">
+    <div class="topo-bloco">
+      <div>
+        <h2>Criar ou encerrar desconto</h2>
+        <p class="sub" id="criarSub"></p>
+      </div>
+    </div>
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-f="ativo" aria-pressed="false">Em desconto</button>
+        <button type="button" data-f="agendado" aria-pressed="false">Agendados</button>
+        <button type="button" data-f="encerrado" aria-pressed="false">Encerrados</button>
+        <button type="button" data-f="sem" aria-pressed="false">Sem desconto</button>
+      </div>
+      <input type="search" id="busca" placeholder="Buscar por produto ou SKU" aria-label="Buscar anúncio">
+      <label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="soAtivos" checked> só anúncios ativos</label>
+    </div>
+    <div class="tabela-rolagem" id="lista"></div>
+    <div class="acoes-camp"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
+
+    <div id="painelAcao" hidden>
+      <h3 style="margin:18px 0 6px;font-size:15px">Com os <span id="qtdEsc">0</span> anúncio(s) escolhido(s)</h3>
+      <div class="form-camp">
+        <label>Desconto (%)<input id="inPct" type="number" min="1" max="90" step="0.5" value="5"></label>
+        <label>Início<input id="inIni" type="date"></label>
+        <label>Fim<input id="inFim" type="date"></label>
+      </div>
+      <div class="acoes-camp">
+        <button type="button" class="bt" id="btPrevia">Ver prévia</button>
+        <button type="button" class="bt" id="btEncerrar">Encerrar o desconto dos escolhidos</button>
+        <button type="button" class="bt" id="btLimpar">Desmarcar todos</button>
+      </div>
+      <div id="previa" class="tabela-rolagem previa" hidden></div>
+      <div class="acoes-camp" id="acoesPrevia" hidden>
+        <button type="button" class="bt primario" id="btAplicar">Aplicar</button>
+        <span class="sub" id="resumoPrevia"></span>
+      </div>
+      <div class="recusas" id="recusas"></div>
+    </div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=8"></script>
+<script>
+// ?conta=amazon | leroy. Os dados vêm de /api/{canal}/campanhas; criar e encerrar mudam a loja
+// (só pelo clique, com confirmação). Nada desta tela vai para o MCP.
+const CANAL = new URLSearchParams(location.search).get('conta') === 'leroy' ? 'leroy' : 'amazon';
+const NOME = CANAL === 'leroy' ? 'Leroy Merlin' : 'Amazon';
+document.documentElement.style.setProperty('--cor-canal', CANAL === 'leroy' ? '#5a9a1a' : '#232f3e');
+document.documentElement.style.setProperty('--cor-canal2', CANAL === 'leroy' ? '#3d6e0f' : '#37475a');
+$('titulo').textContent = 'Campanhas — ' + NOME;
+document.title = 'Campanhas ' + NOME;
+$('topoTxt').textContent = `Promoções e descontos na ${NOME}, com o resultado de cada um: vendas e lucro no período contra os mesmos dias antes.`;
+$('criarSub').textContent = CANAL === 'leroy'
+  ? 'Preço promocional com início e fim em cada oferta. A Leroy aceita uma mudança de preços por minuto e leva alguns minutos para aplicar. Se o Bling também manda preço para a Leroy, ele pode sobrescrever o desconto.'
+  : 'Preço promocional (preço de oferta) com início e fim em cada anúncio. A Amazon leva alguns minutos para aplicar. Cupons, ofertas relâmpago e descontos Prime só no Seller Central.';
+
+const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
+const diaInput = (ms) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+function cartao(rot, valor, nota, destaque){
+  const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || ''));
+  return c;
+}
+const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(corpo) });
+const SIT = { ativo: ['em desconto', 'verde'], agendado: ['agendado', 'azul'], encerrado: ['encerrado', 'cinza'] };
+const chipSit = (s) => el('span', 'chip ' + (SIT[s]?.[1] || ''), SIT[s]?.[0] || 'sem desconto');
+function variacaoTxt(atual, antes){
+  if(!antes) return el('span', 'chip', atual ? 'sem venda antes' : '—');
+  const d = (atual - antes) / Math.abs(antes);
+  return el('span', 'chip ' + (Math.abs(d) < 0.005 ? '' : d > 0 ? 'sobe' : 'desce'), `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${pct(Math.abs(d), 0)}`);
+}
+const lucroTxt = (x) => (x.sem_lucro ? `lucro pendente (${numero(x.sem_lucro)} venda(s) sem ${CANAL === 'leroy' ? 'frete' : 'custo'})` : 'lucro ' + real(x.lucro));
+
+let dados = null, filtro = 'todos', mostrar = 200;
+const escolhidos = new Set();
+
+async function carregar(recarregar){
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', `Perguntando à ${NOME}… ${CANAL === 'amazon' ? 'A Amazon manda os anúncios de 20 em 20: pode levar até 1 minuto.' : ''}`));
+  try{
+    dados = await api(`/api/${CANAL}/campanhas${recarregar ? '?recarregar=1' : ''}`);
+    aviso(dados.erro_leitura ? `Não consegui ler as novidades da ${NOME} agora (${dados.erro_leitura}). Os números são da última leitura.` : '');
+    pintarCartoes(); pintarParticipar(); pintarPromocoes(); pintarGrupos(); pintarLista();
+  }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
+}
+
+function pintarCartoes(){
+  const a = dados.anuncios;
+  const n = (s) => a.filter((x) => x.situacao === s).length;
+  const pr = dados.promocoes.reduce((s, p) => ({ fat: s.fat + p.faturamento, desc: s.desc + p.desconto }), { fat: 0, desc: 0 });
+  const box = $('cartoes'); box.innerHTML = '';
+  box.append(
+    cartao('Em desconto agora', numero(n('ativo')), `${numero(n('agendado'))} agendado(s) · ${numero(n('encerrado'))} encerrado(s)`, true),
+    cartao('Anúncios', numero(a.length), `${numero(a.filter((x) => x.ativa).length)} ativo(s)`),
+    cartao('Vendido com promoções', real(pr.fat), `${real(pr.desc)} de desconto dado · últimos 5 meses`),
+  );
+}
+
+function pintarParticipar(){
+  const box = $('participar'); box.innerHTML = '';
+  if(CANAL === 'amazon'){
+    box.appendChild(el('p', 'sub', 'A Amazon não deixa outros sistemas lerem os convites de promoção (cupons, ofertas relâmpago, descontos Prime e ofertas da Amazon). Veja as que você pode participar no Seller Central; o resultado de cada uma aparece abaixo assim que houver venda com ela.'));
+    const l = el('div', 'links-canal');
+    for(const [t, u] of [['Promoções', 'https://sellercentral.amazon.com.br/promotions/manage'], ['Cupons', 'https://sellercentral.amazon.com.br/coupons/']]){
+      const a = el('a', null, t + ' no Seller Central'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; l.appendChild(a);
+    }
+    box.appendChild(l);
+    return;
+  }
+  const lst = dados.promocoes_loja;
+  if(lst == null){ box.appendChild(el('p', 'sub', 'Não consegui ler as promoções da Leroy agora.')); return; }
+  if(!lst.length){ box.appendChild(el('p', 'sub', 'A Leroy não tem nenhuma promoção aberta para a sua loja agora (nem ativa, nem encerrada). Quando ela abrir uma, aparece aqui; os convites de campanha da Leroy também chegam pelo portal e por e-mail.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Promoção', 'Tipo', 'Situação', 'Período']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const p of lst){ const tr = el('tr'); tr.append(el('td', null, p.nome || p.id), el('td', null, p.tipo || '—'), el('td', null, p.situacao || '—'), el('td', null, `${dataBR(p.inicio)} a ${dataBR(p.fim)}`)); t.appendChild(tr); }
+  box.appendChild(t);
+}
+
+function pintarPromocoes(){
+  const box = $('promocoes'); box.innerHTML = '';
+  $('promoSub').textContent = CANAL === 'amazon'
+    ? 'Cada promoção que apareceu nas suas vendas dos últimos 5 meses (pelo financeiro da Amazon): pedidos, faturamento, desconto dado ao cliente e lucro. A Amazon não manda o nome de algumas (cupons e ofertas dela): ficam juntas em "sem identificação".'
+    : 'Cada promoção da Leroy que apareceu nas suas vendas dos últimos 5 meses: pedidos, faturamento, desconto e lucro.';
+  if(!dados.promocoes.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com promoção nos últimos 5 meses.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Promoção', 'Vendas entre', 'Pedidos', 'Unidades', 'Faturamento', 'Desconto dado', 'Lucro']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const p of dados.promocoes){
+    const tr = el('tr');
+    const nome = el('td'); nome.appendChild(document.createTextNode(p.id ? p.nome : 'Promoção sem identificação'));
+    if(p.skus.length) nome.appendChild(el('div', 'skus', 'Mais vendidos: ' + p.skus.slice(0, 3).map((s) => `${s.sku} (${numero(s.unidades)} un.)`).join(' · ')));
+    const lu = el('td', 'dinheiro ' + (p.sem_lucro ? '' : p.lucro < 0 ? 'neg' : 'pos'), p.sem_lucro ? 'pendente' : real(p.lucro));
+    if(p.sem_lucro) lu.title = lucroTxt(p);
+    tr.append(nome, el('td', null, `${dataBR(p.primeira)} a ${dataBR(p.ultima)}`), el('td', null, numero(p.pedidos)), el('td', null, numero(p.unidades)),
+      el('td', 'dinheiro', real(p.faturamento)), el('td', 'dinheiro', real(p.desconto)), lu);
+    t.appendChild(tr);
+  }
+  box.appendChild(t);
+}
+
+// Descontos agrupados pelo período (descontos criados juntos = uma campanha), com a soma do resultado.
+function pintarGrupos(){
+  const box = $('grupos'); box.innerHTML = '';
+  const g = new Map();
+  for(const a of dados.anuncios){
+    if(!a.desconto) continue;
+    const k = `${a.desconto.inicio || ''}|${a.desconto.fim || ''}`;
+    const x = g.get(k) || { inicio: a.desconto.inicio, fim: a.desconto.fim, situacao: a.situacao, anuncios: 0, desc: 0,
+      d: { un: 0, fat: 0, lucro: 0, sem: 0 }, b: { un: 0, fat: 0 }, dias: null };
+    x.anuncios++; x.desc += a.cheio ? 1 - a.desconto.preco / a.cheio : 0;
+    if(a.resultado){ x.dias = a.resultado.dias; const r = a.resultado; x.d.un += r.durante.unidades; x.d.fat += r.durante.faturamento; x.d.lucro += r.durante.lucro; x.d.sem += r.durante.sem_lucro; x.b.un += r.antes.unidades; x.b.fat += r.antes.faturamento; }
+    g.set(k, x);
+  }
+  // encerrados há mais de 6 meses (ex.: restos de 2020 na Amazon) ficam só na lista abaixo, no filtro Encerrados
+  const antigo = (x) => x.situacao === 'encerrado' && x.fim && Date.parse(x.fim) < Date.now() - 183 * 864e5;
+  const todosGrupos = [...g.values()];
+  const grupos = todosGrupos.filter((x) => !antigo(x)).sort((a, b) => String(b.inicio).localeCompare(String(a.inicio)));
+  const antigos = todosGrupos.length - grupos.length;
+  $('descSub').textContent = `Preço promocional nos anúncios, agrupado pelo período (os criados juntos formam uma campanha). Resultado = vendas desses anúncios no período do desconto contra os mesmos dias antes${CANAL === 'leroy' ? ' (pedidos dos últimos 5 meses)' : ''}.`;
+  if(antigos) box.appendChild(el('p', 'sub', `${numero(antigos)} desconto(s) encerrado(s) há mais de 6 meses não aparecem aqui (estão na lista abaixo, em Encerrados).`));
+  if(!grupos.length){ box.appendChild(el('p', 'vazio', 'Nenhum desconto ativo, agendado ou recente.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Período', 'Situação', 'Anúncios', 'Desconto médio', 'Vendido no desconto', 'Mesmos dias antes', 'Variação', '']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const x of grupos){
+    const tr = el('tr');
+    const dur = el('td', 'dinheiro'); dur.appendChild(document.createTextNode(real(x.d.fat))); dur.appendChild(el('span', 'pequeno', `${numero(x.d.un)} un. · ${x.d.sem ? 'lucro pendente' : 'lucro ' + real(x.d.lucro)}`));
+    const ant = el('td', 'dinheiro'); ant.appendChild(document.createTextNode(real(x.b.fat))); ant.appendChild(el('span', 'pequeno', `${numero(x.b.un)} un.` + (x.dias ? ` · ${x.dias} dia(s)` : '')));
+    const var_ = el('td'); var_.appendChild(x.situacao === 'agendado' ? el('span', 'chip azul', 'ainda não começou') : variacaoTxt(x.d.fat, x.b.fat));
+    const sit = el('td'); sit.appendChild(chipSit(x.situacao));
+    const bt = el('button', 'bt pequeno', 'Ver anúncios'); bt.type = 'button';
+    bt.onclick = () => { filtroPara(x.situacao); $('busca').value = ''; grupoSel = `${x.inicio || ''}|${x.fim || ''}`; pintarLista(); $('lista').scrollIntoView({ behavior: 'smooth' }); };
+    const tb = el('td'); tb.appendChild(bt);
+    tr.append(el('td', null, `${dataBR(x.inicio)} a ${x.fim ? dataBR(x.fim) : 'sem fim'}`), sit, el('td', null, numero(x.anuncios)),
+      el('td', null, pct(x.desc / x.anuncios)), dur, ant, var_, tb);
+    t.appendChild(tr);
+  }
+  box.appendChild(t);
+}
+
+let grupoSel = null;
+function filtroPara(f){ filtro = f; for(const b of $('segFiltro').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.f === f)); }
+$('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtroPara(b.dataset.f); grupoSel = null; mostrar = 200; pintarLista(); };
+$('busca').oninput = () => { grupoSel = null; mostrar = 200; pintarLista(); };
+$('soAtivos').onchange = () => { mostrar = 200; pintarLista(); };
+$('btMais').onclick = () => { mostrar += 200; pintarLista(); };
+
+function pintarLista(){
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  const itens = dados.anuncios.filter((a) => {
+    if($('soAtivos').checked && !a.ativa) return false;
+    if(filtro === 'sem' ? a.desconto : filtro !== 'todos' && a.situacao !== filtro) return false;
+    if(grupoSel && (!a.desconto || `${a.desconto.inicio || ''}|${a.desconto.fim || ''}` !== grupoSel)) return false;
+    if(q && ![a.titulo, a.sku].some((t) => (t || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  // primeiro os que mais venderam (no desconto e no geral)
+  const vendeu = (a) => (a.resultado?.durante.unidades || 0) * 1e6 + (a.vendas_30 ?? a.vendas_90 ?? 0);
+  itens.sort((x, y) => vendeu(y) - vendeu(x));
+  const box = $('lista'); box.innerHTML = '';
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhum anúncio com esse filtro.')); $('btMais').hidden = true; return; }
+  const t = el('table'); const cab = el('tr');
+  const todos = el('input'); todos.type = 'checkbox'; todos.title = 'Marcar os mostrados'; todos.setAttribute('aria-label', 'Marcar todos os mostrados');
+  todos.checked = itens.slice(0, mostrar).every((a) => escolhidos.has(a.sku));
+  todos.onchange = () => { for(const a of itens.slice(0, mostrar)) if(!a.complexo) todos.checked ? escolhidos.add(a.sku) : escolhidos.delete(a.sku); pintarLista(); pintarAcao(); };
+  const th0 = el('th'); th0.appendChild(todos); cab.appendChild(th0);
+  for(const h of ['Anúncio', 'Preço cheio', 'Preço promocional', 'Período', 'Situação', 'Resultado no desconto']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const a of itens.slice(0, mostrar)){
+    const tr = el('tr');
+    const td0 = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = escolhidos.has(a.sku); cb.disabled = a.complexo;
+    cb.setAttribute('aria-label', 'Escolher ' + a.sku);
+    if(a.complexo) cb.title = 'Preço por canal ou quantidade: mude no portal';
+    cb.onchange = () => { cb.checked ? escolhidos.add(a.sku) : escolhidos.delete(a.sku); pintarAcao(); };
+    td0.appendChild(cb);
+    const sub = `${a.sku}` + (a.estoque != null ? ` · estoque ${numero(a.estoque)}` : '') + (a.ativa ? '' : ' · inativo') + (a.canal ? ` · ${a.canal === 'FBA' ? 'FBA' : 'envio próprio'}` : '');
+    const promo = el('td', 'dinheiro');
+    if(a.desconto){ promo.appendChild(document.createTextNode(real(a.desconto.preco))); if(a.cheio) promo.appendChild(el('span', 'pequeno', a.desconto.preco >= a.cheio ? 'acima do preço atual' : `${pct(1 - a.desconto.preco / a.cheio)} off`)); } else promo.textContent = '—';
+    const sit = el('td'); sit.appendChild(chipSit(a.situacao));
+    const res = el('td');
+    if(a.resultado){
+      const r = a.resultado;
+      res.appendChild(document.createTextNode(`${numero(r.durante.unidades)} un. · ${real(r.durante.faturamento)}`));
+      res.appendChild(el('span', 'pequeno', `antes: ${numero(r.antes.unidades)} un. · ${real(r.antes.faturamento)} · ${r.durante.sem_lucro ? 'lucro pendente' : 'lucro ' + real(r.durante.lucro)}`));
+    }else res.textContent = a.situacao === 'agendado' ? 'ainda não começou' : '—';
+    tr.append(td0, celulaProduto(a.foto, a.titulo, sub), el('td', 'dinheiro', real(a.cheio)), promo,
+      el('td', null, a.desconto ? `${dataBR(a.desconto.inicio)} a ${a.desconto.fim ? dataBR(a.desconto.fim) : 'sem fim'}` : '—'), sit, res);
+    t.appendChild(tr);
+  }
+  box.appendChild(t);
+  $('btMais').hidden = itens.length <= mostrar;
+  $('btMais').textContent = `Mostrar mais (${numero(itens.length - mostrar)} restantes)`;
+}
+
+function pintarAcao(){
+  $('painelAcao').hidden = !escolhidos.size;
+  $('qtdEsc').textContent = numero(escolhidos.size);
+  $('previa').hidden = true; $('acoesPrevia').hidden = true; $('recusas').textContent = '';
+}
+$('btLimpar').onclick = () => { escolhidos.clear(); pintarLista(); pintarAcao(); };
+$('inIni').value = diaInput(Date.now()); $('inFim').value = diaInput(Date.now() + 7 * 864e5);
+
+let previa = [];
+$('btPrevia').onclick = () => {
+  const p = Number($('inPct').value);
+  if(!(p > 0 && p < 90)){ aviso('Informe um desconto entre 1% e 90%.'); return; }
+  const mapa = new Map(dados.anuncios.map((a) => [a.sku, a]));
+  previa = [...escolhidos].map((s) => mapa.get(s)).filter((a) => a && a.cheio).map((a) => ({ sku: a.sku, titulo: a.titulo, cheio: a.cheio,
+    preco: Math.round(a.cheio * (1 - p / 100) * 100) / 100 }));
+  const box = $('previa'); box.innerHTML = '';
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Anúncio', 'Preço cheio', 'Preço promocional', 'Desconto']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const x of previa){
+    const tr = el('tr');
+    const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0.01'; inp.value = x.preco.toFixed(2); inp.setAttribute('aria-label', 'Preço promocional de ' + x.sku);
+    const off = el('td', null, pct(1 - x.preco / x.cheio));
+    inp.oninput = () => { x.preco = Number(inp.value); off.textContent = x.preco > 0 ? pct(1 - x.preco / x.cheio) : '—'; };
+    const tdi = el('td'); tdi.appendChild(inp);
+    tr.append(celulaProduto(null, x.titulo, x.sku), el('td', 'dinheiro', real(x.cheio)), tdi, off);
+    t.appendChild(tr);
+  }
+  box.appendChild(t); box.hidden = false;
+  $('acoesPrevia').hidden = false;
+  $('btAplicar').textContent = `Aplicar na ${NOME}`;
+  $('resumoPrevia').textContent = `${numero(previa.length)} anúncio(s), de ${dataBR($('inIni').value + 'T12:00:00')} a ${dataBR($('inFim').value + 'T12:00:00')}. Você pode mudar o preço de cada um antes de aplicar.`;
+};
+
+$('btAplicar').onclick = async () => {
+  if(!previa.length) return;
+  if(!confirm(`Colocar preço promocional em ${previa.length} anúncio(s) na ${NOME}, de ${dataBR($('inIni').value + 'T12:00:00')} a ${dataBR($('inFim').value + 'T12:00:00')}?`)) return;
+  $('btAplicar').disabled = true; $('recusas').textContent = '';
+  try{
+    const r = await post(`/api/${CANAL}/campanhas/desconto`, { itens: previa.map((x) => ({ sku: x.sku, preco: x.preco })), inicio: $('inIni').value, fim: $('inFim').value });
+    depoisDeEnviar(r, 'Desconto enviado');
+  }catch(e){ aviso(`A ${NOME} recusou: ${e.message}`); }
+  finally{ $('btAplicar').disabled = false; }
+};
+$('btEncerrar').onclick = async () => {
+  const skus = [...escolhidos].filter((s) => dados.anuncios.find((a) => a.sku === s)?.desconto);
+  if(!skus.length){ aviso('Nenhum dos escolhidos tem desconto.'); return; }
+  if(!confirm(`Encerrar o preço promocional de ${skus.length} anúncio(s) na ${NOME}? O preço volta ao cheio.`)) return;
+  $('btEncerrar').disabled = true; $('recusas').textContent = '';
+  try{ depoisDeEnviar(await post(`/api/${CANAL}/campanhas/encerrar`, { skus }), 'Encerramento enviado'); }
+  catch(e){ aviso(`A ${NOME} recusou: ${e.message}`); }
+  finally{ $('btEncerrar').disabled = false; }
+};
+
+function depoisDeEnviar(r, oque){
+  if(CANAL === 'amazon'){
+    const erros = (r.resultados || []).filter((x) => !x.ok);
+    aviso(`${oque} para ${numero(r.ok)} anúncio(s). A Amazon aplica em alguns minutos.` + (erros.length ? ` ${numero(erros.length)} recusado(s): veja abaixo.` : ''), erros.length ? '' : 'ok');
+    $('recusas').textContent = erros.map((x) => `${x.sku}: ${x.erro}`).join('\n');
+    if(!erros.length){ escolhidos.clear(); pintarAcao(); }
+    setTimeout(() => carregar(true), 4000);
+    return;
+  }
+  aviso(`${oque} à Leroy (${numero(r.ofertas)} oferta(s)). Conferindo a importação…`, 'ok');
+  acompanhar(r.import_id, 0);
+}
+// Leroy: a importação de preços roda na Mirakl; confere a cada 20 s por até 5 min.
+async function acompanhar(id, vez){
+  if(id == null){ aviso('A Leroy recebeu o arquivo, mas não informou o número da importação. Confira as ofertas daqui a alguns minutos.'); return; }
+  try{
+    const s = await api(`/api/leroy/campanhas/importacao?id=${encodeURIComponent(id)}`);
+    if(['WAITING', 'RUNNING'].includes(s.situacao) && vez < 15){ setTimeout(() => acompanhar(id, vez + 1), 20000); return; }
+    if(s.situacao === 'COMPLETE' && !s.com_erro){ aviso(`A Leroy aplicou os preços (${numero(s.ok)} oferta(s)).`, 'ok'); escolhidos.clear(); pintarAcao(); carregar(true); return; }
+    aviso(`Importação ${s.situacao === 'COMPLETE' ? 'terminou com erro' : s.situacao}: ${numero(s.ok || 0)} ok, ${numero(s.com_erro || 0)} com erro.` + (s.motivo ? ' ' + s.motivo : ''));
+    $('recusas').textContent = s.erros || '';
+  }catch(e){ aviso('Não consegui conferir a importação: ' + e.message); }
+}
+
+$('btReler').onclick = () => carregar(true);
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

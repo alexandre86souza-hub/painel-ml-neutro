@@ -58,6 +58,8 @@
   .prod img{width:36px;height:36px;object-fit:contain;background:#f2f3f5;border-radius:6px;flex:0 0 36px}
   .prod span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .pequeno{display:block;font-size:11px;color:var(--muted)}
+  .frete-leroy{display:block;margin-top:4px}
+  .frete-leroy input{width:88px;font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px}
   .neg{color:#b3261e;font-weight:700}
   .pos{color:#0b6b33;font-weight:700}
   tr.cancelada td{opacity:.5}
@@ -83,7 +85,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=27"></script>
+    <script src="/menu.js?v=28"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -172,10 +174,11 @@ async function api(caminho, opts){
 // ?conta=amazon: os pedidos da Amazon (escolhida na lista de contas do topo).
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
 const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
-const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE;
-const NOME_CANAL = NA_AMAZON ? 'Amazon' : 'Shopee';
+const NA_LEROY = new URLSearchParams(location.search).get('conta') === 'leroy';
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : 'Shopee';
 if(NA_AMAZON) document.querySelector('#segFiltro [data-f="full"]').textContent = 'FBA';
-if(NA_SHOPEE) document.querySelector('#segFiltro [data-f="full"]').hidden = true;
+if(NA_SHOPEE || NA_LEROY) document.querySelector('#segFiltro [data-f="full"]').hidden = true;
 if(NA_EXT){
   $('busca').placeholder = 'Buscar por produto, SKU ou nº do pedido';
   $('addConta').hidden = true;
@@ -251,7 +254,12 @@ function pintarResumo(r){
   if(r.estimadas){
     box.appendChild(el('p', 'sub', `${numero(r.estimadas)} venda(s) com tarifa estimada (≈): a Amazon só lança a tarifa real no envio. Até lá vale a média daquele produto.`));
   }
-  if(r.erro_leitura) box.appendChild(el('p', 'sub', 'Não consegui ler as novidades da Amazon agora (' + r.erro_leitura + '). Os números são da última leitura.'));
+  if(NA_LEROY && r.fretes_a_informar){
+    const p = el('p', 'sub', `${numero(r.fretes_a_informar)} pedido(s) sem o frete do Melhor Envio: digite o valor na coluna Frete de cada pedido. `
+      + (r.sem_entrega ? 'Enquanto isso o lucro deles fica pendente (ou informe um custo médio na ' : 'Enquanto isso vale o custo médio (≈) da '));
+    const ln = el('a', null, 'tela Empresa da Leroy'); ln.href = '/empresa.html?conta=leroy'; p.append(ln, r.sem_entrega ? ').' : '.'); box.appendChild(p);
+  }
+  if(r.erro_leitura) box.appendChild(el('p', 'sub', 'Não consegui ler as novidades da ' + NOME_CANAL + ' agora (' + r.erro_leitura + '). Os números são da última leitura.'));
 
   const al = $('alerta');
   $('listaAlerta').innerHTML = '';
@@ -264,6 +272,29 @@ function pintarResumo(r){
     if(r.sem_custo.length > 15) $('listaAlerta').appendChild(el('li', null, `e mais ${r.sem_custo.length - 15}…`));
     al.hidden = false;
   }else al.hidden = true;
+}
+
+// Leroy: o vendedor contrata o frete no Melhor Envio e digita aqui quanto pagou pelo PEDIDO.
+// Frete na tabela = esse valor (rateado entre os itens) − o frete que o cliente pagou (a Leroy repassa).
+function campoFreteLeroy(v){
+  const box = el('label', 'frete-leroy');
+  box.appendChild(el('span', 'pequeno', 'Melhor Envio (pedido)'));
+  const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.inputMode = 'decimal';
+  inp.placeholder = v.frete_estimado ? 'médio ' + real(v.custo_entrega) : 'R$'; inp.value = v.frete_pedido ?? '';
+  inp.title = `Cliente pagou ${real(v.frete_cliente)} de frete (a Leroy repassa). Digite quanto você pagou pela entrega do pedido ${v.pedido}.`;
+  const salvar = async () => {
+    const novo = inp.value.trim();
+    if(novo === String(v.frete_pedido ?? '')) return;
+    inp.disabled = true;
+    try{
+      await api('/api/leroy/frete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pedido: v.pedido, valor: novo }) });
+      await carregar();
+    }catch(e){ inp.disabled = false; alert(e.message); }
+  };
+  inp.addEventListener('change', salvar);
+  inp.addEventListener('keydown', (ev) => { if(ev.key === 'Enter') inp.blur(); });
+  box.appendChild(inp);
+  return box;
 }
 
 function pintarLista(){
@@ -291,7 +322,8 @@ function pintarLista(){
     const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(v.foto) im.src = v.foto;
     const nome = el('span'); nome.appendChild(document.createTextNode(v.titulo || v.item_id));
     const info = el('span', 'pequeno', `${v.full ? (NA_AMAZON ? 'FBA · ' : 'FULL · ') : ''}${v.sku || (NA_AMAZON && !v.itens_lidos ? 'itens ainda não lidos' : 'sem SKU')} · pedido ${v.pedido}`
-      + (v.comprador_nome || v.comprador ? ` · cliente ${v.comprador_nome || v.comprador}${v.comprador_nome && v.comprador ? ' (' + v.comprador + ')' : ''}` : '') + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_EXT && v.devolvido ? ' · reembolsada' : '') + (NA_SHOPEE && v.valida && !v.recebido_final ? ' · repasse provisório' : ''));
+      + (v.comprador_nome || v.comprador ? ` · cliente ${v.comprador_nome || v.comprador}${v.comprador_nome && v.comprador ? ' (' + v.comprador + ')' : ''}` : '') + (v.valida ? '' : ` · ${['cancelled', 'Canceled'].includes(v.status) ? 'cancelada' : v.status}`) + (NA_EXT && v.devolvido ? ' · reembolsada' : '') + (NA_SHOPEE && v.valida && !v.recebido_final ? ' · repasse provisório' : '')
+      + (NA_LEROY && v.valida ? (v.repasse === 'PAID' ? ' · repassado' : v.repasse === 'PAYABLE' ? ' · no próximo repasse' : ' · aguardando o cliente receber') : ''));
     const caixa = el('div'); caixa.append(nome, info);
     p.append(im, caixa); td.appendChild(p);
 
@@ -302,8 +334,9 @@ function pintarLista(){
       if(v.componentes.length > 1) prodTd.title = v.componentes.map((c) => `${c.sku}: ${real(c.custo)}`).join('\n');
       prodTd.appendChild(el('span', 'pequeno', `${real(v.custo_unit)}/un.`));
     }
-    const freteTd = el('td', null, v.frete == null ? '…' : real(v.frete));
-    if(v.frete == null) freteTd.title = 'Frete ainda não consultado';
+    const freteTd = el('td', v.frete_estimado ? 'estimado' : null, v.frete == null ? (NA_LEROY ? '—' : '…') : (v.frete_estimado ? '≈ ' : '') + real(v.frete));
+    if(v.frete == null && !NA_LEROY) freteTd.title = 'Frete ainda não consultado';
+    if(NA_LEROY && v.valida) freteTd.appendChild(campoFreteLeroy(v));
     const lucroTd = el('td', v.lucro == null ? null : v.lucro < 0 ? 'neg' : 'pos', v.lucro == null ? '—' : real(v.lucro));
     const link = el('td'); const a = el('a', null, 'Ver'); a.href = v.link; a.target = '_blank'; a.rel = 'noopener'; link.appendChild(a);
     // Amazon "Pending": sem preço até confirmar o pagamento -> último preço do SKU, com ≈
@@ -326,12 +359,13 @@ function pintarLista(){
 async function carregar(){
   $('msg').style.display = 'none';
   $('composicao').innerHTML = '';
-  $('composicao').appendChild(el('p', 'carregando', NA_SHOPEE ? 'Carregando os pedidos da Shopee… Na primeira vez o painel lê 5 meses de pedidos (uns 2 minutos).'
+  $('composicao').appendChild(el('p', 'carregando', NA_LEROY ? 'Carregando os pedidos da Leroy Merlin… Na primeira vez o painel lê 5 meses de pedidos e repasses.'
+    : NA_SHOPEE ? 'Carregando os pedidos da Shopee… Na primeira vez o painel lê 5 meses de pedidos (uns 2 minutos).'
     : NA_AMAZON ? 'Carregando os pedidos da Amazon… Na primeira vez o painel lê 5 meses de pedidos e os itens chegam aos poucos.'
     : 'Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.'));
   $('lista').innerHTML = '';
   try{
-    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
+    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_LEROY ? `/api/leroy/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
     dados = r;
     const d = (iso) => new Date(iso).toLocaleDateString('pt-BR');
     $('periodoTxt').textContent = dias === 1 ? 'Vendas de hoje, com todos os custos.'

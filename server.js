@@ -2013,7 +2013,7 @@ const amazonMod = require('./amazon.js').criar({ D, janela });
 Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
 Object.assign(routes, require('./calculadora.js').criar({ D, ml, amazon: amazonMod }).rotas);
-Object.assign(routes, require('./leroy.js').criar({ D }).rotas);
+Object.assign(routes, require('./leroy.js').criar({ D, janela }).rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
@@ -2055,14 +2055,15 @@ const chaveMarca = (campo, contaId) => (contaId ? `marca_${campo}:${contaId}` : 
 // da conta; se ela não tem, a geral
 const marcaLer = (campo, contaId) => (contaId && D.configLer(chaveMarca(campo, contaId))) || D.configLer(chaveMarca(campo, null));
 const marcaLogo = (contaId = D.contaAtivaId()) => { try { return JSON.parse(marcaLer('logo', contaId) || 'null'); } catch { return null; } };
-// A Amazon e cada loja da Shopee têm identidade própria ("amazon", "shopee-{loja}"): não são
+// A Amazon, a Leroy e cada loja da Shopee têm identidade própria ("amazon", "leroy", "shopee-{loja}"): não são
 // contas do Mercado Livre.
-const contaExterna = (v) => (/^(amazon|shopee-\d+)$/.test(String(v || '')) ? String(v) : null);
+const contaExterna = (v) => (/^(amazon|leroy|shopee-\d+)$/.test(String(v || '')) ? String(v) : null);
 const contaDaMarca = (url) => contaExterna(url?.searchParams?.get('conta')) || D.contaAtivaId();
 const marcaAtual = (contaId = D.contaAtivaId()) => {
   const externa = contaExterna(contaId);
   const loja = externa?.startsWith('shopee-') ? D.shopeeLojasListar().find((l) => `shopee-${l.shop_id}` === externa) : null;
   const nome = marcaLer('nome', contaId) || (externa === 'amazon' ? D.configLer('amazon_vendedor') || 'Amazon'
+    : externa === 'leroy' ? D.configLer('leroy_loja_nome') || 'Leroy Merlin'
     : externa ? (loja?.nome || 'Shopee') : contaId ? D.contaObter(Number(contaId))?.nickname : null);
   return { conta: externa || (contaId ? Number(contaId) : null), nome: nome || MARCA_PADRAO, personalizado: !!nome,
     nome_proprio: (contaId && D.configLer(chaveMarca('nome', contaId))) || '',

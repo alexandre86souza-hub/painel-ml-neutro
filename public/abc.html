@@ -23,7 +23,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=27"></script>
+    <script src="/menu.js?v=28"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -69,14 +69,15 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=7"></script>
+<script src="/comum.js?v=8"></script>
 <script>
 let dias = 30, dados = null, classe = '';
 // ?conta=amazon: a curva dos SKUs da Amazon; "sem venda" = produtos com estoque no FBA.
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
 const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
-const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE;
-const NOME_CANAL = NA_AMAZON ? 'Amazon' : 'Shopee';
+const NA_LEROY = new URLSearchParams(location.search).get('conta') === 'leroy';
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : 'Shopee';
 if(NA_EXT){
   document.querySelector('h1').textContent = 'Análise ABC — ' + NOME_CANAL;
   $('busca').placeholder = 'Buscar por produto ou SKU';
@@ -144,7 +145,7 @@ async function carregar(){
   erroTela('');
   $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Carregando…'));
   try{
-    dados = await api(NA_AMAZON ? `/api/amazon/abc?dias=${dias}` : NA_SHOPEE ? `/api/shopee/abc?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/abc?dias=${dias}`);
+    dados = await api(NA_AMAZON ? `/api/amazon/abc?dias=${dias}` : NA_LEROY ? `/api/leroy/abc?dias=${dias}` : NA_SHOPEE ? `/api/shopee/abc?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/abc?dias=${dias}`);
     const box = $('cartoes'); box.innerHTML = '';
     const tot = el('div', 'cartao');
     tot.append(el('p', 'rotulo', 'Faturamento do período'), el('div', 'valor', real(dados.total)),

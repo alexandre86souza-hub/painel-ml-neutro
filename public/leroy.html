@@ -26,6 +26,18 @@
   .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-word}
   ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
   ol.como li{margin-bottom:4px}
+  .cartoes-rep{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:10px 0 14px}
+  .cartoes-rep .cartao{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .cartoes-rep .rotulo{font-size:12px;color:var(--muted);margin:0 0 4px}
+  .cartoes-rep .valor{font-size:22px;font-weight:700}
+  .cartoes-rep .nota{font-size:12px;color:var(--muted);margin-top:4px}
+  .tab-rep{width:100%;border-collapse:collapse;font-size:13px}
+  .tab-rep th,.tab-rep td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  .tab-rep th:first-child,.tab-rep td:first-child{text-align:left}
+  .tab-rep th{font-size:12px;color:var(--muted);font-weight:600}
+  .rolar{overflow-x:auto}
+  .atalhos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .atalhos a{font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:10px;padding:7px 14px;color:var(--ink);text-decoration:none;background:#fff}
   @media (max-width:900px){ .form{grid-template-columns:1fr} }
 </style>
 </head>
@@ -34,7 +46,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=27"></script>
+    <script src="/menu.js?v=28"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -47,8 +59,20 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
-    <p>Conexão da sua loja na Leroy Merlin (plataforma Mirakl) com o painel. Por enquanto esta tela só conecta e testa; vendas, lucro e repasses entram na próxima etapa.</p>
+    <p>Conexão da sua loja na Leroy Merlin (plataforma Mirakl) com o painel e os repasses. Pedidos, lucro, Performance e ABC: escolha a Leroy na lista de contas (ou use os atalhos abaixo).</p>
   </div>
+
+  <section class="bloco" id="blocoRepasses" hidden>
+    <h2>Repasses</h2>
+    <p class="sub">A Leroy fecha um ciclo nos dias 10 e 25 e transfere o valor até o vencimento (fechamento + 25 dias). No banco ele costuma chegar em 2 créditos.</p>
+    <div id="repasses"></div>
+    <div class="atalhos">
+      <a href="/vendas.html?conta=leroy">Pedidos e lucro</a>
+      <a href="/performance.html?conta=leroy">Performance</a>
+      <a href="/abc.html?conta=leroy">Curva ABC</a>
+      <a href="/empresa.html?conta=leroy">Empresa (entrega, embalagem, impostos)</a>
+    </div>
+  </section>
 
   <section class="bloco">
     <h2><span class="passo">1</span>Onde pegar os dados</h2>
@@ -79,7 +103,7 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=7"></script>
+<script src="/comum.js?v=8"></script>
 <script>
 const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
@@ -94,7 +118,44 @@ async function carregar(){
     $('cKey').placeholder = cfg.tem_chave ? 'já gravada — preencha só para trocar' : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx';
     $('cKey').required = !cfg.tem_chave;
     pintarConta();
+    if(cfg.conectada_em) carregarRepasses(); else $('blocoRepasses').hidden = true;
   }catch(e){ aviso(e.message); }
+}
+
+const dia = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
+// o fechamento é 00h do dia 10/25 em Brasília; o ciclo vai até a véspera
+const ateDia = (iso) => (iso ? new Date(Date.parse(iso) - 3 * 3600e3 - 1).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—');
+async function carregarRepasses(){
+  const bloco = $('blocoRepasses'), box = $('repasses');
+  bloco.hidden = false; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo pedidos e repasses da Leroy… Na primeira vez são 5 meses.'));
+  try{
+    const r = await api('/api/leroy/repasses');
+    box.innerHTML = '';
+    if(r.erro_leitura) box.appendChild(el('p', 'sub', 'Não consegui ler as novidades da Leroy agora (' + r.erro_leitura + '). Os números são da última leitura.'));
+    const cards = el('div', 'cartoes-rep');
+    const card = (rot, valor, nota) => { const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota)); return c; };
+    cards.append(
+      card('Próximo repasse', real(r.proximo.valor), `fecha em ${dia(r.proximo.fechamento)} · previsto no banco até ${dia(r.proximo.previsto)} · ${r.proximo.pedidos} pedido(s)`
+        + (r.proximo.cobrancas ? ` · inclui ${real(r.proximo.cobrancas)} de mensalidade/cobranças` : '')),
+      card('Aguardando o cliente receber', real(r.aguardando_entrega.valor), `${r.aguardando_entrega.pedidos} pedido(s): entram no repasse depois da entrega`));
+    const aVencer = r.ciclos.filter((c) => !c.vencido);
+    if(aVencer.length) cards.append(card('Ciclos fechados a receber', real(aVencer.reduce((s, c) => s + c.valor, 0)),
+      aVencer.map((c) => `${real(c.valor)} até ${dia(c.previsto)}`).join(' · ')));
+    box.appendChild(cards);
+    if(!r.ciclos.length){ box.appendChild(el('p', 'vazio', 'Nenhum ciclo fechado nos últimos meses.')); return; }
+    const wrap = el('div', 'rolar'), t = el('table', 'tab-rep');
+    const cab = el('tr');
+    for(const h of ['Ciclo', 'Vendas + frete', 'Comissão', 'Reembolsos', 'Mensalidade', 'Outros', 'Transferido', 'Vencimento']) cab.appendChild(el('th', null, h));
+    t.appendChild(cab);
+    for(const c of r.ciclos){
+      const tr = el('tr');
+      tr.append(el('td', null, `${dia(c.inicio)} a ${ateDia(c.fim)}`), el('td', null, real(c.vendas)), el('td', null, real(c.comissao)),
+        el('td', null, real(c.reembolsos)), el('td', null, real(c.assinatura)), el('td', null, c.outros ? real(c.outros) : '—'),
+        el('td', null, real(c.valor)), el('td', null, dia(c.previsto) + (c.vencido ? '' : ' (a receber)')));
+      t.appendChild(tr);
+    }
+    wrap.appendChild(t); box.appendChild(wrap);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', e.message)); }
 }
 
 function pintarConta(){
