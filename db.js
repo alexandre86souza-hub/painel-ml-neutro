@@ -129,12 +129,25 @@ function contasListar() {
                      FROM contas c ORDER BY conectada_em`).all();
 }
 
-const contaAtivaId = () =>
-  db.prepare("SELECT valor FROM estado WHERE chave='conta_ativa'").get()?.valor ?? null;
+// Conta ativa: a da SESSÃO de quem pediu (contexto.js), para cada pessoa do escritório olhar a sua
+// sem trocar a dos outros; sem escolha na sessão (ou fora de pedido: MCP, segundo plano), a geral.
+const CTX = require('./contexto.js');
+const contaAtivaGeral = () => db.prepare("SELECT valor FROM estado WHERE chave='conta_ativa'").get()?.valor ?? null;
+function contaAtivaId() {
+  const c = CTX.atual();
+  if (c?.conta && db.prepare('SELECT 1 FROM contas WHERE ml_user_id=?').get(Number(c.conta))) return c.conta;
+  return contaAtivaGeral();
+}
 
 function contaAtivaDefinir(id) {
   if (id !== null && !db.prepare('SELECT 1 FROM contas WHERE ml_user_id=?').get(id)) {
     throw Object.assign(new Error('conta não conectada'), { status: 404 });
+  }
+  const c = CTX.atual();
+  if (c?.sessao) {
+    c.conta = id === null ? null : String(id);
+    db.prepare('UPDATE sessoes SET conta_ativa=? WHERE token_hash=?').run(c.conta, c.sessao);
+    if (contaAtivaGeral()) return;   // a geral só é escrita quando ainda não existe
   }
   db.prepare(`INSERT INTO estado (chave, valor) VALUES ('conta_ativa', ?)
               ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor`).run(id === null ? null : String(id));
@@ -1511,13 +1524,18 @@ function senhaDefinir(senha) {
   configGravar('painel_senha', `scrypt:${sal.toString('base64')}:${hash.toString('base64')}`);
   configGravar('painel_senha_em', agora());   // validade de 365 dias (seguranca.js)
   configGravar('painel_senha_fraca', null);    // a nova já passou pela política
-  db.prepare('DELETE FROM sessoes').run(); // senha nova derruba quem estava logado
+  db.prepare('DELETE FROM sessoes WHERE usuario_id IS NULL').run(); // senha nova derruba quem estava logado
 }
 
 const senhaDefinida = () => !!configLer('painel_senha');
 
-function senhaConfere(senha) {
-  const [tipo, sal, hash] = String(configLer('painel_senha') || '').split(':');
+const senhaConfere = (senha) => hashConfere(configLer('painel_senha'), senha);
+function hashDeSenha(senha) {
+  const sal = crypto.randomBytes(16);
+  return `scrypt:${sal.toString('base64')}:${crypto.scryptSync(String(senha), sal, 64).toString('base64')}`;
+}
+function hashConfere(guardado, senha) {
+  const [tipo, sal, hash] = String(guardado || '').split(':');
   if (tipo !== 'scrypt' || !sal || !hash) return false;
   const esperado = Buffer.from(hash, 'base64');
   const obtido = crypto.scryptSync(String(senha), Buffer.from(sal, 'base64'), esperado.length);
@@ -1527,13 +1545,80 @@ function senhaConfere(senha) {
 const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 const TOKEN = /^[a-f0-9]{64}$/;
 
-function sessaoCriar(dias = 7) {
+// usuarioId null = o administrador (a senha do primeiro acesso).
+function sessaoCriar(dias = 7, usuarioId = null) {
   const token = crypto.randomBytes(32).toString('hex');
   db.prepare('DELETE FROM sessoes WHERE expira_em < ?').run(Date.now());
-  db.prepare('INSERT INTO sessoes (token_hash, criada_em, expira_em) VALUES (?,?,?)')
-    .run(hashToken(token), agora(), Date.now() + dias * 864e5);
+  db.prepare('INSERT INTO sessoes (token_hash, criada_em, expira_em, usuario_id) VALUES (?,?,?,?)')
+    .run(hashToken(token), agora(), Date.now() + dias * 864e5, usuarioId);
   return token;
 }
+// A sessão do cookie: { sessao (hash), usuario_id, conta_ativa } ou null.
+function sessaoDe(token) {
+  if (!TOKEN.test(token || '')) return null;
+  const h = hashToken(token);
+  const s = db.prepare('SELECT usuario_id, conta_ativa, expira_em FROM sessoes WHERE token_hash=?').get(h);
+  return s && s.expira_em > Date.now() ? { sessao: h, usuario_id: s.usuario_id ?? null, conta_ativa: s.conta_ativa ?? null } : null;
+}
+
+// ---------- usuários do painel (usuarios.js) ----------
+// Senha em scrypt com sal, como a do administrador; chave do 2FA cifrada. "temporaria" = criada pelo
+// administrador: vale 72 h e o 1º login manda trocar.
+for (const col of ['usuario_id INTEGER', 'conta_ativa TEXT']) { try { db.exec(`ALTER TABLE sessoes ADD COLUMN ${col}`); } catch { /* já existe */ } }
+db.exec(`
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    login TEXT NOT NULL UNIQUE,
+    nome TEXT NOT NULL,
+    modulos TEXT NOT NULL DEFAULT '[]',
+    ativo INTEGER NOT NULL DEFAULT 1,
+    senha TEXT, senha_em TEXT, senha_temporaria INTEGER NOT NULL DEFAULT 1,
+    mfa_segredo TEXT, mfa_pendente TEXT, mfa_em TEXT,
+    criado_em TEXT NOT NULL, ultimo_acesso TEXT
+  );
+  CREATE TABLE IF NOT EXISTS auditoria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    em TEXT NOT NULL, quem TEXT NOT NULL, metodo TEXT NOT NULL, caminho TEXT NOT NULL, status INTEGER
+  );
+`);
+const usuarioDe = (u) => u && ({ id: u.id, login: u.login, nome: u.nome, modulos: JSON.parse(u.modulos || '[]'), ativo: !!u.ativo,
+  senha_em: u.senha_em, senha_temporaria: !!u.senha_temporaria, mfa_ativo: !!u.mfa_segredo, mfa_em: u.mfa_em,
+  criado_em: u.criado_em, ultimo_acesso: u.ultimo_acesso });
+const usuariosListar = () => db.prepare('SELECT * FROM usuarios ORDER BY nome').all().map(usuarioDe);
+const usuarioObter = (id) => usuarioDe(db.prepare('SELECT * FROM usuarios WHERE id=?').get(id));
+const usuarioPorLogin = (login) => usuarioDe(db.prepare('SELECT * FROM usuarios WHERE login=?').get(String(login || '').trim().toLowerCase()));
+function usuarioCriar({ login, nome, modulos }, senhaTemp) {
+  if (usuarioPorLogin(login)) throw Object.assign(new Error('Já existe um usuário com esse login.'), { status: 400 });
+  const r = db.prepare('INSERT INTO usuarios (login, nome, modulos, senha, senha_em, senha_temporaria, criado_em) VALUES (?,?,?,?,?,1,?)')
+    .run(login, nome, JSON.stringify(modulos || []), hashDeSenha(senhaTemp), agora(), agora());
+  return Number(r.lastInsertRowid);
+}
+function usuarioAtualizar(id, { nome, modulos, ativo }) {
+  db.prepare('UPDATE usuarios SET nome=?, modulos=?, ativo=? WHERE id=?').run(nome, JSON.stringify(modulos || []), ativo ? 1 : 0, id);
+  if (!ativo) usuarioSessoesApagar(id);
+}
+const usuarioSessoesApagar = (id) => db.prepare('DELETE FROM sessoes WHERE usuario_id=?').run(id);
+function usuarioSenhaDefinir(id, senha, temporaria = false) {
+  db.prepare('UPDATE usuarios SET senha=?, senha_em=?, senha_temporaria=? WHERE id=?').run(hashDeSenha(senha), agora(), temporaria ? 1 : 0, id);
+  usuarioSessoesApagar(id);   // senha nova derruba as sessões dele
+}
+const usuarioSenhaConfere = (id, senha) => hashConfere(db.prepare('SELECT senha FROM usuarios WHERE id=?').get(id)?.senha, senha);
+function usuarioMfa(id) {
+  const u = db.prepare('SELECT mfa_segredo, mfa_pendente FROM usuarios WHERE id=?').get(id);
+  return { segredo: decifrar(u?.mfa_segredo ?? null), pendente: decifrar(u?.mfa_pendente ?? null) };
+}
+function usuarioMfaGravar(id, { segredo, pendente }) {
+  db.prepare('UPDATE usuarios SET mfa_segredo=?, mfa_pendente=?, mfa_em=? WHERE id=?')
+    .run(cifrar(segredo ?? null), cifrar(pendente ?? null), segredo ? agora() : null, id);
+}
+const usuarioAcessou = (id) => db.prepare('UPDATE usuarios SET ultimo_acesso=? WHERE id=?').run(agora(), id);
+function usuarioRemover(id) { usuarioSessoesApagar(id); db.prepare('DELETE FROM usuarios WHERE id=?').run(id); }
+// Registro de quem fez o quê (só o método e o caminho; o corpo pode ter segredo). Guarda 1 ano.
+function auditoriaGravar(quem, metodo, caminho, status) {
+  db.prepare('INSERT INTO auditoria (em, quem, metodo, caminho, status) VALUES (?,?,?,?,?)').run(agora(), quem, metodo, String(caminho).slice(0, 200), status);
+  if (Math.random() < 0.01) db.prepare('DELETE FROM auditoria WHERE em < ?').run(new Date(Date.now() - 366 * 864e5).toISOString());
+}
+const auditoriaListar = (n = 300) => db.prepare('SELECT em, quem, metodo, caminho, status FROM auditoria ORDER BY id DESC LIMIT ?').all(n);
 
 function sessaoValida(token) {
   if (!TOKEN.test(token || '')) return false;
@@ -1800,7 +1885,9 @@ function comandasImpressas(chaves, impressa) {
 module.exports = {
   db, DB_FILE, cifrar, decifrar,
   configLer, configGravar,
-  senhaDefinir, senhaDefinida, senhaConfere, sessaoCriar, sessaoValida, sessaoEncerrar,
+  senhaDefinir, senhaDefinida, senhaConfere, sessaoCriar, sessaoValida, sessaoEncerrar, sessaoDe,
+  usuariosListar, usuarioObter, usuarioPorLogin, usuarioCriar, usuarioAtualizar, usuarioSenhaDefinir, usuarioSenhaConfere,
+  usuarioMfa, usuarioMfaGravar, usuarioAcessou, usuarioRemover, usuarioSessoesApagar, auditoriaGravar, auditoriaListar,
   urlPublicaRegistrar, urlPublicaUltima, urlsPublicasHistorico,
   contaSalvar, contaTokensAtualizar, contaObter, contasListar,
   contaAtiva, contaAtivaId, contaAtivaDefinir, contaRemover,

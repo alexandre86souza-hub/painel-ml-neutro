@@ -10,13 +10,16 @@
 //   Magalu         = Magalu sem VAPT
 //   Melhor Envios  = Leroy Merlin (o vendedor contrata o frete no Melhor Envio)
 //   Shopee         = Shopee sem "Entrega Direta"
+//   Amazon         = Amazon com envio do vendedor (MFN: DBA/Envios Fáceis ou próprio); FBA fica fora
 // Pendentes (medido em 07/10/2026): ML /orders/search?shipping.status=ready_to_ship (+ /shipments/{id}
 // para o tipo e o destinatário, /shipments/{id}/sla para o prazo de despacho); Shopee READY_TO_SHIP e
 // PROCESSED (ship_by_date, shipping_carrier, recipient_address.name); Magalu entregas ainda não
 // despachadas (handling_time.limit_date, provider shipping_type VAPT); Leroy OR11 SHIPPING
-// (shipping_deadline). Do cliente só o NOME vai para a comanda. Nada disto vai para o MCP.
+// (shipping_deadline); Amazon getOrders Unshipped/PartiallyShipped com FulfillmentChannels=MFN (LatestShipDate,
+// EasyShipShipmentStatus) + orderItems. Do cliente só o NOME vai para a comanda — na Amazon nem ele (sem RDT:
+// compromisso com a Amazon de não ler dado pessoal; o nome está na etiqueta dela). Nada disto vai para o MCP.
 const r2 = (v) => Math.round(v * 100) / 100;
-const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee'];
+const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee', 'Amazon'];
 const diaLocal = (ms = Date.now()) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
 
 // Categoria e o nome do tipo de envio impresso. null = não entra (ex.: Full). Função pura: testada.
@@ -30,6 +33,10 @@ function categoriaDe(canal, tipo) {
   if (canal === 'shopee') return /entrega direta/i.test(t) ? { categoria: 'Flex', envio: 'Shopee Entrega Direta' } : { categoria: 'Shopee', envio: t || 'Shopee' };
   if (canal === 'magalu') return /vapt/i.test(t) ? { categoria: 'Flex', envio: 'Magalu VAPT' } : { categoria: 'Magalu', envio: 'Magalu Entregas' };
   if (canal === 'leroy') return { categoria: 'Melhor Envios', envio: 'Melhor Envios' };
+  if (canal === 'amazon') {
+    if (t === 'AFN') return null;   // FBA: sai do armazém da Amazon
+    return /easyship/i.test(t) ? { categoria: 'Amazon', envio: 'Amazon DBA' } : { categoria: 'Amazon', envio: 'Amazon Envio Próprio' };
+  }
   return null;
 }
 
@@ -51,7 +58,7 @@ function situacaoPrazo(prazo, agora = Date.now()) {
   return d === diaLocal(agora + 864e5) ? 'amanhã' : 'depois';
 }
 
-function criar({ D, ml, daLoja, leroy, magalu }) {
+function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
   const passo = async (nome, fn, erros) => { try { return await fn(); } catch (e) { erros.push(`${nome}: ${e.message}`); return []; } };
   const lotes = async (lista, n, fn) => { const out = []; for (let i = 0; i < lista.length; i += n) out.push(...await Promise.all(lista.slice(i, i + n).map(fn))); return out; };
 
@@ -169,13 +176,41 @@ function criar({ D, ml, daLoja, leroy, magalu }) {
       etapa: o.order_state }));
   }
 
+  // ---- Amazon (só envio do vendedor; itens de um pedido não mudam: guardados na memória)
+  const itensAmazon = new Map();
+  async function pendentesAmazon() {
+    if (!D.configLer('amazon_refresh_token') || !amazon?.sp) return [];
+    const pedidos = [];
+    let params = { MarketplaceIds: 'A2Q3Y263D00KWC', OrderStatuses: 'Unshipped,PartiallyShipped', FulfillmentChannels: 'MFN',
+      CreatedAfter: new Date(Date.now() - 30 * 864e5).toISOString(), MaxResultsPerPage: 100 };
+    for (let pag = 0; pag < 10; pag++) {
+      const r = await amazon.sp('/orders/v0/orders', params);
+      pedidos.push(...(r.payload?.Orders || []));
+      if (!r.payload?.NextToken) break;
+      params = { MarketplaceIds: 'A2Q3Y263D00KWC', NextToken: r.payload.NextToken };
+    }
+    const out = [];
+    for (const o of pedidos) {
+      const cat = categoriaDe('amazon', o.FulfillmentChannel === 'AFN' ? 'AFN' : (o.EasyShipShipmentStatus ? 'easyship' : ''));
+      if (!cat) continue;
+      const id = o.AmazonOrderId;
+      if (!itensAmazon.has(id)) {
+        try { itensAmazon.set(id, ((await amazon.sp(`/orders/v0/orders/${encodeURIComponent(id)}/orderItems`)).payload?.OrderItems || [])
+          .map((i) => ({ qtd: Number(i.QuantityOrdered) || 0, sku: i.SellerSKU || null, titulo: i.Title || null, variacao: null }))); } catch { /* tenta na próxima */ }
+      }
+      out.push({ chave: `amazon:${id}`, canal: 'amazon', loja: D.configLer('amazon_vendedor') || 'Amazon', pedido: id, ...cat, cliente: null,
+        prazo: o.LatestShipDate || null, itens: itensAmazon.get(id) || [], etapa: o.OrderStatus });
+    }
+    return out;
+  }
+
   let cache = null;
   async function pendentes(recarregar) {
     if (!recarregar && cache && Date.now() - cache.em < 3 * 60e3) return cache;
     const erros = [];
-    const [a, b, c, d] = await Promise.all([passo('Mercado Livre', pendentesMl, erros), passo('Shopee', pendentesShopee, erros),
-      passo('Magalu', pendentesMagalu, erros), passo('Leroy', pendentesLeroy, erros)]);
-    const lista = [...a, ...b, ...c, ...d];
+    const [a, b, c, d, e] = await Promise.all([passo('Mercado Livre', pendentesMl, erros), passo('Shopee', pendentesShopee, erros),
+      passo('Magalu', pendentesMagalu, erros), passo('Leroy', pendentesLeroy, erros), passo('Amazon', pendentesAmazon, erros)]);
+    const lista = [...a, ...b, ...c, ...d, ...e];
     // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém
     const dia = diaLocal();
     const conhecidos = D.comandasDe(lista.map((x) => x.chave));
@@ -197,7 +232,7 @@ function criar({ D, ml, daLoja, leroy, magalu }) {
     },
     // Marca como impressas (a tela chama depois de mandar para a impressora) ou volta para "não impressa".
     'POST /api/comandas/impressas': async (_u, body) => {
-      const chaves = (Array.isArray(body?.chaves) ? body.chaves : []).map(String).filter((c) => /^(ml|shopee|magalu|leroy):[\w:.-]{1,80}$/.test(c));
+      const chaves = (Array.isArray(body?.chaves) ? body.chaves : []).map(String).filter((c) => /^(ml|shopee|magalu|leroy|amazon):[\w:.-]{1,80}$/.test(c));
       if (!chaves.length || chaves.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 comandas.'), { status: 400 });
       D.comandasImpressas(chaves, body?.impressa !== false);
       return { ok: chaves.length };

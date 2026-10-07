@@ -20,6 +20,8 @@ const D = require('./db.js');
 const APP = require('./app-ml.js');
 const A = require('./public/analise.js'); // o mesmo arquivo que a tela usa
 const SEG = require('./seguranca.js');   // senha forte e verificação em duas etapas
+const U = require('./usuarios.js');      // usuários do escritório e o que cada um pode abrir
+const CTX = require('./contexto.js');    // quem fez o pedido (sessão, usuário, conta do ML escolhida)
 
 const PORT = Number(process.env.PORT) || 3100;
 const PORTA_PUBLICA = Number(process.env.PORTA_PUBLICA) || 3101;
@@ -162,13 +164,17 @@ ${erro ? `<p class="erro" id="e1" role="alert">${esc(erro)}</p>` : ''}
 // erro: texto da mensagem; codigo: 401 senha errada, 429 bloqueado por tentativas.
 // Com a verificação em duas etapas ativa, o login pede também o código do aplicativo autenticador.
 const PAGINA_LOGIN = (erro, codigo = 401) => pagina('Entrar', `<h1>Painel Mercado Livre</h1>
-<p>Digite a senha do painel${mfaAtivo() ? ' e o código de 6 dígitos do aplicativo autenticador do celular' : ''}.</p>
+<p>Digite o seu usuário, a senha e o código de 6 dígitos do aplicativo autenticador do celular.</p>
 <form method="POST" action="/login">
+<label for="u">Usuário</label>
+<input id="u" name="usuario" autofocus autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="admin">
+<p class="dica">O administrador entra com <b>admin</b> (ou deixa em branco).</p>
 <label for="s">Senha</label>
-<input id="s" name="senha" type="password" autofocus required autocomplete="current-password"
+<input id="s" name="senha" type="password" required autocomplete="current-password"
  ${erro ? 'aria-describedby="e1"' : ''}>
-${mfaAtivo() ? `<label for="c">Código do aplicativo autenticador</label>
-<input id="c" name="codigo" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autocomplete="one-time-code">` : ''}
+<label for="c">Código do aplicativo autenticador</label>
+<input id="c" name="codigo" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" autocomplete="one-time-code">
+<p class="dica">No primeiro acesso, antes de ativar no celular, deixe em branco.</p>
 ${erro ? `<p class="erro" id="e1" role="alert">${esc(erro)}</p>` : ''}
 <button>Entrar</button></form>`, erro ? codigo : 200);
 
@@ -179,9 +185,12 @@ const pendenciaSeguranca = () => (D.configLer('painel_senha_fraca') || SEG.senha
   ? 'senha' : !mfaAtivo() ? '2fa' : null;
 const nomePainel = () => { try { return marcaAtual().nome; } catch { return 'Painel'; } };
 
-const PAGINA_TROCAR_SENHA = (erro) => pagina('Trocar a senha', `<h1>Troque a senha do painel</h1>
-<p>${D.configLer('painel_senha_fraca') ? 'A senha atual não atende a política de segurança do painel.' : 'A senha do painel venceu (validade de 365 dias).'}
-Crie uma nova para continuar.</p>
+const MOTIVO_SENHA = { fraca: 'A senha atual não atende a política de segurança do painel. Crie uma nova para continuar.',
+  vencida: 'A senha do painel venceu (validade de 365 dias). Crie uma nova para continuar.',
+  temporaria: 'Você entrou com a senha temporária que o administrador criou. Crie a sua senha (só você vai saber).',
+  pedido: 'Troque a sua senha do painel.' };
+const PAGINA_TROCAR_SENHA = (erro, motivo = D.configLer('painel_senha_fraca') ? 'fraca' : 'vencida') => pagina('Trocar a senha', `<h1>Troque a senha do painel</h1>
+<p>${MOTIVO_SENHA[motivo] || MOTIVO_SENHA.pedido}</p>
 <form method="POST" action="/trocar-senha">
 <label for="a">Senha atual</label>
 <input id="a" name="atual" type="password" required autofocus autocomplete="current-password">
@@ -193,12 +202,12 @@ Crie uma nova para continuar.</p>
 ${erro ? `<p class="erro" role="alert">${esc(erro)}</p>` : ''}
 <button>Trocar a senha</button></form>`, erro ? 400 : 200);
 
-const PAGINA_ATIVAR_2FA = (segredo, erro) => pagina('Verificação em duas etapas', `<h1>Ative a verificação em duas etapas</h1>
+const PAGINA_ATIVAR_2FA = (segredo, erro, quem = null) => pagina('Verificação em duas etapas', `<h1>Ative a verificação em duas etapas</h1>
 <p>A partir de agora, entrar no painel pede a senha e um código de 6 dígitos que muda a cada 30 segundos no seu celular.</p>
 <ol>
 <li>Instale no celular um aplicativo autenticador: <b>Google Authenticator</b> ou <b>Microsoft Authenticator</b> (gratuitos).</li>
 <li>No aplicativo, toque em <b>+</b> e escolha <b>Inserir chave de configuração</b> (ou "Digitar uma chave").
- Nome da conta: <b>${esc(nomePainel())}</b>. Chave:<br><code style="font-size:18px;letter-spacing:1px">${esc(SEG.segredoLegivel(segredo))}</code><br>
+ Nome da conta: <b>${esc(quem && !quem.admin ? `${nomePainel()} (${quem.login})` : nomePainel())}</b>. Chave:<br><code style="font-size:18px;letter-spacing:1px">${esc(SEG.segredoLegivel(segredo))}</code><br>
  Tipo: <b>baseada em horário</b>.</li>
 <li>Digite abaixo o código que o aplicativo mostrar.</li>
 </ol>
@@ -207,7 +216,38 @@ const PAGINA_ATIVAR_2FA = (segredo, erro) => pagina('Verificação em duas etapa
 <input id="c" name="codigo" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus autocomplete="one-time-code">
 ${erro ? `<p class="erro" role="alert">${esc(erro)}</p>` : ''}
 <button>Ativar</button></form>
-<p class="dica">Perdeu o celular? No computador onde o painel está instalado, rode <code>npm run desativar-2fa</code> e ative de novo.</p>`, erro ? 400 : 200);
+<p class="dica">${quem && !quem.admin ? 'Perdeu o celular? Peça ao administrador para zerar a sua verificação em Usuários.'
+  : 'Perdeu o celular? No computador onde o painel está instalado, rode <code>npm run desativar-2fa</code> e ative de novo.'}</p>`, erro ? 400 : 200);
+
+// ---------- quem está logado: o administrador ou um usuário (usuarios.js) ----------
+// Sessão com usuario_id null = o administrador (a senha do primeiro acesso). Usuário bloqueado ou
+// apagado perde a sessão na hora.
+function quemDaSessao(sess) {
+  if (!sess) return null;
+  if (sess.usuario_id == null) return { id: null, login: 'admin', nome: 'Administrador', admin: true, modulos: U.IDS };
+  const u = D.usuarioObter(sess.usuario_id);
+  return u && u.ativo ? { ...u, admin: false } : null;
+}
+// Senha e 2FA de quem está logado: as do administrador moram em estado; as dos usuários, na tabela usuarios.
+function segDe(q) {
+  if (q.admin) {
+    return { senhaConfere: (x) => D.senhaConfere(x), senhaDefinir: (x) => D.senhaDefinir(x), pendencia: pendenciaSeguranca,
+      motivo: () => (D.configLer('painel_senha_fraca') ? 'fraca' : 'vencida'),
+      mfa: () => ({ segredo: D.configLer('painel_2fa_segredo'), pendente: D.configLer('painel_2fa_pendente') }),
+      mfaGravar: ({ segredo = null, pendente = null }) => {
+        D.configGravar('painel_2fa_segredo', segredo); D.configGravar('painel_2fa_pendente', pendente);
+        if (segredo) D.configGravar('painel_2fa_em', new Date().toISOString());
+      } };
+  }
+  return { senhaConfere: (x) => D.usuarioSenhaConfere(q.id, x), senhaDefinir: (x) => D.usuarioSenhaDefinir(q.id, x),
+    pendencia: () => ((q.senha_temporaria || SEG.senhaVencida(q.senha_em)) ? 'senha' : !q.mfa_ativo ? '2fa' : null),
+    motivo: () => (q.senha_temporaria ? 'temporaria' : 'vencida'),
+    mfa: () => D.usuarioMfa(q.id), mfaGravar: (x) => D.usuarioMfaGravar(q.id, x) };
+}
+const temporariaVencida = (u) => u.senha_temporaria && Date.now() - Date.parse(u.senha_em || 0) > U.TEMPORARIA_HORAS * 3600e3;
+const PAGINA_SEM_ACESSO = () => pagina('Sem acesso', `<h1>Seu usuário ainda não tem acesso</h1>
+<p>O administrador ainda não liberou nenhuma parte do painel para você. Peça a ele para marcar os módulos em <b>Usuários</b>.</p>
+<form method="POST" action="/sair"><button>Sair</button></form>`, 403);
 
 // Pela internet, antes de existir senha: quem achasse a URL criaria a senha no lugar do aluno.
 const PAGINA_SO_NO_COMPUTADOR = () => pagina('Primeiro acesso', `${PASSOS(0)}
@@ -973,6 +1013,22 @@ const routes = {
     servicos.reiniciarScraper();
     return servicos.scraper();
   },
+  // Quem está logado e o que pode abrir: o menu esconde o resto.
+  'GET /api/eu': async () => {
+    const q = CTX.atual()?.usuario;
+    if (!q) return { admin: true, login: 'admin', nome: 'Administrador', paginas: null };
+    return { admin: q.admin, login: q.login, nome: q.nome, modulos: q.admin ? U.IDS : q.modulos,
+      paginas: q.admin ? null : U.MODULOS.filter((m) => q.modulos.includes(m.id)).flatMap((m) => m.paginas) };
+  },
+  // Usuários (tela usuarios.html): só o administrador — nenhum módulo libera estas rotas.
+  'GET /api/usuarios': async () => ({ usuarios: D.usuariosListar(), temporaria_horas: U.TEMPORARIA_HORAS,
+    modulos: U.MODULOS.map(({ id, nome, descricao }) => ({ id, nome, descricao })), auditoria: D.auditoriaListar(300) }),
+  'POST /api/usuarios': async (_u, body) => {
+    soAdministrador();
+    const senha = U.senhaTemporaria();
+    const id = D.usuarioCriar(U.validarUsuario(body), senha);
+    return { id, senha_temporaria: senha };   // mostrada UMA vez na tela; o banco guarda só o hash
+  },
   'GET /api/accounts': async () => ({
     ativa: D.contaAtivaId() ? Number(D.contaAtivaId()) : null,
     contas: D.contasListar(),
@@ -1692,7 +1748,41 @@ function somarAds(linhas) {
 }
 
 // ---------- rotas com parâmetro no caminho ----------
+// Defesa extra além do permitido(): rota de administrador recusa usuário mesmo se um módulo a liberasse.
+function soAdministrador() {
+  const q = CTX.atual()?.usuario;
+  if (q && !q.admin) throw Object.assign(new Error('Só o administrador mexe nos usuários.'), { status: 403 });
+}
+const usuarioOuErro = (id) => {
+  soAdministrador();
+  const u = D.usuarioObter(Number(id));
+  if (!u) throw Object.assign(new Error('Usuário não encontrado.'), { status: 404 });
+  return u;
+};
 const rotasParam = [
+  { m: 'PUT', re: /^\/api\/usuarios\/(\d+)$/, fn: async ([id], body) => {
+    const u = usuarioOuErro(id);
+    const v = U.validarUsuario({ ...body, login: u.login }, false);
+    D.usuarioAtualizar(u.id, { nome: v.nome, modulos: v.modulos, ativo: body?.ativo !== false });
+    return { ok: true };
+  } },
+  { m: 'POST', re: /^\/api\/usuarios\/(\d+)\/senha-temporaria$/, fn: async ([id]) => {
+    const u = usuarioOuErro(id);
+    const senha = U.senhaTemporaria();
+    D.usuarioSenhaDefinir(u.id, senha, true);
+    return { senha_temporaria: senha };
+  } },
+  { m: 'POST', re: /^\/api\/usuarios\/(\d+)\/zerar-2fa$/, fn: async ([id]) => {
+    const u = usuarioOuErro(id);
+    D.usuarioMfaGravar(u.id, {});
+    D.usuarioSessoesApagar(u.id);
+    return { ok: true };
+  } },
+  { m: 'POST', re: /^\/api\/usuarios\/(\d+)\/remover$/, fn: async ([id]) => {
+    const u = usuarioOuErro(id);
+    D.usuarioRemover(u.id);
+    return { removido: u.login };
+  } },
   { m: 'GET', re: /^\/api\/items\/([A-Z]{3}\d+)$/, fn: async ([id]) => {
     exigeItemId(id);
     const item = await ml(`/items/${id}`);
@@ -2020,7 +2110,7 @@ const magaluMod = require('./magalu.js').criar({ D, janela, novoEstadoOAuth, con
   enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a), pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, magaluMod.rotas);
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
-Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod }).rotas);
+Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod }).rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
@@ -2284,7 +2374,11 @@ const TIPOS = {
 };
 
 // online = o pedido chegou pela internet (porta pública, via túnel), não deste computador.
-async function tratarPainel(req, res, online = false) {
+// Cada pedido roda no próprio contexto (contexto.js): depois do login ele guarda a sessão e o usuário.
+function tratarPainel(req, res, online = false) {
+  return CTX.rodar(() => tratarPainelNoContexto(req, res, online));
+}
+async function tratarPainelNoContexto(req, res, online = false) {
   if (online ? !pedidoOnline(req) : !pedidoLocal(req)) {
     return enviarJson(res, 403, { error: online
       ? 'Pedido recusado: ele não veio de uma página do próprio painel.'
@@ -2328,7 +2422,27 @@ async function tratarPainel(req, res, online = false) {
       }
       const f = new URLSearchParams(await lerCorpo(req, 4096));
       const enviada = f.get('senha') || '';
+      const login = String(f.get('usuario') || '').trim().toLowerCase();
+      const errou = () => { if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); } };
+      if (login && login !== 'admin') {
+        const u = D.usuarioPorLogin(login);
+        const confere = u ? D.usuarioSenhaConfere(u.id, enviada) : (D.senhaConfere(enviada + '\u0000'), false);   // mesmo tempo de quem existe
+        if (!u || !u.ativo || !confere) {
+          errou(); D.auditoriaGravar(login.slice(0, 30), 'LOGIN', online ? 'internet' : 'local', 401);
+          return enviarHtml(res, PAGINA_LOGIN('Usuário ou senha incorretos.'));
+        }
+        if (temporariaVencida(u)) return enviarHtml(res, PAGINA_LOGIN(`A senha temporária vale ${U.TEMPORARIA_HORAS} horas e venceu. Peça outra ao administrador.`));
+        if (u.mfa_ativo && !SEG.codigoConfere(D.usuarioMfa(u.id).segredo, f.get('codigo'))) {
+          errou(); D.auditoriaGravar(u.login, 'LOGIN', online ? 'internet' : 'local', 401);
+          return enviarHtml(res, PAGINA_LOGIN('Código de verificação incorreto ou vencido. Confira o horário do celular e tente de novo.'));
+        }
+        if (online) tentativas.delete(chaveIp);
+        D.usuarioAcessou(u.id);
+        D.auditoriaGravar(u.login, 'LOGIN', online ? 'internet' : 'local', 200);
+        return redirecionar(res, U.primeiraPagina({ ...u, admin: false }), { 'Set-Cookie': cookieSessao(D.sessaoCriar(undefined, u.id), undefined, online) });
+      }
       if (!D.senhaConfere(enviada)) {
+        D.auditoriaGravar('admin', 'LOGIN', online ? 'internet' : 'local', 401);
         if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); }
         return enviarHtml(res, PAGINA_LOGIN('Senha incorreta.'));
       }
@@ -2340,6 +2454,7 @@ async function tratarPainel(req, res, online = false) {
       // senha criada antes da política atual: entra, mas vai direto trocar
       if (SEG.problemaSenha(enviada)) D.configGravar('painel_senha_fraca', '1');
       if (online) tentativas.delete(chaveIp);
+      D.auditoriaGravar('admin', 'LOGIN', online ? 'internet' : 'local', 200);
       const destino = D.contasListar().length ? '/' : '/configuracao.html';
       return redirecionar(res, destino, { 'Set-Cookie': cookieSessao(D.sessaoCriar(), undefined, online) });
     }
@@ -2350,49 +2465,63 @@ async function tratarPainel(req, res, online = false) {
     return redirecionar(res, '/login', { 'Set-Cookie': cookieSessao('', 0, online) });
   }
 
-  if (!autorizado(req)) {
+  const sess = D.sessaoDe(tokenDoCookie(req));
+  const quem = quemDaSessao(sess);
+  if (!quem) {
     if (url.pathname.startsWith('/api/')) return send(401, { error: 'Sessão expirada. Entre de novo.' });
     return redirecionar(res, '/login');
   }
+  Object.assign(CTX.atual() || {}, { sessao: sess.sessao, conta: sess.conta_ativa, usuario: quem });
+  const seg = segDe(quem);
 
   // Política de acesso: com a senha fraca/vencida ou sem o 2FA, só estas duas telas abrem.
   if (url.pathname === '/trocar-senha') {
     if (req.method === 'POST') {
       const f = new URLSearchParams(await lerCorpo(req, 4096));
       const atual = f.get('atual') || '', nova = f.get('nova') || '';
-      if (!D.senhaConfere(atual)) return enviarHtml(res, PAGINA_TROCAR_SENHA('Senha atual incorreta.'));
+      const motivo = seg.pendencia() === 'senha' ? seg.motivo() : 'pedido';
+      if (!seg.senhaConfere(atual)) return enviarHtml(res, PAGINA_TROCAR_SENHA('Senha atual incorreta.', motivo));
       const fraca = SEG.problemaSenha(nova);
-      if (fraca) return enviarHtml(res, PAGINA_TROCAR_SENHA(fraca));
-      if (nova !== (f.get('confirmacao') || '')) return enviarHtml(res, PAGINA_TROCAR_SENHA('As duas senhas novas não são iguais.'));
-      if (nova === atual) return enviarHtml(res, PAGINA_TROCAR_SENHA('A senha nova precisa ser diferente da atual.'));
-      D.senhaDefinir(nova);   // derruba todas as sessões: esta ganha uma nova
-      return redirecionar(res, '/', { 'Set-Cookie': cookieSessao(D.sessaoCriar(), undefined, online) });
+      if (fraca) return enviarHtml(res, PAGINA_TROCAR_SENHA(fraca, motivo));
+      if (nova !== (f.get('confirmacao') || '')) return enviarHtml(res, PAGINA_TROCAR_SENHA('As duas senhas novas não são iguais.', motivo));
+      if (nova === atual) return enviarHtml(res, PAGINA_TROCAR_SENHA('A senha nova precisa ser diferente da atual.', motivo));
+      seg.senhaDefinir(nova);   // derruba as sessões dessa pessoa: esta ganha uma nova
+      D.auditoriaGravar(quem.login, 'SENHA', 'trocou a própria senha', 200);
+      return redirecionar(res, U.primeiraPagina(quem), { 'Set-Cookie': cookieSessao(D.sessaoCriar(undefined, quem.id), undefined, online) });
     }
-    return enviarHtml(res, PAGINA_TROCAR_SENHA());
+    return enviarHtml(res, PAGINA_TROCAR_SENHA(null, seg.pendencia() === 'senha' ? seg.motivo() : 'pedido'));
   }
   if (url.pathname === '/ativar-2fa') {
-    if (mfaAtivo()) return redirecionar(res, '/');
-    let pend = D.configLer('painel_2fa_pendente');
-    if (!pend) { pend = SEG.novoSegredo(); D.configGravar('painel_2fa_pendente', pend); }
+    if (seg.pendencia() === 'senha') return redirecionar(res, '/trocar-senha');
+    const m = seg.mfa();
+    if (m.segredo) return redirecionar(res, U.primeiraPagina(quem));
+    let pend = m.pendente;
+    if (!pend) { pend = SEG.novoSegredo(); seg.mfaGravar({ pendente: pend }); }
     if (req.method === 'POST') {
       const f = new URLSearchParams(await lerCorpo(req, 4096));
       if (!SEG.codigoConfere(pend, f.get('codigo'))) {
-        return enviarHtml(res, PAGINA_ATIVAR_2FA(pend, 'Código não confere. Confira se digitou a chave certa no aplicativo e se o horário do celular está automático.'));
+        return enviarHtml(res, PAGINA_ATIVAR_2FA(pend, 'Código não confere. Confira se digitou a chave certa no aplicativo e se o horário do celular está automático.', quem));
       }
-      D.configGravar('painel_2fa_segredo', pend);
-      D.configGravar('painel_2fa_pendente', null);
-      D.configGravar('painel_2fa_em', new Date().toISOString());
-      return redirecionar(res, '/');
+      seg.mfaGravar({ segredo: pend, pendente: null });
+      D.auditoriaGravar(quem.login, '2FA', 'ativou a verificação em duas etapas', 200);
+      return redirecionar(res, U.primeiraPagina(quem));
     }
-    return enviarHtml(res, PAGINA_ATIVAR_2FA(pend));
+    return enviarHtml(res, PAGINA_ATIVAR_2FA(pend, null, quem));
   }
-  const pendencia = pendenciaSeguranca();
+  const pendencia = seg.pendencia();
   if (pendencia && url.pathname !== '/sair') {
     if (url.pathname.startsWith('/api/')) {
       return send(403, { pendencia, error: pendencia === 'senha' ? 'Troque a senha do painel antes de continuar.'
         : 'Ative a verificação em duas etapas antes de continuar.' });
     }
     return redirecionar(res, pendencia === 'senha' ? '/trocar-senha' : '/ativar-2fa');
+  }
+
+  // O que cada usuário pode abrir (usuarios.js). Negado por padrão; o administrador abre tudo.
+  if (url.pathname === '/sem-acesso') return enviarHtml(res, PAGINA_SEM_ACESSO());
+  if (!U.permitido(quem, req.method, url.pathname)) {
+    if (url.pathname.startsWith('/api/')) return send(403, { error: 'Seu usuário não tem acesso a esta parte do painel. Peça ao administrador.', sem_permissao: true });
+    return redirecionar(res, U.primeiraPagina(quem));
   }
 
   // Retorno da autorização da Magalu: endereço fixo no próprio computador (cadastrado no aplicativo
@@ -2481,8 +2610,11 @@ async function tratarPainel(req, res, online = false) {
       const max = url.pathname === '/api/produtos-custo' ? 2 * 1024 * 1024
         : url.pathname === '/api/marca' ? 512 * 1024 : undefined;   // planilha colada e logo em base64
       if (req.method === 'POST' || req.method === 'PUT') body = JSON.parse((await lerCorpo(req, max)) || '{}');
-      return send(200, await despachar(req.method, url, body));
+      const resposta = await despachar(req.method, url, body);
+      if (req.method !== 'GET') D.auditoriaGravar(quem.login, req.method, url.pathname, 200);
+      return send(200, resposta);
     } catch (e) {
+      if (req.method !== 'GET') D.auditoriaGravar(quem.login, req.method, url.pathname, e.status || 500);
       return send(e.status || 500, { error: e.message, detail: e.faltando ? null : (e.body?.cause || e.errors || null),
         ...(e.faltando ? { faltando: e.faltando } : {}) });
     }

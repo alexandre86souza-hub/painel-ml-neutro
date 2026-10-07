@@ -260,7 +260,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   e ele dá o custo nos Anúncios e nos Pedidos (`linhasDe` ctx.vinculos; `sku_magalu` guarda o código original).
 - Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
-  VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta) —
+  VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon
+  (MFN: DBA = EasyShipShipmentStatus, ou envio próprio; FBA fora; SEM nome do cliente — sem RDT, está na etiqueta da Amazon) —
   numeradas por categoria e DIA na 1ª vez que aparecem (`numerar`, tabela `comandas`; o número não muda). ML:
   /orders/search?shipping.status=ready_to_ship agrupado pelo envio (pack) + /shipments/{id} (tipo, receiver_name) +
   /shipments/{id}/sla (prazo de despacho); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
@@ -305,6 +306,16 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   senha fraca/vencida, `tratarPainel` só abre `/ativar-2fa` e `/trocar-senha` (API dá 403 com
   `pendencia`). Exigência da Amazon para a SP-API; não afrouxe. Perdeu o celular:
   `npm run desativar-2fa` no próprio computador.
+- Usuários do escritório (`usuarios.js`, tela `public/usuarios.html`, só o administrador): o ADMINISTRADOR é a senha
+  do primeiro acesso (login `admin` ou vazio; só ele conecta contas e abre Configurações, Empresa, conexões e Usuários).
+  Cada pessoa tem login, senha e 2FA próprios (tabela `usuarios`; 2FA cifrado) e só os MÓDULOS marcados (vendas,
+  expedicao, anuncios, campanhas, ads, financeiro, mensagens). Permissão NEGADA por padrão (`permitido`): tela ou rota
+  fora de um módulo é só do administrador — rota nova nasce fechada; `test-usuarios.js` confere que cada tela de um
+  módulo só chama rotas liberadas e que toda tela está num módulo ou na lista de administrador. O administrador cria
+  o usuário e recebe UMA senha temporária (72 h; o 1º login manda trocar e ativar o 2FA). Bloquear/remover derruba a
+  sessão na hora. Conta do ML escolhida é da SESSÃO (`contexto.js`, AsyncLocalStorage; `sessoes.conta_ativa`): fora
+  de pedido (MCP, segundo plano) vale a geral. Registro de ações (`auditoria`, 1 ano): logins certos/errados e todo
+  POST/PUT da API (método + caminho, nunca o corpo). Nada de usuários no MCP.
 
 ## Nunca
 

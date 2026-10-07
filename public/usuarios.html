@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usuários</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin:8px 0 4px}
+  .mod{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;cursor:pointer}
+  .mod input{margin-top:3px;width:18px;height:18px;flex:none}
+  .mod b{display:block;font-size:14px}
+  .mod span{font-size:12px;color:var(--muted)}
+  .campos{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .campos label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .campos input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;min-width:200px}
+  .senha{border:2px solid #c96f50;background:#fdf3ee;border-radius:12px;padding:14px 16px;margin:12px 0}
+  .senha code{font-size:22px;font-weight:800;letter-spacing:1px;user-select:all}
+  .senha p{margin:6px 0 0;font-size:13px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;white-space:nowrap}
+  .chip.ok{background:#e7f4ee;color:#1f6b4a}.chip.alerta{background:#fdeee8;color:#b4441e}.chip.cinza{background:#eef1f6;color:#475569}
+  .mods-linha{font-size:12px;color:#334155}
+  .acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .bt.perigo{color:#b42318;border-color:#f1b8b3}
+  .bt.forte{background:#c96f50;color:#fff;border-color:#c96f50}
+  dialog{border:0;border-radius:16px;padding:20px;max-width:96vw;width:640px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(15,23,42,.45)}
+  td.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .filtros select{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=31"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Usuários</h1>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <section class="bloco">
+    <h2>Quem usa o painel</h2>
+    <p class="sub">Cada pessoa entra com o próprio usuário, senha e verificação em duas etapas no celular dela, e vê só os módulos marcados.
+      Você é o <b>administrador</b> (usuário <b>admin</b>): só você conecta contas e mexe em Configurações, Empresa e Usuários.</p>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando…</p></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Novo usuário</h2>
+    <form id="fNovo" autocomplete="off">
+      <div class="campos">
+        <label>Nome<input id="nNome" required maxlength="60" placeholder="Ex.: Maria Souza"></label>
+        <label>Usuário (para entrar)<input id="nLogin" required maxlength="30" pattern="[a-zA-Z0-9._\-]{3,30}" placeholder="ex.: maria" autocapitalize="none" spellcheck="false"></label>
+      </div>
+      <p class="sub" style="margin:14px 0 0">O que essa pessoa pode abrir:</p>
+      <div class="grade" id="nMods"></div>
+      <button class="bt forte" style="margin-top:10px">Criar usuário</button>
+    </form>
+    <div id="caixaSenha"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Registro de ações</h2>
+    <p class="sub">Entradas no painel (certas e erradas) e tudo o que alterou alguma coisa: preço, campanha, comanda impressa, mensagem enviada… Fica guardado por 1 ano.</p>
+    <div class="filtros"><label for="fQuem">Pessoa</label><select id="fQuem"><option value="">Todas</option></select></div>
+    <div class="tabela-rolagem" id="registro"></div>
+  </section>
+</main>
+  </div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dTit">
+  <h2 id="dTit" style="margin:0 0 4px">Editar</h2>
+  <form id="fEdit" method="dialog">
+    <div class="campos"><label>Nome<input id="eNome" required maxlength="60"></label></div>
+    <p class="sub" style="margin:14px 0 0">Módulos:</p>
+    <div class="grade" id="eMods"></div>
+    <div class="acoes" style="margin-top:14px">
+      <button type="button" class="bt" id="eCancelar">Cancelar</button>
+      <button type="submit" class="bt forte" id="eSalvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/comum.js?v=8"></script>
+<script>
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+const JSONH = { 'Content-Type': 'application/json' };
+let dados = null, editando = null;
+
+function grade(box, marcados){
+  box.innerHTML = '';
+  for(const m of dados.modulos){
+    const l = el('label', 'mod'); const c = el('input'); c.type = 'checkbox'; c.value = m.id; c.checked = marcados.includes(m.id);
+    const t = el('div'); t.append(el('b', null, m.nome), el('span', null, m.descricao));
+    l.append(c, t); box.appendChild(l);
+  }
+}
+const marcados = (box) => [...box.querySelectorAll('input:checked')].map((c) => c.value);
+
+function mostrarSenha(nome, login, senha){
+  const b = $('caixaSenha'); b.innerHTML = '';
+  const d = el('div', 'senha');
+  d.append(el('b', null, `Senha temporária de ${nome} (usuário ${login}):`), el('br'), el('code', null, senha));
+  const bt = el('button', 'bt', 'Copiar'); bt.type = 'button'; bt.style.marginLeft = '10px';
+  bt.onclick = () => navigator.clipboard?.writeText(senha).then(() => { bt.textContent = 'Copiada'; });
+  d.appendChild(bt);
+  d.appendChild(el('p', null, `Passe para a pessoa pessoalmente (não por print). Ela vale ${dados.temporaria_horas} horas: no primeiro acesso o painel pede para criar a própria senha e ativar a verificação em duas etapas no celular dela. Esta senha não aparece de novo.`));
+  b.appendChild(d);
+  d.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function carregar(){
+  try{ dados = await api('/api/usuarios'); }catch(e){ aviso(e.message); return; }
+  pintar();
+}
+
+function pintar(){
+  const nomes = Object.fromEntries(dados.modulos.map((m) => [m.id, m.nome]));
+  if(!$('nMods').children.length) grade($('nMods'), []);
+  const box = $('lista'); box.innerHTML = '';
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Pessoa', 'Módulos', 'Segurança', 'Último acesso', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  const adm = el('tr');
+  const tdA = el('td'); tdA.append(el('b', null, 'Administrador'), el('span', 'pequeno', ' admin'));
+  adm.append(tdA, el('td', 'mods-linha', 'Tudo'), el('td', null, ''), el('td', null, '—'), el('td'));
+  tb.appendChild(adm);
+  for(const u of dados.usuarios){
+    const tr = el('tr');
+    const tdN = el('td'); tdN.append(el('b', null, u.nome), el('span', 'pequeno', ' ' + u.login));
+    const tdM = el('td', 'mods-linha', u.modulos.map((m) => nomes[m] || m).join(' · ') || 'Nenhum (não abre nada)');
+    const tdS = el('td');
+    if(!u.ativo) tdS.appendChild(el('span', 'chip alerta', 'Bloqueado'));
+    else if(u.senha_temporaria) tdS.appendChild(el('span', 'chip alerta', 'Falta o 1º acesso'));
+    else if(!u.mfa_ativo) tdS.appendChild(el('span', 'chip alerta', 'Falta ativar o 2FA'));
+    else tdS.appendChild(el('span', 'chip ok', 'Senha + 2FA'));
+    const tdQ = el('td', null, quando(u.ultimo_acesso));
+    const tdX = el('td'); const ac = el('div', 'acoes');
+    const b = (txt, fn, cls = 'bt') => { const x = el('button', cls, txt); x.type = 'button'; x.onclick = fn; ac.appendChild(x); };
+    b('Editar', () => abrirEdicao(u));
+    b(u.ativo ? 'Bloquear' : 'Desbloquear', async () => {
+      if(u.ativo && !confirm(`Bloquear ${u.nome}? Ela sai do painel na hora e não entra até você desbloquear.`)) return;
+      await acao(`/api/usuarios/${u.id}`, 'PUT', { nome: u.nome, modulos: u.modulos, ativo: !u.ativo }, u.ativo ? 'Bloqueado.' : 'Desbloqueado.');
+    });
+    b('Nova senha temporária', async () => {
+      if(!confirm(`Criar uma senha temporária nova para ${u.nome}? A senha atual dela deixa de valer.`)) return;
+      try{ const r = await api(`/api/usuarios/${u.id}/senha-temporaria`, { method: 'POST', headers: JSONH, body: '{}' }); mostrarSenha(u.nome, u.login, r.senha_temporaria); await carregar(); }
+      catch(e){ aviso(e.message); }
+    });
+    if(u.mfa_ativo) b('Zerar 2FA', async () => {
+      if(!confirm(`Zerar a verificação em duas etapas de ${u.nome}? (ex.: trocou ou perdeu o celular) No próximo acesso ela ativa de novo.`)) return;
+      await acao(`/api/usuarios/${u.id}/zerar-2fa`, 'POST', {}, '2FA zerado.');
+    });
+    b('Remover', async () => {
+      if(!confirm(`Remover ${u.nome} (${u.login}) de vez? O registro de ações dela continua guardado.`)) return;
+      await acao(`/api/usuarios/${u.id}/remover`, 'POST', {}, 'Removido.');
+    }, 'bt perigo');
+    tdX.appendChild(ac);
+    tr.append(tdN, tdM, tdS, tdQ, tdX);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  if(!dados.usuarios.length) box.appendChild(el('p', 'sub', 'Nenhum usuário ainda. Crie o primeiro abaixo.'));
+
+  const sel = $('fQuem'); const atual = sel.value;
+  sel.innerHTML = '<option value="">Todas</option>';
+  for(const q of [...new Set(dados.auditoria.map((a) => a.quem))].sort()){ const o = el('option', null, q); o.value = q; o.selected = q === atual; sel.appendChild(o); }
+  pintarRegistro();
+}
+
+function pintarRegistro(){
+  const quem = $('fQuem').value;
+  const lst = dados.auditoria.filter((a) => !quem || a.quem === quem);
+  const box = $('registro'); box.innerHTML = '';
+  if(!lst.length){ box.appendChild(el('p', 'sub', 'Nada registrado ainda.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Quando', 'Quem', 'O quê', 'Resultado']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const a of lst){
+    const tr = el('tr');
+    const oque = a.metodo === 'LOGIN' ? `Entrou pelo ${a.caminho === 'internet' ? 'endereço da internet' : 'computador do painel'}` : a.metodo === 'SENHA' || a.metodo === '2FA' ? a.caminho : `${a.metodo} ${a.caminho}`;
+    const st = el('td'); st.appendChild(el('span', 'chip ' + (a.status < 300 ? 'ok' : 'alerta'), a.status < 300 ? 'ok' : a.metodo === 'LOGIN' ? 'senha/código errado' : 'recusado ' + a.status));
+    tr.append(el('td', null, quando(a.em)), el('td', null, a.quem), el('td', a.metodo === 'LOGIN' || a.metodo === 'SENHA' || a.metodo === '2FA' ? null : 'mono', oque), st);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+}
+$('fQuem').onchange = pintarRegistro;
+
+async function acao(url, metodo, corpo, ok){
+  try{ await api(url, { method: metodo, headers: JSONH, body: JSON.stringify(corpo) }); aviso(ok, 'ok'); await carregar(); }
+  catch(e){ aviso(e.message); }
+}
+
+function abrirEdicao(u){
+  editando = u;
+  $('dTit').textContent = `Editar ${u.nome} (${u.login})`;
+  $('eNome').value = u.nome;
+  grade($('eMods'), u.modulos);
+  $('dlg').showModal();
+}
+$('eCancelar').onclick = () => $('dlg').close();
+$('fEdit').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const u = editando; $('dlg').close();
+  await acao(`/api/usuarios/${u.id}`, 'PUT', { nome: $('eNome').value, modulos: marcados($('eMods')), ativo: u.ativo }, 'Salvo. Vale no próximo clique da pessoa.');
+};
+
+$('fNovo').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const nome = $('nNome').value.trim(), login = $('nLogin').value.trim().toLowerCase(), mods = marcados($('nMods'));
+  if(!mods.length && !confirm('Nenhum módulo marcado: a pessoa entra mas não vê nada. Criar assim mesmo?')) return;
+  try{
+    const r = await api('/api/usuarios', { method: 'POST', headers: JSONH, body: JSON.stringify({ nome, login, modulos: mods }) });
+    $('fNovo').reset(); grade($('nMods'), []);
+    aviso('Usuário criado.', 'ok');
+    await carregar();
+    mostrarSenha(nome, login, r.senha_temporaria);
+  }catch(e){ aviso(e.message); }
+};
+
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

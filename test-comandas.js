@@ -14,6 +14,9 @@ assert.strictEqual(K.categoriaDe('shopee', 'Shopee Xpress').categoria, 'Shopee')
 assert.deepStrictEqual(K.categoriaDe('magalu', 'VAPT mle-vapt'), { categoria: 'Flex', envio: 'Magalu VAPT' });
 assert.strictEqual(K.categoriaDe('magalu', 'Agência Magalu direta').categoria, 'Magalu');
 assert.strictEqual(K.categoriaDe('leroy').categoria, 'Melhor Envios');
+assert.strictEqual(K.categoriaDe('amazon', 'AFN'), null, 'FBA não entra');
+assert.deepStrictEqual(K.categoriaDe('amazon', 'easyship'), { categoria: 'Amazon', envio: 'Amazon DBA' });
+assert.strictEqual(K.categoriaDe('amazon', '').envio, 'Amazon Envio Próprio');
 
 // numeração por categoria no dia: continua do maior número de hoje; pelo prazo
 const dia = '2026-10-07';

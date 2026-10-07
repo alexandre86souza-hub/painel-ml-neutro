@@ -26,6 +26,9 @@
     comandas: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     publicar: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 9v6M9 12h6"/>',
     navegador: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.4 2.6 2.4 12.8 0 16M12 4c-2.4 2.6-2.4 12.8 0 16"/>',
+    usuarios: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/>',
+    sair: '<path d="M10 5H5v14h5"/><path d="M14 8l4 4-4 4M18 12H9"/>',
+    senha: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     config: '<path d="M5 8h14M5 16h14"/><circle cx="10" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/>',
   };
   const ITENS = [
@@ -54,6 +57,7 @@
     ['/magalu.html', 'Magalu', 'magalu'],
     ['/publicar.html', 'Publicar', 'publicar'],
     ['/navegador.html', 'Navegador', 'navegador'],
+    ['/usuarios.html', 'Usuários', 'usuarios'],
     ['/configuracao.html', 'Configurações', 'config'],
   ];
   // Identidade do painel (nome e logo da empresa, tela Empresa). O último valor fica no
@@ -212,4 +216,42 @@
     a.appendChild(document.createTextNode(rotulo));
     nav.appendChild(a);
   }
+
+  // Usuário do escritório (usuarios.js): o menu mostra só as telas dos módulos dele. O servidor é quem
+  // barra de verdade; aqui é só para não oferecer o que não abre. A lista fica no navegador para o menu
+  // já nascer filtrado na próxima tela.
+  const filtrar = (eu) => {
+    if (!eu || eu.admin || !Array.isArray(eu.paginas)) return;
+    for (const a of [...nav.querySelectorAll('a')]) {
+      const p = new URL(a.href, location.origin).pathname;
+      if (!eu.paginas.includes(p === '/' ? '/inicio.html' : p)) a.remove();
+    }
+    for (const hr of [...nav.querySelectorAll('hr')]) if (!hr.previousElementSibling || hr.previousElementSibling.tagName === 'HR' || !hr.nextElementSibling) hr.remove();
+  };
+  const rodape = (eu) => {
+    if (!eu || document.getElementById('menuEu')) return;
+    const box = document.createElement('div'); box.id = 'menuEu';
+    const hr = document.createElement('hr'); hr.className = 'nav-sep'; box.appendChild(hr);
+    const quem = document.createElement('div');
+    quem.style.cssText = 'font-size:12px;opacity:.75;padding:4px 12px';
+    quem.textContent = eu.admin ? 'Administrador' : eu.nome + ' (' + eu.login + ')';
+    box.appendChild(quem);
+    const item = (href, rotulo, icone) => { const a = document.createElement('a'); a.href = href;
+      a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONE[icone] + '</svg>'; a.appendChild(document.createTextNode(rotulo)); return a; };
+    if (!eu.admin) box.appendChild(item('/trocar-senha', 'Trocar minha senha', 'senha'));
+    const sair = item('#', 'Sair', 'sair');
+    sair.onclick = (ev) => { ev.preventDefault(); const f = document.createElement('form'); f.method = 'POST'; f.action = '/sair'; document.body.appendChild(f); f.submit(); };
+    box.appendChild(sair);
+    nav.appendChild(box);
+  };
+  let guardado = null;
+  try { guardado = JSON.parse(localStorage.getItem('painel.eu') || 'null'); } catch {}
+  filtrar(guardado);
+  fetch('/api/eu', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((eu) => {
+    if (!eu) return;
+    try { localStorage.setItem('painel.eu', JSON.stringify(eu)); } catch {}
+    // outra pessoa entrou neste navegador e o menu nasceu filtrado pela anterior: monta de novo
+    if (guardado && !guardado.admin && JSON.stringify(guardado.paginas) !== JSON.stringify(eu.paginas)) { location.reload(); return; }
+    filtrar(eu); rodape(eu);
+  }).catch(() => {});
 })();

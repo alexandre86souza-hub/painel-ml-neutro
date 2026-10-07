@@ -73,7 +73,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=30"></script>
+    <script src="/menu.js?v=31"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -132,7 +132,7 @@ function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' 
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const PRAZO = { atrasado: 'atrasado', hoje: 'hoje', 'amanhã': 'amanhã', depois: '', 'sem prazo': '' };
-const CANAL = { ml: 'Mercado Livre', shopee: 'Shopee', magalu: 'Magalu', leroy: 'Leroy Merlin' };
+const CANAL = { ml: 'Mercado Livre', shopee: 'Shopee', magalu: 'Magalu', leroy: 'Leroy Merlin', amazon: 'Amazon' };
 let dados = null, cat = 'Flex', sit = 'aguarda', prazo = 'todos';
 const nomeComanda = (c) => `${c.categoria} ${c.numero}`;
 
@@ -217,7 +217,7 @@ function comandaEl(c){
   const d = el('div', 'comanda');
   d.append(el('div', 'c-rot', 'COMANDA'), el('div', 'c-num', `Nº ${c.numero}`), el('div', 'c-envio', c.categoria));
   if(c.envio && c.envio.toLowerCase() !== c.categoria.toLowerCase()) d.appendChild(el('div', 'c-sub', c.envio));   // ex.: Flex · Shopee Entrega Direta
-  d.appendChild(el('div', 'c-cliente', c.cliente || 'CLIENTE NÃO INFORMADO'));
+  d.appendChild(el('div', 'c-cliente', c.cliente || (c.canal === 'amazon' ? 'NOME NA ETIQUETA DA AMAZON' : 'CLIENTE NÃO INFORMADO')));
   const caixa = el('div', 'c-caixa');
   caixa.append(el('div', 'c-rot', 'PEDIDO'), el('div', 'c-pedido', c.pedido));
   const barras = el('div', 'c-barras'); barras.innerHTML = window.codigo128Svg(c.pedido);
