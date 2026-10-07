@@ -11,15 +11,18 @@
 //   Melhor Envios  = Leroy Merlin (o vendedor contrata o frete no Melhor Envio)
 //   Shopee         = Shopee sem "Entrega Direta"
 //   Amazon         = Amazon com envio do vendedor (MFN: DBA/Envios Fáceis ou próprio); FBA fica fora
+//   Venda direta   = comanda MANUAL, digitada na tela, para venda fora dos marketplaces (Josi, balcão, OLX…):
+//                    tira os produtos do estoque na hora (estoque.js) e fica na tela até ser concluída
 // Pendentes (medido em 07/10/2026): ML /orders/search?shipping.status=ready_to_ship (+ /shipments/{id}
 // para o tipo e o destinatário, /shipments/{id}/sla para o prazo de despacho); Shopee READY_TO_SHIP e
 // PROCESSED (ship_by_date, shipping_carrier, recipient_address.name); Magalu entregas ainda não
 // despachadas (handling_time.limit_date, provider shipping_type VAPT); Leroy OR11 SHIPPING
-// (shipping_deadline); Amazon getOrders Unshipped/PartiallyShipped com FulfillmentChannels=MFN (LatestShipDate,
+// (shipping_deadline); horário da compra (comprado_em): ML date_created, Shopee create_time, Magalu purchased_at,
+// Leroy created_date, Amazon PurchaseDate; Amazon getOrders Unshipped/PartiallyShipped com FulfillmentChannels=MFN (LatestShipDate,
 // EasyShipShipmentStatus) + orderItems. Do cliente só o NOME vai para a comanda — na Amazon nem ele (sem RDT:
 // compromisso com a Amazon de não ler dado pessoal; o nome está na etiqueta dela). Nada disto vai para o MCP.
 const r2 = (v) => Math.round(v * 100) / 100;
-const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee', 'Amazon'];
+const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee', 'Amazon', 'Venda direta'];
 const diaLocal = (ms = Date.now()) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
 
 // Categoria e o nome do tipo de envio impresso. null = não entra (ex.: Full). Função pura: testada.
@@ -58,7 +61,7 @@ function situacaoPrazo(prazo, agora = Date.now()) {
   return d === diaLocal(agora + 864e5) ? 'amanhã' : 'depois';
 }
 
-function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
+function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   const passo = async (nome, fn, erros) => { try { return await fn(); } catch (e) { erros.push(`${nome}: ${e.message}`); return []; } };
   const lotes = async (lista, n, fn) => { const out = []; for (let i = 0; i < lista.length; i += n) out.push(...await Promise.all(lista.slice(i, i + n).map(fn))); return out; };
 
@@ -74,6 +77,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
     cacheEnvio.set(id, x);
     return x;
   }
+  // pacote com vários pedidos: a compra mais antiga
+  const compraMaisAntiga = (pedidos) => { const t = pedidos.map((p) => Date.parse(p.date_created)).filter(Number.isFinite); return t.length ? new Date(Math.min(...t)).toISOString() : null; };
   async function pendentesMl() {
     const out = [];
     for (const conta of D.contasListar()) {
@@ -100,7 +105,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
         const x = porEnvio.get(id);
         const p0 = x.pedidos[0];
         out.push({ chave: `ml:${id}`, canal: 'ml', loja: conta.nickname, pedido: String(p0.pack_id || p0.id),
-          pedidos: x.pedidos.map((p) => String(p.id)), ...cat, cliente: s.cliente, prazo: s.prazo, itens: x.itens, etapa: s.sub });
+          pedidos: x.pedidos.map((p) => String(p.id)), ...cat, cliente: s.cliente, prazo: s.prazo, itens: x.itens, etapa: s.sub,
+          comprado_em: compraMaisAntiga(x.pedidos) });
       }
     }
     return out;
@@ -132,6 +138,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
           if (!cat) continue;
           out.push({ chave: `shopee:${o.order_sn}`, canal: 'shopee', loja: l.nome || `Shopee ${l.shop_id}`, pedido: o.order_sn,
             ...cat, cliente: o.recipient_address?.name || null, prazo: o.ship_by_date ? new Date(o.ship_by_date * 1000).toISOString() : null,
+            comprado_em: o.create_time ? new Date(o.create_time * 1000).toISOString() : null,
             itens: (o.item_list || []).map((i) => ({ qtd: i.model_quantity_purchased, sku: (i.model_sku || i.item_sku || '').trim() || null,
               titulo: i.item_name || null, variacao: i.model_name || null })), etapa: o.order_status });
         }
@@ -156,6 +163,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
           const cat = categoriaDe('magalu', tipo);
           out.push({ chave: `magalu:${p.code}:${d.code || d.id}`, canal: 'magalu', loja: D.configLer('magalu_loja_nome') || 'Magalu', pedido: String(p.code),
             ...cat, cliente: p.customer?.name || null, prazo: d.shipping?.handling_time?.limit_date || null,
+            comprado_em: p.purchased_at || p.created_at || null,
             itens: (d.items || []).map((i) => ({ qtd: i.quantity, sku: i.info?.sku != null ? String(i.info.sku) : null, titulo: i.info?.description || null, variacao: null })),
             etapa: d.status || p.status });
         }
@@ -172,7 +180,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
     const r = await leroy.mk(c, '/api/orders', { order_state_codes: 'SHIPPING', max: 100 }, { pessoais: true });
     return (r.orders || []).map((o) => ({ chave: `leroy:${o.order_id}`, canal: 'leroy', loja: D.configLer('leroy_loja_nome') || 'Leroy Merlin',
       pedido: o.order_id, ...categoriaDe('leroy'), cliente: [o.customer?.firstname, o.customer?.lastname].filter(Boolean).join(' ') || null,
-      prazo: o.shipping_deadline || null, itens: (o.order_lines || []).map((l) => ({ qtd: l.quantity, sku: l.offer_sku || null, titulo: l.product_title || null, variacao: null })),
+      prazo: o.shipping_deadline || null, comprado_em: o.created_date || null, itens: (o.order_lines || []).map((l) => ({ qtd: l.quantity, sku: l.offer_sku || null, titulo: l.product_title || null, variacao: null })),
       etapa: o.order_state }));
   }
 
@@ -199,7 +207,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
           .map((i) => ({ qtd: Number(i.QuantityOrdered) || 0, sku: i.SellerSKU || null, titulo: i.Title || null, variacao: null }))); } catch { /* tenta na próxima */ }
       }
       out.push({ chave: `amazon:${id}`, canal: 'amazon', loja: D.configLer('amazon_vendedor') || 'Amazon', pedido: id, ...cat, cliente: null,
-        prazo: o.LatestShipDate || null, itens: itensAmazon.get(id) || [], etapa: o.OrderStatus });
+        prazo: o.LatestShipDate || null, comprado_em: o.PurchaseDate || null, itens: itensAmazon.get(id) || [], etapa: o.OrderStatus });
     }
     return out;
   }
@@ -225,17 +233,75 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon }) {
     'GET /api/comandas': async (url) => {
       const p = await pendentes(url.searchParams.get('recarregar') === '1');
       const agora = Date.now();
-      const comandas = D.comandasListar(p.chaves).map((c) => ({ ...c, situacao_prazo: situacaoPrazo(c.prazo, agora),
+      const comandas = D.comandasListar([...p.chaves, ...D.comandasManuaisAbertas()]).map((c) => ({ ...c, situacao_prazo: situacaoPrazo(c.prazo, agora),
         unidades: c.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0) }))
         .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || x.dia.localeCompare(y.dia) || x.numero - y.numero);
       return { em: new Date(p.em).toISOString(), erros: p.erros, categorias: CATEGORIAS, comandas };
     },
+    // Histórico: comandas impressas num dia (Brasília) ou pelo número da venda — inclusive as que já saíram.
+    'GET /api/comandas/historico': async (url) => {
+      const q = url.searchParams;
+      const pedido = String(q.get('pedido') || '').trim();
+      let lista;
+      if (pedido) {
+        if (!/^[\w.-]{3,40}$/.test(pedido)) throw Object.assign(new Error('Número da venda inválido.'), { status: 400 });
+        lista = D.comandasDoPedido(pedido);
+      } else {
+        const de = /^\d{4}-\d{2}-\d{2}$/.test(q.get('de') || '') ? q.get('de') : diaLocal();
+        const ate = /^\d{4}-\d{2}-\d{2}$/.test(q.get('ate') || '') ? q.get('ate') : de;
+        const ini = new Date(`${de}T03:00:00.000Z`).toISOString(), fim = new Date(Date.parse(`${ate}T03:00:00.000Z`) + 864e5).toISOString();
+        lista = D.comandasImpressasEntre(ini, fim);
+      }
+      const pend = new Set(cache?.chaves || []);
+      return { comandas: lista.map((c) => ({ ...c, unidades: (c.itens || []).reduce((s, i) => s + (Number(i.qtd) || 0), 0),
+        pendente: pend.has(c.chave) || (c.canal === 'manual' && !c.concluida_em) })) };
+    },
     // Marca como impressas (a tela chama depois de mandar para a impressora) ou volta para "não impressa".
     'POST /api/comandas/impressas': async (_u, body) => {
-      const chaves = (Array.isArray(body?.chaves) ? body.chaves : []).map(String).filter((c) => /^(ml|shopee|magalu|leroy|amazon):[\w:.-]{1,80}$/.test(c));
+      const chaves = (Array.isArray(body?.chaves) ? body.chaves : []).map(String).filter((c) => /^(ml|shopee|magalu|leroy|amazon|manual):[\w:.-]{1,80}$/.test(c));
       if (!chaves.length || chaves.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 comandas.'), { status: 400 });
       D.comandasImpressas(chaves, body?.impressa !== false);
       return { ok: chaves.length };
+    },
+    'GET /api/comandas/catalogo': async () => ({ produtos: estoque.catalogo().lista.filter((p) => p.sku).map((p) => ({ sku: p.sku, nome: p.nome })) }),
+    // Comanda manual: venda fora dos marketplaces. Itens pelo SKU do produto (DQ-407) ou do kit (KIT-407.408).
+    'POST /api/comandas/manual': async (_u, b) => {
+      const cliente = String(b?.cliente || '').trim().slice(0, 80);
+      const loja = String(b?.loja || '').trim().slice(0, 40);
+      if (!cliente) throw Object.assign(new Error('Informe o nome do cliente.'), { status: 400 });
+      if (!loja) throw Object.assign(new Error('Informe por onde foi a venda (ex.: Josi, Balcão, OLX).'), { status: 400 });
+      const itens = (Array.isArray(b?.itens) ? b.itens : []).filter((i) => String(i?.codigo || '').trim());
+      const cat = estoque.catalogo();
+      estoque.expandir(itens, cat);   // confere os produtos antes de criar
+      const chave = `manual:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const dia = diaLocal();
+      const nome = (cod) => { const ns = require('./estoque.js').numerosDoCodigo(cod, cat.porSku);
+        return ns.map((n) => cat.porNumero.get(n)?.nome).filter(Boolean).join(' + ') || null; };
+      const x = { chave, canal: 'manual', loja, pedido: String(b?.pedido || '').trim().slice(0, 30) || `VD-${dia.slice(2).replace(/-/g, '')}`,
+        categoria: 'Venda direta', envio: String(b?.envio || '').trim().slice(0, 40) || 'Retirada', cliente,
+        prazo: /^\d{4}-\d{2}-\d{2}$/.test(b?.prazo || '') ? `${b.prazo}T21:00:00.000Z` : null, comprado_em: new Date().toISOString(),
+        itens: itens.map((i) => ({ qtd: Math.round(Number(i.qtd)), sku: String(i.codigo).trim().toUpperCase(), titulo: nome(i.codigo), variacao: null })),
+        etapa: String(b?.obs || '').trim().slice(0, 120) || null };
+      const [numerada] = numerar([x], D.comandasDoDia(dia), dia);
+      if (b?.baixar_estoque !== false) estoque.lancarVendaManual(`comanda:${chave}`, itens, `Venda direta · ${loja}`, `Comanda ${numerada.numero} · ${x.pedido}`);
+      D.comandasCriar([numerada]);
+      return { chave, numero: numerada.numero, dia };
+    },
+    'POST /api/comandas/manual/concluir': async (_u, b) => {
+      const chave = String(b?.chave || '');
+      if (!/^manual:[a-z0-9]+$/.test(chave)) throw Object.assign(new Error('Comanda inválida.'), { status: 400 });
+      D.comandaConcluir(chave, b?.concluida !== false);
+      return { ok: true };
+    },
+    // Cancelar devolve os produtos ao estoque.
+    'POST /api/comandas/manual/cancelar': async (_u, b) => {
+      const chave = String(b?.chave || '');
+      if (!/^manual:[a-z0-9]+$/.test(chave)) throw Object.assign(new Error('Comanda inválida.'), { status: 400 });
+      const [c] = D.comandasListar([chave]);
+      if (!c) throw Object.assign(new Error('Comanda não encontrada.'), { status: 404 });
+      estoque.estornarRef(`comanda:${chave}`, `Venda direta · ${c.loja}`);
+      D.comandaApagar(chave);
+      return { ok: true };
     },
   };
   return { rotas, rotasParam: [] };

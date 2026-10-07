@@ -1848,7 +1848,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS comandas_dia ON comandas(dia, categoria);
 `);
-const COMANDA_DADOS = ['canal', 'loja', 'pedido', 'pedidos', 'envio', 'cliente', 'prazo', 'itens', 'etapa'];
+const COMANDA_DADOS = ['canal', 'loja', 'pedido', 'pedidos', 'envio', 'cliente', 'prazo', 'itens', 'etapa', 'comprado_em'];
 const dadosComanda = (x) => JSON.stringify(Object.fromEntries(COMANDA_DADOS.map((k) => [k, x[k] ?? null])));
 function comandasDe(chaves) {
   const st = db.prepare('SELECT 1 FROM comandas WHERE chave=?');
@@ -1881,6 +1881,149 @@ function comandasImpressas(chaves, impressa) {
   try { for (const c of chaves) { if (impressa) marcar.run(agora, c); else desmarcar.run(c); } db.exec('COMMIT'); }
   catch (e) { db.exec('ROLLBACK'); throw e; }
 }
+
+// ---------- estoque (estoque.js) ----------
+// Saldo = soma de estoque_mov com historico=0 (o que aconteceu depois da 1ª contagem). O histórico
+// importado da planilha (historico=1) só serve para a média de saída, o custo médio e os relatórios.
+// qtd tem sinal: + entra, - sai. ref liga o movimento à origem (venda:ml:…, compra:12, comanda:manual:3)
+// e é por ela que a baixa automática confere o que já lançou (sem lançar duas vezes).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS estoque_produtos (
+    numero INTEGER PRIMARY KEY, situacao TEXT, classificacao TEXT, ref_compra TEXT, fornecedor TEXT, atualizado_em TEXT
+  );
+  CREATE TABLE IF NOT EXISTS fornecedores (
+    nome TEXT PRIMARY KEY, representante TEXT, telefone TEXT, endereco TEXT, prazo_meses REAL
+  );
+  CREATE TABLE IF NOT EXISTS estoque_mov (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data TEXT NOT NULL, tipo TEXT NOT NULL, numero INTEGER NOT NULL, qtd INTEGER NOT NULL,
+    valor_unit REAL, origem TEXT, ref TEXT, historico INTEGER NOT NULL DEFAULT 0,
+    quem TEXT, obs TEXT, desfeito INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS estoque_mov_num ON estoque_mov(numero, historico);
+  CREATE INDEX IF NOT EXISTS estoque_mov_ref ON estoque_mov(ref);
+  CREATE INDEX IF NOT EXISTS estoque_mov_data ON estoque_mov(data);
+  CREATE TABLE IF NOT EXISTS estoque_contagem (
+    numero INTEGER PRIMARY KEY, contado INTEGER NOT NULL, quem TEXT, em TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS compras (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido TEXT NOT NULL, data TEXT NOT NULL, fornecedor TEXT, numero INTEGER NOT NULL, qtd INTEGER NOT NULL,
+    previsao TEXT, status TEXT NOT NULL DEFAULT 'aberto', recebido_qtd INTEGER NOT NULL DEFAULT 0,
+    valor_pago REAL, recebido_em TEXT, obs TEXT, da_planilha INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS compras_pedido ON compras(pedido);
+`);
+try { db.exec('ALTER TABLE comandas ADD COLUMN concluida_em TEXT'); } catch { /* já existe */ }
+try { db.exec('ALTER TABLE fornecedores ADD COLUMN situacao TEXT'); } catch { /* já existe */ }
+
+const estoqueProdutos = () => db.prepare('SELECT * FROM estoque_produtos').all();
+function estoqueProdutoGravar(numero, p) {
+  db.prepare(`INSERT INTO estoque_produtos (numero, situacao, classificacao, ref_compra, fornecedor, atualizado_em) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(numero) DO UPDATE SET situacao=excluded.situacao, classificacao=excluded.classificacao, ref_compra=excluded.ref_compra,
+    fornecedor=excluded.fornecedor, atualizado_em=excluded.atualizado_em`)
+    .run(numero, p.situacao ?? null, p.classificacao ?? null, p.ref_compra ?? null, p.fornecedor ?? null, agora());
+}
+const fornecedoresListar = () => db.prepare('SELECT * FROM fornecedores ORDER BY nome COLLATE NOCASE').all();
+function fornecedorGravar(f) {
+  db.prepare(`INSERT INTO fornecedores (nome, representante, telefone, endereco, prazo_meses, situacao) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(nome) DO UPDATE SET representante=excluded.representante, telefone=excluded.telefone, endereco=excluded.endereco,
+    prazo_meses=excluded.prazo_meses, situacao=excluded.situacao`)
+    .run(f.nome, f.representante ?? null, f.telefone ?? null, f.endereco ?? null, f.prazo_meses ?? null, f.situacao || 'Ativo');
+}
+const fornecedorRemover = (nome) => db.prepare('DELETE FROM fornecedores WHERE nome=?').run(nome);
+
+// Movimentos: lista [{data, tipo, numero, qtd, valor_unit, origem, ref, historico, quem, obs}], numa transação.
+function estoqueMovGravar(lista) {
+  const st = db.prepare(`INSERT INTO estoque_mov (data, tipo, numero, qtd, valor_unit, origem, ref, historico, quem, obs, criado_em)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+  const em = agora();
+  const ids = [];
+  db.exec('BEGIN');
+  try {
+    for (const m of lista) ids.push(Number(st.run(m.data, m.tipo, m.numero, m.qtd, m.valor_unit ?? null, m.origem ?? null, m.ref ?? null,
+      m.historico ? 1 : 0, m.quem ?? null, m.obs ?? null, em).lastInsertRowid));
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return ids;
+}
+// Troca TODO o histórico importado (importar de novo a planilha não duplica).
+function estoqueHistoricoTrocar(lista) {
+  db.exec('BEGIN');
+  try { db.prepare('DELETE FROM estoque_mov WHERE historico=1').run(); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return estoqueMovGravar(lista.map((m) => ({ ...m, historico: 1 }))).length;
+}
+const estoqueSaldos = () => new Map(db.prepare('SELECT numero, SUM(qtd) s FROM estoque_mov WHERE historico=0 AND desfeito=0 GROUP BY numero').all().map((r) => [r.numero, r.s]));
+// Para a reposição e o custo médio: por produto, saídas (sem ajustes) desde `de` e entradas com valor.
+function estoqueResumoMov(de) {
+  return db.prepare(`SELECT numero,
+      SUM(CASE WHEN qtd < 0 AND tipo <> 'ajuste' AND data >= ? THEN -qtd ELSE 0 END) AS saidas,
+      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd ELSE 0 END) AS ent_qtd,
+      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd * COALESCE(valor_unit, 0) ELSE 0 END) AS ent_valor,
+      MAX(CASE WHEN qtd < 0 AND tipo <> 'ajuste' THEN data END) AS ultima_saida
+    FROM estoque_mov WHERE desfeito=0 GROUP BY numero`).all(de);
+}
+const estoqueSomaPorRef = (prefixo) => new Map(db.prepare(`SELECT ref || '|' || numero AS k, SUM(qtd) s FROM estoque_mov
+  WHERE historico=0 AND desfeito=0 AND ref LIKE ? GROUP BY ref, numero`).all(prefixo + '%').map((r) => [r.k, r.s]));
+function estoqueMovListar({ numero, de, ate, tipo, origem, historico, limite = 500 } = {}) {
+  const w = [], p = [];
+  if (numero != null) { w.push('numero=?'); p.push(numero); }
+  if (de) { w.push('data>=?'); p.push(de); }
+  if (ate) { w.push('data<=?'); p.push(ate); }
+  if (tipo) { w.push('tipo=?'); p.push(tipo); }
+  if (origem) { w.push('origem=?'); p.push(origem); }
+  if (historico != null) { w.push('historico=?'); p.push(historico ? 1 : 0); }
+  return db.prepare(`SELECT * FROM estoque_mov ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY data DESC, id DESC LIMIT ?`).all(...p, limite);
+}
+const estoqueMovObter = (id) => db.prepare('SELECT * FROM estoque_mov WHERE id=?').get(id);
+// Desfazer um lançamento manual: todas as linhas dele (um kit vira várias), gravadas juntas.
+const estoqueMovDesfeito = (m) => db.prepare(`UPDATE estoque_mov SET desfeito=1 WHERE historico=0 AND criado_em=? AND tipo=? AND ref IS ? AND origem IS ? AND quem IS ?`)
+  .run(m.criado_em, m.tipo, m.ref, m.origem, m.quem).changes;
+// Relatório: soma por período e origem (dia, semana, mês ou ano), entre duas datas.
+function estoqueRelatorio(de, ate) {
+  return db.prepare(`SELECT data, tipo, origem, numero, qtd, valor_unit FROM estoque_mov WHERE data >= ? AND data <= ? AND desfeito=0`).all(de, ate);
+}
+
+const contagemListar = () => db.prepare('SELECT * FROM estoque_contagem').all();
+function contagemGravar(numero, contado, quem) {
+  if (contado == null) return db.prepare('DELETE FROM estoque_contagem WHERE numero=?').run(numero);
+  db.prepare(`INSERT INTO estoque_contagem (numero, contado, quem, em) VALUES (?,?,?,?)
+    ON CONFLICT(numero) DO UPDATE SET contado=excluded.contado, quem=excluded.quem, em=excluded.em`).run(numero, contado, quem ?? null, agora());
+}
+const contagemApagar = (numeros) => { const st = db.prepare('DELETE FROM estoque_contagem WHERE numero=?'); for (const n of numeros) st.run(n); };
+
+const comprasListar = () => db.prepare('SELECT * FROM compras ORDER BY data DESC, pedido DESC, id').all();
+const compraObter = (id) => db.prepare('SELECT * FROM compras WHERE id=?').get(id);
+function comprasCriar(linhas) {
+  const st = db.prepare(`INSERT INTO compras (pedido, data, fornecedor, numero, qtd, previsao, status, recebido_qtd, valor_pago, recebido_em, obs, da_planilha, criado_em)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const em = agora();
+  db.exec('BEGIN');
+  try {
+    for (const l of linhas) st.run(l.pedido, l.data, l.fornecedor ?? null, l.numero, l.qtd, l.previsao ?? null, l.status || 'aberto',
+      l.recebido_qtd || 0, l.valor_pago ?? null, l.recebido_em ?? null, l.obs ?? null, l.da_planilha ? 1 : 0, em);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+const comprasDaPlanilhaApagar = () => db.prepare('DELETE FROM compras WHERE da_planilha=1').run();
+function compraAtualizar(id, c) {
+  db.prepare('UPDATE compras SET status=?, recebido_qtd=?, valor_pago=?, recebido_em=? WHERE id=?')
+    .run(c.status, c.recebido_qtd, c.valor_pago ?? null, c.recebido_em ?? null, id);
+}
+
+// Comanda manual (venda fora dos marketplaces): fica na tela até ser concluída.
+const comandasManuaisAbertas = () => db.prepare(`SELECT chave FROM comandas WHERE chave LIKE 'manual:%' AND concluida_em IS NULL`).all().map((r) => r.chave);
+const comandaConcluir = (chave, sim = true) => db.prepare('UPDATE comandas SET concluida_em=? WHERE chave=?').run(sim ? agora() : null, chave);
+const comandaApagar = (chave) => db.prepare('DELETE FROM comandas WHERE chave=?').run(chave);
+// Histórico: as impressas entre duas datas (ISO) ou as de um número de venda (pedido, pack ou um dos pedidos do envio).
+const comandaDe = (r) => ({ chave: r.chave, categoria: r.categoria, dia: r.dia, numero: r.numero, criada_em: r.criada_em,
+  impressa_em: r.impressa_em, impressoes: r.impressoes, concluida_em: r.concluida_em ?? null, ...JSON.parse(r.dados) });
+const comandasImpressasEntre = (de, ate) => db.prepare('SELECT * FROM comandas WHERE impressa_em >= ? AND impressa_em < ? ORDER BY impressa_em DESC LIMIT 2000')
+  .all(de, ate).map(comandaDe);
+const comandasDoPedido = (num) => db.prepare(`SELECT * FROM comandas WHERE json_extract(dados, '$.pedido') LIKE ?
+    OR EXISTS (SELECT 1 FROM json_each(comandas.dados, '$.pedidos') WHERE value LIKE ?) ORDER BY criada_em DESC LIMIT 200`)
+  .all(`%${num}%`, `%${num}%`).map(comandaDe);
 
 module.exports = {
   db, DB_FILE, cifrar, decifrar,
@@ -1919,4 +2062,8 @@ module.exports = {
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas,
+  comandasManuaisAbertas, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
+  estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
+  estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
+  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar,
 };

@@ -1201,7 +1201,7 @@ function criar({ D, janela }) {
     },
   });
 
-  return { rotas, rotasParam: [], sp, idVendedor, sincronizar };
+  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens };
 }
 
 module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,

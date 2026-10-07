@@ -1029,6 +1029,21 @@ const routes = {
     const id = D.usuarioCriar(U.validarUsuario(body), senha);
     return { id, senha_temporaria: senha };   // mostrada UMA vez na tela; o banco guarda só o hash
   },
+  // De qual LOJA (empresa) é cada conta, para a tela Todas as contas agrupar: o nome que o marketplace
+  // dá nem sempre é o da empresa (a Amazon diz o nome de uma loja numa conta de outra). Gravado à mão em estado.
+  'GET /api/contas/lojas': async () => {
+    const ids = [...D.contasListar().map((c) => String(c.ml_user_id)), 'amazon', 'leroy', 'magalu', ...D.shopeeLojasListar().map((l) => `shopee-${l.shop_id}`)];
+    return { lojas: Object.fromEntries(ids.map((id) => [id, D.configLer(`loja_de:${id}`)]).filter(([, v]) => v)) };
+  },
+  'PUT /api/contas/lojas': async (_u, body) => {
+    soAdministrador();
+    const conta = String(body?.conta || '');
+    const ok = contaExterna(conta) || (Number.isInteger(Number(conta)) && D.contaObter(Number(conta)));
+    if (!ok) throw Object.assign(new Error('Conta não encontrada.'), { status: 404 });
+    const loja = String(body?.loja || '').trim().replace(/\s+/g, ' ').slice(0, 40) || null;
+    D.configGravar(`loja_de:${conta}`, loja);
+    return { conta, loja };
+  },
   'GET /api/accounts': async () => ({
     ativa: D.contaAtivaId() ? Number(D.contaAtivaId()) : null,
     contas: D.contasListar(),
@@ -1968,6 +1983,7 @@ const rotasParam = [
 // Promoções, devoluções e custos/vendas moram em arquivos próprios; as rotas entram aqui e
 // passam pelo mesmo despachar() (sessão, origem e MCP iguais às outras).
 let custosMod = null;   // composição do kit e filtro por produto, usados em GET /api/items
+let devolucoesMod = null;   // devoluções do ML: a baixa do estoque devolve o que chegou sem defeito
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
@@ -1975,6 +1991,7 @@ for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), req
   Object.assign(routes, m.rotas);
   rotasParam.push(...m.rotasParam);
   if (m.composicao) custosMod = m;
+  if (m.atualizarDevolucoes) devolucoesMod = m;
 }
 
 // Histórico do Mercado Ads: a conta dia a dia + as campanhas. Medido em 29/09/2026:
@@ -2110,7 +2127,13 @@ const magaluMod = require('./magalu.js').criar({ D, janela, novoEstadoOAuth, con
   enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a), pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, magaluMod.rotas);
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
-Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod }).rotas);
+// Estoque (estoque.js): saldo, baixa automática das vendas, contagem, compras e relatórios.
+const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) => sincronizarVendas(c, dias), shopeeVendas: shopeeVendasMod,
+  atualizarDevolucoes: (c, de) => devolucoesMod.atualizarDevolucoes(c, de),
+  amazon: amazonMod, leroy: leroyMod, magalu: magaluMod, quem: () => CTX.atual()?.usuario?.login || null });
+Object.assign(routes, estoqueMod.rotas);
+Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
+  estoque: estoqueMod }).rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
@@ -2551,6 +2574,23 @@ async function tratarPainelNoContexto(req, res, online = false) {
     }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
     return res.end(Buffer.from(await r.arrayBuffer()));
+  }
+
+  // Importar a planilha de estoque (.xlsx em bytes crus). Só o administrador (usuarios.js não libera).
+  if (req.method === 'POST' && url.pathname === '/api/estoque/importar') {
+    try {
+      const chunks = []; let size = 0;
+      for await (const c of req) {
+        size += c.length;
+        if (size > 25 * 1024 * 1024) throw Object.assign(new Error('Planilha acima de 25 MB.'), { status: 413 });
+        chunks.push(c);
+      }
+      const r = await estoqueMod.importar(Buffer.concat(chunks));
+      D.auditoriaGravar(quem.login, 'POST', url.pathname, 200);
+      return send(200, r);
+    } catch (e) {
+      return send(e.status || 500, { error: e.message });
+    }
   }
 
   // Upload de foto: bytes crus -> multipart para o ML.

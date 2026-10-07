@@ -43,7 +43,7 @@ for (let i = 0; i < 50; i++) assert.strictEqual(SEG.problemaSenha(U.senhaTempora
 // ---------- cada tela de um módulo só chama rotas liberadas para o módulo ----------
 // (o que a tela tem só para o administrador — conexão e diagnóstico — fica na lista abaixo)
 const SO_ADMIN = { '/leroy.html': [/^\/api\/leroy\/(diagnostico|remover)/], '/anuncios.html': [/^\/api\/(produtos-custo|empresa|imposto)$/],
-  '/vendas.html': [], '/produtos.html': [] };
+  '/vendas.html': [], '/produtos.html': [], '/estoque.html': [/^\/api\/estoque\/importar$/] };
 for (const m of U.MODULOS) {
   const quem = { admin: false, modulos: [m.id] };
   for (const pg of m.paginas) {

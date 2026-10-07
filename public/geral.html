@@ -9,25 +9,48 @@
 <link rel="stylesheet" href="/tema-hn.css?v=3">
 <link rel="stylesheet" href="/tema-painel.css?v=1">
 <style>
+  /* esta tela usa a largura toda (as outras ficam em 1320 px) */
+  main{max-width:none;padding:20px 24px 72px}
   .cartao.destaque{background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-color:transparent;color:#fff}
   .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dbe7ff}
-  /* um cartão por conta, com o logo dela */
-  .contas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:20px}
-  .conta{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;border-top:4px solid var(--cor,#2563eb)}
-  .conta-topo{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:48px}
-  .conta-topo img{max-width:120px;max-height:48px;object-fit:contain}
-  .conta-topo .nome{font-weight:700;font-size:15px;line-height:1.2}
-  .conta-topo .marca-nome{text-align:left;font-size:17px}
-  .conta-topo .nome small{letter-spacing:0;display:block;font-weight:400;font-size:12px;color:var(--muted)}
-  .conta-topo .bt{margin-left:auto;white-space:nowrap}
-  .conta dl{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin:0}
-  .conta dt{font-size:12px;color:var(--muted)}
-  .conta dd{margin:0;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
-  .conta dd small{display:block;font-size:11px;font-weight:400;color:var(--muted)}
-  .conta .part{height:8px;border-radius:4px;background:#eef1f6;overflow:hidden;margin-top:12px}
-  .conta .part i{display:block;height:100%;background:var(--cor,#2563eb)}
-  .conta .part-txt{font-size:12px;color:var(--muted);margin:4px 0 0}
+  /* lojas (Loja A, Loja B…) e, dentro de cada uma, um cartão por canal */
+  .loja{margin:0 0 22px}
+  .loja-topo{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px}
+  .loja-topo img{width:46px;height:46px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line);padding:3px}
+  .loja-topo h2{margin:0;font-size:20px;letter-spacing:-.01em}
+  .loja-topo .resumo{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .pilula{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);white-space:nowrap}
+  .pilula b{font-variant-numeric:tabular-nums}
+  .pilula.lucro b{color:#15803d}
+  .contas{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  @media (min-width:1500px){ .contas{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))} }
+  .contas:has(> :only-child){grid-template-columns:minmax(280px,520px)}   /* loja com um canal só: não estica a tela toda */
+  .conta{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px 14px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);transition:transform .15s,box-shadow .15s}
+  .conta::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--cor,#2563eb)}
+  .conta:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(15,23,42,.05),0 12px 28px rgba(15,23,42,.08)}
+  .conta-topo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .canal{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+  .canal i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--cor);color:var(--cor-txt,#fff);font-style:normal;font-size:13px;font-weight:800}
+  .canal small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+  .conta-topo .abrir{margin-left:auto;font:inherit;font-size:13px;font-weight:600;color:var(--brand,#2563eb);background:none;border:0;cursor:pointer;padding:6px 4px;white-space:nowrap}
+  .conta-topo .abrir:hover{text-decoration:underline}
+  .conta dl{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin:0}
+  .conta dt{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .conta dd{margin:2px 0 0;font-size:18px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .conta dd small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);letter-spacing:0}
+  .conta dd.lucro{color:#15803d}.conta dd.lucro.neg{color:#b91c1c}
+  .conta .rodape{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .conta .part{flex:1;height:6px;border-radius:999px;background:#eef1f6;overflow:hidden}
+  .conta .part i{display:block;height:100%;border-radius:999px;background:var(--cor,#2563eb)}
+  .conta .part-txt{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .conta .pct{font-size:12px;font-weight:700;color:#334155;font-variant-numeric:tabular-nums}
   .conta.erro p{color:#b91c1c;font-size:13px;margin:0}
+  .chip-m{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:#e7f4ee;color:#15803d;margin-left:4px}
+  .chip-m.neg{background:#fde8e8;color:#b91c1c}
+  .sem-custo{display:block;color:#b4441e}
+  .troca-loja{display:block;font:inherit;font-size:12px;font-weight:500;color:var(--muted);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  .troca-loja:hover{color:var(--brand,#2563eb);text-decoration:underline}
   tr.total td{font-weight:700;background:#f8fafd}
   td .bola,.legenda .bola{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
   /* barras empilhadas: o faturamento de cada conta em cada dia */
@@ -44,7 +67,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=31"></script>
+    <script src="/menu.js?v=32"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -69,7 +92,7 @@
 
   <div class="cartoes" id="cartoes"><p class="carregando">Somando as vendas de cada conta…</p></div>
 
-  <div class="contas" id="contas"></div>
+  <div id="contas"></div>
 
   <section class="bloco">
     <h2>Para onde vai o dinheiro, por conta</h2>
@@ -117,40 +140,89 @@ const marcas = {};
 async function lerMarcas(ids){
   await Promise.all(ids.filter((id) => !(id in marcas)).map(async (id) => { try{ marcas[id] = await api('/api/marca?conta=' + encodeURIComponent(id)); }catch{ marcas[id] = null; } }));
 }
-// nome repetido entre contas (ex.: as duas do ML com o mesmo nome): acrescenta o apelido
-const nomeDe = (c) => {
-  const n = marcas[c.ml_user_id]?.nome || c.nickname;
-  const repetido = Object.entries(marcas).filter(([id, m]) => m?.nome === n && String(id) !== String(c.ml_user_id)).length;
-  return repetido && c.nickname && c.nickname !== n ? n + ' · ' + c.nickname : n;
+// Nome da LOJA (a empresa: Loja A, Loja B…) e do CANAL (o marketplace), iguais em toda a tela.
+// Loja: o nome que o próprio marketplace dá (apelido do ML, loja da Shopee/Leroy/Amazon); senão o nome da tela
+// Empresa — que não vale quando é só o nome do marketplace ("Mercado Livre", "Shopee"…); senão a marca geral.
+const CANAIS = { ml: ['Mercado Livre', '#ffe600', '#2d3277', 'ML'], shopee: ['Shopee', '#ee4d2d', '#fff', 'S'], amazon: ['Amazon', '#232f3e', '#ff9900', 'a'],
+  leroy: ['Leroy Merlin', '#78be20', '#fff', 'LM'], magalu: ['Magalu', '#0086ff', '#fff', 'M'] };
+const canalDe = (c) => (c.amazon ? 'amazon' : c.leroy ? 'leroy' : c.magalu ? 'magalu' : c.shopee ? 'shopee' : 'ml');
+const MARKETPLACE = /^(mercado\s*livre|ml|shopee|amazon|leroy(\s*merlin)?|magalu|magazine luiza|loja|sem nome)$/i;
+const PEQUENAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+function capitalizar(t){
+  return String(t || '').trim().replace(/\s+/g, ' ').split(' ').map((p, i) => {
+    if(/^[A-Z0-9]{2,3}$/.test(p)) return p;                   // sigla: ABC
+    const m = p.toLowerCase();
+    return i && PEQUENAS.has(m) ? m : m.charAt(0).toUpperCase() + m.slice(1);
+  }).join(' ');
+}
+let marcaGeral = null;
+let lojasDefinidas = {}, souAdmin = false;   // loja escolhida para cada conta (vale antes de tudo)
+const lojaDe = (c) => {
+  for(const n of [lojasDefinidas[c.ml_user_id], c.loja, marcas[c.ml_user_id]?.nome, marcaGeral]) if(n && !MARKETPLACE.test(String(n).trim())) return capitalizar(n);
+  return 'Minha loja';
 };
+const nomeDe = (c) => `${lojaDe(c)} · ${CANAIS[canalDe(c)][0]}`;
 
+function cartaoConta(c, cor, total){
+  const [nomeCanal, , corTxt, sigla] = CANAIS[canalDe(c)];
+  const k = el('article', 'conta' + (c.erro ? ' erro' : '')); k.style.setProperty('--cor', cor[c.ml_user_id]); k.style.setProperty('--cor-txt', corTxt);
+  const topo = el('div', 'conta-topo');
+  const nome = el('div', 'canal'); const ic = el('i', null, sigla); ic.setAttribute('aria-hidden', 'true');
+  const txt = el('div', null, nomeCanal);
+  if(souAdmin){
+    const tl = el('button', 'troca-loja', lojaDe(c) + ' ✎'); tl.type = 'button'; tl.title = 'Mudar de qual loja é esta conta';
+    tl.onclick = async () => {
+      const lojas = [...new Set(Object.values(lojasDefinidas).concat([lojaDe(c)]))].join(', ');
+      const nova = prompt(`De qual loja é a conta ${nomeCanal} (${lojaDe(c)})?\nLojas: ${lojas}`, lojaDe(c));
+      if(nova == null || !nova.trim()) return;
+      try{ await api('/api/contas/lojas', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conta: c.ml_user_id, loja: nova.trim() }) });
+        lojasDefinidas[c.ml_user_id] = nova.trim(); carregar(); }catch(e){ erroTela(e.message); }
+    };
+    txt.appendChild(tl);
+  } else txt.appendChild(el('small', null, lojaDe(c)));
+  nome.append(ic, txt);
+  const bt = el('button', 'abrir', (c.amazon ? 'Abrir Amazon' : c.externa ? 'Ver pedidos' : 'Abrir Dashboard') + ' →'); bt.type = 'button';
+  bt.setAttribute('aria-label', `${bt.textContent.replace(' →', '')}: ${nomeDe(c)}`);
+  bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
+  topo.append(nome, bt); k.appendChild(topo);
+  if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); return k; }
+  const p = c.periodo, dl = el('dl');
+  const bloco = (rot, valor, nota, cls) => { const d = el('div'); const dd = el('dd', cls || null, valor); if(nota) dd.appendChild(nota instanceof Node ? nota : el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
+  bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
+  bloco(`Faturamento ${dias}d`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.`);
+  const notaLucro = el('small'); notaLucro.append('margem ', el('span', 'chip-m' + (p.margem < 0 ? ' neg' : ''), pct(p.margem)));
+  if(c.sem_custo) notaLucro.appendChild(el('span', 'sem-custo', `${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo`));
+  bloco('Lucro', real(p.lucro), notaLucro, 'lucro' + (p.lucro < 0 ? ' neg' : ''));
+  bloco('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), p.cancelados ? `${numero(p.cancelados)} cancelado(s)` : 'nenhum cancelado');
+  k.appendChild(dl);
+  const parte = total > 0 ? p.faturamento / total : 0;
+  const rod = el('div', 'rodape'); const barra = el('div', 'part'); const i = el('i'); i.style.width = (parte * 100) + '%'; barra.appendChild(i);
+  rod.append(barra, el('span', 'pct', pct(parte, 0)));
+  k.append(rod, el('p', 'part-txt', 'do faturamento de todas as contas' + (c.fretes_pendentes ? ` · ${numero(c.fretes_pendentes)} frete(s) ainda sendo lidos` : '')));
+  return k;
+}
 function pintarContas(r, cor){
   const box = $('contas'); box.innerHTML = '';
   const total = r.total.periodo.faturamento;
-  for(const c of r.contas){
-    const k = el('div', 'conta' + (c.erro ? ' erro' : '')); k.style.setProperty('--cor', cor[c.ml_user_id]);
-    const topo = el('div', 'conta-topo');
-    const img = el('img'); img.alt = ''; img.src = '/api/marca/logo?conta=' + c.ml_user_id;
-    img.onerror = () => img.remove();   // conta sem logo: fica só o nome
-    // nome e logo da tela Empresa e custos de cada conta, no mesmo estilo do menu
-    const nome = el('div', 'nome marca-nome', nomeDe(c));
-    nome.appendChild(el('small', null, c.amazon ? 'Amazon' : c.leroy ? 'Leroy Merlin' : c.magalu ? 'Magalu' : c.shopee ? 'Shopee' : 'Mercado Livre' + (c.nickname && !nomeDe(c).includes(c.nickname) ? ' · ' + c.nickname : '')));
-    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : c.shopee || c.leroy || c.magalu ? 'Abrir os pedidos' : 'Abrir o Dashboard'); bt.type = 'button';
-    bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
-    topo.append(img, nome, bt); k.appendChild(topo);
-    if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); box.appendChild(k); continue; }
-    const p = c.periodo, dl = el('dl');
-    const bloco = (rot, valor, nota) => { const d = el('div'); const dd = el('dd', null, valor); if(nota) dd.appendChild(el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
-    bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
-    bloco(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`);
-    bloco('Lucro', real(p.lucro), `margem ${pct(p.margem)}` + (c.sem_custo ? ` · ${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo` : ''));
-    bloco('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), p.cancelados ? `${numero(p.cancelados)} cancelado(s)` : null);
-    k.appendChild(dl);
-    const parte = total > 0 ? p.faturamento / total : 0;
-    const barra = el('div', 'part'); const i = el('i'); i.style.width = (parte * 100) + '%'; barra.appendChild(i);
-    k.append(barra, el('p', 'part-txt', `${pct(parte, 0)} do faturamento de todas as contas`
-      + (c.fretes_pendentes ? ` · ${numero(c.fretes_pendentes)} frete(s) ainda sendo lidos` : '')));
-    box.appendChild(k);
+  // agrupa pela loja, a de maior faturamento primeiro; dentro dela, os canais do maior para o menor
+  const grupos = new Map();
+  for(const c of r.contas){ const l = lojaDe(c); if(!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(c); }
+  const fat = (c) => c.periodo?.faturamento || 0;
+  const ordem = [...grupos].sort((a, b) => b[1].reduce((s, c) => s + fat(c), 0) - a[1].reduce((s, c) => s + fat(c), 0));
+  for(const [loja, contas] of ordem){
+    contas.sort((a, b) => fat(b) - fat(a));
+    const sec = el('section', 'loja'); sec.setAttribute('aria-label', loja);
+    const topo = el('div', 'loja-topo');
+    const logo = el('img'); logo.alt = ''; logo.src = '/api/marca/logo?conta=' + encodeURIComponent(contas[0].ml_user_id); logo.onerror = () => logo.remove();
+    const soma = (k) => contas.filter((c) => !c.erro).reduce((s, c) => s + (c.periodo?.[k] || 0), 0);
+    const res = el('div', 'resumo');
+    const pil = (rot, v, cls) => { const p = el('span', 'pilula' + (cls ? ' ' + cls : '')); p.append(rot + ' ', el('b', null, v)); res.appendChild(p); };
+    pil(`Faturamento ${dias}d`, real(soma('faturamento'))); pil('Lucro', real(soma('lucro')), 'lucro');
+    pil('Participação', pct(total > 0 ? soma('faturamento') / total : 0, 0));
+    topo.append(logo, el('h2', null, loja), res);
+    const grade = el('div', 'contas');
+    for(const c of contas) grade.appendChild(cartaoConta(c, cor, total));
+    sec.append(topo, grade); box.appendChild(sec);
   }
 }
 
@@ -259,7 +331,7 @@ function comExterna(r, x, linhaBase){
   const contas = [...r.contas, linha];
   return { ...r, contas, total: somar(contas.filter((c) => !c.erro)), produtos: juntarProdutos(r.produtos, x.produtos) };
 }
-const comAmazon = (r, a) => comExterna(r, a, { ml_user_id: 'amazon', nickname: 'Amazon', amazon: true, tela: '/amazon.html' });
+const comAmazon = (r, a, loja) => comExterna(r, a, { ml_user_id: 'amazon', nickname: 'Amazon', loja, amazon: true, tela: '/amazon.html' });
 
 async function carregar(){
   const minha = ++geracao;
@@ -272,32 +344,35 @@ async function carregar(){
   const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
   try{
     const r = await api(`/api/contas/resumo?dias=${dias}`);
+    for(const c of r.contas) c.loja = c.nickname;   // apelido da conta no ML (LOJA A)
+    try{ lojasDefinidas = (await api('/api/contas/lojas')).lojas || {}; }catch{ lojasDefinidas = {}; }
+    try{ souAdmin = !!(await api('/api/eu')).admin; }catch{ souAdmin = false; }
     await lerMarcas(r.contas.map((c) => c.ml_user_id));
     if(minha !== geracao) return;
     pintar(r, false);
     let tudo = r; const erros = [];
     const a = await amz;
     if(minha !== geracao) return;
-    if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false){ await lerMarcas(['amazon']); tudo = comAmazon(tudo, a); }
+    if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false){ await lerMarcas(['amazon']); const cfg = await api('/api/amazon/config').catch(() => ({})); tudo = comAmazon(tudo, a, cfg.vendedor); }
     pintar(tudo, false);
     if((await leroy).conectada_em){
       const lm = await api(`/api/leroy/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(lm.erro) erros.push('Leroy Merlin: ' + lm.erro);
-      else { await lerMarcas(['leroy']); tudo = comExterna(tudo, lm, { ml_user_id: 'leroy', nickname: (lm.nome || 'Loja') + ' · Leroy Merlin', leroy: true, tela: '/vendas.html?conta=leroy' }); pintar(tudo, false); }
+      else { await lerMarcas(['leroy']); tudo = comExterna(tudo, lm, { ml_user_id: 'leroy', nickname: 'Leroy Merlin', loja: lm.nome, leroy: true, tela: '/vendas.html?conta=leroy' }); pintar(tudo, false); }
     }
     if((await magalu).conectada_em){
       const mg = await api(`/api/magalu/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(mg.erro) erros.push('Magalu: ' + mg.erro);
-      else { await lerMarcas(['magalu']); tudo = comExterna(tudo, mg, { ml_user_id: 'magalu', nickname: (mg.nome || 'Loja') + ' · Magalu', magalu: true, tela: '/vendas.html?conta=magalu' }); pintar(tudo, false); }
+      else { await lerMarcas(['magalu']); tudo = comExterna(tudo, mg, { ml_user_id: 'magalu', nickname: 'Magalu', loja: mg.nome, magalu: true, tela: '/vendas.html?conta=magalu' }); pintar(tudo, false); }
     }
     for(const l of await lojas){
       const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&dias=${dias}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(s.erro){ erros.push('Shopee: ' + s.erro); continue; }
       await lerMarcas(['shopee-' + l.shop_id]);
-      tudo = comExterna(tudo, s, { ml_user_id: 'shopee-' + l.shop_id, nickname: (s.nome || 'Loja') + ' · Shopee', shopee: true,
+      tudo = comExterna(tudo, s, { ml_user_id: 'shopee-' + l.shop_id, nickname: 'Shopee', loja: s.nome || l.nome, shopee: true,
         tela: `/vendas.html?conta=shopee-${l.shop_id}` });
       pintar(tudo, false);
     }
@@ -308,7 +383,10 @@ async function carregar(){
 
 function pintar(r, temAmazon){
   {
-    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : c.leroy ? '#78be20' : c.magalu ? '#0086ff' : c.shopee ? '#ee4d2d' : COR[i % COR.length]]));
+    const vistos = {};
+    const TONS = { ml: ['#f5c400', '#b38f00', '#ffe066'], shopee: ['#ee4d2d', '#a8331d', '#f58b74'], amazon: ['#232f3e', '#ff9900', '#56677d'],
+      leroy: ['#78be20', '#4f8a0e', '#a6d867'], magalu: ['#0086ff', '#0058a8', '#66b6ff'] };
+    const cor = Object.fromEntries(r.contas.map((c) => { const k = canalDe(c); const n = vistos[k] = (vistos[k] ?? -1) + 1; return [c.ml_user_id, TONS[k][n % 3]]; }));
     const t = r.total, boas = r.contas.filter((c) => !c.erro).length;
     $('topoTxt').textContent = `${boas} conta(s) somada(s)` + (r.contas.length > boas ? ` · ${r.contas.length - boas} com erro` : '')
       + `. Hoje e os últimos ${dias} dias.` + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');

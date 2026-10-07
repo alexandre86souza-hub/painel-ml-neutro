@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estoque</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  .abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+  .abas button{font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);cursor:pointer}
+  .abas button[aria-selected="true"]{background:#1f2937;color:#fff;border-color:#1f2937}
+  .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
+  .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .cartao small{display:block;font-size:12px;color:var(--muted)}
+  .cartao b{font-size:22px}
+  .cartao.alerta b{color:#b4441e}
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .filtros input,.filtros select,.form input,.form select,.form textarea{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px;background:#fff}
+  .filtros input[type=search]{flex:1 1 200px}
+  .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:0 0 10px}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .linhas .linha{display:grid;grid-template-columns:1.2fr 90px 110px 1.6fr 34px;gap:8px;align-items:center;margin:6px 0}
+  .linhas .nome{font-size:12px;color:var(--muted)}
+  @media (max-width:640px){ .linhas .linha{grid-template-columns:1fr 70px 34px} .linhas .linha .valor,.linhas .nome{grid-column:1/-1} }
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .chip.repor{background:#fde8e1;color:#b4441e}.chip.liquidar{background:#f3e8ff;color:#7e22ce}
+  .cartao.liquidar{border-color:#d8b4fe;background:#faf5ff;cursor:pointer}.cartao.liquidar b{color:#7e22ce}.chip.proximo{background:#fff4d6;color:#7a5600}.chip.regular{background:#e7f4ee;color:#1f6b4a}.chip.desc{background:#eef1f6;color:#64748b}
+  td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td.neg{color:#b42318;font-weight:700}
+  td .pequeno{display:block;font-size:11px;color:var(--muted)}
+  .bt.forte{background:#c96f50;color:#fff;border-color:#c96f50}
+  .aviso-caixa{border:1px solid #f3c3b1;background:#fdf3ee;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:13px}
+  .aviso-caixa.ok{border-color:#b9dfcc;background:#edf6f2}
+  input.contar{width:90px;text-align:right}
+  input.contar.mudou{border-color:#c96f50;background:#fdf3ee}
+  .pedido{border:1px solid var(--line);border-radius:12px;margin:0 0 10px;background:#fff}
+  .pedido > header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .pedido > header b{font-size:15px}
+  .escondido{display:none !important}
+  @media print{ body *{visibility:hidden} #impressaoPedido,#impressaoPedido *{visibility:visible} #impressaoPedido{position:absolute;left:0;top:0;width:100%} }
+  #impressaoPedido{display:none}
+  @media print{ #impressaoPedido{display:block;font:12pt Arial} #impressaoPedido table{width:100%;border-collapse:collapse} #impressaoPedido td,#impressaoPedido th{border:1px solid #000;padding:4px 6px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=32"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Estoque</h1>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="abas" role="tablist" id="abas">
+    <button type="button" role="tab" data-aba="saldo" aria-selected="true">Estoque</button>
+    <button type="button" role="tab" data-aba="lancar" aria-selected="false">Lançar entrada/saída</button>
+    <button type="button" role="tab" data-aba="movs" aria-selected="false">Movimentações</button>
+    <button type="button" role="tab" data-aba="rel" aria-selected="false">Relatórios</button>
+    <button type="button" role="tab" data-aba="contagem" aria-selected="false">Contagem</button>
+    <button type="button" role="tab" data-aba="compras" aria-selected="false">Compras</button>
+    <button type="button" role="tab" data-aba="cadastro" aria-selected="false">Cadastro e fornecedores</button>
+    <button type="button" role="tab" data-aba="importar" aria-selected="false" id="abaImportar">Importar planilha</button>
+  </div>
+
+  <!-- ESTOQUE -->
+  <section class="bloco" data-painel="saldo">
+    <div id="situacaoBaixa"></div>
+    <div class="cartoes" id="cartoes"></div>
+    <div class="filtros">
+      <input type="search" id="sBusca" placeholder="Buscar SKU, produto ou fornecedor" aria-label="Buscar produto">
+      <select id="sStatus" aria-label="Status"><option value="">Todos os status</option><option>Repor agora</option><option>Próximo de repor</option><option>Regular</option><option>Vender o restante</option><option>Não repor</option><option>Descontinuado</option></select>
+      <select id="sForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sAtivos" checked> Só ativos</label>
+      <button type="button" class="bt" id="sCsv">Baixar CSV</button>
+      <button type="button" class="bt" id="sReler">Dar baixa agora</button>
+    </div>
+    <div class="tabela-rolagem" id="sLista"><p class="carregando">Carregando…</p></div>
+    <details id="pendBox" class="escondido" style="margin-top:12px"><summary id="pendTit"></summary><div class="tabela-rolagem" id="pendLista"></div></details>
+  </section>
+
+  <!-- LANÇAR -->
+  <section class="bloco escondido" data-painel="lancar">
+    <h2>Lançar entrada ou saída</h2>
+    <p class="sub">Vendas dos marketplaces saem sozinhas e as devoluções do Mercado Livre sem defeito voltam sozinhas.
+      Devolução de outra loja: lance só o que voltou SEM defeito (com defeito não volta ao estoque) e nunca a do Full/FBA (volta ao armazém do marketplace). Aqui vão as entradas de fornecedor, as saídas manuais (Josi, troca, envio ao Full, OLX…) e as devoluções de cliente. Kit (KIT-407.408) vira os produtos dele.</p>
+    <form id="fLancar" autocomplete="off">
+      <div class="form">
+        <label>Tipo<select id="lTipo"><option value="entrada">Entrada (fornecedor)</option><option value="saida">Saída manual</option><option value="devolucao">Devolução de cliente (volta ao estoque)</option></select></label>
+        <label><span id="lOrigemRot">Fornecedor</span><input id="lOrigem" required maxlength="60" list="lOrigens"></label>
+        <label>Data<input id="lData" type="date"></label>
+        <label>Observação<input id="lObs" maxlength="200"></label>
+      </div>
+      <datalist id="lOrigens"></datalist>
+      <div class="linhas" id="lLinhas"></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="bt" id="lMais">+ Produto</button><button class="bt forte">Lançar</button></div>
+    </form>
+  </section>
+
+  <!-- MOVIMENTAÇÕES -->
+  <section class="bloco escondido" data-painel="movs">
+    <div class="filtros">
+      <input id="mProd" placeholder="SKU (ex.: DQ-407)" aria-label="Produto">
+      <label style="font-size:13px">De <input type="date" id="mDe"></label>
+      <label style="font-size:13px">Até <input type="date" id="mAte"></label>
+      <select id="mTipo" aria-label="Tipo"><option value="">Todos os tipos</option><option value="venda">Venda</option><option value="cancelamento">Venda cancelada</option><option value="entrada">Entrada</option><option value="compra">Recebimento de compra</option><option value="saida">Saída manual</option><option value="devolucao">Devolução</option><option value="ajuste">Ajuste de contagem</option></select>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="mHist"> Incluir a planilha (histórico)</label>
+      <button type="button" class="bt" id="mBuscar">Buscar</button>
+    </div>
+    <div class="tabela-rolagem" id="mLista"></div>
+  </section>
+
+  <!-- RELATÓRIOS -->
+  <section class="bloco escondido" data-painel="rel">
+    <h2>Entradas e saídas</h2>
+    <div class="filtros">
+      <label style="font-size:13px">De <input type="date" id="rDe"></label>
+      <label style="font-size:13px">Até <input type="date" id="rAte"></label>
+      <select id="rPeriodo" aria-label="Agrupar por período"><option value="dia">Por dia</option><option value="semana">Por semana</option><option value="mes" selected>Por mês</option><option value="ano">Por ano</option></select>
+      <select id="rPor" aria-label="Separar por"><option value="total">Total</option><option value="canal">Por canal</option><option value="loja">Por loja</option><option value="produto">Por produto</option></select>
+      <select id="rLoja" aria-label="Loja"><option value="">Todas as lojas</option></select>
+      <input id="rProd" placeholder="Só um SKU (opcional)" aria-label="Produto" style="width:170px">
+      <button type="button" class="bt forte" id="rGerar">Gerar</button>
+      <button type="button" class="bt" id="rCsv">Baixar CSV</button>
+    </div>
+    <div class="cartoes" id="rTotais"></div>
+    <div class="tabela-rolagem" id="rLista"></div>
+    <p class="sub">Inclui o histórico importado da planilha. Saídas = vendas + saídas manuais − vendas canceladas; ajustes de contagem ficam à parte. Valor pelo custo do produto no lançamento.</p>
+  </section>
+
+  <!-- CONTAGEM -->
+  <section class="bloco escondido" data-painel="contagem">
+    <div id="cInfo"></div>
+    <div class="filtros">
+      <input type="search" id="cBusca" placeholder="Buscar SKU, produto ou fornecedor" aria-label="Buscar">
+      <select id="cMostrar" aria-label="Mostrar"><option value="ativos">Ativos</option><option value="contados">Já contados (rascunho)</option><option value="todos">Todos</option></select>
+      <button type="button" class="bt forte" id="cFinalizar">Finalizar contagem</button>
+    </div>
+    <div class="tabela-rolagem" id="cLista"></div>
+  </section>
+
+  <!-- COMPRAS -->
+  <section class="bloco escondido" data-painel="compras">
+    <h2>Novo pedido ao fornecedor</h2>
+    <form id="fCompra" autocomplete="off">
+      <div class="form">
+        <label>Fornecedor<input id="pForn" required maxlength="60" list="listaForn"></label>
+        <label>Nº do pedido<input id="pNum" maxlength="30"></label>
+        <label>Data<input id="pData" type="date"></label>
+        <label>Observação<input id="pObs" maxlength="200"></label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px"><button type="button" class="bt" id="pSugerir">Preencher com a sugestão de compra do fornecedor</button></div>
+      <div class="linhas" id="pLinhas"></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="bt" id="pMais">+ Produto</button><button class="bt forte">Criar pedido</button></div>
+    </form>
+    <h2 style="margin-top:22px">Pedidos</h2>
+    <div class="filtros"><select id="pFiltro" aria-label="Situação"><option value="abertos">Em aberto</option><option value="todos">Todos</option></select><input type="search" id="pBusca" placeholder="Buscar pedido, fornecedor ou SKU"></div>
+    <div id="pLista"></div>
+  </section>
+
+  <!-- CADASTRO -->
+  <section class="bloco escondido" data-painel="cadastro">
+    <h2>Fornecedores</h2>
+    <p class="sub">O prazo (meses) é o tempo de entrega do fornecedor: entra no estoque mínimo, na sugestão de compra e na previsão do pedido.
+      Fornecedor <b>descontinuado</b> = não repor: os produtos dele continuam vendendo o que tem, mas ficam "Não repor", sem sugestão de compra.</p>
+    <div class="filtros"><select id="fFiltro" aria-label="Situação do fornecedor"><option value="Ativo">Fornecedores ativos</option><option value="Descontinuado">Descontinuados</option><option value="">Todos</option></select>
+      <input type="search" id="fBusca" placeholder="Buscar fornecedor"></div>
+    <div class="tabela-rolagem" id="fLista"></div>
+    <form id="fForn" class="form" style="margin-top:10px" autocomplete="off">
+      <label>Fornecedor<input id="fNome" required maxlength="60"></label><label>Representante<input id="fRep" maxlength="60"></label>
+      <label>Telefone<input id="fTel" maxlength="40"></label><label>Endereço<input id="fEnd" maxlength="160"></label>
+      <label>Prazo (meses)<input id="fPrazo" type="number" min="0" max="36" step="0.5" value="1"></label>
+      <label>Situação<select id="fSit"><option>Ativo</option><option>Descontinuado</option></select></label>
+      <label>&nbsp;<button class="bt forte">Salvar fornecedor</button></label>
+    </form>
+    <h2 style="margin-top:22px">Produtos</h2>
+    <p class="sub">Situação, fornecedor e referência de compra de cada produto (SKU, nome e custo continuam na tela Empresa e custos).</p>
+    <div class="filtros"><input type="search" id="kBusca" placeholder="Buscar SKU ou produto"></div>
+    <div class="tabela-rolagem" id="kLista"></div>
+  </section>
+
+  <!-- IMPORTAR -->
+  <section class="bloco escondido" data-painel="importar">
+    <h2>Importar a planilha de estoque</h2>
+    <p class="sub">Arquivo .xlsx no modelo "Controle de Estoque" (abas Cadastro Produtos, Fornecedores, Movimentações, Compras e Recebimentos).
+      Traz o cadastro, os fornecedores, os pedidos de compra e TODO o histórico de movimentações — que serve para a média de saída, o custo médio e os relatórios.
+      O saldo do painel começa na contagem física. Importar de novo troca o histórico da planilha (não duplica).</p>
+    <input type="file" id="iArq" accept=".xlsx">
+    <button type="button" class="bt forte" id="iEnviar">Importar</button>
+    <div id="iRes" style="margin-top:12px"></div>
+  </section>
+</main>
+  </div>
+</div>
+<datalist id="listaForn"></datalist>
+<div id="impressaoPedido" aria-hidden="true"></div>
+
+<script src="/comum.js?v=8"></script>
+<script>
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block: 'nearest' }); }
+const JSONH = { 'Content-Type': 'application/json' };
+const hoje = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+const diaBR = (d) => (d ? d.split('-').reverse().join('/') : '—');
+const n0 = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR'));
+const CHIP = { 'Repor agora': 'repor', 'Próximo de repor': 'proximo', Regular: 'regular', 'Vender o restante': 'liquidar', 'Não repor': 'desc', Descontinuado: 'desc' };
+const post = (u, b, m = 'POST') => api(u, { method: m, headers: JSONH, body: JSON.stringify(b) });
+function tabela(cab, linhas){
+  const t = el('table'); const th = el('thead'); const tr = el('tr');
+  for(const [h, cls] of cab) tr.appendChild(el('th', cls || null, h));
+  th.appendChild(tr); t.appendChild(th);
+  const tb = el('tbody'); for(const l of linhas) tb.appendChild(l); t.appendChild(tb); return t;
+}
+const td = (txt, cls) => el('td', cls || null, txt);
+function csv(nome, cab, linhas){
+  const e = (v) => { const s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const txt = '﻿' + [cab, ...linhas].map((l) => l.map(e).join(';')).join('\n');
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = nome; a.click();
+}
+
+// ---------- abas ----------
+let aba = 'saldo';
+const carregadas = {};
+function abrir(nome){
+  aba = nome;
+  for(const b of $('abas').querySelectorAll('button')) b.setAttribute('aria-selected', String(b.dataset.aba === nome));
+  for(const s of document.querySelectorAll('[data-painel]')) s.classList.toggle('escondido', s.dataset.painel !== nome);
+  aviso('');
+  ({ saldo: carregarSaldo, movs: () => carregadas.movs || buscarMovs(), rel: () => carregadas.rel || gerarRel(), contagem: carregarContagem,
+    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar })[nome]?.();
+  try{ history.replaceState(null, '', '#' + nome); }catch{}
+}
+$('abas').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abrir(b.dataset.aba); };
+
+// ---------- ESTOQUE ----------
+let visao = null;
+async function carregarSaldo(recarregar){
+  try{ visao = await api('/api/estoque' + (recarregar ? '?recarregar=1' : '')); }catch(e){ aviso(e.message); return; }
+  const fs = $('sForn'), atual = fs.value; fs.innerHTML = '<option value="">Todos os fornecedores</option>';
+  for(const f of [...new Set(visao.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option', null, f); o.value = f; o.selected = f === atual; fs.appendChild(o); }
+  $('listaForn').innerHTML = ''; for(const f of [...new Set(visao.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option'); o.value = f; $('listaForn').appendChild(o); }
+  const sb = $('situacaoBaixa'); sb.innerHTML = '';
+  const caixa = el('div', 'aviso-caixa' + (visao.inicio ? ' ok' : ''));
+  if(!visao.inicio) caixa.textContent = 'A baixa automática ainda não está ligada: o saldo começa na contagem física. Vá em "Contagem", conte os produtos e clique em "Finalizar contagem". '
+    + (visao.importado_em ? `Planilha importada em ${quando(visao.importado_em)}.` : 'Antes, importe a planilha (aba "Importar planilha").');
+  else caixa.textContent = `Baixa automática ligada desde ${quando(visao.inicio)} (ML, Shopee, Amazon, Leroy e Magalu; Full e FBA não baixam). Última conferência: ${quando(visao.ultima_baixa)}${visao.baixando ? ' — conferindo agora…' : ''}.`
+    + (visao.erros?.length ? ' Não consegui ler: ' + visao.erros.join(' · ') : '');
+  sb.appendChild(caixa);
+  const r = visao.resumo, cs = $('cartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
+  cartao('Produtos ativos', n0(r.ativos)); cartao('Repor agora', n0(r.repor), r.repor > 0); cartao('Próximos de repor', n0(r.proximo));
+  if(r.vender_restante){
+    const c = el('div', 'cartao liquidar'); c.tabIndex = 0; c.setAttribute('role', 'button');
+    c.title = 'Descontinuados que ainda têm estoque: vender o que sobrou e não comprar mais. Clique para ver.';
+    c.append(el('small', null, 'Vender o restante'), el('b', null, n0(r.vender_restante)), el('small', null, `${n0(r.vender_restante_pecas)} peças · ${real(r.vender_restante_valor)}`));
+    c.onclick = c.onkeydown = (ev) => { if(ev.type === 'keydown' && ev.key !== 'Enter') return; $('sStatus').value = 'Vender o restante'; pintarSaldo(); $('sLista').scrollIntoView({ behavior: 'smooth' }); };
+    cs.appendChild(c);
+  }
+  if(r.nao_repor) cartao('Não repor (fornecedor descontinuado)', n0(r.nao_repor));
+  cartao('Peças em estoque', n0(r.unidades)); cartao('Valor em estoque', real(r.valor)); if(r.negativos) cartao('Saldo negativo', n0(r.negativos), true);
+  pintarSaldo();
+  const pb = $('pendBox');
+  pb.classList.toggle('escondido', !visao.total_pendentes);
+  if(visao.total_pendentes){
+    $('pendTit').textContent = `${visao.total_pendentes} pendência(s): venda com SKU não reconhecido (não saiu do estoque) ou devolução que chegou e ainda não foi conferida (marque "com defeito" ou "sem defeito" na tela Devoluções)`;
+    $('pendLista').innerHTML = '';
+    $('pendLista').appendChild(tabela([['Data'], ['O quê'], ['Loja'], ['SKU do anúncio'], ['Qtd', 'n']], visao.pendentes.map((p) => {
+      const tr = el('tr'); tr.append(td(quando(p.data)), td(p.motivo === 'defeito' ? 'Devolução chegou: conferir defeito' : 'Venda: SKU não reconhecido'), td(p.loja), td(p.sku || '(sem SKU)'), td(n0(p.qtd), 'n')); return tr; })));
+  }
+}
+function saldoFiltrado(){
+  const q = $('sBusca').value.trim().toLowerCase(), st = $('sStatus').value, f = $('sForn').value, at = $('sAtivos').checked;
+  return visao.produtos.filter((p) => (!at || p.situacao === 'Ativo' || st === 'Vender o restante') && (!st || p.status === st) && (!f || p.fornecedor === f)
+    && (!q || [p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => String(t || '').toLowerCase().includes(q))));
+}
+function pintarSaldo(){
+  const ORDEM = { 'Repor agora': 0, 'Próximo de repor': 1, 'Vender o restante': 2, Regular: 3, 'Não repor': 4, Descontinuado: 5 };
+  const lst = saldoFiltrado().sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || b.media - a.media);
+  const box = $('sLista'); box.innerHTML = '';
+  if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum produto com esse filtro.')); return; }
+  box.appendChild(tabela([['Produto'], ['Fornecedor'], ['Saldo', 'n'], ['Média/mês', 'n'], ['Mínimo', 'n'], ['Máximo', 'n'], ['Em pedido', 'n'], ['Sugestão', 'n'], ['Status'], ['Custo médio', 'n'], ['Valor', 'n'], ['Dias', 'n']],
+    lst.slice(0, 1500).map((p) => {
+      const tr = el('tr');
+      const tP = el('td'); tP.append(el('b', null, p.sku || p.numero), el('span', 'pequeno', p.nome || ''));
+      const tS = el('td'); tS.appendChild(el('span', 'chip ' + (CHIP[p.status] || ''), p.status));
+      tr.append(tP, td(p.fornecedor || '—'), td(n0(p.saldo), 'n' + (p.saldo < 0 ? ' neg' : '')), td(n0(p.media), 'n'), td(n0(p.minimo), 'n'), td(n0(p.maximo), 'n'),
+        td(p.em_pedido ? n0(p.em_pedido) : '—', 'n'), td(p.sugestao ? n0(p.sugestao) : '—', 'n'), tS, td(real(p.custo_medio), 'n'), td(real(p.valor), 'n'), td(p.dias == null ? '—' : n0(p.dias), 'n'));
+      tr.style.cursor = 'pointer'; tr.title = 'Ver as movimentações deste produto';
+      tr.onclick = () => { $('mProd').value = p.sku || p.numero; abrir('movs'); buscarMovs(); };
+      return tr;
+    })));
+}
+for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => visao && pintarSaldo());
+$('sReler').onclick = () => carregarSaldo(true);
+$('sCsv').onclick = () => csv(`estoque-${hoje()}.csv`, ['SKU', 'Produto', 'Fornecedor', 'Situação', 'Saldo', 'Saídas 6m', 'Média/mês', 'Prazo (meses)', 'Mínimo', 'Máximo', 'Em pedido', 'Sugestão', 'Status', 'Custo médio', 'Valor', 'Dias'],
+  saldoFiltrado().map((p) => [p.sku, p.nome, p.fornecedor, p.situacao, p.saldo, p.saidas6m, String(p.media).replace('.', ','), p.prazo, p.minimo, p.maximo, p.em_pedido, p.sugestao, p.status,
+    p.custo_medio == null ? '' : String(p.custo_medio).replace('.', ','), p.valor == null ? '' : String(p.valor).replace('.', ','), p.dias ?? '']));
+
+// ---------- LANÇAR ----------
+let nomes = null;   // SKU -> nome (para mostrar ao digitar)
+async function garantirNomes(){ if(nomes) return; if(!visao) await carregarSaldo(); nomes = new Map((visao?.produtos || []).map((p) => [String(p.sku || '').toUpperCase(), p])); }
+function nomeDe(cod){
+  const k = String(cod || '').trim().toUpperCase(); if(!k || !nomes) return '';
+  if(nomes.has(k)) return nomes.get(k).nome;
+  const porNum = new Map([...nomes.values()].map((p) => [p.numero, p.nome]));
+  if(/^\d+$/.test(k)) return porNum.get(Number(k)) || 'não achei';
+  const nums = (k.includes('-') ? k.slice(k.indexOf('-') + 1) : k).split(/[-.\s+/]+/).filter((x) => /^\d+$/.test(x)).map(Number);
+  const ns = nums.map((n) => porNum.get(n)); return nums.length && ns.every(Boolean) ? 'Kit: ' + ns.join(' + ') : 'não achei';
+}
+function linha(box, { codigo = '', qtd = 1, valor = '', comValor = true } = {}){
+  const l = el('div', 'linha');
+  const c = el('input'); c.placeholder = 'SKU (DQ-407)'; c.required = true; c.maxLength = 40; c.value = codigo; c.className = 'cod'; c.setAttribute('aria-label', 'SKU');
+  const q = el('input'); q.type = 'number'; q.min = '1'; q.value = qtd; q.required = true; q.className = 'qtd'; q.setAttribute('aria-label', 'Quantidade');
+  const v = el('input'); v.type = 'number'; v.min = '0'; v.step = '0.01'; v.placeholder = 'R$/un.'; v.value = valor; v.className = 'valor'; v.setAttribute('aria-label', 'Valor por unidade');
+  if(!comValor) v.style.visibility = 'hidden';
+  const n = el('span', 'nome', nomeDe(codigo));
+  c.oninput = () => { n.textContent = nomeDe(c.value); };
+  const x = el('button', 'bt', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Tirar'); x.onclick = () => { if(box.querySelectorAll('.linha').length > 1) l.remove(); };
+  l.append(c, q, v, n, x); box.appendChild(l);
+}
+const itensDe = (box) => [...box.querySelectorAll('.linha')].map((l) => ({ codigo: l.querySelector('.cod').value.trim(), qtd: Number(l.querySelector('.qtd').value),
+  valor_unit: Number(l.querySelector('.valor').value) || null })).filter((i) => i.codigo);
+const ORIGENS = { entrada: ['Fornecedor', []], saida: ['Destino / loja', ['Josi', 'Troca', 'Envio Full Mercado Livre', 'Envio Full Amazon', 'OLX', 'Shein', 'Enjoei', 'Amostra', 'Perda / quebra']],
+  devolucao: ['Loja da venda', ['Mercado Livre', 'Shopee', 'Amazon', 'Leroy Merlin', 'Magalu', 'Josi', 'Venda direta']] };
+function pintarOrigens(){
+  const [rot, lista] = ORIGENS[$('lTipo').value];
+  $('lOrigemRot').textContent = rot;
+  const dl = $('lOrigens'); dl.innerHTML = '';
+  for(const o of ($('lTipo').value === 'entrada' ? [...$('listaForn').options].map((x) => x.value) : lista)){ const op = el('option'); op.value = o; dl.appendChild(op); }
+  for(const v of $('lLinhas').querySelectorAll('.valor')) v.style.visibility = $('lTipo').value === 'entrada' ? 'visible' : 'hidden';
+}
+async function prepararLancar(){
+  await garantirNomes();
+  if(!$('lLinhas').children.length) linha($('lLinhas'));
+  if(!$('lData').value) $('lData').value = hoje();
+  pintarOrigens();
+}
+$('lTipo').onchange = pintarOrigens;
+$('lMais').onclick = () => { linha($('lLinhas'), { comValor: $('lTipo').value === 'entrada' }); };
+$('fLancar').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const itens = itensDe($('lLinhas'));
+  const tipo = $('lTipo').value;
+  const total = itens.reduce((s, i) => s + i.qtd, 0);
+  if(!confirm(`${tipo === 'saida' ? 'Tirar' : 'Dar entrada de'} ${total} peça(s) ${tipo === 'saida' ? 'para' : 'de'} "${$('lOrigem').value}"?`)) return;
+  try{
+    const r = await post('/api/estoque/lancar', { tipo, origem: $('lOrigem').value, data: $('lData').value, obs: $('lObs').value, itens });
+    aviso(`${r.lancados} produto(s) lançado(s).`, 'ok');
+    $('lLinhas').innerHTML = ''; linha($('lLinhas'), { comValor: tipo === 'entrada' }); $('lObs').value = '';
+    visao = null;
+  }catch(e){ aviso(e.message); }
+};
+
+// ---------- MOVIMENTAÇÕES ----------
+async function buscarMovs(){
+  carregadas.movs = true;
+  const p = new URLSearchParams();
+  if($('mProd').value.trim()) p.set('produto', $('mProd').value.trim());
+  if($('mDe').value) p.set('de', $('mDe').value);
+  if($('mAte').value) p.set('ate', $('mAte').value);
+  if($('mTipo').value) p.set('tipo', $('mTipo').value);
+  if($('mHist').checked) p.set('historico', '1');
+  const box = $('mLista'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Carregando…'));
+  let r; try{ r = await api('/api/estoque/movimentos?' + p); }catch(e){ box.innerHTML = ''; aviso(e.message); return; }
+  box.innerHTML = '';
+  if(!r.movimentos.length){ box.appendChild(el('p', 'vazio', 'Nenhuma movimentação com esse filtro.')); return; }
+  box.appendChild(tabela([['Data'], ['Tipo'], ['Produto'], ['Qtd', 'n'], ['Loja / origem'], ['Quem'], ['Obs.'], ['']], r.movimentos.map((m) => {
+    const tr = el('tr'); if(m.desfeito) tr.style.opacity = '.45';
+    const tP = el('td'); tP.append(el('b', null, m.sku || m.numero), el('span', 'pequeno', m.nome || ''));
+    const tA = el('td');
+    if(m.pode_desfazer){ const b = el('button', 'bt', 'Desfazer'); b.type = 'button';
+      b.onclick = async () => { if(!confirm('Desfazer este lançamento? O saldo volta como estava.')) return; try{ await post('/api/estoque/desfazer', { id: m.id }); buscarMovs(); visao = null; }catch(e){ aviso(e.message); } };
+      tA.appendChild(b); }
+    if(m.desfeito) tA.appendChild(el('span', 'pequeno', 'desfeito'));
+    tr.append(td(m.historico ? diaBR(m.data.slice(0, 10)) : quando(m.data)), td(m.tipo_nome + (m.historico ? ' (planilha)' : '')), tP,
+      td((m.qtd > 0 ? '+' : '') + n0(m.qtd), 'n' + (m.qtd < 0 ? ' neg' : '')), td(m.origem || '—'), td(m.quem || '—'), td(m.obs || ''), tA);
+    return tr;
+  })));
+  if(r.movimentos.length >= 1000) box.appendChild(el('p', 'sub', 'Mostrando as 1.000 mais recentes. Use o filtro de datas ou de produto para ver mais.'));
+}
+$('mBuscar').onclick = buscarMovs;
+
+// ---------- RELATÓRIOS ----------
+let rel = null;
+async function gerarRel(){
+  carregadas.rel = true;
+  if(!$('rAte').value) $('rAte').value = hoje();
+  if(!$('rDe').value) $('rDe').value = hoje().slice(0, 4) + '-01-01';
+  const p = new URLSearchParams({ de: $('rDe').value, ate: $('rAte').value, periodo: $('rPeriodo').value, por: $('rPor').value });
+  if($('rLoja').value) p.set('loja', $('rLoja').value);
+  if($('rProd').value.trim()) p.set('produto', $('rProd').value.trim());
+  try{ rel = await api('/api/estoque/relatorio?' + p); }catch(e){ aviso(e.message); return; }
+  const sl = $('rLoja'), atual = sl.value; sl.innerHTML = '<option value="">Todas as lojas</option>';
+  const grupo = (rot, itens) => { const g = el('optgroup'); g.label = rot; for(const x of itens){ const o = el('option', null, x); o.value = x; o.selected = x === atual; g.appendChild(o); } sl.appendChild(g); };
+  grupo('Canais', rel.canais); grupo('Lojas', rel.lojas.filter((l) => !rel.canais.includes(l)));
+  const t = rel.total, cs = $('rTotais'); cs.innerHTML = '';
+  const cartao = (rot, val) => { const c = el('div', 'cartao'); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
+  cartao('Entradas (peças)', n0(t.entradas)); cartao('Saídas (peças)', n0(t.saidas)); cartao('Ajustes de contagem', (t.ajustes > 0 ? '+' : '') + n0(t.ajustes));
+  cartao('Valor das entradas', real(t.valor_entradas)); cartao('Valor das saídas', real(t.valor_saidas));
+  const NOME_P = { dia: 'Dia', semana: 'Semana (seg.)', mes: 'Mês', ano: 'Ano' };
+  const fmt = (pp) => (rel.periodo === 'mes' ? pp.split('-').reverse().join('/') : rel.periodo === 'ano' ? pp : diaBR(pp));
+  const box = $('rLista'); box.innerHTML = '';
+  if(!rel.linhas.length){ box.appendChild(el('p', 'vazio', 'Nada no período.')); return; }
+  box.appendChild(tabela([[NOME_P[rel.periodo]], ...(rel.por === 'total' ? [] : [[{ canal: 'Canal', loja: 'Loja', produto: 'Produto' }[rel.por]]]), ['Entradas', 'n'], ['Saídas', 'n'], ['Ajustes', 'n'], ['Valor entradas', 'n'], ['Valor saídas', 'n']],
+    rel.linhas.map((l) => { const tr = el('tr'); tr.append(td(fmt(l.periodo)), ...(rel.por === 'total' ? [] : [td(l.grupo)]), td(n0(l.entradas), 'n'), td(n0(l.saidas), 'n'),
+      td(l.ajustes ? (l.ajustes > 0 ? '+' : '') + n0(l.ajustes) : '—', 'n'), td(real(l.valor_entradas), 'n'), td(real(l.valor_saidas), 'n')); return tr; })));
+}
+$('rGerar').onclick = gerarRel;
+for(const id of ['rPeriodo', 'rPor', 'rLoja']) $(id).onchange = gerarRel;
+$('rCsv').onclick = () => rel && csv(`estoque-entradas-saidas-${rel.de}-a-${rel.ate}.csv`, ['Período', 'Grupo', 'Entradas', 'Saídas', 'Ajustes', 'Valor entradas', 'Valor saídas'],
+  rel.linhas.map((l) => [l.periodo, l.grupo, l.entradas, l.saidas, l.ajustes, String(l.valor_entradas).replace('.', ','), String(l.valor_saidas).replace('.', ',')]));
+
+// ---------- CONTAGEM ----------
+let cont = null;
+async function carregarContagem(){
+  try{ cont = await api('/api/estoque/contagem'); }catch(e){ aviso(e.message); return; }
+  const info = $('cInfo'); info.innerHTML = '';
+  const c = el('div', 'aviso-caixa' + (cont.inicio ? ' ok' : ''));
+  c.textContent = cont.inicio
+    ? 'Conte e digite a quantidade que está na prateleira. Ao finalizar, o painel lança o ajuste (contado − saldo do painel). O que foi digitado fica salvo até finalizar, mesmo fechando a tela.'
+    : 'PRIMEIRA CONTAGEM: digite o que está na prateleira de cada produto. O que for digitado fica salvo (dá para dividir entre pessoas e dias). Ao clicar em "Finalizar contagem", esse vira o saldo inicial e a baixa automática das vendas começa NESSA hora. A coluna "Planilha" mostra o saldo da sua planilha só para comparar.';
+  info.appendChild(c);
+  pintarContagem();
+}
+function pintarContagem(){
+  const q = $('cBusca').value.trim().toLowerCase(), m = $('cMostrar').value;
+  const lst = cont.produtos.filter((p) => (m === 'todos' || (m === 'ativos' ? p.situacao === 'Ativo' : p.contado != null))
+    && (!q || [p.sku, p.nome, p.fornecedor].some((t) => String(t || '').toLowerCase().includes(q))));
+  const contados = cont.produtos.filter((p) => p.contado != null).length;
+  $('cFinalizar').textContent = contados ? `Finalizar contagem (${contados} produto${contados > 1 ? 's' : ''})` : 'Finalizar contagem';
+  $('cFinalizar').disabled = !contados;
+  const box = $('cLista'); box.innerHTML = '';
+  if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum produto aqui.')); return; }
+  box.appendChild(tabela([['Produto'], ['Fornecedor'], ['Saldo no painel', 'n'], ['Planilha', 'n'], ['Contado', 'n'], ['Diferença', 'n'], ['Contado por']], lst.slice(0, 1200).map((p) => {
+    const tr = el('tr');
+    const tP = el('td'); tP.append(el('b', null, p.sku || p.numero), el('span', 'pequeno', p.nome || ''));
+    const tI = el('td', 'n'); const i = el('input', 'contar'); i.type = 'number'; i.min = '0'; i.inputMode = 'numeric'; i.value = p.contado ?? ''; i.setAttribute('aria-label', 'Contado ' + (p.sku || p.numero));
+    if(p.contado != null) i.classList.add('mudou');
+    const tD = td(p.contado == null ? '—' : ((p.contado - p.saldo > 0 ? '+' : '') + n0(p.contado - p.saldo)), 'n');
+    i.onchange = async () => {
+      const v = i.value === '' ? null : Number(i.value);
+      try{ await post('/api/estoque/contagem', { numero: p.numero, contado: v }, 'PUT'); p.contado = v; i.classList.toggle('mudou', v != null);
+        tD.textContent = v == null ? '—' : ((v - p.saldo > 0 ? '+' : '') + n0(v - p.saldo)); pintarBotao(); }
+      catch(e){ aviso(e.message); }
+    };
+    i.onkeydown = (ev) => { if(ev.key === 'Enter'){ ev.preventDefault(); const todos = [...box.querySelectorAll('input.contar')]; todos[todos.indexOf(i) + 1]?.focus(); } };
+    tI.appendChild(i);
+    tr.append(tP, td(p.fornecedor || '—'), td(n0(p.saldo), 'n'), td(p.planilha == null ? '—' : n0(p.planilha), 'n'), tI, tD, td(p.contado_por || ''));
+    return tr;
+  })));
+}
+function pintarBotao(){ const n = cont.produtos.filter((p) => p.contado != null).length; $('cFinalizar').textContent = n ? `Finalizar contagem (${n} produto${n > 1 ? 's' : ''})` : 'Finalizar contagem'; $('cFinalizar').disabled = !n; }
+$('cBusca').oninput = () => cont && pintarContagem();
+$('cMostrar').onchange = () => cont && pintarContagem();
+$('cFinalizar').onclick = async () => {
+  const n = cont.produtos.filter((p) => p.contado != null).length;
+  const msg = cont.inicio ? `Finalizar a contagem de ${n} produto(s)? O saldo deles passa a ser o contado.`
+    : `Finalizar a PRIMEIRA contagem (${n} produtos)? O contado vira o saldo inicial e a baixa automática das vendas começa agora. Produtos não contados ficam com saldo 0.`;
+  if(!confirm(msg)) return;
+  try{ const r = await post('/api/estoque/contagem/finalizar', {}); aviso(`Contagem finalizada: ${r.produtos} produto(s), ${r.ajustados} com diferença ajustada.${r.baixa_ligada_em ? ' Baixa automática ligada.' : ''}`, 'ok'); visao = null; carregarContagem(); }
+  catch(e){ aviso(e.message); }
+};
+
+// ---------- COMPRAS ----------
+let compras = null;
+async function carregarCompras(){
+  await garantirNomes();
+  try{ compras = await api('/api/estoque/compras'); }catch(e){ aviso(e.message); return; }
+  if(!$('pNum').value) $('pNum').value = compras.proximo;
+  if(!$('pData').value) $('pData').value = hoje();
+  if(!$('pLinhas').children.length) linha($('pLinhas'), { comValor: false });
+  pintarCompras();
+}
+function pintarCompras(){
+  const q = $('pBusca').value.trim().toLowerCase(), abertos = $('pFiltro').value === 'abertos';
+  const grupos = new Map();
+  for(const c of compras.compras){
+    if(abertos && !['aberto', 'parcial'].includes(c.status)) continue;
+    if(q && ![c.pedido, c.fornecedor, c.sku, c.nome].some((t) => String(t || '').toLowerCase().includes(q))) continue;
+    if(!grupos.has(c.pedido)) grupos.set(c.pedido, []); grupos.get(c.pedido).push(c);
+  }
+  const box = $('pLista'); box.innerHTML = '';
+  if(!grupos.size){ box.appendChild(el('p', 'vazio', abertos ? 'Nenhum pedido em aberto.' : 'Nenhum pedido.')); return; }
+  for(const [pedido, itens] of grupos){
+    const c0 = itens[0];
+    const s = el('section', 'pedido'); const h = el('header');
+    const tit = el('div'); tit.append(el('b', null, `${pedido} · ${c0.fornecedor || '—'}`), el('span', 'pequeno', ` pedido em ${diaBR(c0.data)} · previsão ${diaBR(c0.previsao)} · ${itens.length} item(ns)`));
+    const bI = el('button', 'bt', 'Imprimir pedido'); bI.type = 'button'; bI.onclick = () => imprimirPedido(pedido);
+    h.append(tit, bI); s.appendChild(h);
+    const t = tabela([['Produto'], ['Ref. compra'], ['Pedido', 'n'], ['Recebido', 'n'], ['Situação'], ['']], itens.map((c) => {
+      const tr = el('tr');
+      const tP = el('td'); tP.append(el('b', null, c.sku || c.numero), el('span', 'pequeno', c.nome || ''));
+      const tA = el('td'); const ac = el('div', 'acoes');
+      if(['aberto', 'parcial'].includes(c.status)){
+        const bR = el('button', 'bt forte', 'Receber'); bR.type = 'button'; bR.onclick = () => receber(c);
+        const bC = el('button', 'bt', 'Cancelar'); bC.type = 'button'; bC.onclick = async () => { if(!confirm(`Cancelar ${c.sku} do pedido ${c.pedido}?`)) return; try{ await post('/api/estoque/compras/cancelar', { id: c.id }); carregarCompras(); }catch(e){ aviso(e.message); } };
+        ac.append(bR, bC);
+      }
+      tA.appendChild(ac);
+      const SIT = { aberto: 'Em aberto', parcial: 'Parcial', recebido: 'Recebido', cancelado: 'Cancelado' };
+      tr.append(tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
+        td(SIT[c.status] + (c.recebido_em ? ` em ${diaBR(c.recebido_em)}` : '') + (c.valor_pago ? ` · ${real(c.valor_pago)}/un.` : '')), tA);
+      return tr;
+    }));
+    const w = el('div', 'tabela-rolagem'); w.appendChild(t); s.appendChild(w); box.appendChild(s);
+  }
+}
+async function receber(c){
+  const falta = c.qtd - c.recebido_qtd;
+  const q = prompt(`Quantas peças de ${c.sku} chegaram? (faltam ${falta})`, String(falta)); if(q == null) return;
+  const v = prompt('Valor pago por unidade (R$). Deixe em branco para usar o custo do cadastro.', c.valor_pago ? String(c.valor_pago).replace('.', ',') : ''); if(v == null) return;
+  const qtd = Number(q); const fechar = qtd < falta && confirm('Chegou menos do que o pedido. Fechar este item assim mesmo? (Cancelar = continua esperando o resto)');
+  try{ await post('/api/estoque/compras/receber', { id: c.id, qtd, valor_unit: Number(String(v).replace(',', '.')) || null, fechar }); aviso(`${qtd} peça(s) de ${c.sku} entraram no estoque.`, 'ok'); visao = null; carregarCompras(); }
+  catch(e){ aviso(e.message); }
+}
+function imprimirPedido(pedido){
+  const itens = compras.compras.filter((c) => c.pedido === pedido && c.status !== 'cancelado');
+  const area = $('impressaoPedido'); area.innerHTML = '';
+  const c0 = itens[0];
+  area.append(el('h2', null, `Pedido ${pedido}`), el('p', null, `Fornecedor: ${c0.fornecedor || '—'} · Data: ${diaBR(c0.data)} · Previsão de entrega: ${diaBR(c0.previsao)}`));
+  area.appendChild(tabela([['SKU'], ['Produto'], ['Referência de compra'], ['Quantidade', 'n']], itens.map((c) => { const tr = el('tr'); tr.append(td(c.sku), td(c.nome), td(c.ref_compra || ''), td(n0(c.qtd), 'n')); return tr; })));
+  area.appendChild(el('p', null, `Total: ${n0(itens.reduce((s, c) => s + c.qtd, 0))} peças`));
+  window.print();
+}
+$('pFiltro').onchange = () => compras && pintarCompras();
+$('pBusca').oninput = () => compras && pintarCompras();
+$('pMais').onclick = () => linha($('pLinhas'), { comValor: false });
+$('pSugerir').onclick = async () => {
+  const f = $('pForn').value.trim().toLowerCase(); if(!f){ aviso('Escolha o fornecedor primeiro.'); return; }
+  if(!visao) await carregarSaldo();
+  const sug = visao.produtos.filter((p) => String(p.fornecedor || '').toLowerCase() === f && p.sugestao > 0);
+  if(!sug.length){ aviso('Nenhum produto desse fornecedor com sugestão de compra agora.'); return; }
+  $('pLinhas').innerHTML = ''; for(const p of sug) linha($('pLinhas'), { codigo: p.sku, qtd: p.sugestao, comValor: false });
+  aviso(`${sug.length} produto(s) com sugestão de compra. Confira as quantidades antes de criar.`, 'ok');
+};
+$('fCompra').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const itens = itensDe($('pLinhas'));
+  if(!confirm(`Criar o pedido ${$('pNum').value} para ${$('pForn').value} com ${itens.length} produto(s)?`)) return;
+  try{ const r = await post('/api/estoque/compras', { fornecedor: $('pForn').value, pedido: $('pNum').value, data: $('pData').value, obs: $('pObs').value, itens });
+    aviso(`Pedido ${r.pedido} criado.`, 'ok'); $('pLinhas').innerHTML = ''; $('pNum').value = ''; $('pObs').value = ''; visao = null; carregarCompras(); }
+  catch(e){ aviso(e.message); }
+};
+
+// ---------- CADASTRO ----------
+let forn = null;
+async function carregarCadastro(){
+  try{ forn = (await api('/api/estoque/fornecedores')).fornecedores; }catch(e){ aviso(e.message); return; }
+  if(!visao) await carregarSaldo();
+  pintarFornecedores();
+  pintarProdutos();
+}
+function pintarFornecedores(){
+  const sit = $('fFiltro').value, q = $('fBusca').value.trim().toLowerCase();
+  const lst = forn.filter((f) => (!sit || f.situacao === sit) && (!q || [f.nome, f.representante].some((t) => String(t || '').toLowerCase().includes(q))));
+  const box = $('fLista'); box.innerHTML = '';
+  box.appendChild(el('p', 'sub', `${forn.filter((f) => f.situacao === 'Ativo').length} fornecedores ativos · ${forn.filter((f) => f.situacao !== 'Ativo').length} descontinuados`));
+  if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum fornecedor com esse filtro.')); return; }
+  box.appendChild(tabela([['Fornecedor'], ['Situação'], ['Representante'], ['Telefone'], ['Endereço'], ['Prazo (meses)', 'n'], ['Produtos ativos', 'n'], ['Produtos (total)', 'n'], ['']], lst.map((f) => {
+    const tr = el('tr'); const tA = el('td'); const ac = el('div', 'acoes');
+    const bE = el('button', 'bt', 'Editar'); bE.type = 'button'; bE.onclick = () => { $('fNome').value = f.nome; $('fRep').value = f.representante || ''; $('fTel').value = f.telefone || ''; $('fEnd').value = f.endereco || ''; $('fPrazo').value = f.prazo_meses ?? 1; $('fSit').value = f.situacao || 'Ativo'; $('fNome').scrollIntoView({ block: 'center' }); $('fNome').focus(); };
+    const bX = el('button', 'bt', 'Remover'); bX.type = 'button'; bX.onclick = async () => { if(!confirm(`Remover o fornecedor ${f.nome}?`)) return; try{ await post('/api/estoque/fornecedores/remover', { nome: f.nome }); carregarCadastro(); }catch(e){ aviso(e.message); } };
+    ac.append(bE, bX); tA.appendChild(ac);
+    const tS = el('td'); tS.appendChild(el('span', 'chip ' + (f.situacao === 'Ativo' ? 'regular' : 'desc'), f.situacao));
+    tr.append(td(f.nome), tS, td(f.representante || ''), td(f.telefone || ''), td(f.endereco || ''), td(n0(f.prazo_meses), 'n'), td(n0(f.produtos_ativos), 'n'), td(n0(f.produtos), 'n'), tA);
+    return tr;
+  })));
+}
+$('fFiltro').onchange = () => forn && pintarFornecedores();
+$('fBusca').oninput = () => forn && pintarFornecedores();
+$('fForn').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{ await post('/api/estoque/fornecedores', { nome: $('fNome').value, representante: $('fRep').value, telefone: $('fTel').value, endereco: $('fEnd').value, prazo_meses: Number($('fPrazo').value), situacao: $('fSit').value }, 'PUT');
+    aviso('Fornecedor salvo.', 'ok'); $('fForn').reset(); visao = null; carregarCadastro(); }
+  catch(e){ aviso(e.message); }
+};
+function pintarProdutos(){
+  const q = $('kBusca').value.trim().toLowerCase();
+  const lst = visao.produtos.filter((p) => !q || [p.sku, p.nome, p.fornecedor].some((t) => String(t || '').toLowerCase().includes(q))).slice(0, 300);
+  const box = $('kLista'); box.innerHTML = '';
+  box.appendChild(tabela([['Produto'], ['Situação'], ['Fornecedor'], ['Referência de compra'], ['Classificação'], ['']], lst.map((p) => {
+    const tr = el('tr');
+    const tP = el('td'); tP.append(el('b', null, p.sku || p.numero), el('span', 'pequeno', p.nome || ''));
+    const sit = el('select'); for(const o of ['Ativo', 'Descontinuado', 'Amostra']){ const op = el('option', null, o); op.selected = p.situacao === o; sit.appendChild(op); }
+    const fo = el('input'); fo.value = p.fornecedor || ''; fo.setAttribute('list', 'listaForn'); fo.maxLength = 60;
+    const rc = el('input'); rc.value = p.ref_compra || ''; rc.maxLength = 80;
+    const cl = el('input'); cl.value = p.classificacao || ''; cl.maxLength = 80;
+    for(const [x, rot] of [[sit, 'Situação'], [fo, 'Fornecedor'], [rc, 'Referência de compra'], [cl, 'Classificação']]) x.setAttribute('aria-label', `${rot} ${p.sku}`);
+    const b = el('button', 'bt', 'Salvar'); b.type = 'button';
+    b.onclick = async () => { try{ await post('/api/estoque/produto', { numero: p.numero, situacao: sit.value, fornecedor: fo.value, ref_compra: rc.value, classificacao: cl.value }, 'PUT');
+      Object.assign(p, { situacao: sit.value, fornecedor: fo.value, ref_compra: rc.value, classificacao: cl.value }); b.textContent = 'Salvo'; visao = null; }catch(e){ aviso(e.message); } };
+    const c = (x) => { const t = el('td'); t.appendChild(x); return t; };
+    tr.append(tP, c(sit), c(fo), c(rc), c(cl), c(b));
+    return tr;
+  })));
+  if(lst.length >= 300) box.appendChild(el('p', 'sub', 'Mostrando 300. Use a busca para achar o produto.'));
+}
+$('kBusca').oninput = () => visao && pintarProdutos();
+
+// ---------- IMPORTAR ----------
+$('iEnviar').onclick = async () => {
+  const f = $('iArq').files[0]; if(!f){ aviso('Escolha o arquivo .xlsx.'); return; }
+  if(!confirm(`Importar "${f.name}"? O histórico da planilha importado antes é trocado por este.`)) return;
+  $('iRes').textContent = 'Importando… (pode levar alguns segundos)';
+  try{
+    const r = await api('/api/estoque/importar', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f });
+    const a = r.avisos; $('iRes').innerHTML = '';
+    const c = el('div', 'aviso-caixa ok');
+    c.textContent = `Importado: ${n0(r.produtos)} produtos (${n0(r.produtos_novos)} novos na tabela), ${n0(r.fornecedores)} fornecedores, ${n0(r.movimentos)} movimentações e ${n0(r.compras)} itens de compra.`;
+    $('iRes').appendChild(c);
+    const av = [];
+    if(a.saida_sem_acento) av.push(`${n0(a.saida_sem_acento)} linhas com "Saida" (sem acento), ${n0(a.saida_sem_acento_qtd)} peças: a fórmula da planilha NÃO tirava essas do saldo. Aqui elas contam como saída.`);
+    if(a.datas_futuras) av.push(`${n0(a.datas_futuras)} movimentações com data no futuro (ex.: 09/11/2026) — provavelmente erro de digitação na planilha.`);
+    if(a.sem_produto) av.push(`${n0(a.sem_produto)} movimentações de produtos que não existem na tabela ficaram de fora.`);
+    if(av.length){ const w = el('div', 'aviso-caixa'); w.appendChild(el('b', null, 'Conferi a planilha e achei:')); const ul = el('ul'); for(const x of av) ul.appendChild(el('li', null, x)); w.appendChild(ul); $('iRes').appendChild(w); }
+    visao = null; nomes = null;
+  }catch(e){ $('iRes').textContent = ''; aviso(e.message); }
+};
+
+// a aba Importar é só do administrador
+fetch('/api/eu').then((r) => r.json()).then((eu) => { if(!eu.admin) $('abaImportar').remove(); }).catch(() => {});
+abrir(['saldo', 'lancar', 'movs', 'rel', 'contagem', 'compras', 'cadastro', 'importar'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'saldo');
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

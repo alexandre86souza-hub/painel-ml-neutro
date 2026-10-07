@@ -26,6 +26,7 @@
   .chip.impressa{background:#e7f4ee;color:#1f6b4a;border-color:#b9dfcc}
   .chip.atrasado{background:#fde8e8;color:#b42318}.chip.hoje{background:#fff4d6;color:#7a5600}.chip.amanha,.chip.depois{background:#eef1f6;color:#475569}
   td.num{font-family:ui-monospace,Consolas,monospace;font-weight:700;white-space:nowrap}
+  td.compra{white-space:nowrap}td.compra b{display:block;font-variant-numeric:tabular-nums}
   td .pequeno{display:block;font-size:11px;color:var(--muted)}
   .bt.imprimir{background:#c96f50;color:#fff;border-color:#c96f50}
   .bt.leve{background:#edf6f2;color:#1f4d3a;border-color:#b9dfcc}
@@ -56,7 +57,20 @@
   .comanda .c-qtd{font-size:18pt;font-weight:900}
   .comanda .c-sku{font-size:12pt;font-weight:900;word-break:break-all}
   .comanda .c-tit{font-size:9.5pt;font-weight:700;margin-top:0.5mm}
-  .comanda .c-rodape{font-size:8pt;text-align:center;margin-top:2mm}
+  .comanda .c-rodape{font-size:11pt;font-weight:900;text-align:center;margin-top:2.5mm;padding-top:1.5mm;border-top:0.5mm dashed #000}
+  .comanda .c-rodape small{display:block;font-size:8pt;font-weight:700;letter-spacing:.15em}
+  .hist-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px}
+  .hist-filtros label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .hist-filtros input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .hist-filtros .ou{align-self:center;color:var(--muted);font-size:13px;padding-top:18px}
+  #dlgManual{width:640px}
+  #dlgManual form{padding:16px 20px}
+  .campos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .campos label,.itens label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .campos input,.campos select,.itens input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .itens .linha{display:grid;grid-template-columns:1fr 90px 1.4fr 34px;gap:8px;align-items:end;margin-top:8px}
+  .itens .nomeProd{font-size:12px;color:var(--muted);padding-bottom:10px}
+  @media (max-width:560px){ .campos{grid-template-columns:1fr} .itens .linha{grid-template-columns:1fr 70px 34px} .itens .nomeProd{grid-column:1/-1;padding:0} }
   #impressao{display:none}
   @media print {
     @page { size: 80mm auto; margin: 0; }
@@ -73,7 +87,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=31"></script>
+    <script src="/menu.js?v=32"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -87,7 +101,8 @@
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
     <p>Todos os envios que ainda vão sair, de todas as lojas, separados por categoria e numerados no dia (Flex 1, Flex 2…). Imprima as que estão na fila na impressora térmica de 80 mm.</p>
-    <button type="button" class="bt" id="btReler">Atualizar agora</button>
+    <div class="acoes"><button type="button" class="bt imprimir" id="btManual">+ Comanda manual</button>
+    <button type="button" class="bt" id="btReler">Atualizar agora</button></div>
   </div>
   <div class="abas" id="abas" role="group" aria-label="Categorias"></div>
   <section class="bloco">
@@ -108,6 +123,19 @@
     <p class="sub" id="nota"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Buscando os envios de todas as lojas…</p></div>
   </section>
+  <section class="bloco" id="historico">
+  <h2>Histórico de comandas</h2>
+  <p class="sub">Comandas impressas num dia (ou num período) ou pelo número da venda — inclusive as que já saíram da fila porque o envio foi despachado.</p>
+  <form class="hist-filtros" id="fHist">
+    <label>Impressas de<input type="date" id="hDe"></label>
+    <label>até<input type="date" id="hAte"></label>
+    <span class="ou">ou</span>
+    <label>Número da venda<input id="hPedido" placeholder="pedido, pack ou nº Shopee/Amazon" maxlength="40" style="min-width:230px"></label>
+    <button class="bt imprimir">Buscar</button>
+  </form>
+  <p class="sub" id="hNota"></p>
+  <div class="tabela-rolagem" id="hLista"></div>
+</section>
 </main>
   </div>
 </div>
@@ -123,6 +151,31 @@
     <button type="button" class="bt imprimir" id="dlgImprimir">Imprimir agora</button>
   </div>
 </dialog>
+<dialog id="dlgManual" aria-labelledby="mTit">
+  <div class="dlg-topo">
+    <div><small>VENDA DIRETA</small><h2 id="mTit">Nova comanda manual</h2><p class="sub">Para vendas fora dos marketplaces (Josi, balcão, OLX…). Os produtos saem do estoque na hora.</p></div>
+    <button type="button" class="bt" id="mFechar" aria-label="Fechar">✕</button>
+  </div>
+  <form id="fManual" autocomplete="off">
+    <div class="campos">
+      <label>Cliente<input id="mCliente" required maxlength="80"></label>
+      <label>Venda por<input id="mLoja" required maxlength="40" list="mLojas" placeholder="Josi, Balcão, OLX…"></label>
+      <label>Entrega<input id="mEnvio" maxlength="40" list="mEnvios" placeholder="Retirada"></label>
+      <label>Nº do pedido (opcional)<input id="mPedido" maxlength="30"></label>
+      <label>Prazo (opcional)<input id="mPrazo" type="date"></label>
+      <label>Observação<input id="mObs" maxlength="120"></label>
+    </div>
+    <datalist id="mLojas"><option value="Josi"><option value="Balcão"><option value="OLX"><option value="Shein"><option value="Enjoei"><option value="WhatsApp"></datalist>
+    <datalist id="mEnvios"><option value="Retirada"><option value="Motoboy"><option value="Correios"><option value="Transportadora"></datalist>
+    <div class="itens" id="mItens"><p class="sub" style="margin:14px 0 0">Itens (SKU do produto, ex.: DQ-407, ou do kit, ex.: KIT-407.408):</p></div>
+    <button type="button" class="bt" id="mMais" style="margin-top:8px">+ Item</button>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px"><input type="checkbox" id="mBaixar" checked> Tirar os produtos do estoque</label>
+    <div class="dlg-pe" style="padding:12px 0 0;border:0">
+      <button type="button" class="bt" id="mCancelar">Cancelar</button>
+      <button class="bt imprimir">Criar comanda</button>
+    </div>
+  </form>
+</dialog>
 <div id="impressao" aria-hidden="true"></div>
 
 <script src="/comum.js?v=8"></script>
@@ -132,9 +185,10 @@ function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' 
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const PRAZO = { atrasado: 'atrasado', hoje: 'hoje', 'amanhã': 'amanhã', depois: '', 'sem prazo': '' };
-const CANAL = { ml: 'Mercado Livre', shopee: 'Shopee', magalu: 'Magalu', leroy: 'Leroy Merlin', amazon: 'Amazon' };
+const CANAL = { ml: 'Mercado Livre', shopee: 'Shopee', magalu: 'Magalu', leroy: 'Leroy Merlin', amazon: 'Amazon', manual: 'Venda direta' };
 let dados = null, cat = 'Flex', sit = 'aguarda', prazo = 'todos';
 const nomeComanda = (c) => `${c.categoria} ${c.numero}`;
+const horaCompra = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 
 async function carregar(recarregar){
   try{
@@ -182,7 +236,7 @@ function pintarLista(){
   todas.checked = lst.every((c) => sel.has(c.chave));
   todas.onchange = () => { for(const c of lst) todas.checked ? sel.add(c.chave) : sel.delete(c.chave); pintarLista(); };
   thT.appendChild(todas); cab.appendChild(thT);
-  for(const h of ['Comanda', 'Pedido', 'Loja', 'Envio', 'Cliente', 'Prazo', 'Itens', 'Situação', 'Ações']) cab.appendChild(el('th', null, h));
+  for(const h of ['Comanda', 'Pedido', 'Compra', 'Loja', 'Envio', 'Cliente', 'Prazo', 'Itens', 'Situação', 'Ações']) cab.appendChild(el('th', null, h));
   t.appendChild(cab);
   for(const c of lst){
     const tr = el('tr');
@@ -196,6 +250,15 @@ function pintarLista(){
     const bI = el('button', 'bt ' + (c.impressa_em ? '' : 'imprimir'), c.impressa_em ? 'Reimprimir' : 'Imprimir ↗'); bI.type = 'button';
     bI.onclick = () => previa([c]);
     ac.appendChild(bI);
+    if(c.canal === 'manual'){
+      const bC = el('button', 'bt leve', 'Concluir'); bC.type = 'button'; bC.title = 'Entregue/retirada: some da tela';
+      bC.onclick = async () => { if(!confirm(`Concluir a comanda ${nomeComanda(c)} de ${c.cliente}? Ela sai da tela.`)) return;
+        try{ await api('/api/comandas/manual/concluir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave: c.chave }) }); carregar(false); }catch(e){ aviso(e.message); } };
+      const bX = el('button', 'bt', 'Cancelar venda'); bX.type = 'button';
+      bX.onclick = async () => { if(!confirm(`Cancelar a venda de ${c.cliente}? Os produtos voltam para o estoque e a comanda é apagada.`)) return;
+        try{ await api('/api/comandas/manual/cancelar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave: c.chave }) }); aviso('Venda cancelada; produtos devolvidos ao estoque.', 'ok'); carregar(false); }catch(e){ aviso(e.message); } };
+      ac.append(bC, bX);
+    }
     if(c.impressa_em){
       const bV = el('button', 'bt leve', 'Voltar para a fila'); bV.type = 'button';
       bV.onclick = async () => { try{ await marcar([c.chave], false); }catch(e){ aviso(e.message); } };
@@ -205,7 +268,8 @@ function pintarLista(){
     const tdX = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = sel.has(c.chave); cb.setAttribute('aria-label', 'Selecionar ' + nomeComanda(c));
     cb.onchange = () => { cb.checked ? sel.add(c.chave) : sel.delete(c.chave); pintarSel(); };
     tdX.appendChild(cb);
-    tr.append(tdX, tdC, tdP, el('td', null, `${c.loja} · ${CANAL[c.canal] || c.canal}`), el('td', null, c.envio), el('td', null, c.cliente || '—'), tdPr,
+    const tdCo = el('td', 'compra'); if(c.comprado_em){ tdCo.append(el('b', null, horaCompra(c.comprado_em)), el('span', 'pequeno', dataBR(c.comprado_em))); } else tdCo.textContent = '—';
+    tr.append(tdX, tdC, tdP, tdCo, el('td', null, `${c.loja} · ${CANAL[c.canal] || c.canal}`), el('td', null, c.envio), el('td', null, c.cliente || '—'), tdPr,
       el('td', null, `${c.itens.length} item(ns) · ${c.unidades} un.`), tdS, tdA);
     t.appendChild(tr);
   }
@@ -224,14 +288,16 @@ function comandaEl(c){
   caixa.append(barras, el('div', 'c-rot', `${c.loja} · ${CANAL[c.canal] || c.canal}`.toUpperCase()));
   d.appendChild(caixa);
   const linha = (a, b) => { const l = el('div', 'c-linha'); l.append(el('span', null, a), el('span', null, b)); return l; };
-  d.append(linha('LOJA', c.loja), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), linha('ITENS', `${c.itens.length} · ${c.unidades} UN.`), el('hr'));
+  d.append(linha('LOJA', c.loja), linha('COMPRA', c.comprado_em ? horaBR(c.comprado_em) : '—'), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), linha('ITENS', `${c.itens.length} · ${c.unidades} UN.`), el('hr'));
   d.appendChild(el('div', 'c-rot', 'ITENS A SEPARAR'));
   for(const i of c.itens){
     const it = el('div', 'c-item');
     it.append(el('div', 'c-qtd', `QTD: ${i.qtd}`), el('div', 'c-sku', `SKU: ${i.sku || '—'}`), el('div', 'c-tit', [i.titulo, i.variacao].filter(Boolean).join(' — ')));
     d.appendChild(it);
   }
-  d.appendChild(el('div', 'c-rodape', `Impressa em ${horaBR(new Date().toISOString())}`));
+  const rod = el('div', 'c-rodape'); const agora = new Date().toISOString();
+  rod.append(el('small', null, 'IMPRESSA EM'), document.createTextNode(`${dataBR(agora)} às ${new Date(agora).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`));
+  d.appendChild(rod);
   return d;
 }
 
@@ -277,8 +343,75 @@ $('segSit').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) re
 $('segPrazo').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; prazo = b.dataset.p; for(const x of $('segPrazo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
 $('busca').oninput = pintarLista;
 $('btReler').onclick = () => { $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Buscando os envios de todas as lojas…')); carregar(true); };
+// ---- histórico: pela data da impressão ou pelo número da venda
+async function buscarHistorico(){
+  const p = new URLSearchParams();
+  const ped = $('hPedido').value.trim();
+  if(ped) p.set('pedido', ped); else { p.set('de', $('hDe').value); p.set('ate', $('hAte').value || $('hDe').value); }
+  const box = $('hLista'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Buscando…'));
+  let r; try{ r = await api('/api/comandas/historico?' + p); }catch(e){ box.innerHTML = ''; aviso(e.message); return; }
+  box.innerHTML = '';
+  $('hNota').textContent = ped ? `${r.comandas.length} comanda(s) da venda "${ped}".`
+    : `${r.comandas.length} comanda(s) impressa(s) ${$('hAte').value && $('hAte').value !== $('hDe').value ? `de ${dataBR($('hDe').value + 'T15:00:00Z')} a ${dataBR($('hAte').value + 'T15:00:00Z')}` : 'em ' + dataBR($('hDe').value + 'T15:00:00Z')}.`;
+  if(!r.comandas.length){ box.appendChild(el('p', 'vazio', 'Nenhuma comanda encontrada.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Comanda', 'Venda', 'Compra', 'Loja', 'Envio', 'Cliente', 'Itens', 'Impressa em', 'Situação', '']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const c of r.comandas){
+    const tr = el('tr');
+    const tdC = el('td', 'num', nomeComanda(c)); tdC.appendChild(el('span', 'pequeno', 'criada ' + dataBR(c.dia + 'T12:00:00Z')));
+    const tdI = el('td', null, c.impressa_em ? horaBR(c.impressa_em) : '—'); if(c.impressoes > 1) tdI.appendChild(el('span', 'pequeno', `${c.impressoes} impressões`));
+    const tdS = el('td'); tdS.appendChild(el('span', 'chip ' + (c.pendente ? 'aguarda' : 'impressa'), c.pendente ? 'Ainda na fila' : c.canal === 'manual' ? 'Concluída' : 'Já despachada'));
+    const tdA = el('td'); const b = el('button', 'bt', 'Reimprimir'); b.type = 'button'; b.onclick = () => previa([c]); tdA.appendChild(b);
+    tr.append(tdC, el('td', null, c.pedido), el('td', null, c.comprado_em ? horaBR(c.comprado_em) : '—'), el('td', null, `${c.loja} · ${CANAL[c.canal] || c.canal}`), el('td', null, c.envio || '—'), el('td', null, c.cliente || '—'),
+      el('td', null, `${(c.itens || []).length} item(ns) · ${c.unidades} un.`), tdI, tdS, tdA);
+    t.appendChild(tr);
+  }
+  box.appendChild(t);
+}
+$('fHist').onsubmit = (ev) => { ev.preventDefault(); buscarHistorico(); };
+$('hPedido').oninput = () => { const tem = !!$('hPedido').value.trim(); $('hDe').disabled = $('hAte').disabled = tem; };
+$('hDe').value = $('hAte').value = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+
+// ---- comanda manual
+function linhaItem(){
+  const l = el('div', 'linha');
+  const lc = el('label', null, 'SKU'); const c = el('input'); c.required = true; c.maxLength = 40; c.placeholder = 'DQ-407'; c.className = 'mCod'; lc.appendChild(c);
+  const lq = el('label', null, 'Qtd'); const q = el('input'); q.type = 'number'; q.min = '1'; q.value = '1'; q.required = true; q.className = 'mQtd'; lq.appendChild(q);
+  const n = el('div', 'nomeProd', '');
+  c.onchange = () => { const p = produtoDe(c.value); n.textContent = p || (c.value.trim() ? 'não achei esse SKU' : ''); };
+  const x = el('button', 'bt', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Tirar o item'); x.onclick = () => { if($('mItens').querySelectorAll('.linha').length > 1) l.remove(); };
+  l.append(lc, lq, n, x); $('mItens').appendChild(l);
+}
+let catalogo = null;
+async function carregarCatalogo(){ if(catalogo) return; try{ const r = await api('/api/comandas/catalogo'); catalogo = new Map(r.produtos.map((p) => [String(p.sku).toUpperCase(), p.nome])); }catch{ catalogo = new Map(); } }
+function produtoDe(cod){
+  const k = String(cod || '').trim().toUpperCase(); if(!k || !catalogo) return '';
+  if(catalogo.has(k)) return catalogo.get(k);
+  const nums = (k.includes('-') ? k.slice(k.indexOf('-') + 1) : k).split(/[-.\s+/]+/).filter((x) => /^\d+$/.test(x));
+  const nomes = nums.map((n) => [...catalogo].find(([s]) => s.endsWith('-' + n.padStart(3, '0')) || s.endsWith('-' + n))?.[1]).filter(Boolean);
+  return nomes.length === nums.length && nums.length ? nomes.join(' + ') : '';
+}
+$('btManual').onclick = async () => { $('fManual').reset(); $('mItens').querySelectorAll('.linha').forEach((x) => x.remove()); linhaItem(); await carregarCatalogo(); $('dlgManual').showModal(); $('mCliente').focus(); };
+$('mMais').onclick = linhaItem;
+$('mFechar').onclick = $('mCancelar').onclick = () => $('dlgManual').close();
+$('fManual').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const itens = [...$('mItens').querySelectorAll('.linha')].map((l) => ({ codigo: l.querySelector('.mCod').value.trim(), qtd: Number(l.querySelector('.mQtd').value) })).filter((i) => i.codigo);
+  try{
+    const r = await api('/api/comandas/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      cliente: $('mCliente').value, loja: $('mLoja').value, envio: $('mEnvio').value, pedido: $('mPedido').value, prazo: $('mPrazo').value,
+      obs: $('mObs').value, itens, baixar_estoque: $('mBaixar').checked }) });
+    $('dlgManual').close();
+    aviso(`Comanda Nº ${r.numero} (Venda direta) criada${$('mBaixar').checked ? ' e produtos tirados do estoque' : ''}.`, 'ok');
+    cat = 'Venda direta';
+    await carregar(false);
+    const c = dados.comandas.find((x) => x.chave === r.chave); if(c) previa([c]);
+  }catch(e){ alert(e.message); }
+};
+
 carregar(false);
-setInterval(() => { if(!$('dlg').open) carregar(false); }, 3 * 60e3);
+setInterval(() => { if(!$('dlg').open && !$('dlgManual').open) carregar(false); }, 3 * 60e3);
 </script>
 <script src="/sino.js?v=1" defer></script>
 </body>

@@ -269,6 +269,21 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   (vai impresso, em letra grande, para as câmeras). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Código de barras Code 128 em
   `public/codigo128.js` (testado). Nada no MCP (`test-comandas.js`).
+- Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
+  Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
+  Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,
+  `compras` e TODAS as movimentações como histórico (`estoque_mov.historico=1`: média de saída, custo médio, relatórios;
+  fora do saldo). "Saida" sem acento conta como saída (a fórmula da planilha a deixava de fora). Saldo = movimentos
+  com historico=0 e desfeito=0, a partir da 1ª CONTAGEM (`estoque_contagem` rascunho -> ajuste contado − saldo); ao
+  finalizar a 1ª, `estoque_inicio` liga a baixa automática: ML (`vendas`), Shopee, Amazon, Leroy e Magalu pelas cópias
+  locais, Full/FBA NÃO baixa (o envio ao Full é saída manual), cancelada volta. Devolução do ML volta sozinha quando chega
+  (status_devolucao delivered/closed; `devolucoes.js#atualizarDevolucoes` na baixa) e só o que está SEM defeito pela marcação da
+  tela Devoluções (kit: peças marcadas ficam fora; sem marcação = pendente); devolução de venda do Full NÃO entra; as que
+  já tinham chegado na 1ª contagem ficam de fora (`estoque_devol_antes`). Cada linha tem `ref`; `diferencas`
+  lança só o que falta (nunca duplica); SKU sem produto = pendente na tela. Reposição = fórmulas da planilha
+  (`reposicao`: média 6m, mínimo ⌈média×prazo⌉, máximo, sugestão menos pedidos em aberto, status). Relatório
+  (`relatorio`): dia/semana/mês/ano × total/canal/loja/produto. Comanda manual (Venda direta, `comandas.js`) tira do
+  estoque com ref comanda:… e cancelar devolve. Nada no MCP (`test-estoque.js`).
 - Campanhas da Amazon e da Leroy (`campanhas-canais.js`, tela `public/campanhas-canais.html?conta=amazon|leroy`; o menu
   troca Campanhas por ela): (1) preço promocional com início e fim em cada anúncio, agrupado pelo período,
   com o resultado (vendas e lucro no período contra os mesmos dias antes); criar/encerrar só pelo clique, com

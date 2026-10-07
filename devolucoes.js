@@ -176,6 +176,18 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
   const ehVendedor = (c, contaId) => (c.players || [])
     .some((p) => p.role === 'respondent' && Number(p.user_id) === Number(contaId));
 
+  // Lê as reclamações da conta desde "de" e grava as que mudaram (a tela e a baixa do estoque usam).
+  async function atualizar(conta, de) {
+    const claims = (await Promise.all(Object.keys(TIPOS).map((t) => buscar(conta, t, de)))).flat();
+    // reclamação de envio gravada antes de o pedido ser buscado pelo envio: detalha de novo
+    const semPedido = new Set(D.db.prepare('SELECT claim_id FROM devolucoes WHERE ml_user_id=? AND order_id IS NULL')
+      .all(conta.ml_user_id).map((r) => r.claim_id));
+    const mudaram = claims.filter((c) => D.devolucaoAtualizadaEm(c.id) !== c.last_updated
+      || (c.resource === 'shipment' && semPedido.has(c.id)));
+    await emLotes(mudaram, 2, async (c) => D.devolucaoGravar(await detalhar(conta, c)));
+    return claims;
+  }
+
   const motivos = new Map();
   async function motivo(id) {
     if (!id) return null;
@@ -373,13 +385,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       const ate = new Date();
       const de = new Date(ate.getTime() - dias * 864e5);
 
-      const claims = (await Promise.all(Object.keys(TIPOS).map((t) => buscar(conta, t, de)))).flat();
-      // reclamação de envio gravada antes de o pedido ser buscado pelo envio: detalha de novo
-      const semPedido = new Set(D.db.prepare('SELECT claim_id FROM devolucoes WHERE ml_user_id=? AND order_id IS NULL')
-        .all(conta.ml_user_id).map((r) => r.claim_id));
-      const mudaram = claims.filter((c) => D.devolucaoAtualizadaEm(c.id) !== c.last_updated
-        || (c.resource === 'shipment' && semPedido.has(c.id)));
-      await emLotes(mudaram, 2, async (c) => D.devolucaoGravar(await detalhar(conta, c)));
+      const claims = await atualizar(conta, de);
 
       // Só as reclamações em que a conta é a vendedora; as de compra gravadas antes saem.
       const validas = new Set(claims.map((c) => c.id));
@@ -578,7 +584,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
     } },
   ];
 
-  return { rotas, rotasParam };
+  return { rotas, rotasParam, atualizarDevolucoes: atualizar };
 }
 
 module.exports = { criar, custoDa, comDefeito, dinheiroDoPagamento, ligarCreditos, TIPOS, REVISAO };
