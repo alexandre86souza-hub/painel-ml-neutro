@@ -187,7 +187,9 @@ async function carregar(){
     box.append(
       kpi('Investimento', real(t.investimento), `${real(t.investimento / Math.max(1, r.serie.length))} por dia`),
       kpi('Receita com ADS', real(t.receita), `direta ${real(t.direta)} · indireta ${real(t.indireta)}`),
-      kpi('ROAS', razao(t.roas), `ACOS ${pct(t.acos)} · TACOS ${pct(t.tacos)}`),
+      kpi('ROAS', razao(t.roas), `receita ÷ investimento · TACOS ${pct(t.tacos)}`),
+      // ACOS = quanto do que o ADS vendeu foi gasto nele (investimento ÷ receita com ADS)
+      kpi('ACOS', pct(t.acos), t.receita ? `${real(t.investimento)} gastos para vender ${real(t.receita)}` : 'sem venda com ADS no período'),
       kpi('Cliques', numero(t.cliques), `CTR ${pct(t.ctr, 2)} · CPC ${real(t.cpc)} · ${numero(t.unidades)} un. vendidas`),
     );
     const g = $('grafico'); g.innerHTML = '';
