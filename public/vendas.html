@@ -85,7 +85,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=28"></script>
+    <script src="/menu.js?v=29"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -175,10 +175,11 @@ async function api(caminho, opts){
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
 const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
 const NA_LEROY = new URLSearchParams(location.search).get('conta') === 'leroy';
-const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY;
-const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : 'Shopee';
+const NA_MAGALU = new URLSearchParams(location.search).get('conta') === 'magalu';
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY || NA_MAGALU;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : NA_MAGALU ? 'Magalu' : 'Shopee';
 if(NA_AMAZON) document.querySelector('#segFiltro [data-f="full"]').textContent = 'FBA';
-if(NA_SHOPEE || NA_LEROY) document.querySelector('#segFiltro [data-f="full"]').hidden = true;
+if(NA_SHOPEE || NA_LEROY || NA_MAGALU) document.querySelector('#segFiltro [data-f="full"]').hidden = true;
 if(NA_EXT){
   $('busca').placeholder = 'Buscar por produto, SKU ou nº do pedido';
   $('addConta').hidden = true;
@@ -270,6 +271,7 @@ function pintarResumo(r){
       $('listaAlerta').appendChild(el('li', null, `${x.titulo || x.item_id} (${x.item_id}) · ${numero(x.vendas)} venda(s) · ${motivo}`));
     }
     if(r.sem_custo.length > 15) $('listaAlerta').appendChild(el('li', null, `e mais ${r.sem_custo.length - 15}…`));
+    if(NA_MAGALU){ const li = el('li'); const ln = el('a', null, 'Ligue o código da Magalu ao seu SKU na tela Anúncios'); ln.href = '/magalu-anuncios.html?conta=magalu'; li.append(ln, ' (campo "SKU do painel").'); $('listaAlerta').appendChild(li); }
     al.hidden = false;
   }else al.hidden = true;
 }
@@ -359,13 +361,14 @@ function pintarLista(){
 async function carregar(){
   $('msg').style.display = 'none';
   $('composicao').innerHTML = '';
-  $('composicao').appendChild(el('p', 'carregando', NA_LEROY ? 'Carregando os pedidos da Leroy Merlin… Na primeira vez o painel lê 5 meses de pedidos e repasses.'
+  $('composicao').appendChild(el('p', 'carregando', NA_MAGALU ? 'Carregando os pedidos da Magalu… Na primeira vez o painel lê 5 meses de pedidos e do financeiro.'
+    : NA_LEROY ? 'Carregando os pedidos da Leroy Merlin… Na primeira vez o painel lê 5 meses de pedidos e repasses.'
     : NA_SHOPEE ? 'Carregando os pedidos da Shopee… Na primeira vez o painel lê 5 meses de pedidos (uns 2 minutos).'
     : NA_AMAZON ? 'Carregando os pedidos da Amazon… Na primeira vez o painel lê 5 meses de pedidos e os itens chegam aos poucos.'
     : 'Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.'));
   $('lista').innerHTML = '';
   try{
-    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_LEROY ? `/api/leroy/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
+    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_LEROY ? `/api/leroy/pedidos?dias=${dias}` : NA_MAGALU ? `/api/magalu/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
     dados = r;
     const d = (iso) => new Date(iso).toLocaleDateString('pt-BR');
     $('periodoTxt').textContent = dias === 1 ? 'Vendas de hoje, com todos os custos.'

@@ -44,7 +44,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=28"></script>
+    <script src="/menu.js?v=29"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -134,8 +134,8 @@ function pintarContas(r, cor){
     img.onerror = () => img.remove();   // conta sem logo: fica só o nome
     // nome e logo da tela Empresa e custos de cada conta, no mesmo estilo do menu
     const nome = el('div', 'nome marca-nome', nomeDe(c));
-    nome.appendChild(el('small', null, c.amazon ? 'Amazon' : c.leroy ? 'Leroy Merlin' : c.shopee ? 'Shopee' : 'Mercado Livre' + (c.nickname && !nomeDe(c).includes(c.nickname) ? ' · ' + c.nickname : '')));
-    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : c.shopee || c.leroy ? 'Abrir os pedidos' : 'Abrir o Dashboard'); bt.type = 'button';
+    nome.appendChild(el('small', null, c.amazon ? 'Amazon' : c.leroy ? 'Leroy Merlin' : c.magalu ? 'Magalu' : c.shopee ? 'Shopee' : 'Mercado Livre' + (c.nickname && !nomeDe(c).includes(c.nickname) ? ' · ' + c.nickname : '')));
+    const bt = el('button', 'bt', c.amazon ? 'Abrir a tela Amazon' : c.shopee || c.leroy || c.magalu ? 'Abrir os pedidos' : 'Abrir o Dashboard'); bt.type = 'button';
     bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
     topo.append(img, nome, bt); k.appendChild(topo);
     if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); box.appendChild(k); continue; }
@@ -268,6 +268,7 @@ async function carregar(){
   const amz = api(`/api/amazon/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
   // lojas da Shopee: uma chamada por loja (a primeira leitura de uma loja leva uns 2 minutos)
   const leroy = api('/api/leroy/config').catch(() => ({}));
+  const magalu = api('/api/magalu/config').catch(() => ({}));
   const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
   try{
     const r = await api(`/api/contas/resumo?dias=${dias}`);
@@ -285,6 +286,12 @@ async function carregar(){
       if(lm.erro) erros.push('Leroy Merlin: ' + lm.erro);
       else { await lerMarcas(['leroy']); tudo = comExterna(tudo, lm, { ml_user_id: 'leroy', nickname: (lm.nome || 'Loja') + ' · Leroy Merlin', leroy: true, tela: '/vendas.html?conta=leroy' }); pintar(tudo, false); }
     }
+    if((await magalu).conectada_em){
+      const mg = await api(`/api/magalu/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+      if(minha !== geracao) return;
+      if(mg.erro) erros.push('Magalu: ' + mg.erro);
+      else { await lerMarcas(['magalu']); tudo = comExterna(tudo, mg, { ml_user_id: 'magalu', nickname: (mg.nome || 'Loja') + ' · Magalu', magalu: true, tela: '/vendas.html?conta=magalu' }); pintar(tudo, false); }
+    }
     for(const l of await lojas){
       const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&dias=${dias}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
@@ -301,7 +308,7 @@ async function carregar(){
 
 function pintar(r, temAmazon){
   {
-    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : c.leroy ? '#78be20' : c.shopee ? '#ee4d2d' : COR[i % COR.length]]));
+    const cor = Object.fromEntries(r.contas.map((c, i) => [c.ml_user_id, c.amazon ? '#232f3e' : c.leroy ? '#78be20' : c.magalu ? '#0086ff' : c.shopee ? '#ee4d2d' : COR[i % COR.length]]));
     const t = r.total, boas = r.contas.filter((c) => !c.erro).length;
     $('topoTxt').textContent = `${boas} conta(s) somada(s)` + (r.contas.length > boas ? ` · ${r.contas.length - boas} com erro` : '')
       + `. Hoje e os últimos ${dias} dias.` + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');

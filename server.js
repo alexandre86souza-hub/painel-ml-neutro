@@ -2014,6 +2014,10 @@ Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
 Object.assign(routes, require('./calculadora.js').criar({ D, ml, amazon: amazonMod }).rotas);
 Object.assign(routes, require('./leroy.js').criar({ D, janela }).rotas);
+// Magalu (magalu.js): conexão da loja. Retorno da autorização em localhost (/magalu/callback, ver tratarPainel).
+const magaluMod = require('./magalu.js').criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel: () => portaPainel,
+  enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a), pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
+Object.assign(routes, magaluMod.rotas);
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
@@ -2057,13 +2061,14 @@ const marcaLer = (campo, contaId) => (contaId && D.configLer(chaveMarca(campo, c
 const marcaLogo = (contaId = D.contaAtivaId()) => { try { return JSON.parse(marcaLer('logo', contaId) || 'null'); } catch { return null; } };
 // A Amazon, a Leroy e cada loja da Shopee têm identidade própria ("amazon", "leroy", "shopee-{loja}"): não são
 // contas do Mercado Livre.
-const contaExterna = (v) => (/^(amazon|leroy|shopee-\d+)$/.test(String(v || '')) ? String(v) : null);
+const contaExterna = (v) => (/^(amazon|leroy|magalu|shopee-\d+)$/.test(String(v || '')) ? String(v) : null);
 const contaDaMarca = (url) => contaExterna(url?.searchParams?.get('conta')) || D.contaAtivaId();
 const marcaAtual = (contaId = D.contaAtivaId()) => {
   const externa = contaExterna(contaId);
   const loja = externa?.startsWith('shopee-') ? D.shopeeLojasListar().find((l) => `shopee-${l.shop_id}` === externa) : null;
   const nome = marcaLer('nome', contaId) || (externa === 'amazon' ? D.configLer('amazon_vendedor') || 'Amazon'
     : externa === 'leroy' ? D.configLer('leroy_loja_nome') || 'Leroy Merlin'
+    : externa === 'magalu' ? D.configLer('magalu_loja_nome') || 'Magalu'
     : externa ? (loja?.nome || 'Shopee') : contaId ? D.contaObter(Number(contaId))?.nickname : null);
   return { conta: externa || (contaId ? Number(contaId) : null), nome: nome || MARCA_PADRAO, personalizado: !!nome,
     nome_proprio: (contaId && D.configLer(chaveMarca('nome', contaId))) || '',
@@ -2386,6 +2391,10 @@ async function tratarPainel(req, res, online = false) {
     }
     return redirecionar(res, pendencia === 'senha' ? '/trocar-senha' : '/ativar-2fa');
   }
+
+  // Retorno da autorização da Magalu: endereço fixo no próprio computador (cadastrado no aplicativo
+  // do IDM), com a sessão do painel; o state de uso único prova que o pedido nasceu aqui.
+  if (!online && req.method === 'GET' && url.pathname === '/magalu/callback') return magaluMod.callback(res, url);
 
   // Logo da empresa (tela Empresa): imagem, não JSON. Só os três tipos aceitos em validarMarca.
   if (req.method === 'GET' && url.pathname === '/api/marca/logo') {

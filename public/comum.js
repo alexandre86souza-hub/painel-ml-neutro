@@ -43,7 +43,7 @@ function celulaProduto(foto, titulo, sub, link) {
     // A opção "Amazon" é acrescentada pelo menu.js (em todas as telas).
     const { ativa, contas } = await api('/api/accounts');
     // conta de outro marketplace (Amazon, Leroy, loja da Shopee): nenhuma conta do ML fica marcada
-    const naAmazon = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html', '/leroy.html'].includes(location.pathname) || /^(amazon|leroy|shopee-\d+)$/.test(new URLSearchParams(location.search).get('conta') || '');
+    const naAmazon = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html', '/leroy.html', '/magalu.html'].includes(location.pathname) || /^(amazon|leroy|magalu|shopee-\d+)$/.test(new URLSearchParams(location.search).get('conta') || '');
     sel.innerHTML = '';
     if (!contas.length) { sel.hidden = true; return; }
     for (const c of contas) { const o = el('option', null, `${c.nickname} · ${c.site_id}`); o.value = c.ml_user_id; o.selected = !naAmazon && c.ml_user_id === ativa; sel.appendChild(o); }

@@ -22,6 +22,7 @@
     shopee: '<path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
     amazon: '<path d="M4 9h16v10H4z"/><path d="M8 9V6h8v3"/><path d="M7 14c3 2 7 2 10 0"/>',
     leroy: '<path d="M3 11 12 4l9 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
+    magalu: '<path d="M4 7h16v12H4z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12l3 3 3-3"/>',
     publicar: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 9v6M9 12h6"/>',
     navegador: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.4 2.6 2.4 12.8 0 16M12 4c-2.4 2.6-2.4 12.8 0 16"/>',
     config: '<path d="M5 8h14M5 16h14"/><circle cx="10" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/>',
@@ -48,6 +49,7 @@
     ['/shopee.html', 'Shopee', 'shopee'],
     ['/amazon.html', 'Amazon', 'amazon'],
     ['/leroy.html', 'Leroy Merlin', 'leroy'],
+    ['/magalu.html', 'Magalu', 'magalu'],
     ['/publicar.html', 'Publicar', 'publicar'],
     ['/navegador.html', 'Navegador', 'navegador'],
     ['/configuracao.html', 'Configurações', 'config'],
@@ -59,8 +61,8 @@
   // ?conta=…) mostram a identidade daquela conta e os dados dela.
   const PARAM = new URLSearchParams(location.search).get('conta');
   const EXT = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) ? 'amazon'
-    : location.pathname === '/leroy.html' ? 'leroy'
-    : /^(amazon|leroy|shopee-\d+)$/.test(PARAM || '') ? PARAM : null;
+    : location.pathname === '/leroy.html' ? 'leroy' : location.pathname === '/magalu.html' ? 'magalu'
+    : /^(amazon|leroy|magalu|shopee-\d+)$/.test(PARAM || '') ? PARAM : null;
   const NA_AMAZON = EXT === 'amazon';
   const QM = EXT ? `conta=${EXT}&` : '';
   const GUARDA = EXT ? 'painel.marca.' + EXT : 'painel.marca';
@@ -95,8 +97,9 @@
   // Dashboard, Anúncios e Ads; na Shopee o Dashboard é a tela Pedidos.
   const TELAS = { amazon: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html', '/full.html'],
     shopee: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'],
-    leroy: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'] };
-  const tipo = (ext) => (ext === 'amazon' || ext === 'leroy' ? ext : 'shopee');
+    leroy: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'],
+    magalu: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'] };
+  const tipo = (ext) => (ext === 'amazon' || ext === 'leroy' || ext === 'magalu' ? ext : 'shopee');
   const comConta = (href, ext = EXT) => {
     const u = new URL(href, location.origin);
     if (tipo(ext) === 'amazon') {
@@ -105,9 +108,10 @@
       if (u.pathname === '/ads.html') return '/amazon-ads.html';
       if (u.pathname === '/publicar.html') return '/publicar-canais.html?conta=amazon';
       if (u.pathname === '/promocoes.html') return '/campanhas-canais.html?conta=amazon';
-    } else if (tipo(ext) === 'leroy') {
-      if (u.pathname === '/' || u.pathname === '/inicio.html') return '/vendas.html?conta=leroy';
-      if (u.pathname === '/promocoes.html') return '/campanhas-canais.html?conta=leroy';
+    } else if (tipo(ext) === 'leroy' || tipo(ext) === 'magalu') {
+      if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
+      if (u.pathname === '/promocoes.html') return `/campanhas-canais.html?conta=${ext}`;
+      if (u.pathname === '/anuncios.html' && ext === 'magalu') return '/magalu-anuncios.html?conta=magalu';
     } else if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
     else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
     else if (u.pathname === '/ads.html') return `/shopee-ads.html?conta=${ext}`;
@@ -128,10 +132,10 @@
     return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;   // Leroy: a tela Pedidos
   };
   const semConta = () => {
-    if (location.pathname === '/amazon.html' || location.pathname === '/leroy.html') return '/';
+    if (['/amazon.html', '/leroy.html', '/magalu.html'].includes(location.pathname)) return '/';
     if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
     if (location.pathname === '/amazon-ads.html' || location.pathname === '/shopee-ads.html') return '/ads.html';
-    if (location.pathname === '/shopee-anuncios.html') return '/anuncios.html';
+    if (location.pathname === '/shopee-anuncios.html' || location.pathname === '/magalu-anuncios.html') return '/anuncios.html';
     if (location.pathname === '/shopee-campanhas.html' || location.pathname === '/campanhas-canais.html') return '/promocoes.html';
     if (location.pathname === '/shopee-devolucoes.html') return '/devolucoes.html';
     if (location.pathname === '/publicar-canais.html') return '/publicar.html';
@@ -142,7 +146,7 @@
   // externa: troca a ativa e volta para a mesma tela sem a externa.
   document.addEventListener('change', async (ev) => {
     if (!ev.target || ev.target.id !== 'selConta') return;
-    if (/^(amazon|leroy|shopee-\d+)$/.test(ev.target.value)) {
+    if (/^(amazon|leroy|magalu|shopee-\d+)$/.test(ev.target.value)) {
       ev.stopImmediatePropagation();
       location.href = telaDaConta(ev.target.value);
       return;
@@ -159,10 +163,11 @@
   // Amazon, Leroy e lojas da Shopee entram no fim da lista de contas de todas as telas (cada tela monta
   // a sua lista; aqui só acrescenta as opções depois que ela aparece).
   const ler = (u) => fetch(u, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  Promise.all([ler('/api/amazon/config'), ler('/api/shopee/config'), ler('/api/leroy/config')]).then(([amz, sh, lm]) => {
+  Promise.all([ler('/api/amazon/config'), ler('/api/shopee/config'), ler('/api/leroy/config'), ler('/api/magalu/config')]).then(([amz, sh, lm, mgl]) => {
     const extras = [];
     if (amz?.conectada_em) extras.push({ valor: 'amazon', nome: `${amz.vendedor || 'AMAZON'} · Amazon` });
     if (lm?.conectada_em) extras.push({ valor: 'leroy', nome: `${lm.loja || 'Loja'} · Leroy Merlin` });
+    if (mgl?.conectada_em) extras.push({ valor: 'magalu', nome: `${mgl.loja || 'Loja'} · Magalu` });
     for (const l of sh?.lojas || []) extras.push({ valor: `shopee-${l.shop_id}`, nome: `${l.nome || 'Loja ' + l.shop_id} · Shopee` });
     if (!extras.length) return;
     const pendurar = () => {
@@ -196,7 +201,7 @@
     a.href = EXT ? comConta(href) : href;
     const [caminho, query] = href.split('?');
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
-      || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html'].includes(aqui))
+      || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html', '/magalu-anuncios.html'].includes(aqui))
       || (caminho === '/ads.html' && ['/amazon-ads.html', '/shopee-ads.html'].includes(aqui))
       || (caminho === '/promocoes.html' && ['/shopee-campanhas.html', '/campanhas-canais.html'].includes(aqui)) || (caminho === '/devolucoes.html' && aqui === '/shopee-devolucoes.html') || (caminho === '/publicar.html' && aqui === '/publicar-canais.html'))
       && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);

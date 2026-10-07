@@ -41,7 +41,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=28"></script>
+    <script src="/menu.js?v=29"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -124,14 +124,16 @@
 <script>
 // ?conta=amazon | leroy. Os dados vêm de /api/{canal}/campanhas; criar e encerrar mudam a loja
 // (só pelo clique, com confirmação). Nada desta tela vai para o MCP.
-const CANAL = new URLSearchParams(location.search).get('conta') === 'leroy' ? 'leroy' : 'amazon';
-const NOME = CANAL === 'leroy' ? 'Leroy Merlin' : 'Amazon';
-document.documentElement.style.setProperty('--cor-canal', CANAL === 'leroy' ? '#5a9a1a' : '#232f3e');
-document.documentElement.style.setProperty('--cor-canal2', CANAL === 'leroy' ? '#3d6e0f' : '#37475a');
+const CANAL = ['leroy', 'magalu'].includes(new URLSearchParams(location.search).get('conta')) ? new URLSearchParams(location.search).get('conta') : 'amazon';
+const NOME = { leroy: 'Leroy Merlin', magalu: 'Magalu', amazon: 'Amazon' }[CANAL];
+document.documentElement.style.setProperty('--cor-canal', { leroy: '#5a9a1a', magalu: '#0086ff', amazon: '#232f3e' }[CANAL]);
+document.documentElement.style.setProperty('--cor-canal2', { leroy: '#3d6e0f', magalu: '#005bb5', amazon: '#37475a' }[CANAL]);
 $('titulo').textContent = 'Campanhas — ' + NOME;
 document.title = 'Campanhas ' + NOME;
 $('topoTxt').textContent = `Promoções e descontos na ${NOME}, com o resultado de cada um: vendas e lucro no período contra os mesmos dias antes.`;
-$('criarSub').textContent = CANAL === 'leroy'
+$('criarSub').textContent = CANAL === 'magalu'
+  ? 'Na Magalu, o painel ainda só lê: o desconto por anúncio entra quando a API de preços for ligada.'
+  : CANAL === 'leroy'
   ? 'Preço promocional com início e fim em cada oferta. A Leroy aceita uma mudança de preços por minuto e leva alguns minutos para aplicar. Se o Bling também manda preço para a Leroy, ele pode sobrescrever o desconto.'
   : 'Preço promocional (preço de oferta) com início e fim em cada anúncio. A Amazon leva alguns minutos para aplicar. Cupons, ofertas relâmpago e descontos Prime só no Seller Central.';
 
@@ -161,6 +163,8 @@ async function carregar(recarregar){
   try{
     dados = await api(`/api/${CANAL}/campanhas${recarregar ? '?recarregar=1' : ''}`);
     aviso(dados.erro_leitura ? `Não consegui ler as novidades da ${NOME} agora (${dados.erro_leitura}). Os números são da última leitura.` : '');
+    // Magalu: por enquanto sem a lista de anúncios (só promoções e resultado)
+    if(CANAL === 'magalu'){ $('segFiltro').closest('section').hidden = true; $('grupos').closest('section').hidden = true; }
     pintarCartoes(); pintarParticipar(); pintarPromocoes(); pintarGrupos(); pintarLista();
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
 }
@@ -170,6 +174,12 @@ function pintarCartoes(){
   const n = (s) => a.filter((x) => x.situacao === s).length;
   const pr = dados.promocoes.reduce((s, p) => ({ fat: s.fat + p.faturamento, desc: s.desc + p.desconto }), { fat: 0, desc: 0 });
   const box = $('cartoes'); box.innerHTML = '';
+  if(CANAL === 'magalu'){
+    box.append(cartao('Promoções com venda', numero(dados.promocoes.filter((p) => p.id).length), 'últimos 5 meses', true),
+      cartao('Vendido com promoções', real(pr.fat), `${real(pr.desc)} de desconto ao cliente`),
+      cartao('Disponíveis para entrar', dados.promocoes_loja ? numero(dados.promocoes_loja.length) : '—', 'promoções abertas pela Magalu'));
+    return;
+  }
   box.append(
     cartao('Em desconto agora', numero(n('ativo')), `${numero(n('agendado'))} agendado(s) · ${numero(n('encerrado'))} encerrado(s)`, true),
     cartao('Anúncios', numero(a.length), `${numero(a.filter((x) => x.ativa).length)} ativo(s)`),
@@ -179,6 +189,17 @@ function pintarCartoes(){
 
 function pintarParticipar(){
   const box = $('participar'); box.innerHTML = '';
+  if(CANAL === 'magalu'){
+    const lst = dados.promocoes_loja;
+    if(lst == null){ box.appendChild(el('p', 'sub', 'Não consegui ler as promoções disponíveis da Magalu agora.')); return; }
+    if(!lst.length){ box.appendChild(el('p', 'sub', 'A Magalu não tem nenhuma promoção disponível para a sua loja agora. Quando abrir uma (ex.: "Acelere suas vendas", cupons de categoria), ela aparece aqui.')); return; }
+    const t = el('table'); const cab = el('tr');
+    for(const h of ['Promoção', 'Tipo', 'Situação', 'Período']) cab.appendChild(el('th', null, h));
+    t.appendChild(cab);
+    for(const p of lst){ const tr = el('tr'); tr.append(el('td', null, p.nome || p.id), el('td', null, p.tipo || '—'), el('td', null, p.situacao || '—'), el('td', null, `${dataBR(p.inicio)} a ${dataBR(p.fim)}`)); t.appendChild(tr); }
+    box.appendChild(t);
+    return;
+  }
   if(CANAL === 'amazon'){
     box.appendChild(el('p', 'sub', 'A Amazon não deixa outros sistemas lerem os convites de promoção (cupons, ofertas relâmpago, descontos Prime e ofertas da Amazon). Veja as que você pode participar no Seller Central; o resultado de cada uma aparece abaixo assim que houver venda com ela.'));
     const l = el('div', 'links-canal');
@@ -200,7 +221,9 @@ function pintarParticipar(){
 
 function pintarPromocoes(){
   const box = $('promocoes'); box.innerHTML = '';
-  $('promoSub').textContent = CANAL === 'amazon'
+  $('promoSub').textContent = CANAL === 'magalu'
+    ? 'Cada promoção que apareceu nas suas vendas dos últimos 5 meses (pela análise financeira da Magalu): pedidos, faturamento, desconto total ao cliente (com a parte que a Magalu reembolsou) e lucro.'
+    : CANAL === 'amazon'
     ? 'Cada promoção que apareceu nas suas vendas dos últimos 5 meses (pelo financeiro da Amazon): pedidos, faturamento, desconto dado ao cliente e lucro. A Amazon não manda o nome de algumas (cupons e ofertas dela): ficam juntas em "sem identificação".'
     : 'Cada promoção da Leroy que apareceu nas suas vendas dos últimos 5 meses: pedidos, faturamento, desconto e lucro.';
   if(!dados.promocoes.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com promoção nos últimos 5 meses.')); return; }

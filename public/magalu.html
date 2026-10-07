@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magalu</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css">
+<link rel="stylesheet" href="/tema-hn.css?v=3">
+<link rel="stylesheet" href="/tema-painel.css?v=1">
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .passo{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;margin-right:8px}
+  .form{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto;gap:12px;align-items:end}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .form input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;width:100%}
+  .form input.segredo:not(:placeholder-shown){-webkit-text-security:disc}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .aviso-amarelo{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0 0}
+  .conta{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+  .conta-topo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .conta-topo b{font-size:15px}
+  .conta-topo .acoes{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .diag{margin-top:12px;font-size:13px}
+  .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-word}
+  ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
+  ol.como li{margin-bottom:4px}
+  code{background:#f1f3f6;border-radius:5px;padding:1px 5px;font-size:12px}
+  @media (max-width:900px){ .form{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=29"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Magalu</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Conexão da sua loja na Magalu com o painel. Por enquanto esta tela conecta e testa; pedidos, lucro, repasses e promoções entram na próxima etapa, a partir do que a Magalu devolver no diagnóstico.</p>
+  </div>
+
+  <section class="bloco">
+    <h2><span class="passo">1</span>Aplicativo da Magalu</h2>
+    <ol class="como">
+      <li>O aplicativo é criado com o programa <b>IDM</b> da Magalu (<code>idm client create</code>), que mostra o <b>Client ID</b> e o <b>Client Secret</b> uma única vez.</li>
+      <li>O endereço de retorno cadastrado no aplicativo tem de ser <code id="retorno">http://localhost:3100/magalu/callback</code>.</li>
+    </ol>
+    <p class="aviso-amarelo">Cole o Client Secret só aqui: ele fica guardado cifrado neste computador. Não mande print nem cole em conversas.</p>
+    <form class="form" id="formConfig">
+      <label>Client ID<input id="cId" name="magalu-client-id" autocomplete="off" spellcheck="false" autocapitalize="off" required></label>
+      <!-- texto mascarado (não type=password): com senha o Chrome preencheria com a senha do painel -->
+      <label>Client Secret<input id="cSeg" name="magalu-client-secret" type="text" class="segredo" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+      <button class="bt primario">Salvar</button>
+    </form>
+  </section>
+
+  <section class="bloco">
+    <h2><span class="passo">2</span>Autorizar a loja</h2>
+    <p class="sub">Abre o ID Magalu: entre com o login da <b>loja</b> (o mesmo do Portal do Seller), escolha a loja e autorize as permissões. Funciona só no computador do painel (o retorno é em localhost).</p>
+    <button type="button" class="bt primario" id="btConectar">Conectar loja da Magalu</button>
+    <div id="conta"></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=8"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—');
+
+let cfg = null;
+async function carregar(){
+  try{
+    cfg = await api('/api/magalu/config');
+    $('cId').value = cfg.client_id || '';
+    $('cSeg').placeholder = cfg.tem_segredo ? 'já gravado — preencha só para trocar' : 'Client Secret do aplicativo';
+    $('cSeg').required = !cfg.tem_segredo;
+    $('retorno').textContent = cfg.retorno;
+    $('btConectar').disabled = !(cfg.client_id && cfg.tem_segredo);
+    $('btConectar').textContent = cfg.conectada_em ? 'Autorizar de novo' : 'Conectar loja da Magalu';
+    pintarConta();
+  }catch(e){ aviso(e.message); }
+}
+
+function pintarConta(){
+  const box = $('conta'); box.innerHTML = '';
+  if(!cfg.conectada_em) return;
+  const c = el('div', 'conta'), topo = el('div', 'conta-topo');
+  topo.append(el('b', null, cfg.loja || 'Loja na Magalu'), el('span', 'sub', `conectada em ${quando(cfg.conectada_em)}`));
+  const acoes = el('div', 'acoes');
+  const btD = el('button', 'bt', 'Diagnóstico'); btD.type = 'button';
+  const btR = el('button', 'bt', 'Desconectar'); btR.type = 'button';
+  acoes.append(btD, btR); topo.appendChild(acoes); c.appendChild(topo);
+  if(cfg.escopos_faltando?.length) c.appendChild(el('p', 'aviso-amarelo', 'A loja não autorizou: ' + cfg.escopos_faltando.join(', ') + '. Clique em "Autorizar de novo" e marque todas as permissões.'));
+  const diag = el('div', 'diag'); c.appendChild(diag);
+  btD.onclick = async () => {
+    diag.innerHTML = ''; diag.appendChild(el('p', 'carregando', 'Perguntando à Magalu (pedidos, financeiro e promoções dos últimos 15 dias)…'));
+    try{
+      const r = await api('/api/magalu/diagnostico?dias=15');
+      diag.innerHTML = '';
+      diag.appendChild(el('p', 'sub', 'O que a Magalu devolve para a loja: números e a forma das respostas (campos e tipos), sem dados de clientes. Copie e mande para montar pedidos, lucro e repasses.'));
+      diag.appendChild(el('pre', null, JSON.stringify(r, null, 2)));
+    }catch(e){ diag.innerHTML = ''; diag.appendChild(el('p', 'vazio', e.message)); }
+  };
+  btR.onclick = async () => {
+    if(!confirm('Desconectar a loja da Magalu do painel? A autorização é apagada deste computador.')) return;
+    try{ await enviar('POST', '/api/magalu/remover'); aviso('Loja desconectada.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
+  };
+  box.appendChild(c);
+}
+
+$('formConfig').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const bt = ev.submitter; if(bt) bt.disabled = true;
+  try{
+    await enviar('PUT', '/api/magalu/config', { client_id: $('cId').value, client_secret: $('cSeg').value });
+    $('cSeg').value = '';
+    aviso('Credenciais salvas. Agora clique em "Conectar loja da Magalu".', 'ok');
+    await carregar();
+  }catch(e){ aviso(e.message); }
+  finally{ if(bt) bt.disabled = false; }
+};
+$('btConectar').onclick = async () => {
+  $('btConectar').disabled = true;
+  try{ const r = await enviar('POST', '/api/magalu/conectar'); location.href = r.url; }
+  catch(e){ aviso(e.message); $('btConectar').disabled = false; }
+};
+if(new URLSearchParams(location.search).get('conectado')) aviso('Loja da Magalu conectada. Clique em "Diagnóstico" para conferir.', 'ok');
+carregar();
+</script>
+<script src="/sino.js?v=1" defer></script>
+</body>
+</html>

@@ -239,6 +239,25 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   (a Leroy o repassa); sem nenhum dos dois o lucro fica pendente.
   Repasses (`GET /api/leroy/repasses`, tela leroy.html): ciclo fecha dia 10 e 25 (00h Brasília),
   vencimento = fechamento + 25 dias; PAYABLE = próximo ciclo, PENDING = cliente ainda não recebeu.
+- Magalu (`magalu.js`, tela `public/magalu.html`): conexão, vendas e lucro. Aplicativo criado pelo vendedor no
+  IDM (`idm client create`, ID Magalu CLI): Client ID/Secret na tela (segredo e refresh cifrados). Retorno FIXO em
+  localhost (`http://localhost:{porta}/magalu/callback`, atendido em `tratarPainel` só local, com a sessão; a Magalu
+  aceita localhost) — a troca do túnel não quebra. Login em id.magalu.com/login com choose_tenants=true (a LOJA),
+  token em id.magalu.com/oauth/token (JSON na troca, formulário na renovação; grava o refresh novo). API em
+  api.magalu.com/seller/v1 (orders, financial-analysis/orders em janelas de 15 dias, promotions). Diagnóstico mostra
+  a forma, sem dado de comprador (`semPessoais`). Nada no MCP (`test-magalu.js`).
+  Vendas e lucro: conta externa `magalu` (como a Leroy: lista do topo, `empresa:magalu`, "Todas as contas",
+  Campanhas só leitura). Cópia em `magalu_pedidos` (`pedidoDe`) e `magalu_financeiro` (`transacoesDe`), janelas de 15 dias
+  (1ª leitura 152 dias por purchased_at, depois updated_at). Recebido = créditos − débitos da análise financeira, SEM
+  os débitos ABSOLUTE_DISCOUNT (preço promocional, regra da doc) e as linhas not_applicable (`financeiroDo`); tarifa =
+  faturamento − frete debitado − recebido; frete = SHIPPING_COST + SHIPPING_SHARE (o frete pago pelo cliente fica com
+  a Magalu: a SALE não o inclui). Sem financeiro: amounts.commission do pedido (= comissão + tarifa fixa + MDR,
+  medido) como estimado. O financeiro NÃO diz em qual depósito (semanal, às segundas) o pedido foi pago.
+  Anúncios da Magalu (tela `magalu-anuncios.html`; o menu troca `/anuncios.html` por ela): `/portfolios/skus` (100 por
+  página; 1.692 SKUs medidos) + preço e estoque UM SKU por chamada (`/portfolios/prices|stocks/{sku}`; a lista sem SKU dá
+  404), em segundo plano, 3 por vez, relidos a cada 6 h (`magalu_anuncios`). Vários anúncios usam um código numérico da
+  Magalu no lugar do SKU: o vendedor digita o "SKU do painel" (`sku_vinculos`, canal `magalu`, `PUT /api/magalu/sku-vinculo`)
+  e ele dá o custo nos Anúncios e nos Pedidos (`linhasDe` ctx.vinculos; `sku_magalu` guarda o código original).
 - Campanhas da Amazon e da Leroy (`campanhas-canais.js`, tela `public/campanhas-canais.html?conta=amazon|leroy`; o menu
   troca Campanhas por ela): (1) preço promocional com início e fim em cada anúncio, agrupado pelo período,
   com o resultado (vendas e lucro no período contra os mesmos dias antes); criar/encerrar só pelo clique, com

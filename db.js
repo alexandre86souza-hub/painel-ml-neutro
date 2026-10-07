@@ -1479,7 +1479,8 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // O que antes vivia no .env e o aluno teria de editar à mão: senha do painel, App ID e
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
 const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
-  'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token', 'leroy_api_key']);
+  'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token', 'leroy_api_key',
+  'magalu_client_secret', 'magalu_refresh_token']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;
@@ -1655,6 +1656,98 @@ const leroyFretes = () => new Map(db.prepare('SELECT order_id, valor FROM leroy_
 const leroyPedidoExiste = (orderId) => !!db.prepare('SELECT 1 FROM leroy_pedidos WHERE order_id=?').get(orderId);
 function leroyApagarTudo() { db.exec('DELETE FROM leroy_pedidos; DELETE FROM leroy_transacoes; DELETE FROM leroy_ciclos;'); }
 
+// Magalu (magalu.js): pedidos (itens sem dado do comprador, em JSON) e a análise financeira de
+// cada pedido (transações, em JSON). Chave = código do pedido.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS magalu_pedidos (
+    code        TEXT PRIMARY KEY,
+    data        TEXT,
+    status      TEXT,
+    atualizado  TEXT,
+    entregue    TEXT,
+    frete_cliente REAL,
+    comissao    REAL,
+    itens       TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS magalu_ped_data ON magalu_pedidos(data);
+  CREATE TABLE IF NOT EXISTS magalu_financeiro (
+    code        TEXT PRIMARY KEY,
+    atualizado  TEXT,
+    transacoes  TEXT NOT NULL
+  );
+`);
+function magaluPedidosGravar(lista) {
+  const st = db.prepare(`INSERT INTO magalu_pedidos (code, data, status, atualizado, entregue, frete_cliente, comissao, itens) VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(code) DO UPDATE SET data=excluded.data, status=excluded.status, atualizado=excluded.atualizado, entregue=excluded.entregue,
+      frete_cliente=excluded.frete_cliente, comissao=excluded.comissao, itens=excluded.itens`);
+  db.exec('BEGIN');
+  try { for (const p of lista) st.run(p.code, p.data, p.status, p.atualizado, p.entregue, p.frete_cliente, p.comissao, JSON.stringify(p.itens)); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+function magaluFinanceiroGravar(lista) {
+  const st = db.prepare(`INSERT INTO magalu_financeiro (code, atualizado, transacoes) VALUES (?,?,?)
+    ON CONFLICT(code) DO UPDATE SET atualizado=excluded.atualizado, transacoes=excluded.transacoes`);
+  db.exec('BEGIN');
+  try { for (const f of lista) st.run(f.code, f.atualizado, JSON.stringify(f.transacoes)); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lista.length;
+}
+const magaluPedidosPeriodo = (de, ate) => db.prepare('SELECT * FROM magalu_pedidos WHERE data >= ? AND data < ? ORDER BY data DESC')
+  .all(de, ate).map((p) => ({ ...p, itens: JSON.parse(p.itens) }));
+function magaluFinanceiroDe(codes) {
+  const m = new Map();
+  const st = db.prepare('SELECT code, transacoes FROM magalu_financeiro WHERE code = ?');
+  for (const c of codes) { const r = st.get(c); if (r) m.set(c, JSON.parse(r.transacoes)); }
+  return m;
+}
+function magaluApagarTudo() { db.exec('DELETE FROM magalu_pedidos; DELETE FROM magalu_financeiro; DELETE FROM magalu_anuncios;'); }
+
+// Anúncios da Magalu (portfolios/skus + preço + estoque, um SKU por chamada; relidos em segundo plano)
+// e o vínculo SKU do canal -> SKU do painel, digitado pelo vendedor quando o anúncio usa outro código
+// (ex.: 15850067167 na Magalu = KIT-630 no painel). Serve para achar o custo do produto.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS magalu_anuncios (
+    sku         TEXT PRIMARY KEY,
+    titulo      TEXT,
+    status      TEXT,
+    ativo       INTEGER,
+    preco       REAL,
+    preco_lista REAL,
+    estoque     INTEGER,
+    url         TEXT,
+    lido_preco  TEXT,
+    visto_em    TEXT
+  );
+  CREATE TABLE IF NOT EXISTS sku_vinculos (
+    canal       TEXT NOT NULL,
+    sku         TEXT NOT NULL,
+    sku_painel  TEXT NOT NULL,
+    em          TEXT NOT NULL,
+    PRIMARY KEY (canal, sku)
+  );
+`);
+function magaluAnunciosGravar(lista, visto) {
+  const st = db.prepare(`INSERT INTO magalu_anuncios (sku, titulo, status, ativo, url, visto_em) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(sku) DO UPDATE SET titulo=excluded.titulo, status=excluded.status, ativo=excluded.ativo, url=excluded.url, visto_em=excluded.visto_em`);
+  db.exec('BEGIN');
+  try { for (const a of lista) st.run(a.sku, a.titulo, a.status, a.ativo ? 1 : 0, a.url, visto); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+const magaluAnunciosLimparAntes = (visto) => db.prepare('DELETE FROM magalu_anuncios WHERE visto_em < ?').run(visto);
+const magaluPrecoGravar = (sku, preco, lista, estoque) => db.prepare('UPDATE magalu_anuncios SET preco=?, preco_lista=?, estoque=?, lido_preco=? WHERE sku=?')
+  .run(preco, lista, estoque, new Date().toISOString(), sku);
+// sem preço lido ou lido há mais de 6 h; publicados primeiro
+const magaluSemPreco = (limite) => db.prepare(`SELECT sku FROM magalu_anuncios WHERE lido_preco IS NULL OR lido_preco < ?
+  ORDER BY (status = 'PUBLISHED') DESC, lido_preco IS NOT NULL, sku LIMIT ?`).all(new Date(Date.now() - 6 * 3600e3).toISOString(), limite).map((r) => r.sku);
+const magaluAnuncios = () => db.prepare('SELECT * FROM magalu_anuncios ORDER BY titulo').all();
+const skuVinculos = (canal) => new Map(db.prepare('SELECT sku, sku_painel FROM sku_vinculos WHERE canal=?').all(canal).map((r) => [r.sku, r.sku_painel]));
+function skuVinculoGravar(canal, sku, skuPainel) {
+  if (!skuPainel) return db.prepare('DELETE FROM sku_vinculos WHERE canal=? AND sku=?').run(canal, sku);
+  db.prepare(`INSERT INTO sku_vinculos (canal, sku, sku_painel, em) VALUES (?,?,?,?)
+    ON CONFLICT(canal, sku) DO UPDATE SET sku_painel=excluded.sku_painel, em=excluded.em`).run(canal, sku, skuPainel, new Date().toISOString());
+}
+
 module.exports = {
   db, DB_FILE, cifrar, decifrar,
   configLer, configGravar,
@@ -1687,4 +1780,6 @@ module.exports = {
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
+  magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
+  magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar,
 };

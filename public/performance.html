@@ -20,7 +20,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=28"></script>
+    <script src="/menu.js?v=29"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -73,11 +73,12 @@ let dias = 30;
 const NA_AMAZON = new URLSearchParams(location.search).get('conta') === 'amazon';
 const LOJA_SHOPEE = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1] || null;
 const NA_LEROY = new URLSearchParams(location.search).get('conta') === 'leroy';
-const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY;
-const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : 'Shopee';
-const BASE = NA_AMAZON ? '/api/amazon' : NA_LEROY ? '/api/leroy' : NA_SHOPEE ? '/api/shopee' : '/api';
+const NA_MAGALU = new URLSearchParams(location.search).get('conta') === 'magalu';
+const NA_SHOPEE = !!LOJA_SHOPEE, NA_EXT = NA_AMAZON || NA_SHOPEE || NA_LEROY || NA_MAGALU;
+const NOME_CANAL = NA_AMAZON ? 'Amazon' : NA_LEROY ? 'Leroy Merlin' : NA_MAGALU ? 'Magalu' : 'Shopee';
+const BASE = NA_AMAZON ? '/api/amazon' : NA_LEROY ? '/api/leroy' : NA_MAGALU ? '/api/magalu' : NA_SHOPEE ? '/api/shopee' : '/api';
 const QL = NA_SHOPEE ? `loja=${LOJA_SHOPEE}&` : '';
-if(NA_SHOPEE || NA_LEROY){
+if(NA_SHOPEE || NA_LEROY || NA_MAGALU){
   document.querySelector('h1').textContent = 'Performance — ' + NOME_CANAL;
   $('canaisSub').textContent = 'Vendas da loja no período.';
 }
@@ -133,6 +134,7 @@ async function carregarCanais(){
       }
       if(NA_SHOPEE){ $('canaisSub').textContent = `${numero(r.total.pedidos)} venda(s) no período, todas pelos envios da Shopee.`; return; }
       if(NA_LEROY){ $('canaisSub').textContent = `${numero(r.total.pedidos)} venda(s) no período, todas com entrega própria.`; return; }
+      if(NA_MAGALU){ $('canaisSub').textContent = `${numero(r.total.pedidos)} venda(s) no período, pela Magalu Entregas.`; return; }
       if(NA_AMAZON){
         $('canaisSub').textContent = `${numero(r.total.pedidos)} venda(s): FBA (a Amazon guarda e envia) e envio próprio.`
           + (r.envios_pendentes ? ` A Amazon ainda está entregando os itens de ${numero(r.envios_pendentes)} pedido(s); atualize a página daqui a pouco.` : '');
