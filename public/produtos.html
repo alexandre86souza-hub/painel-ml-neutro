@@ -105,6 +105,32 @@
     <div class="cartao"><p class="rotulo">Usados sem custo</p><div class="valor" id="vUsoSem">—</div></div>
   </div>
 
+  <section class="bloco" id="blocoTroca">
+    <h2>Trocar um produto no SKU dos anúncios</h2>
+    <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
+      <b>só esse número</b> dentro do SKU de cada um no Mercado Livre (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.</p>
+    <form class="troca" id="formTroca">
+      <label>Produto atual<input id="tDe" placeholder="DD-795" list="listaProdutosTroca" autocomplete="off" required></label>
+      <label>Produto novo<input id="tPara" placeholder="DD-854" list="listaProdutosTroca" autocomplete="off" required></label>
+      <datalist id="listaProdutosTroca"></datalist>
+      <button class="bt primario">Buscar anúncios</button>
+    </form>
+    <div id="trocaLista"></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Cadastrar produto</h2>
+    <p class="sub">O número do SKU é a chave usada nos anúncios: DQ-943 vira o "943" do SKU KIT-943.408.</p>
+    <form class="novo" id="formNovo">
+      <label>SKU<input id="nSku" placeholder="DQ-943" required></label>
+      <label>Produto<input id="nNome" placeholder="Descrição"></label>
+      <label>Custo (R$)<input id="nCusto" type="number" step="0.01" min="0"></label>
+      <label>Situação<select id="nSit"><option value="">—</option><option>Ativo</option><option>Descontinuado</option><option>Amostra</option></select></label>
+      <label>Fornecedor<input id="nForn"></label>
+      <button class="bt primario">Cadastrar</button>
+    </form>
+  </section>
+
   <section class="bloco">
     <h2>Tabela de produtos</h2>
     <p class="sub">Edite o custo (preço de compra), o nome, a situação ou o fornecedor direto na linha e clique em <b>Salvar</b>.
@@ -158,32 +184,6 @@
     </div>
     <div class="tabela-rolagem" id="atTabela"></div>
     <div class="mais"><button type="button" class="bt" id="atMaisLinhas" hidden>Mostrar mais</button></div>
-  </section>
-
-  <section class="bloco" id="blocoTroca">
-    <h2>Trocar um produto no SKU dos anúncios</h2>
-    <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
-      <b>só esse número</b> dentro do SKU de cada um no Mercado Livre (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.</p>
-    <form class="troca" id="formTroca">
-      <label>Produto atual<input id="tDe" placeholder="DD-795" list="listaProdutosTroca" autocomplete="off" required></label>
-      <label>Produto novo<input id="tPara" placeholder="DD-854" list="listaProdutosTroca" autocomplete="off" required></label>
-      <datalist id="listaProdutosTroca"></datalist>
-      <button class="bt primario">Buscar anúncios</button>
-    </form>
-    <div id="trocaLista"></div>
-  </section>
-
-  <section class="bloco">
-    <h2>Cadastrar produto</h2>
-    <p class="sub">O número do SKU é a chave usada nos anúncios: DQ-943 vira o "943" do SKU KIT-943.408.</p>
-    <form class="novo" id="formNovo">
-      <label>SKU<input id="nSku" placeholder="DQ-943" required></label>
-      <label>Produto<input id="nNome" placeholder="Descrição"></label>
-      <label>Custo (R$)<input id="nCusto" type="number" step="0.01" min="0"></label>
-      <label>Situação<select id="nSit"><option value="">—</option><option>Ativo</option><option>Descontinuado</option><option>Amostra</option></select></label>
-      <label>Fornecedor<input id="nForn"></label>
-      <button class="bt primario">Cadastrar</button>
-    </form>
   </section>
 </main>
   </div>
