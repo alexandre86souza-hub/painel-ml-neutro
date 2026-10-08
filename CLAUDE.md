@@ -269,7 +269,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
   Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
   (vai impresso, em letra grande, para as câmeras). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
-  confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Código de barras Code 128 em
+  confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Comanda nova: `public/comandas-aviso.js`
+  (injetado pelo sino.js em todas as telas, só para quem abre /comandas.html) confere `/api/comandas` a cada minuto e, para
+  comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som
+  (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Código de barras Code 128 em
   `public/codigo128.js` (testado). Nada no MCP (`test-comandas.js`).
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).

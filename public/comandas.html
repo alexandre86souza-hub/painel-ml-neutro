@@ -412,7 +412,9 @@ $('fManual').onsubmit = async (ev) => {
 
 carregar(false);
 setInterval(() => { if(!$('dlg').open && !$('dlgManual').open) carregar(false); }, 3 * 60e3);
+// o aviso de comanda nova (comandas-aviso.js) chama ao achar uma: a lista já aparece atualizada
+window.recarregarComandas = () => { if(!$('dlg').open && !$('dlgManual').open) carregar(false); };
 </script>
-<script src="/sino.js?v=1" defer></script>
+<script src="/sino.js?v=2" defer></script>
 </body>
 </html>

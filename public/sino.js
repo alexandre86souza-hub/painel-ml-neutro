@@ -117,3 +117,10 @@
   carregar();
   setInterval(carregar, 60000);
 })();
+
+// Comanda nova (faixa, som e notificação) para quem tem a Expedição: public/comandas-aviso.js
+(function () {
+  if (document.querySelector('script[src^="/comandas-aviso.js"]')) return;
+  const s = document.createElement('script'); s.src = '/comandas-aviso.js?v=1'; s.defer = true;
+  document.head.appendChild(s);
+})();

@@ -627,6 +627,6 @@ $('iEnviar').onclick = async () => {
 fetch('/api/eu').then((r) => r.json()).then((eu) => { if(!eu.admin) $('abaImportar').remove(); }).catch(() => {});
 abrir(['saldo', 'lancar', 'movs', 'rel', 'contagem', 'compras', 'cadastro', 'importar'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'saldo');
 </script>
-<script src="/sino.js?v=1" defer></script>
+<script src="/sino.js?v=2" defer></script>
 </body>
 </html>
