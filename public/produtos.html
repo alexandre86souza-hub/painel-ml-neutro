@@ -72,6 +72,7 @@
   .dup a{font-weight:600}
   tr.duplica td{background:#fffbeb}
   .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
+  .todas-lojas{flex-direction:row!important;align-items:center;gap:6px;font-size:13px;font-weight:600;align-self:center}
   .troca-canal{font-size:14px;font-weight:700;margin:16px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
 </style>
@@ -120,6 +121,7 @@
       <label>Produto novo<input id="tPara" placeholder="DD-854" list="listaProdutosTroca" autocomplete="off" required></label>
       <datalist id="listaProdutosTroca"></datalist>
       <button class="bt primario">Buscar anúncios</button>
+      <label class="todas-lojas"><input type="checkbox" id="tTodas"> Todas as lojas</label>
     </form>
     <div id="trocaLista"></div>
   </section>
@@ -221,6 +223,10 @@ const selConta = $('selConta');
 selConta.onchange = async () => { await enviar('POST', '/api/accounts/active', { ml_user_id: Number(selConta.value) }); location.reload(); };
 
 let produtos = [], filtro = 'todos', mostrar = 150;
+// loja escolhida no topo (?conta=amazon | leroy | magalu | shopee-ID; sem = a conta do ML): a troca busca só nela,
+// a não ser com "Todas as lojas" marcado
+const LOJA = (new URLSearchParams(location.search).get('conta') || '').match(/^(amazon|leroy|magalu|shopee-\d+)$/)?.[0] || null;
+const daLoja = (c) => !LOJA ? false : LOJA.startsWith('shopee-') ? c.canal === 'shopee' && 'shopee-' + c.loja === LOJA : c.canal === LOJA;
 $('segFiltro').onclick = (ev) => {
   const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; mostrar = 150;
   for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
@@ -504,6 +510,8 @@ $('formTroca').onsubmit = async (ev) => {
   if(de == null || para == null) return aviso('Informe os dois produtos pelo SKU (ex.: DD-795 e DD-854).');
   if(de === para) return aviso('O produto novo é igual ao atual.');
   box.appendChild(el('p', 'sub', 'Buscando os anúncios com esse produto…'));
+  const todas = $('tTodas').checked;
+  if(LOJA && !todas){ box.innerHTML = ''; outrosCanais(de, para, box, false); return; }   // loja de outro canal: só ela
   try{
     // os anúncios do produto atual e os que JÁ usam o produto novo (para avisar de SKU repetido)
     const [r, jaNovo] = await Promise.all([api(`/api/produtos/${de}/anuncios`), api(`/api/produtos/${para}/anuncios`).catch(() => ({ anuncios: [] }))]);
@@ -518,7 +526,7 @@ $('formTroca').onsubmit = async (ev) => {
     if(!novoProd) box.appendChild(el('p', 'alerta-troca', `O produto ${$('tPara').value.trim().toUpperCase()} ainda não está na tabela: cadastre-o abaixo com o custo, senão os anúncios trocados ficam sem custo.`));
     else if(novoProd.custo == null) box.appendChild(el('p', 'alerta-troca', `O produto ${novoProd.sku} está na tabela sem custo: os anúncios trocados ficam sem custo até você informar.`));
     box.appendChild(el('h3', 'troca-canal', 'Mercado Livre · conta selecionada'));
-    if(!r.anuncios.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio desta conta do Mercado Livre usa esse produto no SKU.')); outrosCanais(de, para, box); return; }
+    if(!r.anuncios.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio desta conta do Mercado Livre usa esse produto no SKU.')); if(todas) outrosCanais(de, para, box, true); return; }
     const barra = el('div', 'troca-barra');
     const todos = el('label'); const ckTodos = el('input'); ckTodos.type = 'checkbox';
     todos.append(ckTodos, document.createTextNode(` Selecionar todos (${numero(r.anuncios.length)})`));
@@ -597,18 +605,20 @@ $('formTroca').onsubmit = async (ev) => {
       carregar();
     };
     box.append(barra, t);
-    outrosCanais(de, para, box);
-  }catch(e){ box.innerHTML = ''; aviso('Mercado Livre: ' + e.message); outrosCanais(de, para, box); }
+    if(todas) outrosCanais(de, para, box, true);
+  }catch(e){ box.innerHTML = ''; aviso('Mercado Livre: ' + e.message); if(todas) outrosCanais(de, para, box, true); }
 };
 
 // Shopee (no anúncio), Amazon, Leroy e Magalu (no painel): os anúncios de cada canal com o produto no SKU.
-async function outrosCanais(de, para, box){
+async function outrosCanais(de, para, box, todas){
   const sec = el('div'); box.appendChild(sec);
-  sec.appendChild(el('p', 'sub', 'Buscando nos outros canais (Shopee, Amazon, Leroy, Magalu)…'));
+  sec.appendChild(el('p', 'sub', todas ? 'Buscando nos outros canais (Shopee, Amazon, Leroy, Magalu)…' : 'Buscando os anúncios desta loja…'));
   let r; try{ r = await api(`/api/produtos/${de}/anuncios-canais`); }catch(e){ sec.innerHTML = ''; sec.appendChild(el('p', 'alerta-troca', 'Outros canais: ' + e.message)); return; }
   sec.innerHTML = '';
+  if(!todas) r.canais = r.canais.filter(daLoja);
   for(const e of r.erros || []) sec.appendChild(el('p', 'alerta-troca', e));
-  if(!r.canais.length){ sec.appendChild(el('h3', 'troca-canal', 'Outros canais')); sec.appendChild(el('p', 'sub', 'Nenhum anúncio da Shopee, Amazon, Leroy ou Magalu usa esse produto no SKU.')); return; }
+  if(!r.canais.length){ sec.appendChild(el('h3', 'troca-canal', todas ? 'Outros canais' : 'Esta loja'));
+    sec.appendChild(el('p', 'sub', todas ? 'Nenhum anúncio da Shopee, Amazon, Leroy ou Magalu usa esse produto no SKU.' : 'Nenhum anúncio desta loja usa esse produto no SKU.')); return; }
   const linhas = [];
   for(const c of r.canais){
     sec.appendChild(el('h3', 'troca-canal', c.nome + (c.modo === 'painel' ? ' · troca no painel' : ' · troca no anúncio')));
