@@ -196,3 +196,10 @@ html[data-tema="escuro"] .nav-grupo > button:hover{color:var(--ciano);filter:non
 html[data-tema="escuro"] .aviso-config{background:rgba(251,191,36,.1)!important;color:#fcd34d!important;border-color:rgba(251,191,36,.3)!important}
 html[data-tema="escuro"] .aviso-config.grave{background:rgba(255,77,109,.1)!important;color:#ff8199!important;border-color:rgba(255,77,109,.3)!important}
 }
+@media screen{
+/* botão escolhido de um grupo (período, filtro, aba): sempre aceso, por cima das cores geradas de cada tela */
+html[data-tema="escuro"] .seg button[aria-pressed="true"],html[data-tema="escuro"] button[aria-pressed="true"]:not(.nav-grupo > button),
+html[data-tema="escuro"] button[aria-selected="true"],html[data-tema="escuro"] [role="tab"][aria-selected="true"]{
+  background:linear-gradient(135deg,#22e4ff,#3b82f6)!important;color:#03111f!important;border-color:transparent!important;box-shadow:0 0 16px rgba(34,228,255,.35)}
+html[data-tema="escuro"] button[aria-pressed="true"] .qtd{background:rgba(3,17,31,.25)!important;color:#03111f!important}
+}

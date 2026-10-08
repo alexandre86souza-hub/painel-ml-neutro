@@ -185,6 +185,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
     const mudaram = claims.filter((c) => D.devolucaoAtualizadaEm(c.id) !== c.last_updated
       || (c.resource === 'shipment' && semPedido.has(c.id)));
     await emLotes(mudaram, 2, async (c) => D.devolucaoGravar(await detalhar(conta, c)));
+    claims.detalhadas = mudaram.length;   // quantas foram lidas de novo agora (a tela mostra)
     return claims;
   }
 
@@ -504,7 +505,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       // Crédito digitado: entra no total; se a reclamação já tinha um crédito ligado, ele sai.
       const ajusteManual = soma(itens.filter((x) => x.credito_ml?.manual).map((x) => x.credito_ml.valor - num(x.credito_ml.automatico)));
       return {
-        dias, de: de.toISOString(), ate: ate.toISOString(), detalhadas_agora: mudaram.length,
+        dias, de: de.toISOString(), ate: ate.toISOString(), detalhadas_agora: claims.detalhadas ?? 0,
         resumo: {
           total: itens.length,
           devolucoes: itens.filter((x) => x.tipo === 'returns').length,
