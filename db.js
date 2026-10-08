@@ -694,7 +694,10 @@ const DEVOL_CAMPOS = ['claim_id', 'ml_user_id', 'tipo', 'status', 'etapa', 'moti
   'quantidade', 'criada_em', 'atualizada_em', 'resolucao', 'beneficiado', 'cobertura_ml', 'valor_pedido',
   'reembolsado', 'frete_ida', 'frete_volta', 'tarifa_devolucao', 'status_devolucao', 'status_dinheiro', 'acoes',
   'nf_venda', 'nf_devolucao', 'reembolso_ml', 'reembolso_vendedor', 'frete_ida_estornado', 'tarifas',
-  'tarifas_estornadas', 'custo_produto', 'revisao', 'detalhe_ml', 'fonte_dinheiro'];
+  'tarifas_estornadas', 'custo_produto', 'revisao', 'detalhe_ml', 'fonte_dinheiro', 'pack_id'];
+// pack_id: número do PACOTE que o ML mostra nas vendas (carrinho com vários pedidos); 0 = venda sem pacote.
+colunaNova('devolucoes', 'pack_id INTEGER');
+const devolucaoPackGravar = (orderId, pack) => db.prepare('UPDATE devolucoes SET pack_id=? WHERE order_id=?').run(pack, orderId);
 function devolucaoGravar(d) {
   db.prepare(`INSERT OR REPLACE INTO devolucoes (${DEVOL_CAMPOS.join(',')})
               VALUES (${DEVOL_CAMPOS.map(() => '?').join(',')})`)
@@ -2048,7 +2051,7 @@ module.exports = {
   vendasPorDia, vendasTopItens, vendasRecentes,
   promoPedidosSemLeitura, promoPedidoGravar, promoOfertasSemPromocao, promoOfertaGravar,
   promoNomesFaltando, promoNomeGravar, promoResultado, promoTopItens,
-  devolucaoGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
+  devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
   avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, creditoManualGravar, creditosManuais,

@@ -365,7 +365,7 @@ function pintarLista(){
   if(!dados) return;
   const q = ($('busca').value || '').trim().toLowerCase();
   const itens = dados.itens.filter((x) => (filtro === 'todas' || (filtro === 'abertas' ? x.aberta : x.tipo === filtro))
-    && (!q || [x.titulo, x.sku, x.item_id, String(x.pedido || ''), String(x.id), x.comprador, x.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))));
+    && (!q || [x.titulo, x.sku, x.item_id, String(x.pedido || ''), String(x.pack || ''), String(x.id), x.comprador, x.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))));
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
   const lista = el('div', 'rec-lista');
   for(const x of itens){

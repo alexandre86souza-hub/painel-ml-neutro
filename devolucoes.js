@@ -258,6 +258,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
     base.item_id = devol?.orders?.[0]?.item_id || oi?.item?.id || null;
     base.quantidade = num(devol?.orders?.[0]?.return_quantity) || oi?.quantity || null;
     base.valor_pedido = pedido?.total_amount ?? null;
+    base.pack_id = pedido ? (pedido.pack_id || 0) : null;
     base.reembolsado = pedido ? soma((pedido.payments || []).map((p) => p.transaction_amount_refunded)) : null;
     base.tarifa_devolucao = tarifa?.amount ?? null;
     base.status_devolucao = devol?.status || null;
@@ -423,12 +424,16 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       const clientes = D.compradoresDosPedidos(pedidosDev);
       // Cliente que ainda não está na cópia das vendas (pedido antigo): lê o pedido (até 60 por
       // abertura) e guarda; a busca da tela acha pelo apelido ou pelo nome.
-      const semCliente = pedidosDev.filter((id) => !clientes[id]?.apelido && !clientes[id]?.nome).slice(0, 60);
+      // O mesmo pedido dá o número do PACOTE (o que o ML mostra nas vendas) para as gravadas antes dele existir.
+      const semPack = new Set(linhas.filter((l) => l.order_id && l.pack_id == null).map((l) => l.order_id));
+      const semCliente = pedidosDev.filter((id) => (!clientes[id]?.apelido && !clientes[id]?.nome) || semPack.has(id)).slice(0, 60);
       await emLotes(semCliente, 3, async (id) => {
         const o = await ml(`/orders/${id}`, {}, conta.ml_user_id).catch(() => null);
         if (!o) return;
         const c = { id: o.buyer?.id ?? null, apelido: o.buyer?.nickname || '', nome: [o.buyer?.first_name, o.buyer?.last_name].filter(Boolean).join(' ') };
         D.compradorGravarPedido(id, c);
+        D.devolucaoPackGravar(id, o.pack_id || 0);
+        for (const l of linhas) if (l.order_id === id) l.pack_id = o.pack_id || 0;
         clientes[id] = { apelido: c.apelido || null, nome: c.nome || null };
       });
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
@@ -449,7 +454,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
           id: l.claim_id, tipo: l.tipo, tipo_nome: TIPOS[l.tipo] || l.tipo, status: l.status,
           aberta: l.status === 'opened', etapa: l.etapa,
           motivo: motivoTxt[l.motivo_id] || l.motivo_id,
-          pedido: l.order_id, item_id: l.item_id, quantidade: l.quantidade,
+          pedido: l.order_id, pack: l.pack_id || null, item_id: l.item_id, quantidade: l.quantidade,
           sku: kit.sku || null, comprador: clientes[l.order_id]?.apelido || null, comprador_nome: clientes[l.order_id]?.nome || null,
           titulo: info[l.item_id]?.title || null, foto: info[l.item_id]?.thumbnail || null,
           criada_em: l.criada_em,
