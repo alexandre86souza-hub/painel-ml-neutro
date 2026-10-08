@@ -144,7 +144,12 @@
     u.searchParams.set('conta', ext);
     return u.pathname + u.search;
   };
+  // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
+  // fica na mesma tela, só com a loja escolhida na lista.
+  const DE_TODAS = ['/geral.html', '/comandas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+    '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
+    if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);
     const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html', '/publicar.html'].includes(location.pathname)
       || ['/promocoes.html', '/campanhas-canais.html', '/shopee-campanhas.html'].includes(location.pathname)
       || (tipo(ext) === 'shopee' && location.pathname === '/devolucoes.html');
@@ -154,6 +159,7 @@
     return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;   // Leroy: a tela Pedidos
   };
   const semConta = () => {
+    if (DE_TODAS.includes(location.pathname)) return location.pathname;
     if (['/amazon.html', '/leroy.html', '/magalu.html'].includes(location.pathname)) return '/';
     if (location.pathname === '/amazon-anuncios.html') return '/anuncios.html';
     if (location.pathname === '/amazon-ads.html' || location.pathname === '/shopee-ads.html') return '/ads.html';
