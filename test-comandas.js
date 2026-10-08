@@ -27,6 +27,15 @@ const n = K.numerar([
 [{ categoria: 'Flex', dia, numero: 3 }, { categoria: 'Flex', dia: '2026-10-06', numero: 40 }], dia);
 assert.deepStrictEqual(n.map((x) => [x.chave, x.categoria, x.numero]), [['b', 'Flex', 4], ['a', 'Flex', 5], ['c', 'Shopee', 1]]);
 
+// não impressa de ontem entra na numeração de hoje; impressa ontem (ou de hoje) mantém
+const fila = [{ chave: 'x', dia: '2026-10-06', impressa_em: null }, { chave: 'y', dia: '2026-10-06', impressa_em: '2026-10-06T18:00:00Z' },
+  { chave: 'z', dia, impressa_em: null }];
+assert.deepStrictEqual(K.atrasadasDaFila(fila, dia).map((c) => c.chave), ['x']);
+
+// ML: entregue no ponto / coletado / no centro ainda é ready_to_ship, mas já saiu
+assert.ok(K.jaSaiuMl('dropped_off') && K.jaSaiuMl('picked_up') && K.jaSaiuMl('in_hub'));
+assert.ok(!K.jaSaiuMl('ready_to_print') && !K.jaSaiuMl('printed') && !K.jaSaiuMl(null));
+
 // prazo em relação a hoje (Brasília)
 const ag = Date.parse('2026-10-07T15:00:00Z');
 assert.strictEqual(K.situacaoPrazo('2026-10-06T20:00:00Z', ag), 'atrasado');

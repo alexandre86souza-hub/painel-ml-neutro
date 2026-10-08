@@ -1873,6 +1873,13 @@ function comandasListar(chaves) {
   return chaves.map((c) => st.get(c)).filter(Boolean).map((r) => ({ chave: r.chave, categoria: r.categoria, dia: r.dia, numero: r.numero,
     criada_em: r.criada_em, impressa_em: r.impressa_em, impressoes: r.impressoes, ...JSON.parse(r.dados) }));
 }
+// Comanda de um dia anterior que não foi impressa ganha o número de hoje (a impressa mantém o do papel).
+function comandasRenumerar(lista) {
+  const st = db.prepare('UPDATE comandas SET dia=?, numero=? WHERE chave=? AND impressa_em IS NULL');
+  db.exec('BEGIN');
+  try { for (const x of lista) st.run(x.dia, x.numero, x.chave); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+}
 function comandasImpressas(chaves, impressa) {
   const marcar = db.prepare('UPDATE comandas SET impressa_em=?, impressoes=impressoes+1 WHERE chave=?');
   const desmarcar = db.prepare('UPDATE comandas SET impressa_em=NULL WHERE chave=?');
@@ -2061,7 +2068,7 @@ module.exports = {
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar,
-  comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas,
+  comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,

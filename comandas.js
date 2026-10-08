@@ -52,6 +52,15 @@ function numerar(novos, existentes, dia) {
   return ordem.map((x) => { const n = (prox.get(x.categoria) || 0) + 1; prox.set(x.categoria, n); return { ...x, dia, numero: n }; });
 }
 
+// Na fila, não impressa e numerada num dia anterior: entra na numeração de hoje (o envio não saiu ontem
+// e vai ser impresso hoje). A já impressa mantém o número que está no papel. Função pura: testada.
+const atrasadasDaFila = (fila, dia) => fila.filter((c) => !c.impressa_em && c.dia < dia);
+
+// O ML deixa o envio em ready_to_ship até a transportadora marcar "shipped": entregue no ponto (dropped_off),
+// coletado (picked_up) ou já no centro (in_hub) = já saiu daqui, sai da fila. Medido em 08/10/2026. Função pura: testada.
+const SAIU_ML = new Set(['dropped_off', 'picked_up', 'in_hub', 'in_transit', 'out_for_delivery']);
+const jaSaiuMl = (substatus) => SAIU_ML.has(String(substatus || ''));
+
 // Prazo -> situação para a tela. Função pura: testada.
 function situacaoPrazo(prazo, agora = Date.now()) {
   if (!prazo) return 'sem prazo';
@@ -99,7 +108,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       }
       const envios = await lotes([...porEnvio.keys()], 5, async (id) => ({ id, s: await envioMl(id, conta.ml_user_id).catch(() => null) }));
       for (const { id, s } of envios) {
-        if (!s) continue;
+        if (!s || jaSaiuMl(s.sub)) continue;
         const cat = categoriaDe('ml', s.tipo);
         if (!cat) continue;
         const x = porEnvio.get(id);
@@ -214,18 +223,25 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
 
   let cache = null;
   async function pendentes(recarregar) {
-    if (!recarregar && cache && Date.now() - cache.em < 3 * 60e3) return cache;
+    if (!recarregar && cache && cache.dia === diaLocal() && Date.now() - cache.em < 3 * 60e3) return cache;
     const erros = [];
     const [a, b, c, d, e] = await Promise.all([passo('Mercado Livre', pendentesMl, erros), passo('Shopee', pendentesShopee, erros),
       passo('Magalu', pendentesMagalu, erros), passo('Leroy', pendentesLeroy, erros), passo('Amazon', pendentesAmazon, erros)]);
     const lista = [...a, ...b, ...c, ...d, ...e];
-    // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém
+    // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém —
+    // menos o que ficou de um dia anterior sem imprimir, que entra junto na numeração de hoje (pelo prazo)
     const dia = diaLocal();
     const conhecidos = D.comandasDe(lista.map((x) => x.chave));
     const novos = lista.filter((x) => !conhecidos.has(x.chave));
-    if (novos.length) D.comandasCriar(numerar(novos, D.comandasDoDia(dia), dia));
+    const atrasadas = atrasadasDaFila(D.comandasListar([...conhecidos, ...D.comandasManuaisAbertas()]), dia);
+    if (novos.length || atrasadas.length) {
+      const velhas = new Set(atrasadas.map((c) => c.chave));
+      const numeradas = numerar([...atrasadas, ...novos], D.comandasDoDia(dia), dia);
+      D.comandasRenumerar(numeradas.filter((x) => velhas.has(x.chave)));
+      D.comandasCriar(numeradas.filter((x) => !velhas.has(x.chave)));
+    }
     D.comandasAtualizar(lista);
-    cache = { em: Date.now(), erros, chaves: lista.map((x) => x.chave) };
+    cache = { em: Date.now(), dia, erros, chaves: lista.map((x) => x.chave) };
     return cache;
   }
 
@@ -307,4 +323,4 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, categoriaDe, numerar, situacaoPrazo, CATEGORIAS };
+module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, CATEGORIAS };

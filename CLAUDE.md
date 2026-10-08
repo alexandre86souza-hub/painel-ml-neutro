@@ -262,9 +262,11 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
   VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon
   (MFN: DBA = EasyShipShipmentStatus, ou envio próprio; FBA fora; SEM nome do cliente — sem RDT, está na etiqueta da Amazon) —
-  numeradas por categoria e DIA na 1ª vez que aparecem (`numerar`, tabela `comandas`; o número não muda). ML:
+  numeradas por categoria e DIA na 1ª vez que aparecem (`numerar`, tabela `comandas`); a que ficou de um dia anterior SEM
+  imprimir entra na numeração de hoje (`atrasadasDaFila`, `comandasRenumerar`); impressa mantém o número do papel. ML:
   /orders/search?shipping.status=ready_to_ship agrupado pelo envio (pack) + /shipments/{id} (tipo, receiver_name) +
-  /shipments/{id}/sla (prazo de despacho); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
+  /shipments/{id}/sla (prazo de despacho), fora os substatus dropped_off/picked_up/in_hub (`jaSaiuMl`: já saiu, mas o ML
+  só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
   Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
   (vai impresso, em letra grande, para as câmeras). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Código de barras Code 128 em
