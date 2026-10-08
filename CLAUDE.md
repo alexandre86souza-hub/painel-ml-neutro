@@ -126,6 +126,11 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   sobrescreveria o anúncio). Escrita só no clique da tela.
 - Troca de SKU (Produtos): a tela também busca os anúncios do produto NOVO e marca em amarelo (e
   deixa desmarcado) o anúncio que ficaria com SKU igual ao de outro — o vendedor decide.
+- Troca de produto no SKU nos outros canais (`trocas-sku.js`, mesmo bloco da tela Produtos, `GET /api/produtos/:n/anuncios-canais`,
+  `POST …/trocar-sku-canais`): Shopee troca NO ANÚNCIO (update_item / update_model); Amazon, Leroy e Magalu não deixam
+  renomear o SKU, então a troca fica no painel (`sku_trocas`, `custos.js#skuNaData`) e vale A PARTIR da data para custo,
+  lucro e baixa do estoque (venda anterior = produto antigo). Comandas mostram o SKU novo em todos os canais (ML e Shopee
+  também gravam a troca em `sku_trocas`, só para isso). Fora do MCP.
 - Atacado em massa (`precos.js`, bloco na tela Produtos): `GET /api/atacado` lista os anúncios
   ativos com o atacado de cada um (uma chamada por anúncio, guardada em `anuncio_atacado`);
   `POST /api/atacado/aplicar` e `/remover` usam o mesmo `gravarAtacado` do anúncio individual.

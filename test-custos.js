@@ -122,4 +122,13 @@ assert.deepStrictEqual(C.freteFlex({ custoMl: 0, bonus: null, entrega: 12, media
 assert.deepStrictEqual(C.freteFlex({ custoMl: 9.89, bonus: null, entrega: 12 }), { frete: 12, bonus: null, estimado: true });
 assert.deepStrictEqual([C.lerEmpresa('{}').entrega_flex, C.validarEmpresa({ entrega_flex: '12,00' }).entrega_flex, C.validarEmpresa({}).entrega_flex], [null, 12, null]);
 assert.throws(() => C.validarEmpresa({ entrega_flex: '-1' }), /Flex inválido/);
+// troca de produto no SKU feita no painel (Amazon, Leroy, Magalu): vale a partir da data, em cadeia
+{
+  const tr = new Map([['DD-795', [{ sku_novo: 'DD-854', desde: '2026-10-08T18:00:00Z' }]], ['DD-854', [{ sku_novo: 'DD-900', desde: '2026-11-01T00:00:00Z' }]]]);
+  assert.strictEqual(C.skuNaData(tr, 'DD-795', '2026-10-01T00:00:00Z'), 'DD-795', 'venda anterior: produto antigo');
+  assert.strictEqual(C.skuNaData(tr, 'DD-795', '2026-10-09T00:00:00Z'), 'DD-854');
+  assert.strictEqual(C.skuNaData(tr, 'DD-795', '2026-11-02T00:00:00Z'), 'DD-900', 'trocas em cadeia');
+  assert.strictEqual(C.skuNaData(new Map(), 'KIT-1.2'), 'KIT-1.2');
+}
+
 console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma das contas: ok');

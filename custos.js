@@ -83,6 +83,18 @@ function trocarComponente(sku, de, para) {
   return prefixo + resto.replace(/(^|[-.\s+/])(\d+)(?=$|[-.\s+/])/g, (m, sep, n) => (Number(n) === de ? sep + novo : m));
 }
 
+// SKU que vale numa data, com as trocas feitas no painel (Amazon, Leroy, Magalu): a troca mais nova com
+// "desde" <= data; em cadeia (795 -> 854 -> 900). trocas: Map sku -> [{ sku_novo, desde }]. Função pura: testada.
+function skuNaData(trocas, sku, data = new Date().toISOString()) {
+  let s = sku;
+  for (let i = 0; i < 5 && s && trocas?.size; i++) {
+    const t = (trocas.get(s) || []).filter((x) => x.desde <= data).sort((a, b) => b.desde.localeCompare(a.desde))[0];
+    if (!t || t.sku_novo === s) break;
+    s = t.sku_novo;
+  }
+  return s;
+}
+
 // SKUs de um anúncio: o do próprio anúncio e o de cada variação.
 function skusDoAnuncio(it) {
   const doAttr = (attrs) => (attrs || []).find((a) => a.id === 'SELLER_SKU')?.value_name || null;
@@ -651,6 +663,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           if (custos.length === comp.length && D.custoObter(id)?.origem !== 'manual') {
             D.custoAutoGravar(conta.ml_user_id, id, Math.round(custos.reduce((s, v) => s + v, 0) / custos.length * 100) / 100);
           }
+          const agora = new Date().toISOString();
+          for (const t of trocas) D.skuTrocaGravar('ml', t.antes, t.depois, agora, null);
           return { id, ok: true, trocas };
         } catch (e) { return { id, ok: false, erro: e.message }; }
       });
@@ -732,5 +746,5 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa };
 }
 
-module.exports = { criar, freteFlex, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, somarContas, topPorSku, validarEmpresa, lerEmpresa,
+module.exports = { criar, freteFlex, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
   impostoTotal, contaDaLinha, dinheiro };

@@ -139,7 +139,8 @@ function linhasDe(pedidos, ctx) {
       const parte = fatPedido > 0 ? fat / fatPedido : 1 / p.itens.length;
       const tarifa = valida ? tarifaPedido * parte : 0;
       const frete = valida ? fretePedido * parte : 0;
-      const skuPainel = (i.sku && ctx.vinculos?.get(i.sku)) || i.sku;   // SKU digitado pelo vendedor (anúncio com outro código)
+      // SKU digitado pelo vendedor (anúncio com outro código) e a troca de produto feita no painel (a partir da data)
+      const skuPainel = C.skuNaData(ctx.trocas, (i.sku && ctx.vinculos?.get(i.sku)) || i.sku, p.data);
       const cs = skuPainel ? C.custoDoSku(skuPainel, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;
@@ -256,7 +257,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const peds = D.magaluPedidosPeriodo(de, ate);
     const ls = linhasDe(peds, { mapa, imposto_pct: impostoPct, embalagem_pedido: e.embalagem_padrao || 0, financeiro: D.magaluFinanceiroDe(peds.map((p) => p.code)),
-      vinculos: D.skuVinculos('magalu') });
+      vinculos: D.skuVinculos('magalu'), trocas: D.skuTrocas('magalu') });
     return { linhas: ls, impostoPct, erroLeitura };
   }
   const diasDe = (url, ok, padrao = 30) => { const d = Number(url.searchParams.get('dias')); return ok.includes(d) ? d : padrao; };
@@ -323,9 +324,11 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         porSku.set(l.sku_magalu, x);
       }
       const media = fatT > 0 ? tarT / fatT : null;
+      const trocasMg = D.skuTrocas('magalu');
       const itens = D.magaluAnuncios().map((a) => {
         const skuPainel = vinc.get(a.sku) || null;
-        const cs = C.custoDoSku(skuPainel || a.sku, mapa);
+        const trocado = C.skuNaData(trocasMg, skuPainel || a.sku);
+        const cs = C.custoDoSku(trocado, mapa);
         const x = porSku.get(a.sku);
         return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: a.preco, preco_lista: a.preco_lista,
           estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),

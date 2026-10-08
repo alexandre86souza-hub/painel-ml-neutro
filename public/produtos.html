@@ -72,6 +72,7 @@
   .dup a{font-weight:600}
   tr.duplica td{background:#fffbeb}
   .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
+  .troca-canal{font-size:14px;font-weight:700;margin:16px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
 </style>
 <link rel="stylesheet" href="/layout.css">
@@ -111,7 +112,9 @@
   <section class="bloco" id="blocoTroca">
     <h2>Trocar um produto no SKU dos anúncios</h2>
     <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
-      <b>só esse número</b> dentro do SKU de cada um no Mercado Livre (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.</p>
+      <b>só esse número</b> dentro do SKU de cada um (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.
+      Mercado Livre e Shopee: muda no anúncio. Amazon, Leroy e Magalu não deixam renomear o SKU: a troca fica no painel e, a partir
+      de agora, custo, lucro, estoque e comandas usam o produto novo (o anúncio continua com o código antigo no marketplace).</p>
     <form class="troca" id="formTroca">
       <label>Produto atual<input id="tDe" placeholder="DD-795" list="listaProdutosTroca" autocomplete="off" required></label>
       <label>Produto novo<input id="tPara" placeholder="DD-854" list="listaProdutosTroca" autocomplete="off" required></label>
@@ -514,7 +517,8 @@ $('formTroca').onsubmit = async (ev) => {
     const novoProd = produtos.find((p) => p.numero === para);
     if(!novoProd) box.appendChild(el('p', 'alerta-troca', `O produto ${$('tPara').value.trim().toUpperCase()} ainda não está na tabela: cadastre-o abaixo com o custo, senão os anúncios trocados ficam sem custo.`));
     else if(novoProd.custo == null) box.appendChild(el('p', 'alerta-troca', `O produto ${novoProd.sku} está na tabela sem custo: os anúncios trocados ficam sem custo até você informar.`));
-    if(!r.anuncios.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio usa esse produto no SKU.')); return; }
+    box.appendChild(el('h3', 'troca-canal', 'Mercado Livre · conta selecionada'));
+    if(!r.anuncios.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio desta conta do Mercado Livre usa esse produto no SKU.')); outrosCanais(de, para, box); return; }
     const barra = el('div', 'troca-barra');
     const todos = el('label'); const ckTodos = el('input'); ckTodos.type = 'checkbox';
     todos.append(ckTodos, document.createTextNode(` Selecionar todos (${numero(r.anuncios.length)})`));
@@ -593,8 +597,69 @@ $('formTroca').onsubmit = async (ev) => {
       carregar();
     };
     box.append(barra, t);
-  }catch(e){ box.innerHTML = ''; aviso(e.message); }
+    outrosCanais(de, para, box);
+  }catch(e){ box.innerHTML = ''; aviso('Mercado Livre: ' + e.message); outrosCanais(de, para, box); }
 };
+
+// Shopee (no anúncio), Amazon, Leroy e Magalu (no painel): os anúncios de cada canal com o produto no SKU.
+async function outrosCanais(de, para, box){
+  const sec = el('div'); box.appendChild(sec);
+  sec.appendChild(el('p', 'sub', 'Buscando nos outros canais (Shopee, Amazon, Leroy, Magalu)…'));
+  let r; try{ r = await api(`/api/produtos/${de}/anuncios-canais`); }catch(e){ sec.innerHTML = ''; sec.appendChild(el('p', 'alerta-troca', 'Outros canais: ' + e.message)); return; }
+  sec.innerHTML = '';
+  for(const e of r.erros || []) sec.appendChild(el('p', 'alerta-troca', e));
+  if(!r.canais.length){ sec.appendChild(el('h3', 'troca-canal', 'Outros canais')); sec.appendChild(el('p', 'sub', 'Nenhum anúncio da Shopee, Amazon, Leroy ou Magalu usa esse produto no SKU.')); return; }
+  const linhas = [];
+  for(const c of r.canais){
+    sec.appendChild(el('h3', 'troca-canal', c.nome + (c.modo === 'painel' ? ' · troca no painel' : ' · troca no anúncio')));
+    const t = el('table'); const cab = el('tr');
+    for(const h of ['', 'Anúncio', 'Situação', 'SKU atual', 'SKU novo', '']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    for(const a of c.anuncios){
+      const tr = el('tr'); const ck = el('input'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Trocar em ' + a.id);
+      const c0 = el('td'); c0.appendChild(ck);
+      const c1 = el('td'); const lk = el(a.link ? 'a' : 'span', null, a.titulo || a.id); if(a.link){ lk.href = a.link; lk.target = '_blank'; lk.rel = 'noopener'; }
+      c1.append(lk, el('br'), el('span', 'chip cinza', c.modo === 'painel' ? 'SKU no ' + c.nome.split(' · ').pop() + ': ' + a.id : a.id));
+      const skus = [...new Set(a.skus.map((s) => s.sku))];
+      const res = el('td', 'salvo');
+      tr.append(c0, c1, el('td', null, a.status || '—'), el('td', 'sku', skus.join(', ')), el('td', 'sku', skus.map((s) => trocarNoSku(s, de, para)).join(', ')), res);
+      tb.appendChild(tr);
+      linhas.push({ c, a, ck, res });
+    }
+    t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); sec.appendChild(rol);
+  }
+  const barra = el('div', 'troca-barra');
+  const todos = el('label'); const ckTodos = el('input'); ckTodos.type = 'checkbox';
+  todos.append(ckTodos, document.createTextNode(` Selecionar todos (${numero(linhas.length)})`));
+  const ok = el('button', 'bt primario', 'Trocar nos selecionados'); ok.type = 'button'; ok.disabled = true;
+  barra.append(todos, ok); sec.appendChild(barra);
+  const contar = () => { const n = linhas.filter((l) => l.ck.checked && !l.ck.disabled).length; ok.disabled = !n;
+    ok.textContent = n ? `Trocar em ${numero(n)} anúncio(s) dos outros canais` : 'Trocar nos selecionados'; };
+  for(const l of linhas) l.ck.onchange = contar;
+  ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled) l.ck.checked = ckTodos.checked; contar(); };
+  ok.onclick = async () => {
+    const esc = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
+    const nomeDe = $('tDe').value.trim().toUpperCase(), nomePara = $('tPara').value.trim().toUpperCase();
+    const nShopee = esc.filter((l) => l.c.canal === 'shopee').length, nPainel = esc.length - nShopee;
+    if(!confirm(`Trocar ${nomeDe} por ${nomePara} em ${esc.length} anúncio(s)?\n\n`
+      + (nShopee ? `• ${nShopee} da Shopee: muda o SKU no anúncio da Shopee.\n` : '')
+      + (nPainel ? `• ${nPainel} da Amazon/Leroy/Magalu: a troca fica no painel; a partir de agora custo, lucro, estoque e comandas usam ${nomePara}. As vendas anteriores continuam com ${nomeDe}.\n` : '')
+      + '\nO preço e o estoque no marketplace não mudam.')) return;
+    ok.disabled = true; ok.textContent = 'Trocando…';
+    try{
+      const x = await enviar('POST', `/api/produtos/${de}/trocar-sku-canais`, { novo: para,
+        itens: esc.map((l) => ({ canal: l.c.canal, loja: l.c.loja, id: l.a.id, refs: l.c.canal === 'shopee' ? l.a.skus.map((s) => s.ref) : undefined })) });
+      for(const rr of x.resultado){
+        const l = esc.find((q) => q.c.canal === rr.canal && String(q.a.id) === String(rr.id) && (rr.loja == null || q.c.loja === rr.loja)); if(!l) continue;
+        if(rr.ok){ l.res.textContent = rr.no_painel ? 'trocado no painel' : 'trocado'; l.ck.checked = false; l.ck.disabled = true; }
+        else{ l.res.textContent = 'não trocou: ' + rr.erro; l.res.style.color = '#ff8199'; }
+      }
+      aviso(`${x.alterados} anúncio(s) dos outros canais com o SKU trocado de ${nomeDe} para ${nomePara}.` + (x.falhas.length ? ` ${x.falhas.length} não trocaram (veja o motivo na lista).` : ''), x.falhas.length && !x.alterados ? 'erro' : 'ok');
+    }catch(e){ aviso(e.message); }
+    contar();
+  };
+}
 
 $('formNovo').onsubmit = async (ev) => {
   ev.preventDefault();

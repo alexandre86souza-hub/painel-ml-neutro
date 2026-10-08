@@ -251,20 +251,21 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       out.push({ ref: `venda:shopee:${i.order_sn}:${i.linha}`, sku: i.sku, qtd: i.quantidade, data: i.data,
         valida: !['CANCELLED', 'IN_CANCEL', 'UNPAID'].includes(i.status), origem: `Shopee · ${lojas.get(i.shop_id) || i.shop_id}` });
     }
+    const trAmz = D.skuTrocas('amazon'), trLm = D.skuTrocas('leroy'), trMg = D.skuTrocas('magalu');
     for (const i of db.prepare(`SELECT p.pedido, p.data, p.status, p.canal, i.item_id, i.sku, i.quantidade FROM amazon_pedidos p
         JOIN amazon_itens i ON i.pedido = p.pedido WHERE p.data >= ?`).all(desde)) {
-      out.push({ ref: `venda:amazon:${i.pedido}:${i.item_id}`, sku: i.sku, qtd: i.quantidade, data: i.data,
+      out.push({ ref: `venda:amazon:${i.pedido}:${i.item_id}`, sku: C.skuNaData(trAmz, i.sku, i.data), qtd: i.quantidade, data: i.data,
         valida: i.status !== 'Canceled' && i.canal !== 'FBA', origem: 'Amazon' });
     }
     for (const p of db.prepare('SELECT order_id, data, status, linhas FROM leroy_pedidos WHERE data >= ?').all(desde)) {
       for (const l of JSON.parse(p.linhas || '[]')) {
-        out.push({ ref: `venda:leroy:${p.order_id}:${l.id}`, sku: l.sku, qtd: l.quantidade, data: p.data,
+        out.push({ ref: `venda:leroy:${p.order_id}:${l.id}`, sku: C.skuNaData(trLm, l.sku, p.data), qtd: l.quantidade, data: p.data,
           valida: !/^(CANCELED|REFUSED)$/.test(p.status || '') && !/^(CANCELED|REFUSED)$/.test(l.estado || ''), origem: 'Leroy Merlin' });
       }
     }
     const vinc = D.skuVinculos('magalu');
     for (const p of db.prepare('SELECT code, data, status, itens FROM magalu_pedidos WHERE data >= ?').all(desde)) {
-      JSON.parse(p.itens || '[]').forEach((i, k) => out.push({ ref: `venda:magalu:${p.code}:${k}`, sku: (i.sku && vinc.get(i.sku)) || i.sku,
+      JSON.parse(p.itens || '[]').forEach((i, k) => out.push({ ref: `venda:magalu:${p.code}:${k}`, sku: C.skuNaData(trMg, (i.sku && vinc.get(i.sku)) || i.sku, p.data),
         qtd: i.quantidade, data: p.data, valida: !/cancel/i.test(p.status || ''), origem: 'Magalu' }));
     }
     return out.filter((l) => l.qtd > 0);

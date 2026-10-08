@@ -21,6 +21,7 @@
 // Leroy created_date, Amazon PurchaseDate; Amazon getOrders Unshipped/PartiallyShipped com FulfillmentChannels=MFN (LatestShipDate,
 // EasyShipShipmentStatus) + orderItems. Do cliente só o NOME vai para a comanda — na Amazon nem ele (sem RDT:
 // compromisso com a Amazon de não ler dado pessoal; o nome está na etiqueta dela). Nada disto vai para o MCP.
+const C = require('./custos.js');
 const r2 = (v) => Math.round(v * 100) / 100;
 const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee', 'Amazon', 'Venda direta'];
 const diaLocal = (ms = Date.now()) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
@@ -228,6 +229,11 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     const [a, b, c, d, e] = await Promise.all([passo('Mercado Livre', pendentesMl, erros), passo('Shopee', pendentesShopee, erros),
       passo('Magalu', pendentesMagalu, erros), passo('Leroy', pendentesLeroy, erros), passo('Amazon', pendentesAmazon, erros)]);
     const lista = [...a, ...b, ...c, ...d, ...e];
+    // troca de produto no SKU (trocas-sku.js): o envio pendente já mostra o SKU novo, em todos os canais
+    const trocas = Object.fromEntries(['ml', 'shopee', 'amazon', 'leroy', 'magalu'].map((k) => [k, D.skuTrocas(k)]));
+    const vincMg = D.skuVinculos('magalu');   // Magalu: o "SKU do painel" digitado no lugar do código da Magalu
+    for (const x of lista) x.itens = (x.itens || []).map((i) => (i.sku
+      ? { ...i, sku: C.skuNaData(trocas[x.canal], x.canal === 'magalu' ? (vincMg.get(i.sku) || i.sku) : i.sku) } : i));
     // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém —
     // menos o que ficou de um dia anterior sem imprimir, que entra junto na numeração de hoje (pelo prazo)
     const dia = diaLocal();

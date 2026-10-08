@@ -120,7 +120,7 @@ function linhasDe(pedidos, ctx) {
       const devolvido = valida && fat > 0 && n(l.reembolso) >= fat - 0.01;
       const tarifa = valida ? n(l.comissao) - n(l.comissao_devolvida) + n(l.reembolso) + n(l.reembolso_frete) : 0;
       const frete = !valida ? 0 : custoEntrega == null ? null : custoEntrega * parte - n(l.frete_cliente);
-      const cs = l.sku ? C.custoDoSku(l.sku, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = l.sku ? C.custoDoSku(C.skuNaData(ctx.trocas, l.sku, p.data), ctx.mapa) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
       const imposto = valida ? (ctx.imposto_pct || 0) / 100 * fat : 0;
@@ -304,7 +304,7 @@ function criar({ D, janela }) {
     const impostoPct = C.impostoTotal(e);
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const estados = estadosDasLinhas(D.leroyTransacoes(new Date(Date.parse(de) - 5 * 864e5).toISOString()));
-    const ls = linhasDe(D.leroyPedidosPeriodo(de, ate), { mapa, imposto_pct: impostoPct, embalagem_pedido: e.embalagem_padrao || 0,
+    const ls = linhasDe(D.leroyPedidosPeriodo(de, ate), { mapa, trocas: D.skuTrocas('leroy'), imposto_pct: impostoPct, embalagem_pedido: e.embalagem_padrao || 0,
       entrega_propria: e.entrega_propria, fretes: D.leroyFretes(), estados, host: config().host });
     const semFrete = new Set(ls.filter((l) => l.valida && !l.frete_informado).map((l) => l.pedido)).size;
     return { linhas: ls, impostoPct, erroLeitura, semFrete, semEntrega: e.entrega_propria == null };
@@ -528,7 +528,7 @@ function criar({ D, janela }) {
       };
     },
   };
-  return { rotas, rotasParam: [], config, mk, sincronizar };
+  return { rotas, rotasParam: [], config, mk, sincronizar, ofertas };
 }
 
 module.exports = { criar, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };

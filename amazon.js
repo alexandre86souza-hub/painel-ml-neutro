@@ -596,8 +596,9 @@ function criar({ D, janela }) {
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const semCusto = new Map();
     const fotos = D.amazonFotos();
+    const trocas = D.skuTrocas('amazon');   // troca de produto feita no painel (vale a partir da data)
     const linhas = comEtiquetas(D.amazonLancPeriodo(j.de, j.ate)).map((l) => {
-      const cs = l.sku ? C.custoDoSku(l.sku, mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa) : { custo: null, componentes: [], faltando: [] };
       const conta_ = contaDoLancamento(l, { custo_unit: cs.custo, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct });
       if (l.tipo === 'venda' && cs.custo == null) {
         const s = semCusto.get(l.sku || '—') || { sku: l.sku, faltando: cs.faltando, vendas: 0 };
@@ -612,7 +613,7 @@ function criar({ D, janela }) {
     const hojeDe = janelaVendas(1, janela).de;
     // mês passado não inclui hoje: as vendas de hoje lidas à parte
     const linhasHoje = j.ate <= hojeDe ? comEtiquetas(D.amazonLancPeriodo(hojeDe, new Date(Date.now() + 60e3).toISOString())).map((l) =>
-      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(l.sku, mapa).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
+      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
       : linhas.filter((l) => l.data >= hojeDe);
     const porDia = new Map();
     for (const l of linhas) {
@@ -687,8 +688,9 @@ function criar({ D, janela }) {
     const fotos = D.amazonFotos();
     const taxas = taxasDosLancamentos(D.amazonLancPeriodo(new Date(Date.parse(de) - 92 * 86400e3).toISOString(), '9999'));
     const precoSku = D.amazonUltimoPrecoPorSku();
+    const trocas = D.skuTrocas('amazon');
     const linhas = D.amazonVendasPeriodo(de, ate).map((v) => {
-      const cs = v.sku ? C.custoDoSku(v.sku, mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = v.sku ? C.custoDoSku(C.skuNaData(trocas, v.sku, v.data), mapa) : { custo: null, componentes: [], faltando: [] };
       const emb = empresa.embalagem_padrao || 0;
       const conta_ = linhaDoPedido(v, { taxas, custo_unit: cs.custo, embalagem_unit: emb, imposto_pct: impostoPct,
         preco_unit_sku: precoSku.get(`${v.sku}|${v.canal}`) ?? precoSku.get(v.sku) ?? null });
@@ -904,7 +906,8 @@ function criar({ D, janela }) {
     const v30 = vendas(30), v60 = vendas(60), v90 = vendas(90);
     const fotos = D.amazonFotos();
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
-    const nomeSku = (sku) => C.custoDoSku(sku, mapa).componentes.map((x) => x.nome).filter(Boolean).join(' + ') || null;
+    const trocasFba = D.skuTrocas('amazon');
+    const nomeSku = (sku) => C.custoDoSku(C.skuNaData(trocasFba, sku), mapa).componentes.map((x) => x.nome).filter(Boolean).join(' + ') || null;
     const semFoto = new Map();
     const itens = est.filter((e) => e.sellerSku).map((e) => {
       const d = e.inventoryDetails || {};
@@ -975,19 +978,21 @@ function criar({ D, janela }) {
       const x = v30.get(r.sku) || { u: 0, f: 0 }; x.u += r.u; x.f += r.f; v30.set(r.sku, x);
     }
     const fotos = D.amazonFotos();
+    const trocasAnuncios = D.skuTrocas('amazon');
     const itens = lista.map((it) => {
       const s = (it.summaries || []).find((x) => x.marketplaceId === BR) || it.summaries?.[0] || {};
       const oferta = (it.offers || []).find((o) => o.marketplaceId === BR && (o.offerType || 'B2C') === 'B2C') || it.offers?.[0];
       const disp = (it.fulfillmentAvailability || []);
       const fba = disp.some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT');
       const estoque = disp.reduce((a, d) => a + (Number(d.quantity) || 0), 0);
-      const cs = C.custoDoSku(it.sku, mapa);
+      const skuPainel = C.skuNaData(trocasAnuncios, it.sku);
+      const cs = C.custoDoSku(skuPainel, mapa);
       const po = (it.attributes?.purchasable_offer || []).find((o) => o.marketplace_id === BR && (!o.audience || o.audience === 'ALL'));
       const dp = po?.discounted_price?.[0]?.schedule?.[0];
       const desconto = dp?.value_with_tax != null ? { preco: Number(dp.value_with_tax), inicio: dp.start_at || null, fim: dp.end_at || null } : null;
       const cheio = po?.our_price?.[0]?.schedule?.[0]?.value_with_tax != null ? Number(po.our_price[0].schedule[0].value_with_tax) : null;
       const m = taxas.mediaSku(it.sku, fba ? 'FBA' : 'proprio') || taxas.mediaCanal(fba ? 'FBA' : 'proprio');
-      return { sku: it.sku, asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
+      return { sku: it.sku, sku_painel: skuPainel !== it.sku ? skuPainel : null, asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
         nome_amazon: s.itemName || null, foto: s.mainImage?.link || fotos.get(it.sku)?.foto || null, status: s.status || [],
         tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null, cheio, desconto,
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',
@@ -1210,7 +1215,7 @@ function criar({ D, janela }) {
     },
   });
 
-  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens };
+  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon };
 }
 
 module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,

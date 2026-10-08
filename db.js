@@ -1039,6 +1039,7 @@ function shopeeAnunciosGravar(shopId, linhas) {
 }
 // Leitura completa: o que não veio nela (anúncio apagado ou banido) sai.
 const shopeeAnunciosLimparAntes = (shopId, quando) => db.prepare('DELETE FROM shopee_anuncios WHERE shop_id=? AND lido_em < ?').run(shopId, quando);
+const shopeeSkuGravar = (itemId, modelId, sku) => db.prepare('UPDATE shopee_anuncios SET sku=? WHERE item_id=? AND model_id=?').run(sku, itemId, modelId || 0);
 const shopeeAnuncios = (shopId) => db.prepare('SELECT * FROM shopee_anuncios WHERE shop_id=? ORDER BY item_id, model_id').all(shopId);
 const shopeePrecoGravar = (itemId, modelId, preco, original) =>
   db.prepare('UPDATE shopee_anuncios SET preco=?, preco_original=? WHERE item_id=? AND model_id=?').run(preco, original, itemId, modelId || 0);
@@ -1830,6 +1831,21 @@ const magaluSemPreco = (limite) => db.prepare(`SELECT sku FROM magalu_anuncios W
   ORDER BY (status = 'PUBLISHED') DESC, lido_preco IS NOT NULL, sku LIMIT ?`).all(new Date(Date.now() - 6 * 3600e3).toISOString(), limite).map((r) => r.sku);
 const magaluAnuncios = () => db.prepare('SELECT * FROM magalu_anuncios ORDER BY titulo').all();
 const skuVinculos = (canal) => new Map(db.prepare('SELECT sku, sku_painel FROM sku_vinculos WHERE canal=?').all(canal).map((r) => [r.sku, r.sku_painel]));
+// Troca de produto no SKU (trocas-sku.js). Amazon, Leroy e Magalu não deixam renomear o SKU do anúncio: a troca
+// fica no painel e vale para as vendas A PARTIR de "desde" (antes, saiu o produto antigo). ML e Shopee: a troca é
+// feita no anúncio e fica registrada aqui só para as comandas mostrarem o SKU novo nos envios já pendentes.
+db.exec(`CREATE TABLE IF NOT EXISTS sku_trocas (
+  canal TEXT NOT NULL, sku TEXT NOT NULL, sku_novo TEXT NOT NULL, desde TEXT NOT NULL, quem TEXT,
+  PRIMARY KEY (canal, sku, desde))`);
+// Map sku -> [{ sku_novo, desde }] de um canal (ou de todos, canal null)
+function skuTrocas(canal = null) {
+  const m = new Map();
+  const rs = canal ? db.prepare('SELECT * FROM sku_trocas WHERE canal=?').all(canal) : db.prepare('SELECT * FROM sku_trocas').all();
+  for (const r of rs) { const l = m.get(r.sku) || []; l.push({ sku_novo: r.sku_novo, desde: r.desde }); m.set(r.sku, l); }
+  return m;
+}
+const skuTrocaGravar = (canal, sku, skuNovo, desde, quem = null) => db.prepare(`INSERT INTO sku_trocas (canal, sku, sku_novo, desde, quem)
+  VALUES (?,?,?,?,?) ON CONFLICT(canal, sku, desde) DO UPDATE SET sku_novo=excluded.sku_novo, quem=excluded.quem`).run(canal, sku, skuNovo, desde, quem);
 function skuVinculoGravar(canal, sku, skuPainel) {
   if (!skuPainel) return db.prepare('DELETE FROM sku_vinculos WHERE canal=? AND sku=?').run(canal, sku);
   db.prepare(`INSERT INTO sku_vinculos (canal, sku, sku_painel, em) VALUES (?,?,?,?)
@@ -2060,7 +2076,7 @@ module.exports = {
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
   shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,
   shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
-  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeePrecoGravar,
+  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeePrecoGravar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
@@ -2070,7 +2086,7 @@ module.exports = {
   qualidadeGravar, qualidadeDe,
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
-  magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar,
+  magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,

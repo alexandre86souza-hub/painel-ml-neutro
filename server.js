@@ -2144,6 +2144,12 @@ routes['GET /api/contas/atencao'] = async () => {
     limite(comandasMod.resumoFila(), 9000)]);
   return { estoque, comandas };
 };
+// Trocar um produto no SKU dos anúncios da Shopee (no anúncio) e da Amazon, Leroy e Magalu (no painel).
+{
+  const t = require('./trocas-sku.js').criar({ D, shopee: shopeeMod, amazon: amazonMod, leroy: leroyMod, magalu: magaluMod,
+    quem: () => CTX.atual()?.usuario?.login || null });
+  rotasParam.push(...t.rotasParam);
+}
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 
