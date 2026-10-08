@@ -381,11 +381,13 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo });
     },
     'GET /api/magalu/vendas': async (url) => {
-      const dias = diasDe(url, [7, 15, 30, 60, 90]);
-      const j = K.janelaVendas(dias, janela);
+      const j = K.periodoDoPedido(url, [7, 15, 30, 60, 90], janela);
+      const { dias } = j;
+      const hojeDe = K.janelaVendas(1, janela).de;
       const r = await linhas(j.de, j.ate);
+      const rh = j.ate <= hojeDe ? await linhas(hojeDe, new Date(Date.now() + 60e3).toISOString()) : null;
       return { nome: D.configLer('magalu_loja_nome') || 'Magalu', erro_leitura: r.erroLeitura,
-        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe: K.janelaVendas(1, janela).de, conta: 'magalu', topPorSku: C.topPorSku }) };
+        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe, conta: 'magalu', topPorSku: C.topPorSku, mes: j.mes, rotulo: j.rotulo, linhasHoje: rh?.linhas }) };
     },
     // Campanhas (tela campanhas-canais.html?conta=magalu): promoções disponíveis para entrar e o
     // resultado das promoções que apareceram nas vendas (pelo financeiro). Só leitura por enquanto.

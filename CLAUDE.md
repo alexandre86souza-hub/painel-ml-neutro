@@ -17,6 +17,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   volta uma cópia com o painel PARADO (o banco atual fica ao lado). A ML_DB_KEY do .env não vai na cópia.
 - `npm test` — testes do painel. Scraper: `cd scraper && uv run python test_api.py`.
 - Logs: `logs/scraper.log`, `logs/tunel.log`.
+- Servidor (VPS Ubuntu, domínio próprio, sem túnel: `URL_PUBLICA` no .env, Caddy na frente da 3101): `servidor/SERVIDOR.md`
+  (`instalar-vps.sh` uma vez; `bash servidor/publicar.sh IP` envia o último commit e reinicia). Nunca dois painéis
+  ligados com o mesmo banco (refresh da Shopee é de uso único).
 
 ## Arquitetura (leia antes de mexer)
 
@@ -136,6 +139,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   (`custos.js#resumoDasContas`): roda as vendas de cada conta conectada (hoje e o período), soma
   e junta os produtos por SKU. O Dashboard (`/`) continua sendo só da conta selecionada.
   A tabela de produtos (`produtos_custo`) é uma só para todas as contas.
+  Período: `?dias=` ou `?mes=atual|anterior` (mês do calendário em Brasília, `canais.js#janelaDoMes`) em
+  `/api/contas/resumo` e `/api/{amazon,shopee,leroy,magalu}/vendas`; no mês passado o "hoje" é lido à parte.
 - Shopee (`shopee.js`, tela `public/shopee.html`): por enquanto só a conexão da loja. Partner ID
   e Partner Key digitados na tela (chave cifrada em `estado`), autorização com retorno em
   `/shopee/callback/{state}` pela porta pública, tokens em `shopee_lojas` (refresh de uso

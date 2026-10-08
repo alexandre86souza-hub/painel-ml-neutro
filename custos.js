@@ -394,6 +394,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     // Dashboard de todas as contas conectadas (tela "Todas as contas"): hoje e o período de
     // cada uma, a soma e os produtos mais vendidos juntando as contas.
     'GET /api/contas/resumo': async (url) => {
+      const mes = url?.searchParams.get('mes');
+      if (mes === 'atual' || mes === 'anterior') return resumoDasContas(require('./canais.js').janelaDoMes(mes));
       const d = Number(url?.searchParams.get('dias')) || 30;
       return resumoDasContas([7, 15, 30, 60, 90].includes(d) ? d : 30);
     },
@@ -401,11 +403,13 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
 
   // As vendas de UMA conta (a ativa na tela Vendas; cada conta conectada no resumo geral).
   // `titulos: false` pula a busca de título e foto dos anúncios, que o resumo não usa.
+  // pedido: dias (1, 7…90) ou o mês do calendário { mes, dias, de, ate } (canais.js#janelaDoMes)
   async function vendasDaConta(conta, pedido, { titulos = true } = {}) {
     {
-      const dias = DIAS_OK.includes(pedido) ? pedido : 30;
-      await sincronizarVendas(conta, Math.max(dias, 7));
-      const j = dias === 1
+      const per = pedido && typeof pedido === 'object' ? pedido : null;
+      const dias = per ? per.dias : DIAS_OK.includes(pedido) ? pedido : 30;
+      await sincronizarVendas(conta, per ? Math.max(7, Math.ceil((Date.now() - Date.parse(per.de)) / 864e5) + 1) : Math.max(dias, 7));
+      const j = per ? { de: per.de, ate: per.ate } : dias === 1
         ? { de: new Date(Date.parse(new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10) + 'T03:00:00Z')).toISOString(),
           ate: new Date(Date.now() + 60e3).toISOString() }
         : { ...janela(dias), ate: new Date(Date.now() + 60e3).toISOString() };
@@ -537,21 +541,23 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     } finally { lendoNomes.delete(conta.ml_user_id); }
   }
 
-  async function resumoDasContas(dias = 30) {
+  // periodo: dias ou o mês do calendário (canais.js#janelaDoMes)
+  async function resumoDasContas(periodo = 30) {
+    const dias = typeof periodo === 'object' ? periodo.dias : periodo;
     const linhas = [], vendidas = [];
     for (const c of D.contasListar()) {
       const conta = D.contaObter(c.ml_user_id);
       const base = { ml_user_id: c.ml_user_id, nickname: c.nickname };
       try {
         const hoje = await vendasDaConta(conta, 1, { titulos: false });
-        const per = await vendasDaConta(conta, dias);
+        const per = await vendasDaConta(conta, periodo);
         linhas.push({ ...base, hoje: hoje.resumo, periodo: per.resumo, sem_custo: per.sem_custo.length,
           fretes_pendentes: per.fretes_pendentes,
           dias: D.vendasPorDia(c.ml_user_id, per.de, per.ate).map((d) => ({ dia: d.dia, faturamento: d.faturamento, pedidos: d.pedidos })) });
         for (const v of per.vendas) if (v.valida) vendidas.push({ ...v, conta: c.ml_user_id });
       } catch (e) { linhas.push({ ...base, erro: e.message }); }
     }
-    return { dias, contas: linhas, total: somarContas(linhas.filter((l) => !l.erro)), produtos: topPorSku(vendidas, 30) };
+    return { dias, mes: periodo?.mes || null, rotulo: periodo?.rotulo || null, contas: linhas, total: somarContas(linhas.filter((l) => !l.erro)), produtos: topPorSku(vendidas, 30) };
   }
 
   // Um produto da tabela a partir do formulário. O número sai do SKU (DQ-407 -> 407).

@@ -17,6 +17,27 @@ function janelaVendas(dias, janela, agora = Date.now()) {
     ate: new Date(agora + 60e3).toISOString() };
   return { ...janela(dias), ate: new Date(agora + 60e3).toISOString() };
 }
+// Mês do calendário (Brasília): "atual" = do dia 1º até agora; "anterior" = o mês passado inteiro.
+// dias = dias corridos da janela (para a média por dia). Função pura: testada.
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function janelaDoMes(mes, agora = Date.now()) {
+  const h = new Date(agora - 3 * 3600e3);
+  let a = h.getUTCFullYear(), m = h.getUTCMonth();
+  if (mes === 'anterior') { m -= 1; if (m < 0) { m = 11; a -= 1; } }
+  const de = Date.UTC(a, m, 1, 3), fimMes = Date.UTC(a, m + 1, 1, 3);
+  const ate = mes === 'anterior' ? fimMes : agora + 60e3;
+  return { mes, dias: Math.max(1, Math.ceil((Math.min(ate, fimMes) - de) / 864e5)), de: new Date(de).toISOString(),
+    ate: new Date(ate).toISOString(), rotulo: `${MESES[m]}/${a}` };
+}
+// Período pedido pela tela: ?mes=atual|anterior ou ?dias=N (N da lista; senão o padrão).
+function periodoDoPedido(url, diasOk, janela, padrao = 30, agora = Date.now()) {
+  const mes = url.searchParams.get('mes');
+  if (mes === 'atual' || mes === 'anterior') return janelaDoMes(mes, agora);
+  const d = Number(url.searchParams.get('dias'));
+  const dias = diasOk.includes(d) ? d : padrao;
+  return { dias, ...janelaVendas(dias, janela, agora) };
+}
+
 // Período terminando amanhã 00h de Brasília (inclui hoje), como painel.js#performance.
 function intervalo(dias, fimMs = Date.now()) {
   const hojeLocal = new Date(fimMs - 3 * 3600e3).toISOString().slice(0, 10);
@@ -117,7 +138,8 @@ function abcDe(linhas, { dias, de, ate, semVenda = [], ativos = 0 } = {}) {
 
 // Resumo para "Todas as contas" (o mesmo formato de amazon.js#vendasAmazon): hoje, período,
 // faturamento por dia e os produtos (topPorSku junta com as outras contas pelo número do SKU).
-function resumoGeral(linhas, { dias, de, ate, hojeDe, conta, topPorSku }) {
+// linhasHoje: quando o período não inclui hoje (mês passado), as vendas de hoje lidas à parte.
+function resumoGeral(linhas, { dias, de, ate, hojeDe, conta, topPorSku, mes, rotulo, linhasHoje }) {
   const porDia = new Map();
   for (const l of linhas) {
     if (!l.valida) continue;
@@ -126,11 +148,12 @@ function resumoGeral(linhas, { dias, de, ate, hojeDe, conta, topPorSku }) {
     d.faturamento += l.faturamento || 0; d.pedidos.add(l.pedido); porDia.set(dia, d);
   }
   return {
-    dias, de, ate, resumo: somaLinhas(linhas), hoje: somaLinhas(linhas.filter((l) => l.data >= hojeDe)),
+    dias, de, ate, mes: mes || null, rotulo: rotulo || null, resumo: somaLinhas(linhas),
+    hoje: somaLinhas(linhasHoje || linhas.filter((l) => l.data >= hojeDe)),
     por_dia: [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)).map((d) => ({ dia: d.dia, faturamento: r2(d.faturamento), pedidos: d.pedidos.size })),
     sem_custo: semCusto(linhas),
     produtos: topPorSku(linhas.filter((l) => l.valida).map((l) => ({ ...l, conta })), 100),
   };
 }
 
-module.exports = { janelaVendas, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, resumoGeral };
+module.exports = { janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, resumoGeral };

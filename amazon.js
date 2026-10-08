@@ -107,6 +107,7 @@ const valor = (m) => Number(m?.CurrencyAmount ?? m?.currencyAmount ?? m?.Amount 
 const dataIso = (d) => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
 const r2 = (v) => Math.round(v * 100) / 100;
 const CC = require('./campanhas-canais.js');
+const { janelaDoMes } = require('./canais.js');
 
 // Função pura: testada.
 // Pedido com 2+ unidades do mesmo item (FBA): a Amazon manda uma linha por unidade, com o MESMO
@@ -586,7 +587,10 @@ function criar({ D, janela }) {
     if (!c.client_id || !c.refresh_token) return null;
     let erroLeitura = null;
     try { await sincronizar(opcoes.recarregar); } catch (e) { erroLeitura = e.message; }
-    const j = janelaVendas(dias, janela);
+    // dias: número (últimos N dias) ou o mês do calendário (canais.js#janelaDoMes)
+    const per = typeof dias === 'object' ? dias : null;
+    if (per) dias = per.dias;
+    const j = per || janelaVendas(dias, janela);
     const { propria, empresa } = empresaAmazon();
     const impostoPct = C.impostoTotal(empresa);
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
@@ -606,6 +610,10 @@ function criar({ D, janela }) {
     for (const l of linhas) if (l.tipo === 'venda' && l.sku && l.pedido && !l.foto) pedidoPorSku.set(l.sku, l.pedido);
     if (pedidoPorSku.size) buscarFotos(pedidoPorSku).catch(() => null);
     const hojeDe = janelaVendas(1, janela).de;
+    // mês passado não inclui hoje: as vendas de hoje lidas à parte
+    const linhasHoje = j.ate <= hojeDe ? comEtiquetas(D.amazonLancPeriodo(hojeDe, new Date(Date.now() + 60e3).toISOString())).map((l) =>
+      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(l.sku, mapa).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
+      : linhas.filter((l) => l.data >= hojeDe);
     const porDia = new Map();
     for (const l of linhas) {
       const dia = new Date(Date.parse(l.data) - 3 * 3600e3).toISOString().slice(0, 10);
@@ -614,9 +622,9 @@ function criar({ D, janela }) {
       porDia.set(dia, d);
     }
     return {
-      dias, de: j.de, ate: j.ate, lido_em: D.configLer('amazon_lanc_lido_em'), erro_leitura: erroLeitura,
+      dias, de: j.de, ate: j.ate, mes: per?.mes || null, rotulo: per?.rotulo || null, lido_em: D.configLer('amazon_lanc_lido_em'), erro_leitura: erroLeitura,
       imposto_pct: impostoPct, embalagem_padrao: empresa.embalagem_padrao || 0, empresa_propria: propria,
-      resumo: resumoAmazon(linhas), hoje: resumoAmazon(linhas.filter((l) => l.data >= hojeDe)),
+      resumo: resumoAmazon(linhas), hoje: resumoAmazon(linhasHoje),
       por_dia: [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)).map((d) => ({ dia: d.dia, faturamento: r2(d.faturamento), pedidos: d.pedidos.size })),
       sem_custo: [...semCusto.values()].sort((a, b) => b.vendas - a.vendas),
       produtos: C.topPorSku(linhas.filter((l) => l.tipo === 'venda').map((l) => ({ ...l, conta: 'amazon' })), 100),
@@ -1194,7 +1202,8 @@ function criar({ D, janela }) {
     // Vendas e lucro do período (tela Amazon e a linha da Amazon em "Todas as contas").
     // Nunca exposta ao MCP: dados da Amazon não vão a terceiros.
     'GET /api/amazon/vendas': async (url) => {
-      const dias = Math.min(90, Math.max(1, Number(url.searchParams.get('dias')) || 30));
+      const mes = url.searchParams.get('mes');
+      const dias = mes === 'atual' || mes === 'anterior' ? janelaDoMes(mes) : Math.min(90, Math.max(1, Number(url.searchParams.get('dias')) || 30));
       const r = await vendasAmazon(dias, { recarregar: url.searchParams.get('recarregar') === '1',
         lancamentos: url.searchParams.get('lancamentos') === '1' });
       return r || { conectada: false };

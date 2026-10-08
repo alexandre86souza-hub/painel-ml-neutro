@@ -87,6 +87,8 @@
       <button type="button" data-dias="30">30 dias</button>
       <button type="button" data-dias="60">60 dias</button>
       <button type="button" data-dias="90">90 dias</button>
+      <button type="button" data-dias="atual">Este mês</button>
+      <button type="button" data-dias="anterior">Mês passado</button>
     </div>
   </div>
 
@@ -118,7 +120,12 @@
 </div>
 <script src="/comum.js?v=8"></script>
 <script>
-let dias = 30, geracao = 0;
+// período: 7…90 dias ou o mês do calendário ("atual" / "anterior"); no mês, dias = dias corridos da janela (média por dia)
+let per = '30', dias = 30, rotuloMes = '', geracao = 0;
+const ehMes = () => per === 'atual' || per === 'anterior';
+const qsPer = () => (ehMes() ? `mes=${per}` : `dias=${per}`);
+const curto = () => (ehMes() ? (per === 'atual' ? 'do mês' : 'mês passado') : `${dias}d`);
+const longo = () => (ehMes() ? (per === 'atual' ? `em ${rotuloMes || 'este mês'}` : `em ${rotuloMes || 'o mês passado'}`) : `em ${dias} dias`);
 const COR = ['#2563eb', '#f59e0b', '#16a34a', '#9333ea', '#dc2626', '#0891b2'];
 const diaMes = (d) => d.slice(8, 10) + '/' + d.slice(5, 7);
 
@@ -189,7 +196,7 @@ function cartaoConta(c, cor, total){
   const p = c.periodo, dl = el('dl');
   const bloco = (rot, valor, nota, cls) => { const d = el('div'); const dd = el('dd', cls || null, valor); if(nota) dd.appendChild(nota instanceof Node ? nota : el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
   bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
-  bloco(`Faturamento ${dias}d`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.`);
+  bloco(`Faturamento ${curto()}`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.`);
   const notaLucro = el('small'); notaLucro.append('margem ', el('span', 'chip-m' + (p.margem < 0 ? ' neg' : ''), pct(p.margem)));
   if(c.sem_custo) notaLucro.appendChild(el('span', 'sem-custo', `${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo`));
   bloco('Lucro', real(p.lucro), notaLucro, 'lucro' + (p.lucro < 0 ? ' neg' : ''));
@@ -217,7 +224,7 @@ function pintarContas(r, cor){
     const soma = (k) => contas.filter((c) => !c.erro).reduce((s, c) => s + (c.periodo?.[k] || 0), 0);
     const res = el('div', 'resumo');
     const pil = (rot, v, cls) => { const p = el('span', 'pilula' + (cls ? ' ' + cls : '')); p.append(rot + ' ', el('b', null, v)); res.appendChild(p); };
-    pil(`Faturamento ${dias}d`, real(soma('faturamento'))); pil('Lucro', real(soma('lucro')), 'lucro');
+    pil(`Faturamento ${curto()}`, real(soma('faturamento'))); pil('Lucro', real(soma('lucro')), 'lucro');
     pil('Participação', pct(total > 0 ? soma('faturamento') / total : 0, 0));
     topo.append(logo, el('h2', null, loja), res);
     const grade = el('div', 'contas');
@@ -337,13 +344,14 @@ async function carregar(){
   const minha = ++geracao;
   erroTela('');
   $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Somando as vendas de cada conta…'));
-  const amz = api(`/api/amazon/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+  const amz = api(`/api/amazon/vendas?${qsPer()}`).catch((e) => ({ erro: e.message }));
   // lojas da Shopee: uma chamada por loja (a primeira leitura de uma loja leva uns 2 minutos)
   const leroy = api('/api/leroy/config').catch(() => ({}));
   const magalu = api('/api/magalu/config').catch(() => ({}));
   const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
   try{
-    const r = await api(`/api/contas/resumo?dias=${dias}`);
+    const r = await api(`/api/contas/resumo?${qsPer()}`);
+    if(ehMes()){ dias = r.dias; rotuloMes = r.rotulo || ''; }
     for(const c of r.contas) c.loja = c.nickname;   // apelido da conta no ML (LOJA A)
     try{ lojasDefinidas = (await api('/api/contas/lojas')).lojas || {}; }catch{ lojasDefinidas = {}; }
     try{ souAdmin = !!(await api('/api/eu')).admin; }catch{ souAdmin = false; }
@@ -356,19 +364,19 @@ async function carregar(){
     if(a.erro) erros.push('Amazon: ' + a.erro); else if(a.conectada !== false){ await lerMarcas(['amazon']); const cfg = await api('/api/amazon/config').catch(() => ({})); tudo = comAmazon(tudo, a, cfg.vendedor); }
     pintar(tudo, false);
     if((await leroy).conectada_em){
-      const lm = await api(`/api/leroy/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+      const lm = await api(`/api/leroy/vendas?${qsPer()}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(lm.erro) erros.push('Leroy Merlin: ' + lm.erro);
       else { await lerMarcas(['leroy']); tudo = comExterna(tudo, lm, { ml_user_id: 'leroy', nickname: 'Leroy Merlin', loja: lm.nome, leroy: true, tela: '/vendas.html?conta=leroy' }); pintar(tudo, false); }
     }
     if((await magalu).conectada_em){
-      const mg = await api(`/api/magalu/vendas?dias=${dias}`).catch((e) => ({ erro: e.message }));
+      const mg = await api(`/api/magalu/vendas?${qsPer()}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(mg.erro) erros.push('Magalu: ' + mg.erro);
       else { await lerMarcas(['magalu']); tudo = comExterna(tudo, mg, { ml_user_id: 'magalu', nickname: 'Magalu', loja: mg.nome, magalu: true, tela: '/vendas.html?conta=magalu' }); pintar(tudo, false); }
     }
     for(const l of await lojas){
-      const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&dias=${dias}`).catch((e) => ({ erro: e.message }));
+      const s = await api(`/api/shopee/vendas?loja=${l.shop_id}&${qsPer()}`).catch((e) => ({ erro: e.message }));
       if(minha !== geracao) return;
       if(s.erro){ erros.push('Shopee: ' + s.erro); continue; }
       await lerMarcas(['shopee-' + l.shop_id]);
@@ -389,13 +397,13 @@ function pintar(r, temAmazon){
     const cor = Object.fromEntries(r.contas.map((c) => { const k = canalDe(c); const n = vistos[k] = (vistos[k] ?? -1) + 1; return [c.ml_user_id, TONS[k][n % 3]]; }));
     const t = r.total, boas = r.contas.filter((c) => !c.erro).length;
     $('topoTxt').textContent = `${boas} conta(s) somada(s)` + (r.contas.length > boas ? ` · ${r.contas.length - boas} com erro` : '')
-      + `. Hoje e os últimos ${dias} dias.` + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');
+      + (ehMes() ? `. Hoje e ${per === 'atual' ? 'este mês' : 'o mês passado'} (${rotuloMes}, ${dias} dias).` : `. Hoje e os últimos ${dias} dias.`) + (r.contas.length < 2 ? ' Conecte outra conta (em Configurações) para comparar.' : '');
     const box = $('cartoes'); box.innerHTML = '';
     const p = t.periodo;
     box.append(
       cartao('Faturamento de hoje', real(t.hoje.faturamento), `${numero(t.hoje.pedidos)} pedido(s) · ${numero(t.hoje.unidades)} un.`),
-      cartao(`Faturamento em ${dias} dias`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
-      cartao(`Lucro em ${dias} dias`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
+      cartao(`Faturamento ${longo()}`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
+      cartao(`Lucro ${longo()}`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
       cartao('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), `média de ${real(p.faturamento / dias)} por dia`),
       cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
     );
@@ -403,7 +411,12 @@ function pintar(r, temAmazon){
     if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando Amazon e Shopee…'));
   }
 }
-periodo('segDias', dias, (d) => { dias = d; carregar(); });
+{
+  const seg = $('segDias');
+  const marcar = () => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.dias === per)); };
+  marcar();
+  seg.onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; per = b.dataset.dias; if(!ehMes()) dias = Number(per); marcar(); carregar(); };
+}
 carregar();
 </script>
 <script src="/sino.js?v=2" defer></script>

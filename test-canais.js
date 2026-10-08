@@ -145,4 +145,18 @@ assert.deepStrictEqual({ g: ads.total.gasto, v: ads.total.vendas, roas: ads.tota
   { g: 10, v: 80, roas: 8, acos: 0.125, ctr: 0.02, cpc: 0.5 });
 assert.strictEqual(require('./shopee-ads.js').adsDe([]).total.roas, null, 'sem gasto: sem ROAS');
 
+// mês do calendário (Brasília): este mês até agora, mês passado inteiro; virada de ano
+{
+  const ag = Date.parse('2026-10-08T15:00:00Z');
+  const at = K.janelaDoMes('atual', ag), an = K.janelaDoMes('anterior', ag);
+  assert.deepStrictEqual([at.de, at.dias, at.rotulo], ['2026-10-01T03:00:00.000Z', 8, 'outubro/2026']);
+  assert.deepStrictEqual([an.de, an.ate, an.dias, an.rotulo], ['2026-09-01T03:00:00.000Z', '2026-10-01T03:00:00.000Z', 30, 'setembro/2026']);
+  const jan = K.janelaDoMes('anterior', Date.parse('2027-01-01T02:00:00Z'));   // 31/12 23h de Brasília: ainda dezembro
+  assert.strictEqual(jan.rotulo, 'novembro/2026');
+  assert.strictEqual(K.janelaDoMes('anterior', Date.parse('2027-01-01T04:00:00Z')).rotulo, 'dezembro/2026');
+  const u = new URL('http://x/?mes=anterior');
+  assert.strictEqual(K.periodoDoPedido(u, [30], () => ({}), 30, ag).rotulo, 'setembro/2026');
+  assert.strictEqual(K.periodoDoPedido(new URL('http://x/?dias=7'), [7, 30], (d) => ({ de: 'x', dias: d }), 30, ag).dias, 7);
+}
+
 console.log('Canais e Shopee: pedidos, repasse, lucro exato, rateio, estimativa, resumo, performance e ABC: ok');

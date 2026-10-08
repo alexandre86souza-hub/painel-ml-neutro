@@ -380,11 +380,13 @@ function criar({ D, janela }) {
     },
     // "Todas as contas": hoje, período, por dia e produtos (somados no navegador, como a Shopee).
     'GET /api/leroy/vendas': async (url) => {
-      const dias = diasDe(url, [7, 15, 30, 60, 90]);
-      const j = K.janelaVendas(dias, janela);
+      const j = K.periodoDoPedido(url, [7, 15, 30, 60, 90], janela);
+      const { dias } = j;
+      const hojeDe = K.janelaVendas(1, janela).de;
       const r = await linhas(j.de, j.ate);
+      const rh = j.ate <= hojeDe ? await linhas(hojeDe, new Date(Date.now() + 60e3).toISOString()) : null;
       return { nome: D.configLer('leroy_loja_nome') || 'Leroy Merlin', erro_leitura: r.erroLeitura,
-        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe: K.janelaVendas(1, janela).de, conta: 'leroy', topPorSku: C.topPorSku }) };
+        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe, conta: 'leroy', topPorSku: C.topPorSku, mes: j.mes, rotulo: j.rotulo, linhasHoje: rh?.linhas }) };
     },
     // Campanhas: descontos das ofertas (com o resultado) e as promoções que aparecem nas vendas.
     'GET /api/leroy/campanhas': async (url) => {

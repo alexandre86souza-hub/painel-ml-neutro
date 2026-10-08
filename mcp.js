@@ -330,8 +330,9 @@ const FERRAMENTAS = [
     descricao: 'Dashboard de todas as contas conectadas: pedidos, faturamento, custos, lucro e margem de hoje e '
       + 'do período de cada conta, a série diária de cada uma, a soma de todas e os produtos (SKU) que mais '
       + 'faturaram juntando as contas.',
-    schema: obj({ dias: { type: 'integer', enum: [7, 15, 30, 60, 90], default: 30 } }),
-    rota: (a) => ['GET', `/api/contas/resumo${qs({ dias: a.dias })}`] },
+    schema: obj({ dias: { type: 'integer', enum: [7, 15, 30, 60, 90], default: 30 },
+      mes: { type: 'string', enum: ['atual', 'anterior'], description: 'Mês do calendário no lugar dos dias: este mês ou o mês passado' } }),
+    rota: (a) => ['GET', `/api/contas/resumo${qs({ dias: a.dias, mes: a.mes })}`] },
 
   { nome: 'ml_performance', titulo: 'Performance do período',
     descricao: 'Faturamento, pedidos, ticket, visitas, conversão, tarifas e cancelamentos do período contra '

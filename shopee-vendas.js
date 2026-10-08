@@ -267,12 +267,14 @@ function criar({ D, daLoja, janela }) {
     // "Todas as contas": hoje, período, por dia e produtos (somados no navegador, como a Amazon).
     'GET /api/shopee/vendas': async (url) => {
       const shopId = exigeLoja(url);
-      const dias = diasDe(url, [7, 15, 30, 60, 90]);
-      const j = K.janelaVendas(dias, janela);
+      const j = K.periodoDoPedido(url, [7, 15, 30, 60, 90], janela);
+      const { dias } = j;
+      const hojeDe = K.janelaVendas(1, janela).de;
       const r = await linhas(shopId, j.de, j.ate);
+      const rh = j.ate <= hojeDe ? await linhas(shopId, hojeDe, new Date(Date.now() + 60e3).toISOString()) : null;
       const loja = D.shopeeLojasListar().find((l) => l.shop_id === shopId);
       return { loja: shopId, nome: loja?.nome || `Shopee ${shopId}`, erro_leitura: r.erroLeitura,
-        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe: K.janelaVendas(1, janela).de, conta: `shopee-${shopId}`, topPorSku: C.topPorSku }) };
+        ...K.resumoGeral(r.linhas, { dias, de: j.de, ate: j.ate, hojeDe, conta: `shopee-${shopId}`, topPorSku: C.topPorSku, mes: j.mes, rotulo: j.rotulo, linhasHoje: rh?.linhas }) };
     },
   };
   return { rotas, rotasParam: [], sincronizar, linhas: async (shopId, de, ate) => (await linhas(shopId, de, ate)).linhas };
