@@ -24,6 +24,7 @@
   const grave = !abrindo && (r.pendente === 'url_mudou' || r.pendente === 'tunel');
   const barra = document.createElement('div');
   barra.setAttribute('role', grave ? 'alert' : 'status');
+  barra.className = 'aviso-config' + (grave ? ' grave' : '');   // tema escuro: tema-escuro.css
   barra.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 20px;'
     + 'font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;border-bottom:1px solid;'
     + (grave ? 'background:#fce8e6;color:#8c1d18;border-color:#f0b3ad' : 'background:#fff4e0;color:#7a4a00;border-color:#f0c46b');

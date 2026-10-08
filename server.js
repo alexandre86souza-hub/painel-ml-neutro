@@ -2132,8 +2132,18 @@ const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) =
   atualizarDevolucoes: (c, de) => devolucoesMod.atualizarDevolucoes(c, de),
   amazon: amazonMod, leroy: leroyMod, magalu: magaluMod, quem: () => CTX.atual()?.usuario?.login || null });
 Object.assign(routes, estoqueMod.rotas);
-Object.assign(routes, require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
-  estoque: estoqueMod }).rotas);
+const comandasMod = require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
+  estoque: estoqueMod });
+Object.assign(routes, comandasMod.rotas);
+// "Precisa de atenção" da tela Todas as contas: resumo do estoque (situação de reposição) e da fila de
+// comandas. Cada parte que falhar ou demorar vem null. Fora do MCP (estoque e comandas não vão ao Claude).
+routes['GET /api/contas/atencao'] = async () => {
+  const limite = (p, ms) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(null), ms))]).catch(() => null);
+  const [estoque, comandas] = await Promise.all([
+    limite(Promise.resolve().then(() => { const v = estoqueMod.visao(); return v.inicio ? { ...v.resumo, inicio: v.inicio } : { inicio: null, ativos: v.resumo.ativos }; }), 5000),
+    limite(comandasMod.resumoFila(), 9000)]);
+  return { estoque, comandas };
+};
 // ---------- Publicar na Shopee e na Amazon copiando um anúncio do ML (publicar-canais.js) ----------
 Object.assign(routes, require('./publicar-canais.js').criar({ D, ml, contaOuErro, shopee: shopeeMod, amazon: amazonMod }).rotas);
 

@@ -60,4 +60,14 @@ assert.strictEqual(canais[0].ticket, 150);
 // sem venda num canal, ele aparece zerado (a tela sempre mostra os três)
 assert.deepStrictEqual(P.porCanal([]).map((c) => [c.canal, c.pedidos, c.faturamento]), [['full', 0, 0], ['flex', 0, 0], ['envios', 0, 0]]);
 
+// tema escuro: o CSS gerado das cores de cada tela está em dia com os <style> das telas
+{
+  const G = require('./tema-escuro-gerar.js');
+  assert.strictEqual(require('node:fs').readFileSync(G.SAIDA, 'utf8'), G.gerar(), 'rode: node tema-escuro-gerar.js');
+  assert.strictEqual(G.escura('#fff', 'fundo'), 'rgba(14,24,44,.72)');
+  assert.strictEqual(G.escura('#1a1a1a', 'texto'), 'var(--ink)');
+  assert.strictEqual(G.escura('#2563eb', 'fundo'), null, 'cor forte (botão) fica');
+  assert.ok(/^hsla\(/.test(G.escura('#dcfce7', 'fundo')), 'chip verde-claro vira verde translúcido');
+}
+
 console.log('Full, qualidade dos anúncios, campanha do vendedor e canais de envio: ok');

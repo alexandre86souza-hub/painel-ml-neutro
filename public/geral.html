@@ -7,7 +7,10 @@
 <link rel="stylesheet" href="/paginas.css?v=1">
 <link rel="stylesheet" href="/layout.css">
 <link rel="stylesheet" href="/tema-hn.css?v=3">
-<link rel="stylesheet" href="/tema-painel.css?v=1">
+<link rel="stylesheet" href="/tema-painel.css?v=2">
+<link rel="stylesheet" href="/tema-escuro.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
 <style>
   /* esta tela usa a largura toda (as outras ficam em 1320 px) */
   main{max-width:none;padding:20px 24px 72px}
@@ -60,6 +63,31 @@
   .empilhado .col i:last-child{border-radius:3px 3px 0 0}
   .mini-part{display:flex;height:8px;border-radius:4px;overflow:hidden;background:#eef1f6;min-width:90px}
   .mini-part i{display:block;height:100%}
+  /* destaques: estoque, precisa de atenção, vendas por canal */
+  .destaques{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin:0 0 20px}
+  .destaques .bloco{margin:0}
+  .destaques h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .destaques h3 a{font-size:12px;letter-spacing:0;text-transform:none;font-weight:600;text-decoration:none}
+  .rosca{display:flex;gap:18px;align-items:center}
+  .rosca .meio{position:relative;width:118px;height:118px;flex:none}
+  .rosca .meio span{position:absolute;inset:0;display:grid;place-content:center;text-align:center;font-size:11px;color:var(--muted)}
+  .rosca .meio b{font-size:20px;color:var(--ink);display:block}
+  .rosca ul,.atencao{list-style:none;margin:0;padding:0;font-size:13px}
+  .rosca li{display:flex;align-items:center;gap:8px;margin:6px 0;color:var(--muted)}
+  .rosca li i{width:9px;height:9px;border-radius:3px;flex:none}
+  .rosca li b{margin-left:auto;color:var(--ink);font-variant-numeric:tabular-nums}
+  .atencao li a{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:10px;color:var(--ink);text-decoration:none}
+  .atencao li a:hover{background:rgba(125,160,220,.08)}
+  .atencao .ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none;background:#fee2e2;color:#b91c1c}
+  .atencao .ic.am{background:#fff4d6;color:#7a5600}
+  .atencao .ic.ok{background:#dcfce7;color:#15803d}
+  .atencao li b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .canais div{display:grid;grid-template-columns:118px 1fr 46px;gap:10px;align-items:center;font-size:13px;color:var(--muted);margin:9px 0}
+  .canais .barra{height:8px;border-radius:99px;background:#eef1f6;overflow:hidden}
+  .canais .barra i{display:block;height:100%;border-radius:99px}
+  .canais b{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .faisca{display:block;width:100%;height:36px;margin-top:10px}
+  html[data-tema="escuro"] .canais .barra i{box-shadow:0 0 10px rgba(34,228,255,.35)}
 </style>
 </head>
 <body>
@@ -67,7 +95,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=32"></script>
+    <script src="/menu.js?v=33"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -93,6 +121,8 @@
   </div>
 
   <div class="cartoes" id="cartoes"><p class="carregando">Somando as vendas de cada conta…</p></div>
+
+  <div class="destaques" id="destaques"></div>
 
   <div id="contas"></div>
 
@@ -122,12 +152,94 @@
 <script>
 // período: 7…90 dias ou o mês do calendário ("atual" / "anterior"); no mês, dias = dias corridos da janela (média por dia)
 let per = '30', dias = 30, rotuloMes = '', geracao = 0;
+let atencao = null;   // /api/contas/atencao: estoque e fila de comandas
+const lerAtencao = api('/api/contas/atencao').then((a) => { atencao = a; if(ultimo) pintarDestaques(ultimo); }).catch(() => { atencao = {}; });
+let ultimo = null;
 const ehMes = () => per === 'atual' || per === 'anterior';
 const qsPer = () => (ehMes() ? `mes=${per}` : `dias=${per}`);
 const curto = () => (ehMes() ? (per === 'atual' ? 'do mês' : 'mês passado') : `${dias}d`);
 const longo = () => (ehMes() ? (per === 'atual' ? `em ${rotuloMes || 'este mês'}` : `em ${rotuloMes || 'o mês passado'}`) : `em ${dias} dias`);
 const COR = ['#2563eb', '#f59e0b', '#16a34a', '#9333ea', '#dc2626', '#0891b2'];
 const diaMes = (d) => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+// Mini gráfico do faturamento por dia (soma das contas) dentro de um cartão.
+function faisca(cartaoEl, r){
+  if(!cartaoEl) return;
+  const porDia = {};
+  for(const c of r.contas.filter((x) => !x.erro)) for(const d of c.dias || []) porDia[d.dia] = (porDia[d.dia] || 0) + (d.faturamento || 0);
+  const v = Object.keys(porDia).sort().map((k) => porDia[k]);
+  if(v.length < 2) return;
+  const max = Math.max(...v) || 1, W = 200, H = 36, passo = W / (v.length - 1);
+  const pts = v.map((x, i) => `${(i * passo).toFixed(1)},${(H - 3 - (x / max) * (H - 6)).toFixed(1)}`);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('preserveAspectRatio', 'none'); svg.classList.add('faisca');
+  svg.setAttribute('aria-hidden', 'true');
+  const area = document.createElementNS(ns, 'path'); area.setAttribute('d', `M0,${H} L${pts.join(' L')} L${W},${H}Z`);
+  area.setAttribute('fill', 'rgba(56,189,248,.18)');
+  const linha = document.createElementNS(ns, 'polyline'); linha.setAttribute('points', pts.join(' '));
+  linha.setAttribute('fill', 'none'); linha.setAttribute('stroke', '#38bdf8'); linha.setAttribute('stroke-width', '2'); linha.setAttribute('vector-effect', 'non-scaling-stroke');
+  svg.append(area, linha); cartaoEl.appendChild(svg);
+}
+
+// Estoque (rosca), Precisa de atenção e Vendas por canal.
+function pintarDestaques(r){
+  const box = $('destaques'); box.innerHTML = '';
+  const bloco = (titulo, link, txtLink) => { const s = el('section', 'bloco'); const h = el('h3', null, titulo);
+    if(link){ const a = el('a', null, txtLink); a.href = link; h.appendChild(a); } s.appendChild(h); box.appendChild(s); return s; };
+  const e = atencao?.estoque, k = atencao?.comandas;
+  // estoque
+  if(e){
+    const s = bloco('Estoque', '/estoque.html', 'detalhes →');
+    if(!e.inicio){ s.appendChild(el('p', 'sub', 'A situação de reposição aparece depois da primeira contagem física (tela Estoque → Contagem).')); }
+    else {
+      const partes = [['Repor agora', e.repor, '#ff4d6d'], ['Próximo de repor', e.proximo, '#fbbf24'],
+        ['Regular', Math.max(0, e.ativos - e.repor - e.proximo - (e.nao_repor || 0)), '#38bdf8'], ['Não repor', e.nao_repor || 0, '#64748b']];
+      const tot = partes.reduce((a, p) => a + p[1], 0) || 1;
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 42 42'); svg.setAttribute('width', '118'); svg.setAttribute('height', '118');
+      svg.setAttribute('aria-hidden', 'true');
+      const circ = (cor, tam, desl) => { const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', 21); c.setAttribute('cy', 21); c.setAttribute('r', 15.915);
+        c.setAttribute('fill', 'none'); c.setAttribute('stroke', cor); c.setAttribute('stroke-width', 4.5);
+        if(tam != null){ c.setAttribute('stroke-dasharray', `${tam} ${100 - tam}`); c.setAttribute('stroke-dashoffset', desl); } svg.appendChild(c); };
+      circ('rgba(125,160,220,.14)');
+      let acum = 25;
+      for(const [, n, cor] of partes){ if(!n) continue; const t = n / tot * 100; circ(cor, t, acum); acum -= t; }
+      const meio = el('div', 'meio'); const sp = el('span'); sp.append(el('b', null, numero(e.ativos)), 'produtos ativos'); meio.append(svg, sp);
+      const ul = el('ul');
+      for(const [nome, n, cor] of partes){ const li = el('li'); const i = el('i'); i.style.background = cor; li.append(i, nome, el('b', null, numero(n))); ul.appendChild(li); }
+      const ro = el('div', 'rosca'); ro.append(meio, ul); s.appendChild(ro);
+    }
+  }
+  // precisa de atenção
+  {
+    const s = bloco('Precisa de atenção');
+    const ul = el('ul', 'atencao');
+    const item = (txt, n, link, tom) => { const li = el('li'); const a = el('a'); a.href = link;
+      a.append(el('span', 'ic' + (n ? (tom ? ' ' + tom : '') : ' ok'), n ? '!' : '✓'), txt, el('b', null, numero(n))); li.appendChild(a); ul.appendChild(li); };
+    if(k){ item('Comandas com prazo vencido', k.atrasadas, '/comandas.html'); item('Comandas para imprimir', k.nao_impressas, '/comandas.html', 'am'); }
+    if(e?.inicio){ item('Produtos para repor agora', e.repor, '/estoque.html', ''); item('Descontinuados com estoque (vender o restante)', e.vender_restante, '/estoque.html', 'am');
+      if(e.negativos) item('Produtos com saldo negativo', e.negativos, '/estoque.html'); }
+    const semCusto = r.contas.filter((c) => !c.erro).reduce((a, c) => a + (c.sem_custo || 0), 0);
+    item('Anúncios/SKUs vendidos sem custo cadastrado', semCusto, '/produtos.html', 'am');
+    if(!atencao) ul.appendChild(el('li', 'sub', 'Lendo estoque e comandas…'));
+    s.appendChild(ul);
+  }
+  // vendas por canal
+  {
+    const s = bloco('Vendas por canal', null);
+    const soma = {}; let total = 0;
+    for(const c of r.contas.filter((x) => !x.erro)){ const n = CANAIS[canalDe(c)][0]; const f = c.periodo?.faturamento || 0; soma[n] = (soma[n] || 0) + f; total += f; }
+    const div = el('div', 'canais');
+    const CORES = { 'Mercado Livre': '#f5c400', Shopee: '#ee4d2d', Amazon: '#ff9900', 'Leroy Merlin': '#78be20', Magalu: '#0086ff' };
+    for(const [n, f] of Object.entries(soma).sort((a, b) => b[1] - a[1])){
+      const l = el('div'); const bar = el('span', 'barra'); const i = el('i'); i.style.width = (total ? f / total * 100 : 0) + '%'; i.style.background = CORES[n] || '#38bdf8';
+      bar.appendChild(i); l.append(el('span', null, n), bar, el('b', null, pct(total ? f / total : 0, 0))); l.title = real(f);
+      div.appendChild(l);
+    }
+    if(!total) div.appendChild(el('p', 'sub', 'Sem vendas no período.'));
+    s.appendChild(div);
+  }
+}
 
 function cartao(rot, valor, nota, destaque){
   const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
@@ -407,6 +519,8 @@ function pintar(r, temAmazon){
       cartao('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), `média de ${real(p.faturamento / dias)} por dia`),
       cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
     );
+    faisca(box.children[1], r);
+    ultimo = r; pintarDestaques(r);
     pintarContas(r, cor); pintarTabela(r, cor); pintarGrafico(r, cor); pintarProdutos(r, cor);
     if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando Amazon e Shopee…'));
   }
@@ -419,6 +533,6 @@ function pintar(r, temAmazon){
 }
 carregar();
 </script>
-<script src="/sino.js?v=2" defer></script>
+<script src="/sino.js?v=3" defer></script>
 </body>
 </html>

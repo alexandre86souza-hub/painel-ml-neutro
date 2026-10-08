@@ -31,36 +31,44 @@
     sair: '<path d="M10 5H5v14h5"/><path d="M14 8l4 4-4 4M18 12H9"/>',
     senha: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     config: '<path d="M5 8h14M5 16h14"/><circle cx="10" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/>',
+    escuro: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',
+    claro: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   };
-  const ITENS = [
-    ['/geral.html', 'Todas as contas', 'geral'],
-    ['/comandas.html', 'Comandas', 'comandas'],
-    ['/estoque.html', 'Estoque', 'estoque'],
-    ['/', 'Dashboard', 'dashboard'],
-    ['/vendas.html?dias=1', 'Vendas Hoje', 'hoje'],
-    ['/vendas.html', 'Pedidos', 'pedidos'],
-    ['/performance.html', 'Performance', 'performance'],
-    ['/abc.html', 'Análise ABC', 'abc'],
-    ['/produtos.html', 'Produtos', 'produtos'],
-    ['/anuncios.html', 'Anúncios', 'anuncios'],
-    ['/calculadora.html', 'Calculadora reversa', 'calculadora'],
-    ['/promocoes.html', 'Campanhas', 'campanhas'],
-    ['/ads.html', 'Histórico ADS', 'ads'],
-    ['/full.html', 'Full', 'full'],
-    null,
-    ['/mensagens.html', 'Mensagens', 'mensagens'],
-    ['/devolucoes.html', 'Devoluções', 'devolucoes'],
-    ['/financeiro.html', 'Financeiro', 'financeiro'],
-    ['/reputacao.html', 'Reputação', 'reputacao'],
-    ['/empresa.html', 'Empresa e custos', 'empresa'],
-    ['/shopee.html', 'Shopee', 'shopee'],
-    ['/amazon.html', 'Amazon', 'amazon'],
-    ['/leroy.html', 'Leroy Merlin', 'leroy'],
-    ['/magalu.html', 'Magalu', 'magalu'],
-    ['/publicar.html', 'Publicar', 'publicar'],
-    ['/navegador.html', 'Navegador', 'navegador'],
-    ['/usuarios.html', 'Usuários', 'usuarios'],
-    ['/configuracao.html', 'Configurações', 'config'],
+  // Grupos do menu (cada um abre e fecha; o estado fica no navegador). recolhido = começa fechado.
+  const GRUPOS = [
+    { nome: 'Visão geral', itens: [
+      ['/geral.html', 'Todas as contas', 'geral'],
+      ['/', 'Dashboard', 'dashboard'],
+      ['/vendas.html?dias=1', 'Vendas hoje', 'hoje']] },
+    { nome: 'Operação', itens: [
+      ['/comandas.html', 'Comandas', 'comandas'],
+      ['/estoque.html', 'Estoque', 'estoque'],
+      ['/mensagens.html', 'Mensagens', 'mensagens'],
+      ['/devolucoes.html', 'Devoluções', 'devolucoes']] },
+    { nome: 'Vendas e análise', itens: [
+      ['/vendas.html', 'Pedidos', 'pedidos'],
+      ['/performance.html', 'Performance', 'performance'],
+      ['/abc.html', 'Análise ABC', 'abc'],
+      ['/full.html', 'Full', 'full'],
+      ['/reputacao.html', 'Reputação', 'reputacao']] },
+    { nome: 'Anúncios e marketing', itens: [
+      ['/anuncios.html', 'Anúncios', 'anuncios'],
+      ['/produtos.html', 'Produtos', 'produtos'],
+      ['/promocoes.html', 'Campanhas', 'campanhas'],
+      ['/ads.html', 'Publicidade (Ads)', 'ads'],
+      ['/publicar.html', 'Publicar', 'publicar'],
+      ['/calculadora.html', 'Calculadora reversa', 'calculadora']] },
+    { nome: 'Financeiro', itens: [
+      ['/financeiro.html', 'Financeiro', 'financeiro'],
+      ['/empresa.html', 'Empresa e custos', 'empresa']] },
+    { nome: 'Conexões e sistema', recolhido: true, itens: [
+      ['/shopee.html', 'Shopee', 'shopee'],
+      ['/amazon.html', 'Amazon', 'amazon'],
+      ['/leroy.html', 'Leroy Merlin', 'leroy'],
+      ['/magalu.html', 'Magalu', 'magalu'],
+      ['/navegador.html', 'Navegador', 'navegador'],
+      ['/usuarios.html', 'Usuários', 'usuarios'],
+      ['/configuracao.html', 'Configurações', 'config']] },
   ];
   // Identidade do painel (nome e logo da empresa, tela Empresa). O último valor fica no
   // navegador para a marca aparecer junto com a página; o servidor confirma em seguida.
@@ -202,8 +210,25 @@
   if (!nav) return;
   const aqui = location.pathname === '/inicio.html' ? '/' : location.pathname;
   const hoje = new URLSearchParams(location.search).get('dias') === '1';
-  for (const it of ITENS) {
-    if (!it) { const hr = document.createElement('hr'); hr.className = 'nav-sep'; nav.appendChild(hr); continue; }
+  let fechados = null;
+  try { fechados = JSON.parse(localStorage.getItem('painel.menu.fechados') || 'null'); } catch {}
+  if (!Array.isArray(fechados)) fechados = GRUPOS.filter((g) => g.recolhido).map((g) => g.nome);
+  for (const g of GRUPOS) {
+    const box = document.createElement('div'); box.className = 'nav-grupo';
+    const tit = document.createElement('button'); tit.type = 'button'; tit.textContent = g.nome;
+    const lista = document.createElement('div'); lista.className = 'nav-itens';
+    box.append(tit, lista); nav.appendChild(box);
+    for (const it of g.itens) lista.appendChild(itemDoMenu(it));
+    // a tela aberta fica sempre à vista, mesmo num grupo fechado
+    const aberto = !fechados.includes(g.nome) || !!lista.querySelector('[aria-current]');
+    tit.setAttribute('aria-expanded', String(aberto)); lista.hidden = !aberto;
+    tit.onclick = () => {
+      const abrir = lista.hidden; lista.hidden = !abrir; tit.setAttribute('aria-expanded', String(abrir));
+      fechados = abrir ? fechados.filter((n) => n !== g.nome) : [...new Set([...fechados, g.nome])];
+      try { localStorage.setItem('painel.menu.fechados', JSON.stringify(fechados)); } catch {}
+    };
+  }
+  function itemDoMenu(it) {
     const [href, rotulo, icone] = it;
     const a = document.createElement('a');
     a.href = EXT ? comConta(href) : href;
@@ -216,8 +241,18 @@
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;
     a.appendChild(document.createTextNode(rotulo));
-    nav.appendChild(a);
+    return a;
   }
+  // Contador ao lado de um item (ex.: comandas a imprimir, por public/comandas-aviso.js). 0 tira.
+  window.contadorMenu = (caminho, n) => {
+    for (const a of nav.querySelectorAll('a')) {
+      if (new URL(a.href, location.origin).pathname !== caminho) continue;
+      let c = a.querySelector('.nav-cont');
+      if (!n) { if (c) c.remove(); continue; }
+      if (!c) { c = document.createElement('span'); c.className = 'nav-cont'; a.appendChild(c); }
+      c.textContent = n > 99 ? '99+' : String(n);
+    }
+  };
 
   // Usuário do escritório (usuarios.js): o menu mostra só as telas dos módulos dele. O servidor é quem
   // barra de verdade; aqui é só para não oferecer o que não abre. A lista fica no navegador para o menu
@@ -228,7 +263,7 @@
       const p = new URL(a.href, location.origin).pathname;
       if (!eu.paginas.includes(p === '/' ? '/inicio.html' : p)) a.remove();
     }
-    for (const hr of [...nav.querySelectorAll('hr')]) if (!hr.previousElementSibling || hr.previousElementSibling.tagName === 'HR' || !hr.nextElementSibling) hr.remove();
+    for (const g of [...nav.querySelectorAll('.nav-grupo')]) if (!g.querySelector('a')) g.remove();
   };
   const rodape = (eu) => {
     if (!eu || document.getElementById('menuEu')) return;
@@ -240,6 +275,14 @@
     box.appendChild(quem);
     const item = (href, rotulo, icone) => { const a = document.createElement('a'); a.href = href;
       a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONE[icone] + '</svg>'; a.appendChild(document.createTextNode(rotulo)); return a; };
+    // tema claro / escuro (public/tema.js), por pessoa neste navegador
+    const tema = item('#', '', 'escuro');
+    const pintarTema = () => { const escuro = document.documentElement.dataset.tema === 'escuro';
+      tema.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONE[escuro ? 'claro' : 'escuro'] + '</svg>';
+      tema.appendChild(document.createTextNode(escuro ? 'Tema claro' : 'Tema escuro')); };
+    tema.onclick = (ev) => { ev.preventDefault(); if (window.trocarTema) window.trocarTema(); pintarTema(); };
+    pintarTema();
+    box.appendChild(tema);
     if (!eu.admin) box.appendChild(item('/trocar-senha', 'Trocar minha senha', 'senha'));
     const sair = item('#', 'Sair', 'sair');
     sair.onclick = (ev) => { ev.preventDefault(); const f = document.createElement('form'); f.method = 'POST'; f.action = '/sair'; document.body.appendChild(f); f.submit(); };

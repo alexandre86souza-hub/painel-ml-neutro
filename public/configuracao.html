@@ -71,7 +71,10 @@
 </style>
 <link rel="stylesheet" href="/layout.css">
 <link rel="stylesheet" href="/tema-hn.css?v=3">
-<link rel="stylesheet" href="/tema-painel.css?v=1">
+<link rel="stylesheet" href="/tema-painel.css?v=2">
+<link rel="stylesheet" href="/tema-escuro.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
 <style>
 /* ===== Configurações — Workspace redesign ===== */
 .cfg-shell{max-width:none!important;margin:0!important;padding:30px clamp(24px,3vw,46px) 70px!important;background:transparent}
@@ -107,7 +110,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=32"></script>
+    <script src="/menu.js?v=33"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -561,6 +564,6 @@ $('formSenha').onsubmit = async (ev) => {
   }catch(e){ $('senhaStatus').replaceChildren(caixa('err', 'Não trocou.', [e.message])); }
 };
 </script>
-<script src="/sino.js?v=2" defer></script>
+<script src="/sino.js?v=3" defer></script>
 </body>
 </html>

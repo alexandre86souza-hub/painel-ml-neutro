@@ -548,7 +548,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       compras: dados.compras.length, avisos: { ...dados.avisos, sem_produto: dados.movimentos.length - movs.length } };
   }
 
-  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir };
+  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao };
 }
 
 module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, TIPO_NOME };

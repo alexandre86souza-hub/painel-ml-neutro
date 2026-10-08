@@ -7,7 +7,10 @@
 <link rel="stylesheet" href="/paginas.css?v=1">
 <link rel="stylesheet" href="/layout.css">
 <link rel="stylesheet" href="/tema-hn.css?v=3">
-<link rel="stylesheet" href="/tema-painel.css?v=1">
+<link rel="stylesheet" href="/tema-painel.css?v=2">
+<link rel="stylesheet" href="/tema-escuro.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
 <style>
   .abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
   .abas button{font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);cursor:pointer}
@@ -50,7 +53,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=32"></script>
+    <script src="/menu.js?v=33"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -627,6 +630,6 @@ $('iEnviar').onclick = async () => {
 fetch('/api/eu').then((r) => r.json()).then((eu) => { if(!eu.admin) $('abaImportar').remove(); }).catch(() => {});
 abrir(['saldo', 'lancar', 'movs', 'rel', 'contagem', 'compras', 'cadastro', 'importar'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'saldo');
 </script>
-<script src="/sino.js?v=2" defer></script>
+<script src="/sino.js?v=3" defer></script>
 </body>
 </html>

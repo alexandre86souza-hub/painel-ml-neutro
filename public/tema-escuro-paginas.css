@@ -1,0 +1,533 @@
+/* GERADO por tema-escuro-gerar.js — não edite à mão (rode: node tema-escuro-gerar.js). */
+@media screen {
+/* abc.html */
+html[data-tema="escuro"][data-pagina="abc"] .classe.SEM{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="abc"] .classe.A{background:hsla(141,84%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="abc"] .classe.B{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="abc"] .classe.C{background:hsla(0,90%,60%,.14);color:hsl(0,74%,72%)}
+/* ads.html */
+html[data-tema="escuro"][data-pagina="ads"] .filtro-campanha select{background:rgba(14,24,44,.72)}
+/* amazon-ads.html */
+html[data-tema="escuro"][data-pagina="amazon-ads"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="amazon-ads"] .form input,
+html[data-tema="escuro"][data-pagina="amazon-ads"] .form select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="amazon-ads"] .dominio{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="amazon-ads"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+/* amazon-anuncios.html */
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .preco-novo input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] tr.conc > td{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .conc-resumo b.ok{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .conc-resumo b.nao{color:hsl(26,90%,72%)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.destaque{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.voce{background:hsla(214,90%,60%,.14)}
+/* amazon.html */
+html[data-tema="escuro"][data-pagina="amazon"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="amazon"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="amazon"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+html[data-tema="escuro"][data-pagina="amazon"] .linha-empresa select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+/* anuncios.html */
+html[data-tema="escuro"][data-pagina="anuncios"] input,
+html[data-tema="escuro"][data-pagina="anuncios"] select{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] button.ghost{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] button.perigo{background:hsla(5,79%,60%,.14);color:hsl(5,88%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tituloInput{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tituloInput:focus{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] .statusTexto.paused{color:hsl(39,95%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .statusTexto.under_review{color:hsl(224,64%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu > summary:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu[open] > summary{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button.perigo{color:hsl(5,88%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button.perigo:hover{background:hsla(5,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .selo.active{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .selo.paused{background:hsla(39,90%,60%,.14);color:hsl(36,95%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .selo.closed{background:rgba(125,211,252,.06);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="anuncios"] .selo.under_review{background:hsla(222,77%,60%,.14);color:hsl(224,64%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .saude{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%);border:1px solid hsla(138,44%,60%,.35)}
+html[data-tema="escuro"][data-pagina="anuncios"] #msg.err{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="anuncios"] .mPe{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .mCorpo input,
+html[data-tema="escuro"][data-pagina="anuncios"] .mCorpo select,
+html[data-tema="escuro"][data-pagina="anuncios"] .mCorpo textarea{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] .nota.alerta{color:hsl(36,95%,72%);background:hsla(39,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] a.linkAnuncio > svg{color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos td{border-bottom:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos tr.este td{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos tr.seu td{background:hsla(216,45%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos tr.pulo td{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos .marca{background:hsla(218,90%,60%,.14);color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tabPos tr.pulo button{color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] #mFotos li{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] #mFotos .barra button:hover{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] #mSolta{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] #mSolta:hover,
+html[data-tema="escuro"][data-pagina="anuncios"] #mSolta.dentro{background:hsla(216,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] #mErro{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="anuncios"] .kpi{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .grafico{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .chips span{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .linhaCodigo code{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="anuncios"] .linhaCodigo a{color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .numPer .val.prejuizo{color:hsl(5,88%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .numPer button.link{color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tend.queda{color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tend.alta{color:hsl(146,83%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .abc.B{background:hsla(215,67%,60%,.14);color:hsl(215,73%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .abc.C{background:rgba(125,211,252,.06);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="anuncios"] .formCusto input{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] .formCusto .salvo{color:hsl(146,83%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .conta td{border-bottom:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="anuncios"] .conta tr.total.prejuizo td{color:hsl(5,88%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .q-filtros button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="anuncios"] .q-cad{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .q-nota.boa{background:hsla(141,84%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .q-nota.media{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .q-nota.ruim{background:hsla(0,90%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .det-kpi{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .det-tab td{border-bottom:1px solid hsla(214,26%,60%,.35)}
+html[data-tema="escuro"][data-pagina="anuncios"] .det-falta{color:hsl(35,95%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .calc-tab tr.calc-lucro td{color:hsl(142,72%,72%)}
+/* calculadora.html */
+html[data-tema="escuro"][data-pagina="calculadora"] .form-calc label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="calculadora"] .form-calc input,
+html[data-tema="escuro"][data-pagina="calculadora"] .form-calc select{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="calculadora"] .sugestoes{background:rgba(14,24,44,.72);border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="calculadora"] .sugestoes button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="calculadora"] .sugestoes button:hover{background:hsla(210,40%,60%,.14)}
+html[data-tema="escuro"][data-pagina="calculadora"] .produto-info{color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="calculadora"] .opcoes fieldset{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="calculadora"] .opcoes label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="calculadora"] .opcoes select,
+html[data-tema="escuro"][data-pagina="calculadora"] .opcoes input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="calculadora"] .canal{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="calculadora"] .canal tr.soma td{border-top:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="calculadora"] .resultado-max{background:hsla(214,90%,60%,.14);border:1px solid hsla(213,90%,60%,.35)}
+html[data-tema="escuro"][data-pagina="calculadora"] .resultado-max.neg{background:hsla(0,86%,60%,.14);border-color:hsla(0,90%,60%,.35)}
+html[data-tema="escuro"][data-pagina="calculadora"] .resultado-max.neg b{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="calculadora"] .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="calculadora"] .neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="calculadora"] .avisos{color:hsl(23,83%,72%)}
+/* campanhas-canais.html */
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip.azul{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip.cinza{background:hsla(216,22%,60%,.14)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip.sobe{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .chip.desce{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .seg{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .seg button{background:rgba(14,24,44,.72);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .filtros input[type=search]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .form-camp label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .form-camp input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .links-canal a{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .recusas{color:hsl(4,76%,72%)}
+/* comandas.html */
+html[data-tema="escuro"][data-pagina="comandas"] .abas button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="comandas"] .abas .qtd{background:hsla(218,31%,60%,.14);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .abas button[aria-pressed="true"] .qtd{background:rgba(14,24,44,.72);color:hsl(215,28%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .abas .qtd.alerta{background:hsla(15,88%,60%,.14);color:hsl(15,71%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .seg{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="comandas"] .seg button{background:rgba(14,24,44,.72);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .filtros input[type=search]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="comandas"] .chip.aguarda{background:hsla(17,84%,60%,.14);color:hsl(15,71%,72%);border-color:hsla(16,73%,60%,.35)}
+html[data-tema="escuro"][data-pagina="comandas"] .chip.impressa{background:hsla(152,37%,60%,.14);color:hsl(154,55%,72%);border-color:hsla(150,37%,60%,.35)}
+html[data-tema="escuro"][data-pagina="comandas"] .chip.atrasado{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .chip.hoje{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="comandas"] .chip.amanha,
+html[data-tema="escuro"][data-pagina="comandas"] .chip.depois{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="comandas"] .bt.leve{background:hsla(153,33%,60%,.14);color:hsl(155,43%,72%);border-color:hsla(150,37%,60%,.35)}
+html[data-tema="escuro"][data-pagina="comandas"] dialog{background:hsla(43,41%,60%,.14)}
+html[data-tema="escuro"][data-pagina="comandas"] .dlg-topo{border-bottom:1px solid hsla(41,30%,60%,.35)}
+html[data-tema="escuro"][data-pagina="comandas"] .dlg-corpo{background:hsla(42,28%,60%,.14)}
+html[data-tema="escuro"][data-pagina="comandas"] .dlg-pe{border-top:1px solid hsla(41,30%,60%,.35)}
+html[data-tema="escuro"][data-pagina="comandas"] .hist-filtros input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="comandas"] .campos input,
+html[data-tema="escuro"][data-pagina="comandas"] .campos select,
+html[data-tema="escuro"][data-pagina="comandas"] .itens input{border:1px solid var(--line)}
+/* configuracao.html */
+html[data-tema="escuro"][data-pagina="configuracao"]{--link:hsl(216,77%,72%);--ok-bg:hsla(137,39%,60%,.14);--ok-line:hsla(138,44%,60%,.35);--warn-bg:hsla(39,90%,60%,.14);--err-bg:hsla(5,79%,60%,.14);--err-line:hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="configuracao"] input{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] input[readonly]{background:hsla(220,23%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] button.ghost{background:hsla(220,79%,60%,.14);color:hsl(216,77%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-hero-health{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-health-ring{background:radial-gradient(circle at center,#0b2534 56%,transparent 57%),conic-gradient(#2bd3f4 50%,rgba(14,24,44,.72) 0)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-rail{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-rail-link:hover{background:hsla(203,57%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-rail-link>span{background:hsla(201,64%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-rail-link.active>span{color:hsl(199,82%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-section{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-section-primary{background:linear-gradient(180deg,hsla(200,75%,60%,.14),rgba(14,24,44,.72) 30%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-status-chip{border:1px solid hsla(203,69%,60%,.35);background:hsla(204,88%,60%,.14);color:hsl(202,89%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-status-safe{background:hsla(170,55%,60%,.14);border-color:hsla(171,51%,60%,.35);color:hsl(177,87%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-steps li{background:rgba(14,24,44,.72)!important}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-steps li:before{background:hsla(201,38%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-step-num{background:hsla(202,44%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-steps li.feito .cfg-step-num{background:hsla(168,56%,60%,.14);color:hsl(177,87%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-steps li.feito em{color:hsl(177,82%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-flow-card{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-flow-index .num{background:linear-gradient(135deg,hsla(180,75%,60%,.14),hsla(213,90%,60%,.14));color:hsl(202,88%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-fieldbox{background:hsla(200,60%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-service-card{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-service-featured{background:linear-gradient(145deg,rgba(14,24,44,.72) 0%,hsla(202,90%,60%,.14) 100%);border-color:hsla(200,67%,60%,.35)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-service-icon{border:1px solid hsla(202,51%,60%,.35);background:hsla(200,60%,60%,.14);color:hsl(201,87%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-service-badge{border:1px solid hsla(202,62%,60%,.35);background:hsla(201,88%,60%,.14);color:hsl(201,88%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-status-list{background:hsla(200,60%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-row{background:hsla(200,60%,60%,.14)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-icon{background:hsla(169,53%,60%,.14);color:hsl(177,82%,72%)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-action{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="configuracao"] .cfg-password-form{background:rgba(14,24,44,.72)}
+/* devolucoes.html */
+html[data-tema="escuro"][data-pagina="devolucoes"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .seg button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .seg button+button{border-left:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="devolucoes"] #msg{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .cartao.alerta{border-color:hsla(5,69%,60%,.35);background:hsla(7,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .valor.neg,
+html[data-tema="escuro"][data-pagina="devolucoes"] .neg{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .valor.pos,
+html[data-tema="escuro"][data-pagina="devolucoes"] .pos{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .rec{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .rec-nf .defeito{background:hsla(33,90%,60%,.14);border:1px solid hsla(32,90%,60%,.35)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .defeito-kit label .sem-custo{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .comp .barra{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .taxa-alta{color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .motivos .barra{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .chip.vermelho{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+/* empresa.html */
+html[data-tema="escuro"][data-pagina="empresa"] #msg.erro{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="empresa"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="empresa"] input,
+html[data-tema="escuro"][data-pagina="empresa"] select,
+html[data-tema="escuro"][data-pagina="empresa"] textarea{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="empresa"] button.bt{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="empresa"] button.bt:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="empresa"] .marca-form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="empresa"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="empresa"] .seg button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="empresa"] .seg button+button{border-left:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="empresa"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="empresa"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="empresa"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
+html[data-tema="escuro"][data-pagina="empresa"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="empresa"] .alerta{background:hsla(46,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="empresa"] .salvo{color:hsl(145,81%,72%)}
+/* estoque.html */
+html[data-tema="escuro"][data-pagina="estoque"] .abas button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="estoque"] .cartao{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="estoque"] .cartao.alerta b{color:hsl(15,71%,72%)}
+html[data-tema="escuro"][data-pagina="estoque"] .filtros input,
+html[data-tema="escuro"][data-pagina="estoque"] .filtros select,
+html[data-tema="escuro"][data-pagina="estoque"] .form input,
+html[data-tema="escuro"][data-pagina="estoque"] .form select,
+html[data-tema="escuro"][data-pagina="estoque"] .form textarea{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="estoque"] .chip.repor{background:hsla(15,88%,60%,.14);color:hsl(15,71%,72%)}
+html[data-tema="escuro"][data-pagina="estoque"] .chip.liquidar{background:hsla(269,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] .cartao.liquidar{border-color:hsla(269,90%,60%,.35);background:hsla(270,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] .chip.proximo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="estoque"] .chip.regular{background:hsla(152,37%,60%,.14);color:hsl(154,55%,72%)}
+html[data-tema="escuro"][data-pagina="estoque"] .chip.desc{background:hsla(218,31%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] td.neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="estoque"] .aviso-caixa{border:1px solid hsla(16,73%,60%,.35);background:hsla(20,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] .aviso-caixa.ok{border-color:hsla(150,37%,60%,.35);background:hsla(153,33%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] input.contar.mudou{background:hsla(20,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="estoque"] .pedido{background:rgba(14,24,44,.72)}
+/* financeiro.html */
+html[data-tema="escuro"][data-pagina="financeiro"] .cartao.alerta .valor{color:hsl(26,90%,72%)}
+html[data-tema="escuro"][data-pagina="financeiro"] .linha-filtros select,
+html[data-tema="escuro"][data-pagina="financeiro"] .filtros select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="financeiro"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="financeiro"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="financeiro"] .chip.azul{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="financeiro"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="financeiro"] .chip.vermelho{background:hsla(2,88%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="financeiro"] .situacao-extrato{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="financeiro"] .situacao-extrato.alerta{background:hsla(43,90%,60%,.14);border-color:hsla(41,84%,60%,.35)}
+html[data-tema="escuro"][data-pagina="financeiro"] .situacao-extrato.erro{background:hsla(3,82%,60%,.14);border-color:hsla(4,74%,60%,.35)}
+html[data-tema="escuro"][data-pagina="financeiro"] .nota-vendedor{color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="financeiro"] .editor{background:hsla(210,40%,60%,.14)}
+html[data-tema="escuro"][data-pagina="financeiro"] .editor input[type=text],
+html[data-tema="escuro"][data-pagina="financeiro"] .editor textarea{border:1px solid hsla(218,24%,60%,.35)}
+/* full.html */
+html[data-tema="escuro"][data-pagina="full"] .dias.critico{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .dias.alerta{color:hsl(26,90%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .dias.ok{color:hsl(142,72%,72%)}
+/* geral.html */
+html[data-tema="escuro"][data-pagina="geral"] .pilula{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="geral"] .pilula.lucro b{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .conta dd.lucro{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .conta dd.lucro.neg{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .conta .part{background:hsla(218,31%,60%,.14)}
+html[data-tema="escuro"][data-pagina="geral"] .conta .pct{color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .conta.erro p{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .chip-m{background:hsla(152,37%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .chip-m.neg{background:hsla(0,84%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .sem-custo{color:hsl(15,71%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] tr.total td{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="geral"] .mini-part{background:hsla(218,31%,60%,.14)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .ic{background:hsla(0,90%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .ic.am{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .ic.ok{background:hsla(141,84%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .canais .barra{background:hsla(218,31%,60%,.14)}
+/* inicio.html */
+html[data-tema="escuro"][data-pagina="inicio"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="inicio"] .chip.sobe{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="inicio"] .chip.desce{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="inicio"] .barra .haste{background:hsla(219,37%,60%,.14)}
+html[data-tema="escuro"][data-pagina="inicio"] button.recarregar{background:rgba(14,24,44,.72);border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="inicio"] button.recarregar:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="inicio"] .r-card:hover{border-color:hsla(222,86%,60%,.35)}
+html[data-tema="escuro"][data-pagina="inicio"] .r-card b.neg{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="inicio"] .r-card b.pos{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="inicio"] #msg{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+/* leroy.html */
+html[data-tema="escuro"][data-pagina="leroy"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="leroy"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="leroy"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+html[data-tema="escuro"][data-pagina="leroy"] .atalhos a{background:rgba(14,24,44,.72)}
+/* magalu-anuncios.html */
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .chip.cinza{background:hsla(216,22%,60%,.14)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .filtros input[type=search]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg button{background:rgba(14,24,44,.72);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input.salvo{background:hsla(135,50%,60%,.14)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
+/* magalu.html */
+html[data-tema="escuro"][data-pagina="magalu"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="magalu"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="magalu"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+html[data-tema="escuro"][data-pagina="magalu"] code{background:hsla(216,22%,60%,.14)}
+/* mensagens.html */
+html[data-tema="escuro"][data-pagina="mensagens"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip.ml{background:hsla(49,90%,60%,.14);color:hsl(45,95%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip.shopee{background:hsla(14,90%,60%,.14);color:hsl(17,88%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip.rec{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip.perg{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="mensagens"] .chip.msg{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .seg{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="mensagens"] .seg button{background:rgba(14,24,44,.72);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .filtros select{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="mensagens"] .lista{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="mensagens"] .item{border-bottom:1px solid hsla(216,22%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="mensagens"] .item:hover{background:hsla(210,40%,60%,.14)}
+html[data-tema="escuro"][data-pagina="mensagens"] .item[aria-current="true"]{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="mensagens"] .item .tx{color:hsl(222,47%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .conversa{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="mensagens"] .situacao{background:hsla(33,90%,60%,.14);border:1px solid hsla(32,90%,60%,.35);color:hsl(15,79%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .bolha.comprador{background:hsla(210,40%,60%,.14)}
+html[data-tema="escuro"][data-pagina="mensagens"] .bolha.voce{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="mensagens"] .bolha.ml{background:hsla(33,90%,60%,.14);border:1px solid hsla(32,90%,60%,.35)}
+html[data-tema="escuro"][data-pagina="mensagens"] .resp label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="mensagens"] .resp select,
+html[data-tema="escuro"][data-pagina="mensagens"] .resp textarea,
+html[data-tema="escuro"][data-pagina="mensagens"] .modelos input,
+html[data-tema="escuro"][data-pagina="mensagens"] .modelos select,
+html[data-tema="escuro"][data-pagina="mensagens"] .modelos textarea{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="mensagens"] .conta-car.passou{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .modelo{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="mensagens"] .modelo p{color:hsl(215,25%,72%)}
+/* navegador.html */
+html[data-tema="escuro"][data-pagina="navegador"] input{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="navegador"] button.ghost{background:hsla(220,79%,60%,.14);color:hsl(216,76%,72%)}
+html[data-tema="escuro"][data-pagina="navegador"] button.perigo{background:hsla(5,79%,60%,.14);color:hsl(5,88%,72%)}
+html[data-tema="escuro"][data-pagina="navegador"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%);border:1px solid hsla(138,44%,60%,.35)}
+html[data-tema="escuro"][data-pagina="navegador"] #msg.err{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="navegador"] #msg.info{background:hsla(220,79%,60%,.14);color:hsl(217,67%,72%);border:1px solid hsla(219,87%,60%,.35)}
+html[data-tema="escuro"][data-pagina="navegador"] .selo.ok{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%)}
+html[data-tema="escuro"][data-pagina="navegador"] .selo.erro{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%)}
+html[data-tema="escuro"][data-pagina="navegador"] .selo.aviso{background:hsla(39,90%,60%,.14);color:hsl(36,95%,72%)}
+html[data-tema="escuro"][data-pagina="navegador"] .selo.neutro{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="navegador"] .cabecaNota{color:hsl(57,61%,72%);background:rgba(14,24,44,.72)}
+/* performance.html */
+html[data-tema="escuro"][data-pagina="performance"] .barra-canais{background:hsla(218,31%,60%,.14)}
+/* produtos.html */
+html[data-tema="escuro"][data-pagina="produtos"] #msg.erro{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .filtros input[type=search]{border:1px solid hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .seg{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] .seg button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] .seg button+button{border-left:1px solid hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] button.bt{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] td input:hover,
+html[data-tema="escuro"][data-pagina="produtos"] td select:hover{border-color:hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] td input:focus,
+html[data-tema="escuro"][data-pagina="produtos"] td select:focus{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] tr.sujo td{background:hsla(220,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="produtos"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="produtos"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="produtos"] .chip.cinza{background:hsla(218,31%,60%,.14)}
+html[data-tema="escuro"][data-pagina="produtos"] .salvo{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="produtos"] .novo input,
+html[data-tema="escuro"][data-pagina="produtos"] .novo select{border:1px solid hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .at-faixas{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="produtos"] .at-faixa input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] .at-faixa button{color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="produtos"] button.bt.perigo{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border-color:hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .chip.azul{background:hsla(222,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="produtos"] .troca input{border:1px solid hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .dup{color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="produtos"] tr.duplica td{background:hsla(48,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="produtos"] .alerta-troca{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+/* promocoes.html */
+html[data-tema="escuro"][data-pagina="promocoes"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .seg button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .seg button+button{border-left:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] button.bt{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] button.bt:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="promocoes"] button.bt.perigo{color:hsl(3,71%,72%);border-color:hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="promocoes"] button.bt.perigo:hover{background:hsla(5,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="promocoes"] #msg.erro{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="promocoes"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="promocoes"] tr.linha:hover td{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] tr.sem td{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .barra-part{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="promocoes"] tr.detalhe td{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .promo{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .promo:hover{border-color:var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="promocoes"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .chip.vermelho{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .form-adesao{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .form-adesao input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .busca input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .lote{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .lote select,
+html[data-tema="escuro"][data-pagina="promocoes"] .lote input[type=number]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .res-lote.ok{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .res-lote.falha{color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .sel-venda select{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .ultimas.parado{color:hsl(35,95%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .lucro b.pos{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .lucro b.neg{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .lucro.sem{color:hsl(35,95%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros input,
+html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros select{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros .pa-num{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="promocoes"] .nova-campanha{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="promocoes"] .nova-campanha input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .excluir-campanha{color:hsl(0,74%,72%)}
+/* publicar-canais.html */
+html[data-tema="escuro"][data-pagina="publicar-canais"] .grade input,
+html[data-tema="escuro"][data-pagina="publicar-canais"] .grade select,
+html[data-tema="escuro"][data-pagina="publicar-canais"] .campo input,
+html[data-tema="escuro"][data-pagina="publicar-canais"] .campo textarea,
+html[data-tema="escuro"][data-pagina="publicar-canais"] .campo select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .res{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .res:hover,
+html[data-tema="escuro"][data-pagina="publicar-canais"] .res[aria-pressed="true"]{background:hsla(222,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .aviso{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(138,38%,60%,.35)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .falhou{background:hsla(2,88%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(4,74%,60%,.35)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="publicar-canais"] .chip.vermelho{background:hsla(2,88%,60%,.14);color:hsl(0,74%,72%)}
+/* publicar.html */
+html[data-tema="escuro"][data-pagina="publicar"]{--brand-ink:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="publicar"] input,
+html[data-tema="escuro"][data-pagina="publicar"] select,
+html[data-tema="escuro"][data-pagina="publicar"] textarea{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="publicar"] button.ghost{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] #sugestoes button{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] .alertaMarca{background:hsla(39,90%,60%,.14);color:hsl(36,95%,72%)}
+html[data-tema="escuro"][data-pagina="publicar"] #attrs .pedido{background:hsla(39,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] #gradeCriar summary{color:hsl(216,77%,72%)}
+html[data-tema="escuro"][data-pagina="publicar"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%);border:1px solid hsla(138,44%,60%,.35)}
+html[data-tema="escuro"][data-pagina="publicar"] #msg.err{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="publicar"] #drop{background:hsla(210,25%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] #drop:hover{background:hsla(216,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] #drop.dentro{background:hsla(220,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="publicar"] #thumbs li{background:rgba(14,24,44,.72)}
+/* reputacao.html */
+html[data-tema="escuro"][data-pagina="reputacao"] .cartao.alerta .valor{color:hsl(26,90%,72%)}
+html[data-tema="escuro"][data-pagina="reputacao"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="reputacao"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="reputacao"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="reputacao"] .chip.vermelho{background:hsla(2,88%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="reputacao"] .chip.azul{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="reputacao"] .caso{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="reputacao"] .sugestao{background:hsla(210,40%,60%,.14)}
+html[data-tema="escuro"][data-pagina="reputacao"] .sugestao textarea{border:1px solid hsla(218,24%,60%,.35)}
+/* shopee-anuncios.html */
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .preco-novo input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.promo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+/* shopee-campanhas.html */
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.azul{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.sobe{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.desce{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .seg{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .seg button{background:rgba(14,24,44,.72);color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .form-camp label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .form-camp input,
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .form-camp select{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .busca-an input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .achados{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .achados .linha,
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .escolhidos .linha{border-bottom:1px solid hsla(216,22%,60%,.35)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .escolhidos table input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .recusas{color:hsl(4,76%,72%)}
+/* shopee-devolucoes.html */
+html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip.vermelho{background:hsla(2,88%,60%,.14);color:hsl(0,74%,72%)}
+/* shopee.html */
+html[data-tema="escuro"][data-pagina="shopee"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="shopee"] .form input,
+html[data-tema="escuro"][data-pagina="shopee"] .form select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="shopee"] .dominio{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="shopee"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+/* usuarios.html */
+html[data-tema="escuro"][data-pagina="usuarios"] .mod{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="usuarios"] .campos input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="usuarios"] .senha{background:hsla(20,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="usuarios"] .chip.ok{background:hsla(152,37%,60%,.14);color:hsl(154,55%,72%)}
+html[data-tema="escuro"][data-pagina="usuarios"] .chip.alerta{background:hsla(17,84%,60%,.14);color:hsl(15,71%,72%)}
+html[data-tema="escuro"][data-pagina="usuarios"] .chip.cinza{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="usuarios"] .mods-linha{color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="usuarios"] .bt.perigo{color:hsl(4,76%,72%);border-color:hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="usuarios"] .filtros select{border:1px solid var(--line)}
+/* vendas.html */
+html[data-tema="escuro"][data-pagina="vendas"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="vendas"] .seg button{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="vendas"] .seg button+button{border-left:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="vendas"] #msg{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+html[data-tema="escuro"][data-pagina="vendas"] .alerta{background:hsla(46,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="vendas"] .alerta h2{color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="vendas"] .comp .barra{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"][data-pagina="vendas"] .filtros input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="vendas"] th{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="vendas"] .neg{color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="vendas"] .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="vendas"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}
+html[data-tema="escuro"][data-pagina="vendas"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="vendas"] button.bt{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+}

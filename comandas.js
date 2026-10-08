@@ -320,7 +320,16 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       return { ok: true };
     },
   };
-  return { rotas, rotasParam: [] };
+  // Resumo da fila para "Todas as contas" (Precisa de atenção): a não impressas e as com prazo vencido.
+  async function resumoFila() {
+    const p = await pendentes(false);
+    const agora = Date.now();
+    const fila = D.comandasListar([...p.chaves, ...D.comandasManuaisAbertas()]);
+    return { fila: fila.length, nao_impressas: fila.filter((c) => !c.impressa_em).length,
+      atrasadas: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'atrasado').length,
+      hoje: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'hoje').length };
+  }
+  return { rotas, rotasParam: [], resumoFila };
 }
 
 module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, CATEGORIAS };

@@ -169,3 +169,21 @@ dialog{border-radius:16px;border-color:var(--line);box-shadow:0 24px 60px rgba(1
   .lateral .nav-sep{display:none}
   header{padding:14px 16px 4px}
 }
+
+/* ---------------- grupos do menu (public/menu.js) ---------------- */
+.nav-grupo{display:flex;flex-direction:column;gap:2px;margin-bottom:4px}
+.nav-grupo > button{all:unset;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  margin:10px 0 3px;padding:2px 12px;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#8a94a6}
+.nav-grupo > button::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg);margin:-3px 2px 0 0;transition:transform .15s}
+.nav-grupo > button[aria-expanded="false"]::after{transform:rotate(-45deg);margin-top:0}
+.nav-grupo > button:hover{color:var(--marca-azul)}
+.nav-grupo > button:focus-visible{outline:2px solid var(--marca-azul);outline-offset:2px;border-radius:6px}
+.nav-itens{display:flex;flex-direction:column;gap:2px}
+.nav-itens[hidden]{display:none}
+.nav-cont{margin-left:auto;min-width:20px;padding:1px 7px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;text-align:center}
+@media (max-width:900px){
+  .nav-grupo{flex-direction:row;margin:0;gap:4px}
+  .nav-grupo > button{display:none}
+  .nav-itens,.nav-itens[hidden]{display:flex;flex-direction:row;gap:4px}
+}

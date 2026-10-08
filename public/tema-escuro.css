@@ -1,0 +1,198 @@
+/* ============================================================
+   TEMA ESCURO (futurista) — fundo azul-marinho com grade, cartões de vidro com borda em
+   gradiente, destaque ciano. Vale com <html data-tema="escuro"> (public/tema.js; o botão fica
+   no menu) e só na TELA: a impressão (comandas, etiquetas) continua clara.
+   Carregado DEPOIS de tema-painel.css. Cores fixas das páginas são cobertas aqui, por seletor.
+   ============================================================ */
+@media screen {
+html[data-tema="escuro"]{
+  color-scheme:dark;
+  --bg:#050913;
+  --card:rgba(14,24,44,.72);
+  --card-solido:#0d1628;
+  --raised:#111d34;
+  --overlay:#0f1a30;
+  --ink:#e9f1ff;
+  --muted:#8b9cc0;
+  --faint:#5f7194;
+  --line:rgba(125,211,252,.13);
+  --softline:rgba(125,211,252,.07);
+  --brand:#38bdf8;
+  --ok:#2ee6a6;
+  --err:#ff4d6d;
+  --warn:#fbbf24;
+  --ciano:#22e4ff;
+  --violeta:#8b5cf6;
+  --marca-azul:#3b82f6;
+  --marca-azul-escuro:#60a5fa;
+  --marca-azul-claro:rgba(56,189,248,.12);
+  --grad:linear-gradient(135deg,#22e4ff 0%,#3b82f6 55%,#8b5cf6 100%);
+  --neon:0 0 0 1px rgba(34,228,255,.22),0 0 26px rgba(34,228,255,.16);
+}
+html[data-tema="escuro"] body{background:var(--bg);color:var(--ink)}
+/* grade fina + auroras atrás de tudo */
+html[data-tema="escuro"] body::before{display:block;content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(rgba(125,211,252,.04) 1px,transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg,rgba(125,211,252,.04) 1px,transparent 1px) 0 0/44px 44px,
+    radial-gradient(900px 520px at 85% -10%,rgba(59,130,246,.22),transparent 60%),
+    radial-gradient(760px 460px at 25% 110%,rgba(139,92,246,.15),transparent 60%),
+    radial-gradient(520px 320px at 0% 0%,rgba(34,228,255,.09),transparent 60%)}
+html[data-tema="escuro"] .app,html[data-tema="escuro"] .conteudo{background:transparent}
+html[data-tema="escuro"] ::selection{background:rgba(34,228,255,.3)}
+:where(html[data-tema="escuro"]) a{color:var(--brand)}
+html[data-tema="escuro"] ::-webkit-scrollbar{width:10px;height:10px}
+html[data-tema="escuro"] ::-webkit-scrollbar-thumb{background:rgba(125,211,252,.18);border-radius:99px;border:2px solid transparent;background-clip:padding-box}
+html[data-tema="escuro"] ::-webkit-scrollbar-track{background:transparent}
+
+/* ---------------- lateral ---------------- */
+html[data-tema="escuro"] .lateral{background:linear-gradient(180deg,rgba(9,16,32,.94),rgba(5,9,19,.97));
+  border-right:1px solid var(--line);color:var(--ink);backdrop-filter:blur(14px)}
+html[data-tema="escuro"] .marca-nome{color:var(--ink)}
+html[data-tema="escuro"] .marca-logo-painel{border-radius:12px;background:#fff;padding:6px}
+html[data-tema="escuro"] .lateral nav a{color:#a9b8d6}
+html[data-tema="escuro"] .lateral nav a svg{color:currentColor;opacity:.85}
+html[data-tema="escuro"] .lateral nav a:hover{background:rgba(125,211,252,.06);color:#fff}
+html[data-tema="escuro"] .lateral nav a[aria-current]{color:#fff;font-weight:600;
+  background:linear-gradient(90deg,rgba(34,228,255,.16),rgba(59,130,246,.06) 70%,transparent);
+  box-shadow:inset 0 0 0 1px rgba(34,228,255,.18)}
+html[data-tema="escuro"] .lateral nav a[aria-current] svg{color:var(--ciano);opacity:1}
+html[data-tema="escuro"] .lateral nav a[aria-current]::before{display:block;content:"";position:absolute;left:-14px;top:8px;bottom:8px;
+  width:3px;border-radius:0 3px 3px 0;background:var(--ciano);box-shadow:0 0 12px var(--ciano)}
+html[data-tema="escuro"] .lateral .nav-sep{border-top-color:var(--line)}
+html[data-tema="escuro"] .nav-grupo > button{color:#5f7194}
+html[data-tema="escuro"] .nav-grupo > button:hover{color:var(--ciano)}
+html[data-tema="escuro"] .nav-cont{background:rgba(255,77,109,.16);color:#ff6b85}
+
+/* ---------------- cabeçalho ---------------- */
+html[data-tema="escuro"] header{background:rgba(5,9,19,.72);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+html[data-tema="escuro"] header h1{color:var(--ink)}
+html[data-tema="escuro"] #barraContas label{color:var(--muted)}
+html[data-tema="escuro"] #barraContas select,
+html[data-tema="escuro"] #barraContas a,
+html[data-tema="escuro"] .sino > button{background:rgba(14,24,44,.8);border:1px solid var(--line);color:var(--ink);box-shadow:none}
+html[data-tema="escuro"] #barraContas a:hover,html[data-tema="escuro"] .sino > button:hover{background:#13213b}
+html[data-tema="escuro"] .sino .bolha{box-shadow:0 0 10px #ff4d6d}
+html[data-tema="escuro"] .sino .painel-avisos{background:#0b1426;border-color:var(--line);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+html[data-tema="escuro"] .painel-avisos li a{color:var(--ink)}
+html[data-tema="escuro"] .painel-avisos li a:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"] .painel-avisos li.novo a{background:rgba(56,189,248,.09)}
+html[data-tema="escuro"] .painel-avisos small,html[data-tema="escuro"] .painel-avisos .vazio{color:var(--muted)}
+html[data-tema="escuro"] .painel-avisos .perm button{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.3);color:var(--brand)}
+
+/* ---------------- texto ---------------- */
+:where(html[data-tema="escuro"]) h1,:where(html[data-tema="escuro"]) h2,:where(html[data-tema="escuro"]) h3,:where(html[data-tema="escuro"]) h4{color:var(--ink)}
+html[data-tema="escuro"] .sub,html[data-tema="escuro"] .pequeno,html[data-tema="escuro"] .nota,
+html[data-tema="escuro"] .cabecaNota,html[data-tema="escuro"] .meta,:where(html[data-tema="escuro"]) small{color:var(--muted)}
+html[data-tema="escuro"] .num,html[data-tema="escuro"] .cartao .valor,html[data-tema="escuro"] .kpi .val{font-variant-numeric:tabular-nums}
+
+/* ---------------- cartões de vidro ---------------- */
+html[data-tema="escuro"] section.bloco,html[data-tema="escuro"] .bloco,html[data-tema="escuro"] .painel,
+html[data-tema="escuro"] .cartao,html[data-tema="escuro"] .kpi,html[data-tema="escuro"] .item,
+html[data-tema="escuro"] #ads,html[data-tema="escuro"] .det-bloco,html[data-tema="escuro"] .conta,
+html[data-tema="escuro"] .caixa,html[data-tema="escuro"] .card{
+  background:var(--card);border-color:var(--line);color:var(--ink);
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px rgba(0,0,0,.25);backdrop-filter:blur(12px)}
+html[data-tema="escuro"] section.bloco,html[data-tema="escuro"] .cartao,html[data-tema="escuro"] .kpi,
+html[data-tema="escuro"] .painel,html[data-tema="escuro"] .conta{position:relative}
+/* borda em gradiente (ciano no canto de cima, violeta no de baixo) */
+html[data-tema="escuro"] section.bloco::after,html[data-tema="escuro"] .cartao::after,
+html[data-tema="escuro"] .kpi::after,html[data-tema="escuro"] .painel::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(135deg,rgba(34,228,255,.32),transparent 32%,transparent 72%,rgba(139,92,246,.28));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+html[data-tema="escuro"] .cartao .rotulo,html[data-tema="escuro"] .kpi .rot{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+html[data-tema="escuro"] .cartao .valor{color:var(--ink)}
+html[data-tema="escuro"] .cartao .nota{color:var(--muted)}
+/* cartão principal: neon em vez do bloco azul */
+html[data-tema="escuro"] .cartao.destaque{background:linear-gradient(160deg,rgba(34,228,255,.13),rgba(59,130,246,.10) 45%,rgba(14,24,44,.75));
+  border-color:rgba(34,228,255,.35);box-shadow:var(--neon);color:var(--ink)}
+html[data-tema="escuro"] .cartao.destaque .valor{background:linear-gradient(90deg,#fff,#a5f3fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-tema="escuro"] .cartao.destaque .rotulo,html[data-tema="escuro"] .cartao.destaque .nota{color:#a5f3fc}
+html[data-tema="escuro"] .kpi.destaque{background:linear-gradient(180deg,rgba(34,228,255,.10),var(--card));border-color:rgba(34,228,255,.35)}
+html[data-tema="escuro"] .kpi.destaque .val{color:#a5f3fc}
+html[data-tema="escuro"] .item:hover,html[data-tema="escuro"] .item.aberto{border-color:rgba(34,228,255,.35);box-shadow:var(--neon)}
+html[data-tema="escuro"] .vazio{background:transparent;border-color:var(--line);color:var(--muted)}
+
+/* ---------------- controles ---------------- */
+:where(html[data-tema="escuro"]) input,:where(html[data-tema="escuro"]) select,:where(html[data-tema="escuro"]) textarea{
+  background:rgba(8,14,28,.85);border-color:rgba(125,211,252,.18);color:var(--ink)}
+:where(html[data-tema="escuro"]) input::placeholder,:where(html[data-tema="escuro"]) textarea::placeholder{color:var(--faint)}
+:where(html[data-tema="escuro"]) input:focus,:where(html[data-tema="escuro"]) select:focus,:where(html[data-tema="escuro"]) textarea:focus{
+  outline:2px solid rgba(34,228,255,.45);outline-offset:1px;border-color:rgba(34,228,255,.5)}
+:where(html[data-tema="escuro"]) input[type="checkbox"],:where(html[data-tema="escuro"]) input[type="radio"]{accent-color:#22d3ee}
+:where(html[data-tema="escuro"]) option{background:#0d1628;color:var(--ink)}
+:where(html[data-tema="escuro"]) input[readonly],:where(html[data-tema="escuro"]) input:disabled,:where(html[data-tema="escuro"]) select:disabled{opacity:.6}
+html[data-tema="escuro"] div:has(> input[data-mascara="moeda"])::after{color:var(--faint)}
+
+:where(html[data-tema="escuro"]) button{background:linear-gradient(135deg,#22d3ee,#3b82f6);color:#fff;border-color:transparent}
+:where(html[data-tema="escuro"]) button:hover{filter:brightness(1.1);box-shadow:0 0 18px rgba(34,228,255,.35)}
+html[data-tema="escuro"] button.ghost,html[data-tema="escuro"] button.bt,html[data-tema="escuro"] .bt{
+  background:rgba(14,24,44,.8);color:var(--ink);border:1px solid rgba(125,211,252,.2)}
+html[data-tema="escuro"] button.ghost:hover,html[data-tema="escuro"] button.bt:hover,html[data-tema="escuro"] .bt:hover{
+  background:#13213b;border-color:rgba(34,228,255,.4);filter:none;box-shadow:none}
+html[data-tema="escuro"] button.bt.primario,html[data-tema="escuro"] .bt.primario,html[data-tema="escuro"] .bt.imprimir{
+  background:linear-gradient(135deg,#22d3ee,#3b82f6);color:#03111f;border-color:transparent}
+html[data-tema="escuro"] button.perigo,html[data-tema="escuro"] button.bt.perigo,html[data-tema="escuro"] .bt.perigo{
+  background:rgba(255,77,109,.1);color:#ff8199;border:1px solid rgba(255,77,109,.35)}
+html[data-tema="escuro"] button.perigo:hover,html[data-tema="escuro"] .bt.perigo:hover{background:rgba(255,77,109,.18)}
+:where(html[data-tema="escuro"]) button[disabled],html[data-tema="escuro"] .bt[disabled]{opacity:.4;box-shadow:none;filter:none}
+html[data-tema="escuro"] .seg{background:rgba(14,24,44,.8);border-color:var(--line);padding:3px;gap:2px;border-radius:12px}
+html[data-tema="escuro"] .seg button{background:transparent;color:var(--muted);border:0;border-radius:9px;box-shadow:none}
+html[data-tema="escuro"] .seg button+button{border-left:0}
+html[data-tema="escuro"] .seg button:hover{background:rgba(125,211,252,.07);color:#fff;filter:none}
+html[data-tema="escuro"] .seg button[aria-pressed="true"]{background:linear-gradient(135deg,#22e4ff,#3b82f6);color:#03111f;box-shadow:0 0 16px rgba(34,228,255,.38)}
+
+/* ---------------- tabelas ---------------- */
+:where(html[data-tema="escuro"]) table{color:var(--ink)}
+:where(html[data-tema="escuro"]) th{color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:transparent}
+:where(html[data-tema="escuro"]) th,:where(html[data-tema="escuro"]) td{border-color:var(--line)}
+:where(html[data-tema="escuro"]) tbody tr:hover td,:where(html[data-tema="escuro"]) table tr:hover > td{background:rgba(125,211,252,.035)}
+html[data-tema="escuro"] .prod img,html[data-tema="escuro"] .item img{background:#fff;border-radius:8px}
+
+/* ---------------- chips e estados ---------------- */
+html[data-tema="escuro"] .chip{background:rgba(125,211,252,.08);color:#c3d2ee}
+html[data-tema="escuro"] .chip.sobe,html[data-tema="escuro"] .chip.verde{background:rgba(46,230,166,.12);color:#5ff0bd}
+html[data-tema="escuro"] .chip.desce,html[data-tema="escuro"] .chip.vermelho{background:rgba(255,77,109,.13);color:#ff8199}
+html[data-tema="escuro"] .chip.amarelo{background:rgba(251,191,36,.13);color:#fcd34d}
+html[data-tema="escuro"] .chip.azul{background:rgba(56,189,248,.13);color:#7dd3fc}
+html[data-tema="escuro"] .pos{color:#5ff0bd}html[data-tema="escuro"] .neg{color:#ff8199}
+html[data-tema="escuro"] .selo.active{background:rgba(46,230,166,.12);color:#5ff0bd;border-color:rgba(46,230,166,.3)}
+html[data-tema="escuro"] .selo.paused{background:rgba(251,191,36,.12);color:#fcd34d;border-color:rgba(251,191,36,.3)}
+html[data-tema="escuro"] .selo.closed{background:rgba(125,211,252,.06);color:var(--muted);border-color:var(--line)}
+html[data-tema="escuro"] #msg{background:rgba(255,77,109,.1);color:#ff8199;border-color:rgba(255,77,109,.3)}
+html[data-tema="escuro"] #msg.ok{background:rgba(46,230,166,.1);color:#5ff0bd;border-color:rgba(46,230,166,.3)}
+
+/* ---------------- gráficos ---------------- */
+html[data-tema="escuro"] .grafico{background:rgba(8,14,28,.5);border-color:var(--line)}
+html[data-tema="escuro"] .grafico .b.atual,html[data-tema="escuro"] .barra.hoje .haste{background:linear-gradient(180deg,#22e4ff,#3b82f6);box-shadow:0 0 10px rgba(34,228,255,.35)}
+html[data-tema="escuro"] .grafico .b.antes,html[data-tema="escuro"] .barra .haste{background:rgba(96,165,250,.35)}
+html[data-tema="escuro"] .comp .barra i,html[data-tema="escuro"] .barra-part i,html[data-tema="escuro"] .motivos .barra i{background:linear-gradient(90deg,#8b5cf6,#3b82f6,#22e4ff)}
+html[data-tema="escuro"] .saude,html[data-tema="escuro"] .sc-barra{background:rgba(125,211,252,.08)}
+html[data-tema="escuro"] .sc-col li{background:rgba(8,14,28,.55);border-color:var(--line)}
+
+/* ---------------- modais e menus ---------------- */
+html[data-tema="escuro"] dialog{background:#0b1426;color:var(--ink);border:1px solid rgba(125,211,252,.2);box-shadow:0 30px 80px rgba(0,0,0,.65),var(--neon)}
+html[data-tema="escuro"] dialog::backdrop{background:rgba(2,6,14,.72);backdrop-filter:blur(3px)}
+html[data-tema="escuro"] .mPe{background:rgba(8,14,28,.6)}
+html[data-tema="escuro"] details.menu .itens{background:#0b1426;border-color:var(--line)}
+html[data-tema="escuro"] details.menu .itens button{background:none;color:var(--ink)}
+html[data-tema="escuro"] details.menu .itens button:hover{background:rgba(125,211,252,.06)}
+html[data-tema="escuro"] .tabPos tr.este td{background:rgba(56,189,248,.13);color:#7dd3fc}
+html[data-tema="escuro"] .tabPos tr.seu td{background:rgba(56,189,248,.06)}
+
+/* ---------------- aviso de comanda nova (comandas-aviso.js) ---------------- */
+html[data-tema="escuro"] #avisoComanda{background:linear-gradient(135deg,#f97316,#ea580c);box-shadow:0 0 0 1px rgba(251,146,60,.5),0 18px 50px rgba(234,88,12,.45)}
+}
+@media screen{
+html[data-tema="escuro"] .nav-grupo > button{all:unset;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  margin:12px 0 4px;padding:2px 12px;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#5f7194;background:none;box-shadow:none}
+html[data-tema="escuro"] .nav-grupo > button::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg);margin:-3px 2px 0 0}
+html[data-tema="escuro"] .nav-grupo > button[aria-expanded="false"]::after{transform:rotate(-45deg);margin-top:0}
+html[data-tema="escuro"] .nav-grupo > button:hover{color:var(--ciano);filter:none;box-shadow:none}
+}
+@media screen{
+html[data-tema="escuro"] .aviso-config{background:rgba(251,191,36,.1)!important;color:#fcd34d!important;border-color:rgba(251,191,36,.3)!important}
+html[data-tema="escuro"] .aviso-config.grave{background:rgba(255,77,109,.1)!important;color:#ff8199!important;border-color:rgba(255,77,109,.3)!important}
+}

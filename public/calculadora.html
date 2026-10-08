@@ -7,7 +7,10 @@
 <link rel="stylesheet" href="/paginas.css?v=1">
 <link rel="stylesheet" href="/layout.css">
 <link rel="stylesheet" href="/tema-hn.css?v=3">
-<link rel="stylesheet" href="/tema-painel.css?v=1">
+<link rel="stylesheet" href="/tema-painel.css?v=2">
+<link rel="stylesheet" href="/tema-escuro.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
 <style>
   .form-calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
   .form-calc label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#475569;position:relative}
@@ -43,7 +46,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=32"></script>
+    <script src="/menu.js?v=33"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -250,6 +253,6 @@ for(const id of ['canal', 'tipo']) $(id).onchange = calcular;
 for(const id of ['envio', 'amazon']) $(id).onchange = () => { for(const k of Object.keys(freteEditados)) delete freteEditados[k]; calcular(); };
 for(const id of ['preco', 'margem', 'outros', 'sku', 'item']) $(id).addEventListener('change', calcular);
 </script>
-<script src="/sino.js?v=2" defer></script>
+<script src="/sino.js?v=3" defer></script>
 </body>
 </html>

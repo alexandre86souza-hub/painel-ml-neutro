@@ -83,6 +83,7 @@
     try { r = await fetch('/api/comandas', { credentials: 'same-origin' }); if (!r.ok) return; r = await r.json(); } catch { return; }
     // só o que é para fazer: não impressa e não manual (a comanda manual foi alguém daqui que criou)
     const fila = (r.comandas || []).filter((c) => !c.impressa_em && c.canal !== 'manual');
+    if (typeof window.contadorMenu === 'function') window.contadorMenu('/comandas.html', (r.comandas || []).filter((c) => !c.impressa_em).length);
     const vistas = ler(CHAVE, null);
     if (!Array.isArray(vistas)) { gravar(CHAVE, fila.map((c) => c.chave)); return; }   // 1ª vez neste navegador: sem alarme
     const ja = new Set(vistas);

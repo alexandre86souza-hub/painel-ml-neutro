@@ -312,6 +312,13 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `/privacidade` (exigido no perfil de segurança). Campanhas/histórico: construir a partir do
   diagnóstico com a conta real. Nada do Ads no MCP. Em "Todas as contas" a Amazon é
   somada NO NAVEGADOR (`geral.html#comAmazon`): `/api/contas/resumo` é usada pelo MCP.
+- Tema e menu: menu lateral em GRUPOS que abrem e fecham (`public/menu.js#GRUPOS`; `contadorMenu` põe número num item).
+  Tema escuro é o padrão (botão "Tema claro/escuro" no rodapé do menu, por navegador): `public/tema.js` (no <head>, põe
+  `data-tema` e `data-pagina` no <html>), `public/tema-escuro.css` (componentes; só @media screen — a impressão fica
+  clara) e `public/tema-escuro-paginas.css`, GERADO por `node tema-escuro-gerar.js` a partir do <style> de cada tela
+  (cor fixa clara -> versão escura, presa à tela). Mudou cor no <style> de uma tela: rode o gerador (test-painel.js
+  reprova se ficar velho). Todas as contas: Estoque e "Precisa de atenção" por `GET /api/contas/atencao`
+  (estoque.js#visao + comandas.js#resumoFila; fora do MCP).
 - Concorrentes no ML (`concorrentes.js`, bloco em Anúncios → Detalhes): a API do ML dá 403
   para busca e anúncio de terceiros, então vêm do scraper (`/posicao`, a mesma busca da
   Posição). Vendidos = total da vida, EM FAIXAS (+100, +500…); venda de 30 dias de concorrente
