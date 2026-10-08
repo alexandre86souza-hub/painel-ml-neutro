@@ -94,9 +94,15 @@
         const t = document.createElement('span'); t.className = 'marca-nome'; t.textContent = m.nome; box.appendChild(t);
       }
     }
-    // título da aba: "Tela — Nome da empresa" (só com nome próprio)
+    // título da aba: "Tela — Nome da empresa" (o nome geral; o da conta pode ser só o do marketplace)
     const base = document.title.split(' — ')[0];
-    document.title = m.personalizado ? base + ' — ' + m.nome : base;
+    const nomeAba = m.empresa || (m.personalizado ? m.nome : '');
+    document.title = nomeAba ? base + ' — ' + nomeAba : base;
+    // ícone da aba: o logo da empresa (senão um ícone simples do painel)
+    let ic = document.querySelector('link[rel="icon"]');
+    if (!ic) { ic = document.createElement('link'); ic.rel = 'icon'; document.head.appendChild(ic); }
+    ic.href = m.tem_logo ? '/api/marca/logo?' + QM + 'v=' + encodeURIComponent(m.v || '0')
+      : 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#2563eb"/><path d="M9 22V10h7a4 4 0 0 1 0 8h-7" fill="none" stroke="#fff" stroke-width="3"/></svg>');
   }
   let guardada = null;
   try { guardada = JSON.parse(localStorage.getItem(GUARDA) || 'null'); } catch {}
@@ -283,6 +289,12 @@
     tema.onclick = (ev) => { ev.preventDefault(); if (window.trocarTema) window.trocarTema(); pintarTema(); };
     pintarTema();
     box.appendChild(tema);
+    // aviso de comanda nova (public/comandas-aviso.js): testa o som e a notificação do Windows
+    if (eu.admin || (eu.paginas || []).includes('/comandas.html')) {
+      const teste = item('#', 'Testar aviso de comanda', 'comandas');
+      teste.onclick = (ev) => { ev.preventDefault(); if (window.testarAvisoComanda) window.testarAvisoComanda(); };
+      box.appendChild(teste);
+    }
     if (!eu.admin) box.appendChild(item('/trocar-senha', 'Trocar minha senha', 'senha'));
     const sair = item('#', 'Sair', 'sair');
     sair.onclick = (ev) => { ev.preventDefault(); const f = document.createElement('form'); f.method = 'POST'; f.action = '/sair'; document.body.appendChild(f); f.submit(); };

@@ -41,7 +41,8 @@
   const audio = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch {} return ctx; };
   for (const ev of ['click', 'keydown']) document.addEventListener(ev, () => audio(), { once: true, capture: true });
   function tocar() {
-    const c = audio(); if (!c || c.state !== 'running') return;
+    const c = audio(); if (!c) return;
+    if (c.state !== 'running') c.resume().catch(() => {});   // suspenso: as notas tocam quando o navegador liberar
     const nota = (freq, ini, dur) => {
       const o = c.createOscillator(), g = c.createGain();
       o.type = 'triangle'; o.frequency.value = freq;
@@ -93,6 +94,17 @@
     if (location.pathname === '/comandas.html' && typeof window.recarregarComandas === 'function') window.recarregarComandas();
     mostrar(novas);
   }
+
+  // Botão "Testar aviso de comanda" (menu): toca o som e manda uma notificação de exemplo agora.
+  window.testarAvisoComanda = async () => {
+    audio();
+    if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+    const exemplo = [{ categoria: 'Teste', numero: 0, loja: 'Aviso de comanda', cliente: 'som e notificação' }];
+    const antes = pendentes; pendentes = [];
+    mostrar(exemplo); pendentes = antes;
+    if (!somLigado()) lista.textContent += '\n(o som está desligado: clique em "Som desligado" para ligar)';
+    if (!('Notification' in window) || Notification.permission !== 'granted') lista.textContent += '\n(notificação do Windows bloqueada neste navegador)';
+  };
 
   fetch('/api/eu', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((eu) => {
     if (!eu || !(eu.admin || (eu.paginas || []).includes('/comandas.html'))) return;

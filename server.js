@@ -2198,6 +2198,7 @@ const marcaAtual = (contaId = D.contaAtivaId()) => {
     : externa ? (loja?.nome || 'Shopee') : contaId ? D.contaObter(Number(contaId))?.nickname : null);
   return { conta: externa || (contaId ? Number(contaId) : null), nome: nome || MARCA_PADRAO, personalizado: !!nome,
     nome_proprio: (contaId && D.configLer(chaveMarca('nome', contaId))) || '',
+    empresa: D.configLer('marca_nome') || null,   // nome geral da empresa: título da aba do navegador
     tem_logo: !!marcaLogo(contaId),
     v: `${contaId || 0}-${marcaLer('v', contaId) || '0'}` };   // muda com a conta e a cada gravação: o navegador busca o logo de novo
 };

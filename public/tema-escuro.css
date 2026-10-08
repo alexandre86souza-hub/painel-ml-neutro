@@ -203,3 +203,11 @@ html[data-tema="escuro"] button[aria-selected="true"],html[data-tema="escuro"] [
   background:linear-gradient(135deg,#22e4ff,#3b82f6)!important;color:#03111f!important;border-color:transparent!important;box-shadow:0 0 16px rgba(34,228,255,.35)}
 html[data-tema="escuro"] button[aria-pressed="true"] .qtd{background:rgba(3,17,31,.25)!important;color:#03111f!important}
 }
+@media screen{
+/* botão principal (Buscar, Salvar, Trocar…, Imprimir): sempre em destaque, por cima das cores geradas de cada tela */
+html[data-tema="escuro"] button.bt.primario,html[data-tema="escuro"] .bt.primario,html[data-tema="escuro"] button.primario,
+html[data-tema="escuro"] .bt.imprimir,html[data-tema="escuro"] button.bt.imprimir{
+  background:linear-gradient(135deg,#22d3ee,#3b82f6)!important;color:#03111f!important;border-color:transparent!important;font-weight:700}
+html[data-tema="escuro"] button.bt.primario:hover,html[data-tema="escuro"] .bt.imprimir:hover{filter:brightness(1.1);box-shadow:0 0 18px rgba(34,228,255,.35)}
+html[data-tema="escuro"] button.bt.primario[disabled],html[data-tema="escuro"] .bt.imprimir[disabled]{opacity:.45;box-shadow:none;filter:none}
+}
