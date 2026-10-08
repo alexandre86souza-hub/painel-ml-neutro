@@ -277,8 +277,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Comanda nova: `public/comandas-aviso.js`
   (injetado pelo sino.js em todas as telas, só para quem abre /comandas.html) confere `/api/comandas` a cada minuto e, para
   comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som
-  (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Código de barras Code 128 em
-  `public/codigo128.js` (testado). Nada no MCP (`test-comandas.js`).
+  (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Comanda: pedido no topo (sem código de
+  barras, pedido do vendedor; `public/codigo128.js` segue testado, sem uso). Nada no MCP (`test-comandas.js`).
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,
