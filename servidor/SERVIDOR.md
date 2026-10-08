@@ -49,5 +49,7 @@ ssh root@IP "systemctl start painel && journalctl -u painel -n 30 --no-pager"
 - Administrador (primeiro acesso, Magalu, `desativar-2fa`): `ssh -L 3100:127.0.0.1:3100 root@IP` e abrir
   `http://localhost:3100` neste computador. O painel local nunca fica na internet.
 - Logs: `ssh root@IP "journalctl -u painel -f"` e `/home/painel/app/logs/`.
-- Cópia de segurança: o painel copia o banco 1x/dia em `/home/painel/app/backups`; para trazer para cá:
-  `scp "root@IP:/home/painel/app/backups/*" backups/`.
+- Cópia de segurança: o painel copia o banco 1x/dia em `/home/painel/app/backups`. Para ter uma cópia FORA do
+  servidor, `servidor/trazer-backup.ps1` traz a mais nova para uma pasta (ex.: OneDrive) e guarda as últimas 30;
+  agendado no Agendador de Tarefas do Windows ("Painel - trazer backup do servidor", todo dia 12h, roda depois se o
+  computador estava desligado). Log: `trazer-backup.log` na própria pasta.
