@@ -46,13 +46,12 @@
   /* a comanda: 80 mm de papel, ~72 mm de impressão */
   .comanda{width:72mm;background:#fff;color:#000;padding:4mm 3mm;font-family:Arial,Helvetica,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.12)}
   .comanda .c-rot{font-size:9pt;font-weight:700;letter-spacing:.2em;text-align:center}
-  .comanda .c-num{font-size:34pt;font-weight:900;text-align:center;line-height:1;margin:1mm 0}
+  .comanda .c-num{font-size:42pt;font-weight:900;text-align:center;line-height:1;margin:2mm 0 1mm}
   .comanda .c-envio{font-size:22pt;font-weight:900;text-align:center;line-height:1.1;text-transform:uppercase;border:0.6mm solid #000;padding:1mm;margin:1mm 0}
   .comanda .c-sub{font-size:10pt;font-weight:700;text-align:center;text-transform:uppercase;margin-top:-0.5mm}
   .comanda .c-cliente{font-size:20pt;font-weight:900;text-align:center;line-height:1.1;text-transform:uppercase;margin:2mm 0;word-break:break-word}
-  .comanda .c-caixa{border:0.8mm solid #000;padding:2mm;margin:2mm 0;text-align:center}
-  .comanda .c-pedido{font-size:22pt;font-weight:900;line-height:1.1;word-break:break-all}
-  .comanda .c-barras svg{width:100%;height:13mm;display:block;margin-top:1.5mm}
+  .comanda .c-caixa{border:0.8mm solid #000;padding:2mm;margin:0 0 2mm;text-align:center}
+  .comanda .c-pedido{font-size:26pt;font-weight:900;line-height:1.1;word-break:break-all}
   .comanda .c-linha{display:flex;justify-content:space-between;font-size:10pt;font-weight:700;margin:0.8mm 0;gap:2mm}
   .comanda hr{border:0;border-top:0.5mm solid #000;margin:2mm 0}
   .comanda .c-item{padding:1.5mm 0;border-bottom:0.3mm solid #000}
@@ -182,7 +181,6 @@
 <div id="impressao" aria-hidden="true"></div>
 
 <script src="/comum.js?v=8"></script>
-<script src="/codigo128.js?v=1"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
@@ -279,17 +277,15 @@ function pintarLista(){
   box.appendChild(t);
 }
 
-// a comanda impressa (80 mm): número, envio e cliente em letra grande para as câmeras
+// a comanda impressa (80 mm): pedido no topo; número, envio e cliente em letra grande para as câmeras
 function comandaEl(c){
   const d = el('div', 'comanda');
-  d.append(el('div', 'c-rot', 'COMANDA'), el('div', 'c-num', `Nº ${c.numero}`), el('div', 'c-envio', c.categoria));
-  if(c.envio && c.envio.toLowerCase() !== c.categoria.toLowerCase()) d.appendChild(el('div', 'c-sub', c.envio));   // ex.: Flex · Shopee Entrega Direta
-  d.appendChild(el('div', 'c-cliente', c.cliente || (c.canal === 'amazon' ? 'NOME NA ETIQUETA DA AMAZON' : 'CLIENTE NÃO INFORMADO')));
   const caixa = el('div', 'c-caixa');
   caixa.append(el('div', 'c-rot', 'PEDIDO'), el('div', 'c-pedido', c.pedido));
-  const barras = el('div', 'c-barras'); barras.innerHTML = window.codigo128Svg(c.pedido);
-  caixa.append(barras, el('div', 'c-rot', `${c.loja} · ${CANAL[c.canal] || c.canal}`.toUpperCase()));
-  d.appendChild(caixa);
+  caixa.append(el('div', 'c-rot', `${c.loja} · ${CANAL[c.canal] || c.canal}`.toUpperCase()));
+  d.append(caixa, el('div', 'c-num', `Nº ${c.numero}`), el('div', 'c-envio', c.categoria));
+  if(c.envio && c.envio.toLowerCase() !== c.categoria.toLowerCase()) d.appendChild(el('div', 'c-sub', c.envio));   // ex.: Flex · Shopee Entrega Direta
+  d.appendChild(el('div', 'c-cliente', c.cliente || (c.canal === 'amazon' ? 'NOME NA ETIQUETA DA AMAZON' : 'CLIENTE NÃO INFORMADO')));
   const linha = (a, b) => { const l = el('div', 'c-linha'); l.append(el('span', null, a), el('span', null, b)); return l; };
   d.append(linha('LOJA', c.loja), linha('COMPRA', c.comprado_em ? horaBR(c.comprado_em) : '—'), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), linha('ITENS', `${c.itens.length} · ${c.unidades} UN.`), el('hr'));
   d.appendChild(el('div', 'c-rot', 'ITENS A SEPARAR'));
