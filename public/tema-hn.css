@@ -139,8 +139,8 @@ header h1{color:var(--ink)}
 
 #barraContas label{color:var(--muted)}
 #barraContas select{background:#fff;border-color:var(--line);color:var(--ink)}
-#barraContas a{background:#fff;border-color:var(--line);color:var(--brand)}
-#barraContas a:hover{background:var(--overlay);border-color:var(--hn-sky)}
+#barraContas > a{background:#fff;border-color:var(--line);color:var(--brand)}
+#barraContas > a:hover{background:var(--overlay);border-color:var(--hn-sky)}
 
 /* ============================================================
    CONTROLES

@@ -75,9 +75,9 @@ header{
 }
 header h1{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
 #barraContas select{border-radius:10px;border-color:var(--line);background:#fff}
-#barraContas a{border-radius:999px;border-color:transparent;background:#fff;color:var(--ink);
+#barraContas > a{border-radius:999px;border-color:transparent;background:#fff;color:var(--ink);
   box-shadow:0 1px 3px rgba(16,24,40,.08)}
-#barraContas a:hover{background:#f2f5fa;border-color:transparent}
+#barraContas > a:hover{background:#f2f5fa;border-color:transparent}
 
 main{padding-top:14px}
 

@@ -69,9 +69,9 @@ html[data-tema="escuro"] header{background:rgba(5,9,19,.72);backdrop-filter:blur
 html[data-tema="escuro"] header h1{color:var(--ink)}
 html[data-tema="escuro"] #barraContas label{color:var(--muted)}
 html[data-tema="escuro"] #barraContas select,
-html[data-tema="escuro"] #barraContas a,
+html[data-tema="escuro"] #barraContas > a,
 html[data-tema="escuro"] .sino > button{background:rgba(14,24,44,.8);border:1px solid var(--line);color:var(--ink);box-shadow:none}
-html[data-tema="escuro"] #barraContas a:hover,html[data-tema="escuro"] .sino > button:hover{background:#13213b}
+html[data-tema="escuro"] #barraContas > a:hover,html[data-tema="escuro"] .sino > button:hover{background:#13213b}
 html[data-tema="escuro"] .sino .bolha{box-shadow:0 0 10px #ff4d6d}
 html[data-tema="escuro"] .sino .painel-avisos{background:#0b1426;border-color:var(--line);box-shadow:0 24px 60px rgba(0,0,0,.6)}
 html[data-tema="escuro"] .painel-avisos li a{color:var(--ink)}
