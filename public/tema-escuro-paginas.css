@@ -261,7 +261,6 @@ html[data-tema="escuro"][data-pagina="etiquetas"] .chip.amanha{background:hsla(2
 html[data-tema="escuro"][data-pagina="etiquetas"] dialog{background:hsla(43,41%,60%,.14)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .dlg-topo{border-bottom:1px solid hsla(41,30%,60%,.35)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .arquivo{border:1px solid hsla(41,25%,60%,.35);background:rgba(14,24,44,.72)}
-html[data-tema="escuro"][data-pagina="etiquetas"] .arquivo iframe{border:1px solid hsla(41,25%,60%,.35);background:rgba(125,211,252,.06)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .falhas{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .dlg-pe{border-top:1px solid hsla(41,30%,60%,.35)}
 /* financeiro.html */

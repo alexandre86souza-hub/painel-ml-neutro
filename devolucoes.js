@@ -115,9 +115,14 @@ function custoDa(d) {
   // marcação do vendedor vale sempre; a sugestão da revisão do ML, só com o produto de volta.
   const marcou = d.defeito === true || d.defeito === false;
   const defeito = marcou ? (porProduto ? marcados.length > 0 : d.defeito) : voltou && comDefeito(d);
+  // Quantas unidades estão com defeito (pedido do dono, 09/10/2026: de 2 BP-408 devolvidos, só 1 quebrado).
+  // d.defeito_qtds = { posição: n } no kit ou { '*': n } no produto só; sem ela, todas as devolvidas.
+  const q = d.quantidade || 1;
+  const qtdDe = (i) => { const o = d.defeito_qtds || {}; const v = o[i] ?? o['*'];
+    return v == null ? q : Math.max(0, Math.min(q, Math.round(Number(v)) || 0)); };
   const pecaDefeito = !defeito ? 0
-    : porProduto ? marcados.reduce((s, i) => s + num(comps[i].custo), 0) * (d.quantidade || 1)
-      : num(d.custo_produto);
+    : porProduto ? marcados.reduce((s, i) => s + num(comps[i].custo) * qtdDe(i), 0)
+      : num(d.custo_produto) * qtdDe('*') / q;
   // Não voltou e o dinheiro foi devolvido: perde o produto inteiro — a não ser que o vendedor
   // tenha marcado as peças com defeito (aí vale o que ele marcou, sem somar duas vezes).
   const naoVoltou = devolvido > 0 && !voltou && !defeito ? (d.custo_produto != null ? num(d.custo_produto) : devolvido) : 0;
@@ -127,6 +132,7 @@ function custoDa(d) {
   return { frete_volta: cent(freteVolta), frete_ida_perdido: cent(freteIdaPerdido),
     tarifas_perdidas: cent(tarifasPerdidas), fretes: cent(fretes),
     defeito, produtos_defeito: defeito && porProduto ? marcados : null,
+    qtds_defeito: !defeito ? null : porProduto ? Object.fromEntries(marcados.map((i) => [i, qtdDe(i)])) : { '*': qtdDe('*') },
     peca_defeito: cent(pecaDefeito), nao_voltou: cent(naoVoltou),
     perda_produto: cent(pecaDefeito + naoVoltou), total: cent(total),
     credito_ml: cent(credito), resultado: cent(credito - total - fretes) };
@@ -419,6 +425,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       const defeitos = D.defeitosDe();
       const manuais = D.creditosManuais();   // crédito do ML digitado pelo vendedor (vale no lugar do ligado)
       const defeitosProdutos = D.defeitoProdutosDe();
+      const defeitosQtds = D.defeitoQtdsDe();
       const skusVenda = D.skusDosPedidos([...new Set(linhas.map((l) => l.order_id).filter(Boolean))]);
       const pedidosDev = [...new Set(linhas.map((l) => l.order_id).filter(Boolean))];
       const clientes = D.compradoresDosPedidos(pedidosDev);
@@ -445,7 +452,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
         const marcado = defeitos[l.claim_id];
         const kit = componentesDa(l, skusVenda, info[l.item_id], mapa);
         const custo = custoDa({ ...l, credito_ml: cred?.valor || 0, defeito: marcado,
-          componentes: kit.componentes, defeito_produtos: marcado == null ? null : defeitosProdutos[l.claim_id] });
+          componentes: kit.componentes, defeito_produtos: marcado == null ? null : defeitosProdutos[l.claim_id],
+          defeito_qtds: marcado == null ? null : defeitosQtds[l.claim_id] });
         let acoes = [];
         try { acoes = JSON.parse(l.acoes || '[]'); } catch {}
         const rev = json(l.revisao);
@@ -585,8 +593,22 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       }
       const defeito = produtos ? produtos.length > 0 : body?.defeito;
       if (typeof defeito !== 'boolean') throw Object.assign(new Error('Informe defeito: true ou false.'), { status: 400 });
-      D.defeitoGravar(Number(id), defeito, produtos);
-      return { claim_id: Number(id), defeito, produtos };
+      // Quantas unidades com defeito: qtds = { posição: n } (kit) ou qtd = n (produto só). Sem = todas.
+      let qtds = null;
+      const ruim = () => Object.assign(new Error('Quantidade com defeito: um número inteiro de 1 a 999.'), { status: 400 });
+      const inteiro = (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 999) throw ruim(); return n; };
+      if (body?.qtds != null) {
+        if (typeof body.qtds !== 'object' || Array.isArray(body.qtds)) throw ruim();
+        qtds = {};
+        for (const [k, v] of Object.entries(body.qtds)) {
+          if (k !== '*' && !(produtos || []).includes(Number(k))) continue;   // só das peças marcadas
+          qtds[k] = inteiro(v);
+        }
+        if (!Object.keys(qtds).length) qtds = null;
+      } else if (body?.qtd != null) qtds = { '*': inteiro(body.qtd) };
+      if (!defeito) qtds = null;
+      D.defeitoGravar(Number(id), defeito, produtos, qtds);
+      return { claim_id: Number(id), defeito, produtos, qtds };
     } },
   ];
 

@@ -127,7 +127,7 @@ assert.strictEqual(dv.reembolso_vendedor, 100, 'reembolso recusado não conta');
 // Voltou em boas condições, frete e tarifas estornados: custo 0, só o frete de volta em "fretes".
 assert.deepStrictEqual(custoDa({ tarifa_devolucao: 38.9, reembolso_vendedor: 94.4, frete_ida: 27.41,
   frete_ida_estornado: 27.41, tarifas: 22.9, tarifas_estornadas: 22.9, status_devolucao: 'delivered' }),
-{ frete_volta: 38.9, frete_ida_perdido: 0, tarifas_perdidas: 0, fretes: 38.9, defeito: false, produtos_defeito: null, peca_defeito: 0,
+{ frete_volta: 38.9, frete_ida_perdido: 0, tarifas_perdidas: 0, fretes: 38.9, defeito: false, produtos_defeito: null, qtds_defeito: null, peca_defeito: 0,
   nao_voltou: 0, perda_produto: 0, total: 0, credito_ml: 0, resultado: -38.9 });
 // Frete de ida e tarifas NÃO estornados entram em "fretes"; os estornados não.
 const pv = custoDa({ tarifa_devolucao: 10, reembolso_vendedor: 100, frete_ida: 20, frete_ida_estornado: 5,
@@ -159,6 +159,12 @@ const semVoltaMarcada = custoDa({ ...semVolta, defeito: true, defeito_produtos: 
 assert.deepStrictEqual([semVoltaMarcada.peca_defeito, semVoltaMarcada.nao_voltou, semVoltaMarcada.total], [12.5, 0, 12.5]);
 // desmarcou tudo numa que não voltou: o produto continua perdido (não voltou é fato)
 assert.strictEqual(custoDa({ ...semVolta, defeito: false, defeito_produtos: [], componentes: [{ sku: 'A', custo: 40 }, { sku: 'B', custo: 20.5 }] }).total, 60.5);
+// Quantas com defeito (09/10/2026): 2 BP-408 devolvidos (custo 25 = 2 × 12,50), só 1 quebrado.
+assert.strictEqual(custoDa({ status_devolucao: 'delivered', quantidade: 2, custo_produto: 25, defeito: true, defeito_qtds: { '*': 1 } }).peca_defeito, 12.5);
+assert.deepStrictEqual(custoDa({ status_devolucao: 'delivered', quantidade: 2, custo_produto: 25, defeito: true }).qtds_defeito, { '*': 2 });
+{ const kq = custoDa({ status_devolucao: 'delivered', quantidade: 3, defeito: true, componentes: [{ sku: 'DQ-407', custo: 40 }, { sku: 'BP-408', custo: 12.5 }],
+    defeito_produtos: [0, 1], defeito_qtds: { 1: 1 } });
+  assert.deepStrictEqual([kq.peca_defeito, kq.qtds_defeito], [132.5, { 0: 3, 1: 1 }], 'kit: 3 DQ-407 + 1 BP-408'); }
 // Kit (pedido do dono, 30/09/2026): o vendedor marca QUAIS produtos do anúncio estão com
 // defeito e só eles somam; os outros voltam ao estoque.
 const kit = [{ sku: 'DQ-407', custo: 40 }, { sku: 'BP-408', custo: 12.5 }, { sku: 'DD-795', custo: 8 }];

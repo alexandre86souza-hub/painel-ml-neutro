@@ -39,6 +39,29 @@ function tipoShopee(r) {
   return r?.suggest_shipping_document_type || sel[0] || 'THERMAL_AIR_WAYBILL';
 }
 
+// O que a loja devolveu tem de ser um PDF: confere pelos bytes. ZIP = tira o 1º PDF de dentro; JSON/texto = a
+// mensagem da loja vira erro (sem repetir os bytes: a etiqueta tem dado do comprador). Função pura: testada.
+function soPdf(buf, loja) {
+  if (!Buffer.isBuffer(buf) || !buf.length) throw erro(`${loja} devolveu um arquivo vazio.`, 502);
+  const ini = buf.indexOf('%PDF');
+  if (ini >= 0 && ini < 1024) return ini ? buf.subarray(ini) : buf;
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {   // ZIP: percorre os arquivos de dentro
+    const zlib = require('node:zlib');
+    for (let p = 0; p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50;) {
+      const metodo = buf.readUInt16LE(p + 8), tam = buf.readUInt32LE(p + 18), nl = buf.readUInt16LE(p + 26), xl = buf.readUInt16LE(p + 28);
+      const nome = buf.toString('utf8', p + 30, p + 30 + nl), dado = buf.subarray(p + 30 + nl + xl, p + 30 + nl + xl + tam);
+      if (/\.pdf$/i.test(nome)) return soPdf(metodo === 8 ? zlib.inflateRawSync(dado) : dado, loja);
+      p += 30 + nl + xl + tam;
+    }
+    throw erro(`${loja} mandou um .zip sem PDF dentro.`, 502);
+  }
+  const txt = buf.subarray(0, 2000).toString('utf8').trim();
+  let msg = null;
+  try { const j = JSON.parse(txt); msg = j.message || j.error || null; } catch { /* não é JSON */ }
+  if (msg) throw erro(`${loja}: ${String(msg).slice(0, 200)}`, 502);
+  throw erro(`${loja} não devolveu um PDF (${/^</.test(txt) ? 'página HTML' : 'formato desconhecido'}, ${buf.length} bytes).`, 502);
+}
+
 function criar({ D, mlArquivo, daLoja, comandas }) {
   // grupo = de onde sai o arquivo (uma conta do ML ou uma loja da Shopee): cada arquivo é de um grupo só
   function grupos() {
@@ -83,7 +106,7 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
 
   async function pdfMl(contaId, escolhidas) {
     const ids = escolhidas.map((e) => e.chave.slice(3));
-    const pdf = await mlArquivo(`/shipment_labels?shipment_ids=${ids.join(',')}&response_type=pdf`, contaId);
+    const pdf = soPdf(await mlArquivo(`/shipment_labels?shipment_ids=${ids.join(',')}&response_type=pdf`, contaId), 'Mercado Livre');
     return { pdf, ok: escolhidas.map((e) => e.chave), falhas: [] };
   }
 
@@ -137,7 +160,7 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
     const pdf = await daLoja(shopId, '/api/v2/logistics/download_shipping_document', {},
       { shipping_document_type: tipo, order_list: prontos.map((x) => ({ order_sn: sn(x.e) })) }, true);
     if (!Buffer.isBuffer(pdf)) throw erro('A Shopee não devolveu o arquivo da etiqueta.', 502);
-    return { pdf, ok: prontos.map((x) => x.e.chave), falhas };
+    return { pdf: soPdf(pdf, 'Shopee'), ok: prontos.map((x) => x.e.chave), falhas };
   }
 
   // O PDF de um grupo. Devolve { pdf, ok, falhas }; marca as baixadas.
@@ -155,4 +178,4 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
   return { rotas, pdf };
 }
 
-module.exports = { criar, situacaoEtiqueta, tipoShopee, MAX };
+module.exports = { criar, situacaoEtiqueta, tipoShopee, soPdf, MAX };

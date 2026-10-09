@@ -74,5 +74,13 @@ assert.strictEqual(ET.situacaoEtiqueta({ canal: 'manual' }), null);
 assert.strictEqual(ET.situacaoEtiqueta({ canal: 'amazon' }), null);
 assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_WAYBILL', selectable_shipping_document_type: ['NORMAL_AIR_WAYBILL', 'THERMAL_AIR_WAYBILL'] }), 'THERMAL_AIR_WAYBILL');
 assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_WAYBILL', selectable_shipping_document_type: ['NORMAL_AIR_WAYBILL'] }), 'NORMAL_AIR_WAYBILL');
+{ const pdf = Buffer.from('%PDF-1.4 x');
+  assert.strictEqual(ET.soPdf(pdf, 'X'), pdf);
+  // zip com um PDF dentro (sem compressão)
+  const nome = Buffer.from('etiqueta.pdf'), cab = Buffer.alloc(30);
+  cab.writeUInt32LE(0x04034b50, 0); cab.writeUInt16LE(0, 8); cab.writeUInt32LE(pdf.length, 18); cab.writeUInt16LE(nome.length, 26);
+  assert.strictEqual(ET.soPdf(Buffer.concat([cab, nome, pdf]), 'X').toString(), '%PDF-1.4 x');
+  assert.throws(() => ET.soPdf(Buffer.from('{"error":"logistics.x","message":"pacote sem rastreio"}'), 'Shopee'), /Shopee: pacote sem rastreio/);
+  assert.throws(() => ET.soPdf(Buffer.from('<html>oi</html>'), 'Shopee'), /página HTML/); }
 assert.ok(!/\/api\/etiquetas/.test(mcp), 'etiquetas fora do MCP');
 console.log('Comandas: categorias, numeração do dia, prazo, código de barras, etiquetas de envio e fora do MCP: ok');

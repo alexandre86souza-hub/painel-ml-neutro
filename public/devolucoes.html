@@ -82,6 +82,8 @@
   .defeito-kit label .custo,.defeito-kit label .sem-custo{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:8px}
   .defeito-kit label .sem-custo{color:#b91c1c}
   .defeito-kit small{font-size:11px;color:var(--muted)}
+  .qtd-defeito{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;white-space:nowrap}
+  .qtd-defeito input{width:56px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:7px}
   @media (max-width:1000px){ .rec{grid-template-columns:1fr 1fr} .rec-nf{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center} .rec-link{margin:0 0 0 auto} }
   @media (max-width:640px){ .rec{grid-template-columns:1fr} }
   .composicao{display:flex;flex-direction:column;gap:8px}
@@ -413,10 +415,11 @@ function pintarLista(){
       x.custo.tarifas_perdidas && `tarifas ${real(x.custo.tarifas_perdidas)}`,
     ].filter(Boolean);
     if(fretesTxt.length) par('Frete e tarifas perdidos', '− ' + real(x.custo.frete_ida_perdido + x.custo.tarifas_perdidas), 'neg', fretesTxt.join(' · '));
-    const comDefeito = (x.custo.produtos_defeito || []).map((i) => x.componentes[i]?.sku).filter(Boolean);
+    const qd = x.custo.qtds_defeito || {};
+    const comDefeito = (x.custo.produtos_defeito || []).map((i) => x.componentes[i]?.sku && (x.quantidade > 1 ? `${qd[i] ?? x.quantidade}× ` : '') + x.componentes[i].sku).filter(Boolean);
     par('Peça com defeito', x.custo.total ? '− ' + real(x.custo.total) : real(0), x.custo.total ? 'neg' : null,
       x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
-        : x.custo.defeito ? 'não volta à venda' : null);
+        : x.custo.defeito ? (x.quantidade > 1 ? `${qd['*'] ?? x.quantidade} de ${x.quantidade} un. · ` : '') + 'não volta à venda' : null);
     par('Crédito do ML', x.credito_ml ? '+ ' + real(x.credito_ml.valor) : '—', x.credito_ml ? 'pos' : null,
       x.credito_ml ? (x.credito_ml.manual ? 'informado por você' + (x.credito_ml.automatico != null ? ` (no lugar de ${real(x.credito_ml.automatico)})` : '')
         : `em ${data(x.credito_ml.data)}`) : null);
@@ -461,37 +464,64 @@ function pintarLista(){
       grupo.appendChild(el('legend', null, 'Quais produtos voltaram com defeito?'));
       if(x.defeito_marcado == null && x.defeito_sugerido && voltou) grupo.appendChild(el('small', null, 'a revisão do ML apontou defeito: confira quais peças'));
       if(x.defeito_marcado == null && x.custo.nao_voltou) grupo.appendChild(el('small', null, 'o produto não voltou: hoje conta o kit inteiro como perdido. Marque as peças para contar só elas.'));
+      const qtdsKit = [];
       const caixas = pecas.map((p, i) => {
         const lab = el('label');
         const ck = el('input'); ck.type = 'checkbox'; ck.checked = marcadas.has(i);
         lab.append(ck, el('b', null, p.sku), document.createTextNode(' ' + (p.nome || 'fora da tabela de produtos')),
           el('span', p.custo == null ? 'sem-custo' : 'custo', p.custo == null ? 'sem custo' : real(p.custo)));
         grupo.appendChild(lab);
+        // várias unidades devolvidas: quantas DESTA peça estão com defeito
+        if(x.quantidade > 1 && ck.checked){
+          const qt = el('label', 'qtd-defeito');
+          const n = el('input'); n.type = 'number'; n.min = '1'; n.max = String(x.quantidade); n.step = '1'; n.value = String(qd[i] ?? x.quantidade);
+          n.setAttribute('aria-label', `Quantas ${p.sku} com defeito`);
+          qt.append(document.createTextNode('com defeito:'), n, document.createTextNode(`de ${x.quantidade}`));
+          grupo.appendChild(qt); qtdsKit[i] = n;
+        }
         return ck;
       });
-      if(x.quantidade > 1) grupo.appendChild(el('small', null, `${x.quantidade} unidades devolvidas: o custo de cada peça marcada conta ${x.quantidade}×.`));
-      for(const ck of caixas) ck.onchange = async () => {
+      if(x.quantidade > 1) grupo.appendChild(el('small', null, `${x.quantidade} unidades devolvidas: diga quantas de cada peça marcada estão com defeito; as outras voltam ao estoque.`));
+      const salvarKit = async (ck) => {
         caixas.forEach((c) => { c.disabled = true; });
+        const produtos = caixas.map((c, i) => (c.checked ? i : -1)).filter((i) => i >= 0);
+        const qtds = {};
+        for(const i of produtos) if(qtdsKit[i]) qtds[i] = Math.min(x.quantidade, Math.max(1, Math.round(Number(qtdsKit[i].value) || x.quantidade)));
         try{
           await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ produtos: caixas.map((c, i) => (c.checked ? i : -1)).filter((i) => i >= 0) }) });
+            body: JSON.stringify({ produtos, ...(Object.keys(qtds).length ? { qtds } : {}) }) });
           carregar(true);
-        }catch(e){ ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; caixas.forEach((c) => { c.disabled = false; }); }
+        }catch(e){ if(ck) ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; caixas.forEach((c) => { c.disabled = false; }); }
       };
+      for(const ck of caixas) ck.onchange = () => salvarKit(ck);
+      for(const n of qtdsKit) if(n) n.onchange = () => salvarKit(null);
       b3.appendChild(grupo);
     }else{
       const lab = el('label', 'defeito');
       const ck = el('input'); ck.type = 'checkbox'; ck.checked = !!x.custo.defeito;
       lab.append(ck, document.createTextNode(' Produto com defeito (não volta à venda)'));
       if(x.defeito_marcado == null && x.defeito_sugerido && voltou) lab.appendChild(el('small', null, 'sugerido pela revisão do ML'));
-      ck.onchange = async () => {
+      let n = null;
+      const salvar = async () => {
         ck.disabled = true;
+        const qtd = n ? Math.min(x.quantidade, Math.max(1, Math.round(Number(n.value) || x.quantidade))) : null;
         try{
-          await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ defeito: ck.checked }) });
+          await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ defeito: ck.checked, ...(ck.checked && qtd ? { qtd } : {}) }) });
           carregar(true);
         }catch(e){ ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; ck.disabled = false; }
       };
+      ck.onchange = salvar;
       b3.appendChild(lab);
+      // várias unidades devolvidas: quantas estão com defeito (as outras voltam ao estoque)
+      if(x.quantidade > 1 && ck.checked){
+        const qt = el('label', 'qtd-defeito');
+        n = el('input'); n.type = 'number'; n.min = '1'; n.max = String(x.quantidade); n.step = '1'; n.value = String(qd['*'] ?? x.quantidade);
+        n.setAttribute('aria-label', 'Quantas unidades com defeito');
+        qt.append(document.createTextNode('Quantas com defeito:'), n, document.createTextNode(`de ${x.quantidade} un.`));
+        n.onchange = salvar;
+        b3.appendChild(qt);
+      }
     }
     const a = el('a', 'rec-link', 'Abrir no Mercado Livre ↗'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener';
     b3.appendChild(a);

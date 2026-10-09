@@ -399,9 +399,12 @@ const FERRAMENTAS = [
       + 'Não muda nada no Mercado Livre.',
     schema: obj({ reclamacao: { type: 'integer', description: 'id da reclamação (de ml_devolucoes)' },
       defeito: { type: 'boolean' },
-      produtos: { type: 'array', items: { type: 'integer', minimum: 0 }, description: 'Kit: posições das peças com defeito' } },
+      produtos: { type: 'array', items: { type: 'integer', minimum: 0 }, description: 'Kit: posições das peças com defeito' },
+      quantidade: { type: 'integer', minimum: 1, description: 'Quantas unidades devolvidas estão com defeito (sem = todas; no kit vale para cada peça marcada)' } },
     ['reclamacao']),
-    rota: (a) => ['PUT', `/api/devolucoes/${a.reclamacao}/defeito`, a.produtos ? { produtos: a.produtos } : { defeito: a.defeito }] },
+    rota: (a) => ['PUT', `/api/devolucoes/${a.reclamacao}/defeito`, a.produtos
+      ? { produtos: a.produtos, ...(a.quantidade ? { qtds: Object.fromEntries(a.produtos.map((i) => [i, a.quantidade])) } : {}) }
+      : { defeito: a.defeito, ...(a.quantidade ? { qtd: a.quantidade } : {}) }] },
 
   { nome: 'ml_atacado_lista', titulo: 'Preço de atacado dos anúncios',
     descricao: 'Anúncios ativos com o preço de atacado de cada um (faixas: quantidade mínima, % e preço). '

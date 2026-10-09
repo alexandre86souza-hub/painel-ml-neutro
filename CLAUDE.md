@@ -108,6 +108,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   financeiro (`taxasDosLancamentos`). Sem ferramenta MCP (tem dado da Amazon).
 - Devolução de kit: o vendedor marca QUAIS produtos do SKU vendido estão com defeito
   (`devolucao_defeito.produtos` = posições nos componentes); só eles somam, vezes a quantidade.
+  Com 2+ unidades devolvidas, diz QUANTAS de cada peça marcada estão com defeito (`devolucao_defeito.qtds` =
+  {posição: n}, `{"*": n}` no produto só; sem ela, todas): só elas somam no custo e as outras voltam ao estoque.
 - Flex do ML (`custos.js#freteFlex`): o Mercado Pago NÃO cobra o frete do `/costs` em venda Flex;
   o ML paga um bônus por envio (`bonificaciones_flex`, ligado pelo envio) = tarifa Flex − custo do
   vendedor no /costs. Com `empresa.entrega_flex` (o que o vendedor paga à empresa de entrega)

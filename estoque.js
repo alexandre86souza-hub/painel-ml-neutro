@@ -167,10 +167,15 @@ function diferencas(linhas, jaLancado, porSku) {
     if (l.pendente) { pendentes.push({ ref: l.ref, loja: l.origem, sku: l.sku || null, data: l.data, qtd: l.qtd, motivo: l.pendente }); continue; }
     const nums = l.sem ? todos.filter((_, i) => !l.sem.includes(i)) : todos;
     const sinal = l.sinal || -1;
+    // devolução com só PARTE das unidades com defeito (defeituosos = { posição | '*': n }): da peça marcada
+    // voltam qtd − n; sem a quantidade, a peça marcada não volta nenhuma
+    const ruins = (i) => { if (!l.sem || !l.sem.includes(i)) return 0; const o = l.defeituosos || {}; const v = o[i] ?? o['*'];
+      return v == null ? l.qtd : Math.max(0, Math.min(l.qtd, Number(v) || 0)); };
     for (const n of contar(todos).keys()) {
-      const fica = nums.filter((x) => x === n).length;   // quantas desse produto valem (kit com peça com defeito)
+      const unidades = l.defeituosos ? todos.reduce((s, x, i) => s + (x === n ? l.qtd - ruins(i) : 0), 0)
+        : l.qtd * nums.filter((x) => x === n).length;   // quantas desse produto valem (kit com peça com defeito)
       const k = `${l.ref}|${n}`;
-      desejado.set(k, { ...l, numero: n, alvo: (desejado.get(k)?.alvo || 0) + (l.valida ? sinal * l.qtd * fica : 0) });
+      desejado.set(k, { ...l, numero: n, alvo: (desejado.get(k)?.alvo || 0) + (l.valida ? sinal * unidades : 0) });
     }
   }
   const lancar = [];
@@ -277,17 +282,18 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
     const nomeConta = new Map(D.contasListar().map((c) => [c.ml_user_id, c.nickname]));
     const de = new Date(Date.parse(desde) - 90 * 864e5).toISOString();
     return D.db.prepare(`SELECT d.claim_id, d.ml_user_id, d.quantidade, d.status_devolucao, d.atualizada_em, v.sku, v.origem,
-        f.defeito, f.produtos FROM devolucoes d
+        f.defeito, f.produtos, f.qtds FROM devolucoes d
         LEFT JOIN vendas v ON v.order_id = d.order_id AND v.item_id = d.item_id
         LEFT JOIN devolucao_defeito f ON f.claim_id = d.claim_id
         WHERE d.criada_em >= ? AND d.status_devolucao IN ('delivered', 'closed')`).all(de)
       .filter((d) => !antes.has(d.claim_id) && !(d.origem && !/^BRP\d+$/.test(d.origem)))   // Full: volta ao armazém do ML
       .map((d) => {
-        let sem = null, pendente = null;
+        let sem = null, pendente = null, defeituosos = null;
         if (d.defeito == null) pendente = 'defeito';                      // ninguém conferiu ainda
-        else if (d.defeito === 1) { try { sem = JSON.parse(d.produtos || 'null'); } catch { sem = null; } if (!Array.isArray(sem)) sem = [...Array(50).keys()]; }
+        else if (d.defeito === 1) { try { sem = JSON.parse(d.produtos || 'null'); } catch { sem = null; } if (!Array.isArray(sem)) sem = [...Array(50).keys()];
+          try { defeituosos = JSON.parse(d.qtds || 'null'); } catch { defeituosos = null; } }
         return { ref: `devolucao:ml:${d.claim_id}`, sku: d.sku, qtd: Math.round(d.quantidade || 1), data: d.atualizada_em || new Date().toISOString(),
-          valida: true, sinal: 1, sem, pendente, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(d.ml_user_id) || d.ml_user_id}` };
+          valida: true, sinal: 1, sem, defeituosos, pendente, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(d.ml_user_id) || d.ml_user_id}` };
       });
   }
   let pendentes = [], ultimaBaixa = null, baixando = null, errosBaixa = [];

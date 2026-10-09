@@ -41,7 +41,17 @@
   .dlg-corpo{max-height:72vh;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
   .arquivo{border:1px solid #e3ddd0;border-radius:12px;background:#fff;padding:12px}
   .arquivo-topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-  .arquivo iframe{width:100%;height:420px;border:1px solid #e3ddd0;border-radius:8px;background:#f4f4f4}
+  .previas{display:flex;gap:10px;flex-wrap:wrap}
+  .previas img{width:150px;height:225px;object-fit:contain;background:#fff;border:1px solid #d5d0c4;border-radius:4px}
+  #impressao{display:none}
+  @media print {
+    @page { size: 100mm 150mm; margin: 0; }
+    body{background:#fff !important}
+    body > *:not(#impressao){display:none !important}
+    #impressao{display:block}
+    #impressao img{display:block;width:100mm;height:150mm;object-fit:contain;page-break-after:always;break-after:page}
+    #impressao img:last-child{page-break-after:auto;break-after:auto}
+  }
   .falhas{margin:6px 0 0;padding-left:18px;color:#b42318;font-size:13px}
   .dlg-pe{padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #ece7dc}
 </style>
@@ -81,7 +91,7 @@
     </div>
     <p class="sub" id="nota"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Buscando os envios de todas as lojas…</p></div>
-    <p class="sub">Na impressora: papel 100 × 150 mm no driver da impressora térmica e, no diálogo de impressão, escala "Tamanho real" (ou "Ajustar" se a etiqueta sair cortada).
+    <p class="sub">Na impressão, escolha a impressora térmica: a página já vai em 100 × 150 mm (margens "Nenhuma", escala padrão).
       Cada arquivo é de uma conta ou loja (até 50 etiquetas), na ordem das comandas. O Mercado Livre marca o envio como impresso ao baixar a etiqueta.</p>
   </section>
   </main>
@@ -92,10 +102,13 @@
   <div class="dlg-topo"><div><h2 id="dlgTitulo">Etiquetas</h2><p class="sub" id="dlgSub" style="margin:4px 0 0"></p></div>
     <button type="button" class="bt" id="dlgFechar" aria-label="Fechar">✕</button></div>
   <div class="dlg-corpo" id="dlgCorpo"></div>
-  <div class="dlg-pe"><button type="button" class="bt" id="dlgFechar2">Fechar</button></div>
+  <div class="dlg-pe"><button type="button" class="bt" id="dlgFechar2">Fechar</button>
+    <button type="button" class="bt imprimir" id="dlgImprimir" disabled>Imprimir na térmica (10×15)</button></div>
 </dialog>
+<div id="impressao"></div>
 
 <script src="/comum.js?v=8"></script>
+<script src="/vendor/pdfjs/pdf.min.js"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -192,6 +205,43 @@ function pintarLista(){
   box.appendChild(t);
 }
 
+// O PDF da loja vira imagens (pdf.js, só no navegador), sem a margem branca e de pé, uma por página de 100×150 mm:
+// a impressão sai no tamanho da etiqueta, não no da folha do leitor de PDF. Nada fica guardado.
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+async function etiquetasDoPdf(bytes){
+  const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  const imgs = [];
+  for(let n = 1; n <= doc.numPages; n++){
+    const pg = await doc.getPage(n);
+    const vp = pg.getViewport({ scale: 3 });
+    const cv = document.createElement('canvas'); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    await pg.render({ canvasContext: cx, viewport: vp }).promise;
+    // corta a margem branca
+    const px = cx.getImageData(0, 0, cv.width, cv.height).data;
+    let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
+    for(let y = 0; y < cv.height; y += 2) for(let x = 0; x < cv.width; x += 2){
+      const i = (y * cv.width + x) * 4;
+      if(px[i] < 200 || px[i + 1] < 200 || px[i + 2] < 200){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+    }
+    if(x1 < 0) continue;   // página em branco
+    const m = 12; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(cv.width, x1 + m); y1 = Math.min(cv.height, y1 + m);
+    const w = x1 - x0, h = y1 - y0, deitada = w > h;
+    const out = document.createElement('canvas'); out.width = deitada ? h : w; out.height = deitada ? w : h;
+    const ox = out.getContext('2d'); ox.fillStyle = '#fff'; ox.fillRect(0, 0, out.width, out.height);
+    if(deitada){ ox.translate(out.width, 0); ox.rotate(Math.PI / 2); }
+    ox.drawImage(cv, x0, y0, w, h, 0, 0, w, h);
+    imgs.push(out.toDataURL('image/png'));
+  }
+  return imgs;
+}
+let paginas = [];
+function imprimirTermica(){
+  const area = $('impressao'); area.innerHTML = '';
+  for(const src of paginas){ const i = el('img'); i.src = src; i.alt = ''; area.appendChild(i); }
+  setTimeout(() => { window.print(); area.innerHTML = ''; }, 150);
+}
+
 // Um arquivo por conta/loja, até 50 por arquivo, na ordem das comandas. O PDF fica só na memória da tela.
 const urls = [];
 async function imprimir(chaves){
@@ -200,7 +250,7 @@ async function imprimir(chaves){
   for(const k of chaves){ const e = porChave.get(k); if(!e || e.situacao !== 'liberada') continue; const g = grupos.get(e.grupo) || []; g.push(e); grupos.set(e.grupo, g); }
   if(!grupos.size) return;
   for(const u of urls.splice(0)) URL.revokeObjectURL(u);
-  const corpo = $('dlgCorpo'); corpo.innerHTML = '';
+  const corpo = $('dlgCorpo'); corpo.innerHTML = ''; paginas = []; $('dlgImprimir').disabled = true;
   $('dlgSub').textContent = 'Buscando as etiquetas nas lojas…';
   $('dlg').showModal();
   let total = 0;
@@ -223,20 +273,23 @@ async function imprimir(chaves){
         }
         const ok = JSON.parse(decodeURIComponent(r.headers.get('X-Etiquetas-Ok') || '%5B%5D'));
         const falhas = JSON.parse(decodeURIComponent(r.headers.get('X-Etiquetas-Falhas') || '%5B%5D'));
-        const url = URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: 'application/pdf' })); urls.push(url);
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })); urls.push(url);
         total += ok.length;
         st.textContent = 'Comandas: ' + ok.map((k) => porChave.get(k)).filter(Boolean).map(nomeComanda).join(', ');
-        const fr = el('iframe'); fr.src = url; fr.title = 'Etiquetas ' + nomeGrupo(parte[0]);
-        const bI = el('button', 'bt imprimir', 'Imprimir'); bI.type = 'button';
-        bI.onclick = () => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch{ window.open(url, '_blank'); } };
-        const aN = el('a', 'bt', 'Abrir em outra aba'); aN.href = url; aN.target = '_blank'; aN.rel = 'noopener';
-        const ac = el('div', 'acoes'); ac.append(aN, bI); topo.appendChild(ac);
-        caixa.appendChild(fr);
+        const aN = el('a', 'bt', 'PDF original'); aN.href = url; aN.target = '_blank'; aN.rel = 'noopener'; aN.title = 'Se a etiqueta sair estranha na térmica';
+        const ac = el('div', 'acoes'); ac.append(aN); topo.appendChild(ac);
+        const imgs = await etiquetasDoPdf(bytes.slice());
+        paginas.push(...imgs);
+        const pv = el('div', 'previas');
+        for(const src of imgs){ const i = el('img'); i.src = src; i.alt = 'Prévia da etiqueta'; pv.appendChild(i); }
+        caixa.appendChild(pv);
         if(falhas.length) caixa.appendChild(listaFalhas(falhas, porChave));
       }catch(x){ st.textContent = x.message; }
     }
   }
-  $('dlgSub').textContent = total ? `${total} etiqueta(s) prontas. Clique em Imprimir em cada arquivo.` : 'Nenhuma etiqueta saiu.';
+  $('dlgImprimir').disabled = !paginas.length;
+  $('dlgSub').textContent = paginas.length ? `${total} envio(s), ${paginas.length} página(s) de 10×15. Clique em "Imprimir na térmica".` : 'Nenhuma etiqueta saiu.';
   for(const k of chaves) sel.delete(k);
   carregar(false);
 }
@@ -252,6 +305,7 @@ $('busca').oninput = () => pintarLista();
 $('btReler').onclick = () => carregar(true);
 $('btSel').onclick = () => imprimir([...sel]);
 for(const id of ['dlgFechar', 'dlgFechar2']) $(id).onclick = () => $('dlg').close();
+$('dlgImprimir').onclick = () => { $('dlg').close(); imprimirTermica(); };
 carregar(false);
 setInterval(() => { if(!$('dlg').open) carregar(false); }, 3 * 60e3);
 </script>

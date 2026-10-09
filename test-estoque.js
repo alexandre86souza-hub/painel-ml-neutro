@@ -127,6 +127,12 @@ assert.deepStrictEqual([d.lancar.length, d.pendentes[0].motivo], [0, 'defeito'],
 d = E.diferencas([dev([1])], new Map([['devolucao:ml:9|407', 1], ['devolucao:ml:9|408', 1]]), porSku);
 assert.deepStrictEqual(d.lancar.map((m) => [m.numero, m.qtd]), [[408, -1]], 'marcou o defeito depois: tira a peça que tinha entrado');
 
+// devolução de 2 kits, só 1 BP-408 com defeito: voltam 2 DQ-407 e 1 BP-408
+d = E.diferencas([dev([1], { qtd: 2, defeituosos: { 1: 1 } })], new Map(), porSku);
+assert.deepStrictEqual(d.lancar.map((m) => [m.numero, m.qtd]), [[407, 2], [408, 1]], 'parte com defeito: o resto volta');
+d = E.diferencas([dev([0, 1], { sku: 'BP-408', qtd: 2, defeituosos: { '*': 1 } })], new Map(), porSku);
+assert.deepStrictEqual(d.lancar.map((m) => [m.numero, m.qtd]), [[408, 1]], 'produto só: 1 de 2 volta');
+
 // ---------- relatório ----------
 const movs = [
   { data: '2026-10-05T15:00:00.000Z', tipo: 'venda', origem: 'Mercado Livre · LOJA', numero: 407, qtd: -2, valor_unit: 30 },
