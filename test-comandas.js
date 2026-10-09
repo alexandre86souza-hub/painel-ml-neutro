@@ -82,5 +82,12 @@ assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_W
   assert.strictEqual(ET.soPdf(Buffer.concat([cab, nome, pdf]), 'X').toString(), '%PDF-1.4 x');
   assert.throws(() => ET.soPdf(Buffer.from('{"error":"logistics.x","message":"pacote sem rastreio"}'), 'Shopee'), /Shopee: pacote sem rastreio/);
   assert.throws(() => ET.soPdf(Buffer.from('<html>oi</html>'), 'Shopee'), /página HTML/); }
+{ // ZPL do ML: .zip com .txt (deflate) ou texto direto; outra coisa = erro com a mensagem da loja
+  const zpl = Buffer.from('^XA^FO50,50^FDAMG^FS^XZ', 'latin1');
+  const comp = require('node:zlib').deflateRawSync(zpl), nome = Buffer.from('Etiqueta de envio.txt'), cab = Buffer.alloc(30);
+  cab.writeUInt32LE(0x04034b50, 0); cab.writeUInt16LE(8, 8); cab.writeUInt32LE(comp.length, 18); cab.writeUInt16LE(nome.length, 26);
+  assert.strictEqual(ET.soZpl(Buffer.concat([cab, nome, comp]), 'ML'), zpl.toString('latin1'));
+  assert.strictEqual(ET.soZpl(zpl, 'ML'), zpl.toString('latin1'));
+  assert.throws(() => ET.soZpl(Buffer.from('{"message":"envio sem etiqueta"}'), 'Mercado Livre'), /Mercado Livre: envio sem etiqueta/); }
 assert.ok(!/\/api\/etiquetas/.test(mcp), 'etiquetas fora do MCP');
 console.log('Comandas: categorias, numeração do dia, prazo, código de barras, etiquetas de envio e fora do MCP: ok');

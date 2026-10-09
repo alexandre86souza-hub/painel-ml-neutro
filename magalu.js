@@ -389,18 +389,24 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   // Sem filtro de data a Magalu põe sozinha start_date entre AGORA e +30 dias (medido em 09/10/2026 no
   // meta.links.self): as promoções JÁ em andamento ficavam de fora e a lista vinha vazia. O painel manda o
   // período: começou até 180 dias atrás (ou começa nos próximos 120) e ainda não terminou.
-  const filtroPromocoes = (agora = Date.now()) => ({ start_at__gte: new Date(agora - 180 * 864e5).toISOString(),
-    start_at__lte: new Date(agora + 120 * 864e5).toISOString(), end_at__gte: new Date(agora).toISOString() });
+  // Com os filtros da doc a Magalu respondeu 500 (09/10/2026): se a consulta com período falhar no servidor
+  // dela, repete sem filtro (o comportamento de antes). O botão do log testa as variações para achar a certa.
+  const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const filtroPromocoes = (agora = Date.now()) => ({ start_at__gte: iso(agora - 180 * 864e5),
+    start_at__lte: iso(agora + 120 * 864e5), end_at__gte: iso(agora) });
   async function promocoesDaLoja() {
-    const todas = [];
-    const filtro = filtroPromocoes();
-    for (let off = 0; off < 1000; off += 50) {
-      const r = await mg('/seller/v1/promotions', { ...filtro, _limit: 50, _offset: off });
-      const l = r.results || [];
-      todas.push(...l.map(promoDe));
-      if (l.length < 50) break;
-    }
-    return todas;
+    const ler = async (filtro) => {
+      const todas = [];
+      for (let off = 0; off < 1000; off += 50) {
+        const r = await mg('/seller/v1/promotions', { ...filtro, _limit: 50, _offset: off });
+        const l = r.results || [];
+        todas.push(...l.map(promoDe));
+        if (l.length < 50) break;
+      }
+      return todas;
+    };
+    try { return await ler(filtroPromocoes()); }
+    catch (e) { if (e.status === 502 || e.status >= 500) return ler({}); throw e; }
   }
   const promocao = async (id) => promoDe(await mg(`/seller/v1/promotions/${encodeURIComponent(idPromo(id))}`));
   // até 3 chamadas ao mesmo tempo; cada item devolve ok ou o motivo da Magalu
@@ -430,15 +436,34 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   };
 
   const rotasPromocoes = {
+    // Testa as variações de filtro (só leitura, uma chamada cada) e devolve o log completo da 1ª: um resumo
+    // por variação (HTTP, quantas vieram, o filtro que a Magalu aplicou) para achar a que funciona.
     'GET /api/magalu/campanhas/log': async () => {
       const tk = await tokenAcesso(false);
-      const url = `${API}/seller/v1/promotions?${new URLSearchParams({ ...filtroPromocoes(), _limit: '50', _offset: '0' })}`;
-      const em = new Date().toISOString();
-      let r;
-      try { r = await fetch(url, { headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) }); }
-      catch (e) { throw erro(`A Magalu não respondeu (${e.message}).`, 502); }
-      const corpo = await r.text();
-      return { log: logDaRequisicao({ url, status: r.status, cabecalhos: Object.fromEntries(r.headers), corpo, em, token: tk, clientId: config().client_id }) };
+      const agora = Date.now(), f = filtroPromocoes(agora);
+      const variacoes = [
+        ['sem filtro', {}],
+        ['início a partir de 180 dias atrás (start_at__gte)', { start_at__gte: f.start_at__gte }],
+        ['término a partir de hoje (end_at__gte)', { end_at__gte: f.end_at__gte }],
+        ['início entre −180 e +120 dias (start_at__gte + start_at__lte)', { start_at__gte: f.start_at__gte, start_at__lte: f.start_at__lte }],
+        ['os três filtros', f],
+        ['nomes do link da Magalu (start_date_gte + start_date_lte)', { start_date_gte: f.start_at__gte, start_date_lte: f.start_at__lte }],
+      ];
+      const resumo = [];
+      let primeiro = null;
+      for (const [nome, filtro] of variacoes) {
+        const url = `${API}/seller/v1/promotions?${new URLSearchParams({ ...filtro, _limit: '50', _offset: '0' })}`;
+        const em = new Date().toISOString();
+        let r, corpo;
+        try { r = await fetch(url, { headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) }); corpo = await r.text(); }
+        catch (e) { resumo.push(`- ${nome}: sem resposta (${e.message})`); continue; }
+        let j = null; try { j = JSON.parse(corpo); } catch { /* não é JSON */ }
+        resumo.push(`- ${nome}: HTTP ${r.status}` + (j?.results ? ` · ${j.results.length} promoção(ões)` : '')
+          + (j?.meta?.links?.self ? ` · aplicado: ${j.meta.links.self}` : '') + (r.ok ? '' : ` · ${corpo.slice(0, 200)}`)
+          + ` · x-request-id ${r.headers.get('x-request-id') || '—'}`);
+        if (!primeiro) primeiro = logDaRequisicao({ url, status: r.status, cabecalhos: Object.fromEntries(r.headers), corpo, em, token: tk, clientId: config().client_id });
+      }
+      return { log: (primeiro || '') + '\n\nVariações de filtro testadas agora:\n' + resumo.join('\n') };
     },
     // Produtos de uma promoção, com o lucro no preço promocional, e os anúncios para incluir
     'GET /api/magalu/campanhas/skus': async (url) => {

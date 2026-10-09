@@ -198,6 +198,8 @@ html[data-tema="escuro"][data-pagina="devolucoes"] .pos{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .rec{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .rec-nf .defeito{background:hsla(33,90%,60%,.14);border:1px solid hsla(32,90%,60%,.35)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .defeito-kit label .sem-custo{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .defeito-kit .qtd-defeito input,
+html[data-tema="escuro"][data-pagina="devolucoes"] .qtd-defeito input{background:rgba(14,24,44,.72);color:hsl(222,47%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .comp .barra{background:rgba(125,211,252,.06)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .taxa-alta{color:hsl(3,71%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .motivos .barra{background:rgba(125,211,252,.06)}

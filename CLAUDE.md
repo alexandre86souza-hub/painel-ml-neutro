@@ -306,6 +306,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   (`comandas.js#fila`) com o número da comanda. ML: substatus ready_to_print/printed, `GET /shipment_labels?shipment_ids=&response_type=pdf`
   (`server.js#mlArquivo`; baixar marca impresso no ML); o envio sem etiqueta é relido a cada 3 min. Shopee: PROCESSED, get_tracking_number ->
   create_shipping_document (THERMAL_AIR_WAYBILL quando dá) -> get_shipping_document_result -> download_shipping_document (`daLoja(…, true)`).
+  "Baixar ZIP (.txt)": um .txt ZPL por conta/loja (`formato: zpl`: ML `response_type=zpl2`, `soZpl` tira o .txt do .zip; Shopee só tem PDF:
+  a tela converte cada página em imagem ZPL ^GFA 800×1200 pontos = 203 dpi, `zplDaImagem`), ZIP montado no navegador (`zipDe`, sem compressão).
   `POST /api/etiquetas/pdf` (binário, até 50, uma conta/loja por arquivo, falhas no cabeçalho X-Etiquetas-Falhas). A etiqueta tem endereço do
   comprador: não é guardada (só `comandas.etiqueta_em`) e nada vai ao MCP. Magalu: `POST /seller/v1/logistics/shipping-labels` (deliveries,
   label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).

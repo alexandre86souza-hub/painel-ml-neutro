@@ -88,6 +88,7 @@
       </div>
       <input type="search" id="busca" placeholder="Buscar pedido, cliente ou comanda" aria-label="Buscar etiqueta">
       <button type="button" class="bt imprimir" id="btSel" disabled>Imprimir selecionadas</button>
+      <button type="button" class="bt" id="btZip" disabled title="Um .txt (ZPL) por conta/loja, para mandar direto à térmica">Baixar ZIP (.txt)</button>
     </div>
     <p class="sub" id="nota"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Buscando os envios de todas as lojas…</p></div>
@@ -162,6 +163,7 @@ function pintarSel(){
   const n = sel.size;
   $('btSel').disabled = !n;
   $('btSel').textContent = n ? `Imprimir ${n} selecionada(s)` : 'Imprimir selecionadas';
+  $('btZip').disabled = !n;
 }
 
 function pintarLista(){
@@ -231,10 +233,103 @@ async function etiquetasDoPdf(bytes){
     const ox = out.getContext('2d'); ox.fillStyle = '#fff'; ox.fillRect(0, 0, out.width, out.height);
     if(deitada){ ox.translate(out.width, 0); ox.rotate(Math.PI / 2); }
     ox.drawImage(cv, x0, y0, w, h, 0, 0, w, h);
-    imgs.push(out.toDataURL('image/png'));
+    imgs.push({ src: out.toDataURL('image/png'), cv: out });
   }
   return imgs;
 }
+// Imagem -> ZPL (^GFA) em 203 dpi (8 pontos/mm): a etiqueta ocupa 100×150 mm = 800×1200 pontos, centrada,
+// preto/branco. É como a Shopee (só PDF) vira .txt para a térmica.
+function zplDaImagem(cv){
+  const W = 800, H = 1200;
+  const esc = Math.min(W / cv.width, H / cv.height);
+  const w = Math.round(cv.width * esc), h = Math.round(cv.height * esc);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.drawImage(cv, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h);
+  const px = x.getImageData(0, 0, W, H).data;
+  const porLinha = W / 8, hex = [];
+  for(let y = 0; y < H; y++){
+    let linha = '';
+    for(let b = 0; b < porLinha; b++){
+      let v = 0;
+      for(let k = 0; k < 8; k++){
+        const i = (y * W + b * 8 + k) * 4;
+        if(px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114 < 160) v |= 0x80 >> k;
+      }
+      linha += v.toString(16).toUpperCase().padStart(2, '0');
+    }
+    hex.push(linha);
+  }
+  const total = porLinha * H;
+  return `^XA^PW${W}^LL${H}^FO0,0^GFA,${total},${total},${porLinha},${hex.join('')}^FS^XZ`;
+}
+// ZIP sem compressão (método "store") montado no navegador. arquivos: [{ nome, texto }]
+function zipDe(arquivos){
+  const tab = new Uint32Array(256).map((_, n) => { let c = n; for(let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xFFFFFFFF; for(const v of b) c = tab[(c ^ v) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const enc = new TextEncoder();
+  const partes = [], central = []; let pos = 0;
+  for(const a of arquivos){
+    const nome = enc.encode(a.nome);
+    const dados = Uint8Array.from(a.texto, (ch) => ch.charCodeAt(0) & 0xFF);   // latin1, como a térmica lê
+    const c = crc(dados);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(8, 0, true);
+    lh.setUint32(14, c, true); lh.setUint32(18, dados.length, true); lh.setUint32(22, dados.length, true); lh.setUint16(26, nome.length, true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint32(16, c, true); ch.setUint32(20, dados.length, true); ch.setUint32(24, dados.length, true); ch.setUint16(28, nome.length, true);
+    ch.setUint32(42, pos, true);
+    partes.push(new Uint8Array(lh.buffer), nome, dados); central.push(new Uint8Array(ch.buffer), nome);
+    pos += 30 + nome.length + dados.length;
+  }
+  const tamC = central.reduce((s, p) => s + p.length, 0);
+  const fim = new DataView(new ArrayBuffer(22));
+  fim.setUint32(0, 0x06054b50, true); fim.setUint16(8, arquivos.length, true); fim.setUint16(10, arquivos.length, true);
+  fim.setUint32(12, tamC, true); fim.setUint32(16, pos, true);
+  return new Blob([...partes, ...central, new Uint8Array(fim.buffer)], { type: 'application/zip' });
+}
+const nomeArquivo = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w .-]+/g, '-').replace(/\s+/g, ' ').trim();
+
+// ZIP com um .txt (ZPL) por conta/loja, até 50 etiquetas por arquivo, na ordem das comandas.
+async function baixarZip(chaves){
+  const porChave = new Map(dados.etiquetas.map((e) => [e.chave, e]));
+  const grupos = new Map();
+  for(const k of chaves){ const e = porChave.get(k); if(!e || e.situacao !== 'liberada') continue; const g = grupos.get(e.grupo) || []; g.push(e); grupos.set(e.grupo, g); }
+  if(!grupos.size) return;
+  const b = $('btZip'); b.disabled = true; const txtBt = b.textContent; b.textContent = 'Gerando…';
+  const arquivos = [], problemas = [];
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
+  for(const lista of grupos.values()){
+    lista.sort((a, c) => a.categoria.localeCompare(c.categoria) || a.numero - c.numero);
+    for(let i = 0; i < lista.length; i += 50){
+      const parte = lista.slice(i, i + 50);
+      const ml = parte[0].canal === 'ml';
+      try{
+        const r = await fetch('/api/etiquetas/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chaves: parte.map((e) => e.chave), formato: ml ? 'zpl' : 'pdf' }) });
+        if(!r.ok){ const j = await r.json().catch(() => ({})); problemas.push(`${nomeGrupo(parte[0])}: ${j.error || 'falhou'}`);
+          for(const f of j.falhas || []) problemas.push(`  ${porChave.get(f.chave) ? nomeComanda(porChave.get(f.chave)) : f.chave}: ${f.motivo}`); continue; }
+        const falhas = JSON.parse(decodeURIComponent(r.headers.get('X-Etiquetas-Falhas') || '%5B%5D'));
+        for(const f of falhas) problemas.push(`${porChave.get(f.chave) ? nomeComanda(porChave.get(f.chave)) : f.chave}: ${f.motivo}`);
+        let texto;
+        if(ml){ const buf = new Uint8Array(await r.arrayBuffer()); texto = Array.from(buf, (v) => String.fromCharCode(v)).join(''); }
+        else texto = (await etiquetasDoPdf(new Uint8Array(await r.arrayBuffer()))).map((p) => zplDaImagem(p.cv)).join('\n');
+        const sufixo = lista.length > 50 ? ` parte ${i / 50 + 1}` : '';
+        arquivos.push({ nome: nomeArquivo(`${nomeGrupo(parte[0])} ${hoje}${sufixo}`) + '.txt', texto });
+      }catch(x){ problemas.push(`${nomeGrupo(parte[0])}: ${x.message}`); }
+    }
+  }
+  b.textContent = txtBt; b.disabled = false;
+  if(arquivos.length){
+    const a = document.createElement('a'); a.href = URL.createObjectURL(zipDe(arquivos)); a.download = `etiquetas ${hoje}.zip`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+  aviso(problemas.length ? 'Algumas etiquetas não saíram: ' + problemas.join(' · ') : (arquivos.length ? `ZIP baixado com ${arquivos.length} arquivo(s) .txt.` : ''), problemas.length ? '' : 'ok');
+  for(const k of chaves) sel.delete(k);
+  carregar(false);
+}
+
 let paginas = [];
 function imprimirTermica(){
   const area = $('impressao'); area.innerHTML = '';
@@ -280,9 +375,9 @@ async function imprimir(chaves){
         const aN = el('a', 'bt', 'PDF original'); aN.href = url; aN.target = '_blank'; aN.rel = 'noopener'; aN.title = 'Se a etiqueta sair estranha na térmica';
         const ac = el('div', 'acoes'); ac.append(aN); topo.appendChild(ac);
         const imgs = await etiquetasDoPdf(bytes.slice());
-        paginas.push(...imgs);
+        paginas.push(...imgs.map((i) => i.src));
         const pv = el('div', 'previas');
-        for(const src of imgs){ const i = el('img'); i.src = src; i.alt = 'Prévia da etiqueta'; pv.appendChild(i); }
+        for(const { src } of imgs){ const i = el('img'); i.src = src; i.alt = 'Prévia da etiqueta'; pv.appendChild(i); }
         caixa.appendChild(pv);
         if(falhas.length) caixa.appendChild(listaFalhas(falhas, porChave));
       }catch(x){ st.textContent = x.message; }
@@ -304,6 +399,7 @@ for(const b of $('segSit').querySelectorAll('button')) b.onclick = () => {
 $('busca').oninput = () => pintarLista();
 $('btReler').onclick = () => carregar(true);
 $('btSel').onclick = () => imprimir([...sel]);
+$('btZip').onclick = () => baixarZip([...sel]);
 for(const id of ['dlgFechar', 'dlgFechar2']) $(id).onclick = () => $('dlg').close();
 $('dlgImprimir').onclick = () => { $('dlg').close(); imprimirTermica(); };
 carregar(false);

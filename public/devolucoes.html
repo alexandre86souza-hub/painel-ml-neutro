@@ -82,8 +82,9 @@
   .defeito-kit label .custo,.defeito-kit label .sem-custo{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:8px}
   .defeito-kit label .sem-custo{color:#b91c1c}
   .defeito-kit small{font-size:11px;color:var(--muted)}
-  .qtd-defeito{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;white-space:nowrap}
-  .qtd-defeito input{width:56px;font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:7px}
+  .qtd-defeito,.defeito-kit .qtd-defeito{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;margin:2px 0 4px 22px;cursor:default}
+  /* mais específico que ".defeito-kit label input" (caixinha 16 px): campo de número de verdade */
+  .defeito-kit .qtd-defeito input,.qtd-defeito input{width:64px;height:30px;flex:0 0 64px;font:inherit;font-size:14px;font-weight:700;text-align:center;padding:2px 6px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#0f172a;-webkit-appearance:auto;appearance:auto}
   @media (max-width:1000px){ .rec{grid-template-columns:1fr 1fr} .rec-nf{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center} .rec-link{margin:0 0 0 auto} }
   @media (max-width:640px){ .rec{grid-template-columns:1fr} }
   .composicao{display:flex;flex-direction:column;gap:8px}

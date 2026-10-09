@@ -2616,12 +2616,12 @@ async function tratarPainelNoContexto(req, res, online = false) {
   if (req.method === 'POST' && url.pathname === '/api/etiquetas/pdf') {
     try {
       const b = JSON.parse(await lerCorpo(req, 64 * 1024) || '{}');
-      const r = await etiquetasMod.pdf(b.chaves);
+      const r = await etiquetasMod.pdf(b.chaves, b.formato === 'zpl' ? 'zpl' : 'pdf');
       D.auditoriaGravar(quem.login, 'POST', url.pathname, 200);
-      if (!r.pdf) return send(422, { error: 'Nenhuma etiqueta saiu.', falhas: r.falhas });
-      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store', ...SEGURANCA,
+      if (!r.pdf && !r.zpl) return send(422, { error: 'Nenhuma etiqueta saiu.', falhas: r.falhas });
+      res.writeHead(200, { 'Content-Type': r.zpl ? 'text/plain; charset=latin1' : 'application/pdf', 'Cache-Control': 'no-store', ...SEGURANCA,
         'X-Etiquetas-Ok': encodeURIComponent(JSON.stringify(r.ok)), 'X-Etiquetas-Falhas': encodeURIComponent(JSON.stringify(r.falhas)) });
-      return res.end(r.pdf);
+      return res.end(r.zpl ? Buffer.from(r.zpl, 'latin1') : r.pdf);
     } catch (e) {
       D.auditoriaGravar(quem.login, 'POST', url.pathname, e.status || 500);
       return send(e.status || 500, { error: e.message });

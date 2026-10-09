@@ -39,27 +39,53 @@ function tipoShopee(r) {
   return r?.suggest_shipping_document_type || sel[0] || 'THERMAL_AIR_WAYBILL';
 }
 
+// Arquivos de dentro de um .zip (cabeçalhos locais; deflate ou sem compressão). Função pura: testada.
+function arquivosDoZip(buf) {
+  const zlib = require('node:zlib');
+  const out = [];
+  for (let p = 0; p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50;) {
+    const metodo = buf.readUInt16LE(p + 8), tam = buf.readUInt32LE(p + 18), nl = buf.readUInt16LE(p + 26), xl = buf.readUInt16LE(p + 28);
+    const nome = buf.toString('utf8', p + 30, p + 30 + nl), dado = buf.subarray(p + 30 + nl + xl, p + 30 + nl + xl + tam);
+    out.push({ nome, dados: metodo === 8 ? zlib.inflateRawSync(dado) : dado });
+    p += 30 + nl + xl + tam;
+  }
+  return out;
+}
+// Resposta que não é o arquivo esperado: a mensagem da loja vira erro (sem repetir os bytes: a etiqueta tem
+// dado do comprador).
+function recusa(buf, loja, esperado) {
+  const txt = buf.subarray(0, 2000).toString('utf8').trim();
+  let msg = null;
+  try { const j = JSON.parse(txt); msg = j.message || j.error || null; } catch { /* não é JSON */ }
+  if (msg) return erro(`${loja}: ${String(msg).slice(0, 200)}`, 502);
+  return erro(`${loja} não devolveu ${esperado} (${/^</.test(txt) ? 'página HTML' : 'formato desconhecido'}, ${buf.length} bytes).`, 502);
+}
+
 // O que a loja devolveu tem de ser um PDF: confere pelos bytes. ZIP = tira o 1º PDF de dentro; JSON/texto = a
-// mensagem da loja vira erro (sem repetir os bytes: a etiqueta tem dado do comprador). Função pura: testada.
+// mensagem da loja vira erro. Função pura: testada.
 function soPdf(buf, loja) {
   if (!Buffer.isBuffer(buf) || !buf.length) throw erro(`${loja} devolveu um arquivo vazio.`, 502);
   const ini = buf.indexOf('%PDF');
   if (ini >= 0 && ini < 1024) return ini ? buf.subarray(ini) : buf;
-  if (buf[0] === 0x50 && buf[1] === 0x4b) {   // ZIP: percorre os arquivos de dentro
-    const zlib = require('node:zlib');
-    for (let p = 0; p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50;) {
-      const metodo = buf.readUInt16LE(p + 8), tam = buf.readUInt32LE(p + 18), nl = buf.readUInt16LE(p + 26), xl = buf.readUInt16LE(p + 28);
-      const nome = buf.toString('utf8', p + 30, p + 30 + nl), dado = buf.subarray(p + 30 + nl + xl, p + 30 + nl + xl + tam);
-      if (/\.pdf$/i.test(nome)) return soPdf(metodo === 8 ? zlib.inflateRawSync(dado) : dado, loja);
-      p += 30 + nl + xl + tam;
-    }
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {   // ZIP: o 1º PDF de dentro
+    const pdf = arquivosDoZip(buf).find((a) => /\.pdf$/i.test(a.nome));
+    if (pdf) return soPdf(pdf.dados, loja);
     throw erro(`${loja} mandou um .zip sem PDF dentro.`, 502);
   }
-  const txt = buf.subarray(0, 2000).toString('utf8').trim();
-  let msg = null;
-  try { const j = JSON.parse(txt); msg = j.message || j.error || null; } catch { /* não é JSON */ }
-  if (msg) throw erro(`${loja}: ${String(msg).slice(0, 200)}`, 502);
-  throw erro(`${loja} não devolveu um PDF (${/^</.test(txt) ? 'página HTML' : 'formato desconhecido'}, ${buf.length} bytes).`, 502);
+  throw recusa(buf, loja, 'um PDF');
+}
+
+// Etiqueta em ZPL (o texto que a térmica lê; o ML manda um .zip com .txt dentro). Devolve o texto. Função pura: testada.
+function soZpl(buf, loja) {
+  if (!Buffer.isBuffer(buf) || !buf.length) throw erro(`${loja} devolveu um arquivo vazio.`, 502);
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {
+    const txts = arquivosDoZip(buf).filter((a) => /\^XA/.test(a.dados.toString('latin1')));
+    if (!txts.length) throw erro(`${loja} mandou um .zip sem etiqueta ZPL dentro.`, 502);
+    return txts.map((a) => a.dados.toString('latin1')).join('\n');
+  }
+  const txt = buf.toString('latin1');
+  if (/\^XA/.test(txt.slice(0, 4096))) return txt;
+  throw recusa(buf, loja, 'a etiqueta em ZPL');
 }
 
 function criar({ D, mlArquivo, daLoja, comandas }) {
@@ -104,10 +130,11 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
     return { grupo, escolhidas };
   }
 
-  async function pdfMl(contaId, escolhidas) {
+  async function pdfMl(contaId, escolhidas, formato) {
     const ids = escolhidas.map((e) => e.chave.slice(3));
-    const pdf = soPdf(await mlArquivo(`/shipment_labels?shipment_ids=${ids.join(',')}&response_type=pdf`, contaId), 'Mercado Livre');
-    return { pdf, ok: escolhidas.map((e) => e.chave), falhas: [] };
+    const bruto = await mlArquivo(`/shipment_labels?shipment_ids=${ids.join(',')}&response_type=${formato === 'zpl' ? 'zpl2' : 'pdf'}`, contaId);
+    return { ...(formato === 'zpl' ? { zpl: soZpl(bruto, 'Mercado Livre') } : { pdf: soPdf(bruto, 'Mercado Livre') }),
+      ok: escolhidas.map((e) => e.chave), falhas: [] };
   }
 
   async function pdfShopee(shopId, escolhidas) {
@@ -163,11 +190,13 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
     return { pdf: soPdf(pdf, 'Shopee'), ok: prontos.map((x) => x.e.chave), falhas };
   }
 
-  // O PDF de um grupo. Devolve { pdf, ok, falhas }; marca as baixadas.
-  async function pdf(chaves) {
+  // O arquivo de um grupo. Devolve { pdf | zpl, ok, falhas }; marca as baixadas. ZPL: só o ML manda pronto (a
+  // Shopee só tem PDF: a tela converte as páginas em imagem ZPL no navegador).
+  async function pdf(chaves, formato = 'pdf') {
     const { grupo, escolhidas } = await conferir(chaves);
     const [canal, id] = grupo.split(':');
-    const r = canal === 'ml' ? await pdfMl(id, escolhidas) : await pdfShopee(id, escolhidas);
+    if (formato === 'zpl' && canal !== 'ml') throw erro('Só o Mercado Livre manda a etiqueta em ZPL; peça o PDF.', 400);
+    const r = canal === 'ml' ? await pdfMl(id, escolhidas, formato) : await pdfShopee(id, escolhidas);
     if (r.ok.length) D.comandasEtiqueta(r.ok);
     return r;
   }
@@ -178,4 +207,4 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
   return { rotas, pdf };
 }
 
-module.exports = { criar, situacaoEtiqueta, tipoShopee, soPdf, MAX };
+module.exports = { criar, situacaoEtiqueta, tipoShopee, soPdf, soZpl, arquivosDoZip, MAX };
