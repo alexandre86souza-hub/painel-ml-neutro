@@ -21,6 +21,23 @@
     box.appendChild(el('p', 'sub', 'Promoções que a Magalu liberou para a sua loja (as dela e as que você criou). Marque várias para entrar de uma vez, ou abra os produtos de cada uma para escolher preço e quantidade.'));
     if(!lst.length){
       box.appendChild(el('p', 'recusas', 'A Magalu não devolveu nenhuma promoção pela API para a sua loja, embora o Portal do Seller mostre várias. Isso acontece quando a loja ainda não foi liberada pela Magalu para promoções por integração. Peça no atendimento da Magalu (Portal do Seller → Ajuda → abrir chamado): "Quero liberar meu seller na Open API de Promoções (allowlist do módulo promocional) para ver e aderir às campanhas pelo meu sistema." Assim que liberarem, elas aparecem aqui sozinhas.'));
+      // o suporte da Magalu pede o log da requisição: o painel monta, sem o token
+      const bLog = el('button', 'bt', 'Gerar log para o suporte da Magalu'); bLog.type = 'button';
+      const saida = el('div');
+      bLog.onclick = async () => {
+        bLog.disabled = true; saida.innerHTML = '';
+        try{
+          const r = await api('/api/magalu/campanhas/log');
+          const ta = el('textarea'); ta.readOnly = true; ta.value = r.log; ta.rows = 16;
+          ta.style.cssText = 'width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;margin-top:8px';
+          ta.setAttribute('aria-label', 'Log da requisição para o suporte da Magalu');
+          const bC = el('button', 'bt', 'Copiar log'); bC.type = 'button';
+          bC.onclick = async () => { try{ await navigator.clipboard.writeText(ta.value); bC.textContent = 'Copiado'; }catch{ ta.select(); } };
+          saida.append(el('p', 'sub', 'Cole no chamado da Magalu. O token de acesso não aparece (vai como [oculto]).'), ta, bC);
+        }catch(e){ saida.appendChild(el('p', 'recusas', e.message)); }
+        bLog.disabled = false;
+      };
+      box.append(bLog, saida);
       return;
     }
     const t = el('table'); const cab = el('tr');

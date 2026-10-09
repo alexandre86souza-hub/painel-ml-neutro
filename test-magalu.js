@@ -62,4 +62,11 @@ assert.strictEqual(M.linhasDe([{ ...ped, status: 'cancelled' }], { mapa: new Map
 const mcp = require('node:fs').readFileSync(require('node:path').join(__dirname, 'mcp.js'), 'utf8');
 assert.ok(!/\/api\/magalu/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/magalu');
 
+// log para o suporte da Magalu: sem o token, sem cookie, com quem é a loja
+{ const tk = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsb2phLTEiLCJ0ZW5hbnQiOiJBTUciLCJzY29wZSI6Im9wZW46cHJvbW90aW9uLXByb21vdGlvbnMtc2VsbGVyOnJlYWQiLCJlbWFpbCI6InhAeSJ9.assinatura-secreta';
+  const log = require('./magalu.js').logDaRequisicao({ url: 'https://api.magalu.com/seller/v1/promotions?_limit=50&_offset=0', status: 200,
+    cabecalhos: { 'content-type': 'application/json', 'x-request-id': 'abc', 'set-cookie': 'sessao=1' }, corpo: '{"meta":{},"results":[]}', em: '2026-10-09T18:00:00Z', token: tk, clientId: 'app-1' });
+  assert.ok(!log.includes(tk) && !log.includes('assinatura-secreta'), 'token fora do log');
+  assert.ok(!/sessao=1/.test(log) && !/x@y/.test(log), 'sem cookie e sem e-mail');
+  assert.ok(log.includes('Bearer [oculto]') && log.includes('x-request-id: abc') && log.includes('"tenant": "AMG"') && log.includes('"results":[]')); }
 console.log('Magalu: credenciais, autorização da loja, sem dados de comprador, recebido pelo financeiro e fora do MCP: ok');

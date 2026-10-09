@@ -163,6 +163,31 @@ function linhasDe(pedidos, ctx) {
   return out;
 }
 
+// Log da consulta de promoções para o suporte da Magalu (chamado de allowlist): a requisição como foi
+// feita e a resposta inteira, SEM o token (vai "Bearer [oculto]"); do token só os dados de quem é a loja,
+// o aplicativo e as permissões (o que o suporte precisa para achar o seller). Função pura: testada.
+function logDaRequisicao({ url, status, cabecalhos, corpo, em, token, clientId }) {
+  let claims = null;
+  try { claims = JSON.parse(Buffer.from(String(token || '').split('.')[1] || '', 'base64url').toString('utf8')); } catch { claims = null; }
+  const doToken = claims ? Object.fromEntries(Object.entries(claims).filter(([k]) =>
+    /^(sub|iss|aud|azp|client_id|scope|scopes|tenant|tenant_id|tenant_type|seller|seller_id|account|iat|exp)$/i.test(k))) : null;
+  const resp = Object.entries(cabecalhos || {}).filter(([k]) => !/^(set-cookie|cookie)$/i.test(k));
+  return [
+    `Data/hora: ${em} (UTC)`,
+    'Aplicativo (client_id): ' + (clientId || '—'),
+    '',
+    `>>> GET ${url}`,
+    'Authorization: Bearer [oculto]',
+    'Accept: application/json',
+    '',
+    `<<< HTTP ${status}`,
+    ...resp.map(([k, v]) => `${k}: ${v}`),
+    '',
+    String(corpo ?? '').slice(0, 6000),
+    ...(doToken ? ['', 'Dados do token de acesso (sem a assinatura):', JSON.stringify(doToken, null, 2)] : []),
+  ].join('\n');
+}
+
 function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, enviarHtml, redirecionar, pagina, esc }) {
   const config = () => ({ client_id: D.configLer('magalu_client_id') || null, client_secret: D.configLer('magalu_client_secret') || null,
     refresh: D.configLer('magalu_refresh_token') || null });
@@ -399,6 +424,16 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   };
 
   const rotasPromocoes = {
+    'GET /api/magalu/campanhas/log': async () => {
+      const tk = await tokenAcesso(false);
+      const url = `${API}/seller/v1/promotions?_limit=50&_offset=0`;
+      const em = new Date().toISOString();
+      let r;
+      try { r = await fetch(url, { headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) }); }
+      catch (e) { throw erro(`A Magalu não respondeu (${e.message}).`, 502); }
+      const corpo = await r.text();
+      return { log: logDaRequisicao({ url, status: r.status, cabecalhos: Object.fromEntries(r.headers), corpo, em, token: tk, clientId: config().client_id }) };
+    },
     // Produtos de uma promoção, com o lucro no preço promocional, e os anúncios para incluir
     'GET /api/magalu/campanhas/skus': async (url) => {
       const id = idPromo(url.searchParams.get('id'));
@@ -685,4 +720,4 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   return { rotas, rotasParam: [], callback, mg, config, sincronizar };
 }
 
-module.exports = { criar, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };
+module.exports = { criar, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };
