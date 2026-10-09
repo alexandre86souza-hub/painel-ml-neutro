@@ -10,36 +10,17 @@
   const valorTxt = (v) => !v ? null : v.variavel ? `${v.tipo === 'reais' ? real(v.min) : numero(v.min) + '%'} a ${v.tipo === 'reais' ? real(v.max) : numero(v.max) + '%'}`
     : v.tipo === 'variavel' ? 'variável' : v.tipo === 'reais' ? real(v.valor) : `${numero(v.valor)}%`;
   const dh = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-  const extras = new Map();   // promoções abertas pelo código (a lista da API pode não trazer todas)
   const escolhidas = new Set();
 
-  function lista(dados){
-    const base = dados.promocoes_loja || [];
-    const vistos = new Set(base.map((p) => p.id));
-    return [...base, ...[...extras.values()].filter((p) => !vistos.has(p.id))];
-  }
+  const lista = (dados) => dados.promocoes_loja || [];
 
   function pintarLista(box, dados){
     box.innerHTML = '';
     if(dados.erro_promocoes) box.appendChild(el('p', 'recusas', 'Não consegui ler as promoções da Magalu agora: ' + dados.erro_promocoes));
     const lst = lista(dados);
     box.appendChild(el('p', 'sub', 'Promoções que a Magalu liberou para a sua loja (as dela e as que você criou). Marque várias para entrar de uma vez, ou abra os produtos de cada uma para escolher preço e quantidade.'));
-    // abrir pelo código do portal
-    const f = el('div', 'acoes-camp');
-    const inp = el('input'); inp.placeholder = 'Código da promoção (do endereço no Portal do Seller)'; inp.setAttribute('aria-label', 'Código da promoção');
-    inp.style.cssText = 'flex:1 1 320px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px';
-    const bt = el('button', 'bt', 'Abrir promoção'); bt.type = 'button';
-    bt.onclick = async () => {
-      const m = inp.value.trim().match(/([0-9a-f]{24}|[0-9a-f-]{36})\/?$/i);
-      if(!m){ aviso('Cole o código (ou o endereço inteiro) da promoção no Portal do Seller: …/promocoes-disponiveis/detalhes/CÓDIGO'); return; }
-      bt.disabled = true;
-      try{ const r = await api('/api/magalu/campanhas/promocao?id=' + encodeURIComponent(m[1])); extras.set(r.promocao.id, r.promocao); aviso(''); pintarLista(box, dados); }
-      catch(e){ aviso('A Magalu não mostrou essa promoção: ' + e.message); }
-      finally{ bt.disabled = false; }
-    };
-    f.append(inp, bt); box.appendChild(f);
     if(!lst.length){
-      box.appendChild(el('p', 'sub', 'A Magalu não devolveu nenhuma promoção pela API para a sua loja. Se o Portal do Seller mostra promoções, abra uma lá, copie o código do endereço e cole acima. Se ela também não abrir aqui, a Magalu ainda não liberou a sua loja para promoções pela API (peça ao atendimento da Magalu: "liberar o seller na Open API de Promoções").'));
+      box.appendChild(el('p', 'recusas', 'A Magalu não devolveu nenhuma promoção pela API para a sua loja, embora o Portal do Seller mostre várias. Isso acontece quando a loja ainda não foi liberada pela Magalu para promoções por integração. Peça no atendimento da Magalu (Portal do Seller → Ajuda → abrir chamado): "Quero liberar meu seller na Open API de Promoções (allowlist do módulo promocional) para ver e aderir às campanhas pelo meu sistema." Assim que liberarem, elas aparecem aqui sozinhas.'));
       return;
     }
     const t = el('table'); const cab = el('tr');

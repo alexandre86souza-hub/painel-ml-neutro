@@ -89,6 +89,17 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   }
   // pacote com vários pedidos: a compra mais antiga
   const compraMaisAntiga = (pedidos) => { const t = pedidos.map((p) => Date.parse(p.date_created)).filter(Number.isFinite); return t.length ? new Date(Math.min(...t)).toISOString() : null; };
+  // Foto de capa de cada anúncio do ML (1ª foto), 20 por chamada; não muda: fica na memória.
+  const fotosMl = new Map();
+  async function fotosDoMl(ids, userId) {
+    const falta = [...new Set(ids.filter((id) => id && !fotosMl.has(id)))];
+    for (let i = 0; i < falta.length; i += 20) {
+      try {
+        const r = await ml(`/items?ids=${falta.slice(i, i + 20).join(',')}&attributes=id,pictures,secure_thumbnail`, {}, userId);
+        for (const x of Array.isArray(r) ? r : []) if (x?.body?.id) fotosMl.set(x.body.id, x.body.pictures?.[0]?.secure_url || x.body.secure_thumbnail || null);
+      } catch { /* sem foto: a comanda sai sem */ }
+    }
+  }
   async function pendentesMl() {
     const out = [];
     for (const conta of D.contasListar()) {
@@ -104,10 +115,12 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
         const x = porEnvio.get(id) || { pedidos: [], itens: [] };
         x.pedidos.push(p);
         for (const i of p.order_items || []) x.itens.push({ qtd: i.quantity, sku: i.item?.seller_sku || i.item?.seller_custom_field || null, titulo: i.item?.title || null,
-          variacao: (i.item?.variation_attributes || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null });
+          variacao: (i.item?.variation_attributes || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null, item_id: i.item?.id || null });
         porEnvio.set(id, x);
       }
       const envios = await lotes([...porEnvio.keys()], 5, async (id) => ({ id, s: await envioMl(id, conta.ml_user_id).catch(() => null) }));
+      await fotosDoMl([...porEnvio.values()].flatMap((x) => x.itens.map((i) => i.item_id)), conta.ml_user_id);
+      for (const x of porEnvio.values()) for (const i of x.itens) { i.foto = fotosMl.get(i.item_id) || null; delete i.item_id; }
       for (const { id, s } of envios) {
         if (!s || jaSaiuMl(s.sub)) continue;
         const cat = categoriaDe('ml', s.tipo);
@@ -150,7 +163,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
             ...cat, cliente: o.recipient_address?.name || null, prazo: o.ship_by_date ? new Date(o.ship_by_date * 1000).toISOString() : null,
             comprado_em: o.create_time ? new Date(o.create_time * 1000).toISOString() : null,
             itens: (o.item_list || []).map((i) => ({ qtd: i.model_quantity_purchased, sku: (i.model_sku || i.item_sku || '').trim() || null,
-              titulo: i.item_name || null, variacao: i.model_name || null })), etapa: o.order_status });
+              titulo: i.item_name || null, variacao: i.model_name || null, foto: i.image_info?.image_url || null })), etapa: o.order_status });
         }
       }
     }
@@ -174,7 +187,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           out.push({ chave: `magalu:${p.code}:${d.code || d.id}`, canal: 'magalu', loja: D.configLer('magalu_loja_nome') || 'Magalu', pedido: String(p.code),
             ...cat, cliente: p.customer?.name || null, prazo: d.shipping?.handling_time?.limit_date || null,
             comprado_em: p.purchased_at || p.created_at || null,
-            itens: (d.items || []).map((i) => ({ qtd: i.quantity, sku: i.info?.sku != null ? String(i.info.sku) : null, titulo: i.info?.description || null, variacao: null })),
+            itens: (d.items || []).map((i) => ({ qtd: i.quantity, sku: i.info?.sku != null ? String(i.info.sku) : null, titulo: i.info?.description || null, variacao: null,
+              foto: (i.info?.images || []).find((m) => /^https:\/\//.test(m?.url || ''))?.url || null })),
             etapa: d.status || p.status });
         }
       }
@@ -184,13 +198,20 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   }
 
   // ---- Leroy Merlin
+  const FOTO_LEROY = /^\/media\/product\/image\/[0-9a-f-]{36}$/i;
+  const fotoLeroy = (host, medias) => {
+    const ok = (medias || []).filter((m) => FOTO_LEROY.test(m?.media_url || ''));
+    const m = ok.find((x) => x.type === 'MEDIUM') || ok.find((x) => x.type === 'SMALL') || ok[0];
+    return host && m ? `${host}/mmp${m.media_url}` : null;
+  };
   async function pendentesLeroy() {
     const c = leroy?.config();
     if (!c?.host || !c?.api_key) return [];
     const r = await leroy.mk(c, '/api/orders', { order_state_codes: 'SHIPPING', max: 100 }, { pessoais: true });
     return (r.orders || []).map((o) => ({ chave: `leroy:${o.order_id}`, canal: 'leroy', loja: D.configLer('leroy_loja_nome') || 'Leroy Merlin',
       pedido: o.order_id, ...categoriaDe('leroy'), cliente: [o.customer?.firstname, o.customer?.lastname].filter(Boolean).join(' ') || null,
-      prazo: o.shipping_deadline || null, comprado_em: o.created_date || null, itens: (o.order_lines || []).map((l) => ({ qtd: l.quantity, sku: l.offer_sku || null, titulo: l.product_title || null, variacao: null })),
+      prazo: o.shipping_deadline || null, comprado_em: o.created_date || null, itens: (o.order_lines || []).map((l) => ({ qtd: l.quantity, sku: l.offer_sku || null, titulo: l.product_title || null, variacao: null,
+        foto: fotoLeroy(c.host, l.product_medias) })),
       etapa: o.order_state }));
   }
 
@@ -208,6 +229,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       params = { MarketplaceIds: 'A2Q3Y263D00KWC', NextToken: r.payload.NextToken };
     }
     const out = [];
+    const fotosAmazon = D.amazonFotos();
     for (const o of pedidos) {
       const cat = categoriaDe('amazon', o.FulfillmentChannel === 'AFN' ? 'AFN' : (o.EasyShipShipmentStatus ? 'easyship' : ''));
       if (!cat) continue;
@@ -217,7 +239,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           .map((i) => ({ qtd: Number(i.QuantityOrdered) || 0, sku: i.SellerSKU || null, titulo: i.Title || null, variacao: null }))); } catch { /* tenta na próxima */ }
       }
       out.push({ chave: `amazon:${id}`, canal: 'amazon', loja: D.configLer('amazon_vendedor') || 'Amazon', pedido: id, ...cat, cliente: null,
-        prazo: o.LatestShipDate || null, comprado_em: o.PurchaseDate || null, itens: itensAmazon.get(id) || [], etapa: o.OrderStatus });
+        prazo: o.LatestShipDate || null, comprado_em: o.PurchaseDate || null, etapa: o.OrderStatus,
+        itens: (itensAmazon.get(id) || []).map((i) => ({ ...i, foto: fotosAmazon.get(i.sku)?.foto || null })) });
     }
     return out;
   }

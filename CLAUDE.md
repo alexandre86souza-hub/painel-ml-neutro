@@ -264,7 +264,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   a Magalu: a SALE não o inclui). Sem financeiro: amounts.commission do pedido (= comissão + tarifa fixa + MDR,
   medido) como estimado. O financeiro NÃO diz em qual depósito (semanal, às segundas) o pedido foi pago.
   Promoções da Magalu (`magalu.js#rotasPromocoes`, `/api/magalu/campanhas/*`, Open API de Promoções): lista (ativas e planejadas que a loja
-  pode entrar ou já entrou; a API pode trazer menos que o portal: a tela abre uma pelo código do endereço do portal), entrar em
+  pode entrar ou já entrou; só depois que a Magalu põe o seller na allowlist da API — o código do endereço do portal NÃO serve: a API só aceita UUID), entrar em
   várias (POST subscriptions = aceita a coparticipação), sair, produtos (PUT/DELETE skus ficam pending; com a loja já participando
   o painel confirma com POST apply) com lucro no preço promocional (`anunciosComCusto`) e criar promoção da loja (Preço Promocional,
   Desconto à Vista, Cliente Ouro, Cupom). channel.id da Magalu = o dos pedidos. Escrita só pelo clique, com confirmação; nada no MCP.
@@ -283,7 +283,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   /shipments/{id}/sla (prazo de despacho), fora os substatus dropped_off/picked_up/in_hub (`jaSaiuMl`: já saiu, mas o ML
   só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
   Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
-  (vai impresso, em letra grande, para as câmeras). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
+  (vai impresso, em letra grande, para as câmeras). Cada item sai com a foto de capa (cinza, 24 mm): ML pictures[0] por /items?ids= (20 por chamada, memória), Shopee
+  image_info, Magalu info.images, Leroy product_medias ({host}/mmp…), Amazon amazon_fotos; a impressão espera as fotos (até 4 s). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Comanda nova: `public/comandas-aviso.js`
   (injetado pelo sino.js em todas as telas, só para quem abre /comandas.html) confere `/api/comandas` a cada minuto e, para
   comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som

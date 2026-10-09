@@ -399,8 +399,6 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   };
 
   const rotasPromocoes = {
-    // Uma promoção pelo código (o do endereço do portal: …/promocoes-disponiveis/detalhes/{código})
-    'GET /api/magalu/campanhas/promocao': async (url) => ({ promocao: await promocao(url.searchParams.get('id')) }),
     // Produtos de uma promoção, com o lucro no preço promocional, e os anúncios para incluir
     'GET /api/magalu/campanhas/skus': async (url) => {
       const id = idPromo(url.searchParams.get('id'));

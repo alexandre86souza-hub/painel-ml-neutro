@@ -125,7 +125,7 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
-<script src="/magalu-promocoes.js?v=1"></script>
+<script src="/magalu-promocoes.js?v=2"></script>
 <script>
 // ?conta=amazon | leroy. Os dados vêm de /api/{canal}/campanhas; criar e encerrar mudam a loja
 // (só pelo clique, com confirmação). Nada desta tela vai para o MCP.
@@ -175,6 +175,7 @@ async function carregar(recarregar){
       $('segFiltro').closest('.filtros').hidden = true; $('btMais').closest('.acoes-camp').hidden = true;
       $('segFiltro').closest('section').querySelector('h2').textContent = 'Criar promoção da loja';
       $('mgCriar').hidden = false; if(!$('mgCriar').firstChild) MagaluPromocoes.pintarCriar($('mgCriar'));
+      $('participar').closest('section').after($('segFiltro').closest('section'));
     }
     pintarCartoes(); pintarParticipar(); pintarPromocoes(); pintarGrupos(); pintarLista();
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }

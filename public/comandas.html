@@ -59,6 +59,9 @@
   .comanda .c-qtd{font-size:18pt;font-weight:900}
   .comanda .c-sku{font-size:12pt;font-weight:900;word-break:break-all}
   .comanda .c-tit{font-size:9.5pt;font-weight:700;margin-top:0.5mm}
+  .comanda .c-item.com-foto{display:flex;gap:2mm;align-items:flex-start}
+  .comanda .c-foto{width:24mm;height:24mm;object-fit:contain;flex:0 0 24mm;filter:grayscale(1) contrast(1.15)}
+  .comanda .c-item-txt{flex:1;min-width:0}
   .comanda .c-rodape{font-size:11pt;font-weight:900;text-align:center;margin-top:2.5mm;padding-top:1.5mm;border-top:0.5mm dashed #000}
   .comanda .c-rodape small{display:block;font-size:8pt;font-weight:700;letter-spacing:.15em}
   .hist-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px}
@@ -291,7 +294,14 @@ function comandaEl(c){
   d.appendChild(el('div', 'c-rot', 'ITENS A SEPARAR'));
   for(const i of c.itens){
     const it = el('div', 'c-item');
-    it.append(el('div', 'c-qtd', `QTD: ${i.qtd}`), el('div', 'c-sku', `SKU: ${i.sku || '—'}`), el('div', 'c-tit', [i.titulo, i.variacao].filter(Boolean).join(' — ')));
+    const txt = el('div', 'c-item-txt');
+    txt.append(el('div', 'c-qtd', `QTD: ${i.qtd}`), el('div', 'c-sku', `SKU: ${i.sku || '—'}`), el('div', 'c-tit', [i.titulo, i.variacao].filter(Boolean).join(' — ')));
+    // foto de capa do anúncio (só https; sem foto ou se não carregar, a linha fica só com o texto)
+    if(/^https:\/\//.test(i.foto || '')){
+      const img = el('img', 'c-foto'); img.alt = ''; img.referrerPolicy = 'no-referrer'; img.src = i.foto;
+      img.onerror = () => { img.remove(); it.classList.remove('com-foto'); };
+      it.classList.add('com-foto'); it.append(img, txt);
+    }else it.appendChild(txt);
     d.appendChild(it);
   }
   const rod = el('div', 'c-rodape'); const agora = new Date().toISOString();
@@ -314,9 +324,13 @@ async function marcar(chaves, impressa){
   pintar();
 }
 // imprime pela impressora escolhida no navegador; depois de fechar a janela de impressão, marca como impressa
-$('dlgImprimir').onclick = () => {
+$('dlgImprimir').onclick = async () => {
   const area = $('impressao'); area.innerHTML = '';
   for(const c of naPrevia) area.appendChild(comandaEl(c));
+  // espera as fotos (já vistas na prévia, vêm do cache) para não sair a comanda sem elas; no máximo 4 s
+  const fotos = [...area.querySelectorAll('img')].filter((i) => !i.complete);
+  if(fotos.length) await Promise.race([Promise.all(fotos.map((i) => new Promise((ok) => { i.addEventListener('load', ok); i.addEventListener('error', ok); }))),
+    new Promise((ok) => setTimeout(ok, 4000))]);
   const chaves = naPrevia.map((c) => c.chave);
   const depois = async () => {
     window.removeEventListener('afterprint', depois);
