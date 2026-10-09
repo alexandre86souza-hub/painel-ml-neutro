@@ -43,15 +43,24 @@
   function tocar() {
     const c = audio(); if (!c) return;
     if (c.state !== 'running') c.resume().catch(() => {});   // suspenso: as notas tocam quando o navegador liberar
+    // Alto: onda quadrada (mais harmônicos = soa mais forte que a triangular) + a mesma nota uma oitava acima,
+    // tudo num compressor com ganho final no máximo — fica alto sem distorcer.
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.knee.value = 6; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.2;
+    const mestre = c.createGain(); mestre.gain.value = 1.8;
+    comp.connect(mestre).connect(c.destination);
     const nota = (freq, ini, dur) => {
-      const o = c.createOscillator(), g = c.createGain();
-      o.type = 'triangle'; o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, c.currentTime + ini);
-      g.gain.exponentialRampToValueAtTime(0.5, c.currentTime + ini + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + ini + dur);
-      o.connect(g).connect(c.destination); o.start(c.currentTime + ini); o.stop(c.currentTime + ini + dur + 0.05);
+      for (const [tipo, f, vol] of [['square', freq, 0.6], ['triangle', freq * 2, 0.5]]) {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = tipo; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, c.currentTime + ini);
+        g.gain.exponentialRampToValueAtTime(vol, c.currentTime + ini + 0.015);
+        g.gain.setValueAtTime(vol, c.currentTime + ini + dur * 0.5);
+        g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + ini + dur);
+        o.connect(g).connect(comp); o.start(c.currentTime + ini); o.stop(c.currentTime + ini + dur + 0.05);
+      }
     };
-    for (let i = 0; i < 3; i++) { nota(988, i * 0.9, 0.35); nota(784, i * 0.9 + 0.3, 0.5); }
+    for (let i = 0; i < 3; i++) { nota(988, i * 0.95, 0.4); nota(784, i * 0.95 + 0.35, 0.55); }
   }
 
   // Título piscando enquanto o aviso estiver aberto
