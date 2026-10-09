@@ -47,7 +47,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   recalculado; 'manual' nunca é sobrescrito. Imposto da empresa = soma dos impostos cadastrados.
 - Acompanhamento (`painel.js`): Performance, ABC, Full, qualidade dos anúncios e avisos.
   Venda do Full = `vendas.origem` (node_id do estoque) diferente de `BRP…`; estoque no Full =
-  `/user-products/{id}/stock` (meli_facility). Menu lateral único em `public/menu.js`; sino de
+  `/user-products/{id}/stock` (meli_facility). Reposição (tela Full, no navegador, também FBA): enviar = ⌈venda/dia × (dias de
+  cobertura + dias até chegar)⌉ − estoque no Full (− a caminho no FBA); sem estoque no Full e vendendo pelo depósito, usa essa venda. Menu lateral único em `public/menu.js`; sino de
   avisos em `public/sino.js` (os dois carregados em todas as telas).
   Tipo de envio (Performance): Full pela origem do estoque; Flex = `logistic_type`
   `self_service` de `/shipments/{id}`, uma consulta por envio guardada em `envio_logistica`.

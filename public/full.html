@@ -16,6 +16,12 @@
   .filtros input{font:inherit;font-size:14px;padding:7px 12px;border:1px solid var(--line);border-radius:9px;min-width:240px}
   .dias{font-weight:700}
   .dias.critico{color:#b91c1c}.dias.alerta{color:#b45309}.dias.ok{color:#15803d}
+  .repor-param{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 12px}
+  .repor-param label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .repor-param input{width:110px;font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
+  td.enviar{font-weight:800;white-space:nowrap}
+  td.enviar.sim{color:#c2410c}
+  td.enviar small{display:block;font-weight:600;font-size:11px;color:#64748b}
 </style>
 </head>
 <body>
@@ -43,12 +49,18 @@
   <section class="bloco">
     <h2>Anúncios no Full</h2>
     <p class="sub" id="subLista">Dias de estoque = estoque no Full ÷ média diária de vendas do Full.</p>
+    <div class="repor-param">
+      <label>Cobrir quantos dias de venda<input id="pCobertura" type="number" min="1" max="180" step="1" value="30"></label>
+      <label>Dias até chegar ao Full<input id="pPrazo" type="number" min="0" max="60" step="1" value="7"></label>
+      <p class="sub" id="subRepor" style="margin:0;flex:1 1 320px"></p>
+    </div>
     <div class="filtros">
       <input id="busca" type="search" placeholder="Buscar por título ou MLB" aria-label="Buscar anúncio">
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
         <button type="button" data-f="" aria-pressed="true">Todos</button>
         <button type="button" data-f="estoque">Com estoque no Full</button>
         <button type="button" data-f="acabando">Acabando (menos de 15 dias)</button>
+        <button type="button" data-f="enviar">Precisa enviar</button>
         <button type="button" data-f="parado">Com estoque e sem venda</button>
         <button type="button" data-f="zerado">Sem estoque no Full</button>
       </div>
@@ -79,6 +91,22 @@ $('segFiltro').onclick = (ev) => {
   pintar();
 };
 $('busca').oninput = () => pintar();
+// Recomendação de reposição: quanto mandar para o Full cobrir N dias de venda, contando os dias até o envio
+// chegar lá. Venda por dia = média do Full (30 dias); anúncio que ficou sem estoque no Full e vendeu pelo
+// depósito usa essa venda. Enviar = ⌈venda/dia × (cobertura + prazo)⌉ − estoque no Full − a caminho (FBA).
+const PARAM = 'painel.full.repor';
+try{ const p = JSON.parse(localStorage.getItem(PARAM) || 'null'); if(p){ $('pCobertura').value = p.cobertura; $('pPrazo').value = p.prazo; } }catch{}
+const param = () => ({ cobertura: Math.max(1, Number($('pCobertura').value) || 30), prazo: Math.max(0, Number($('pPrazo').value) || 0) });
+for(const id of ['pCobertura', 'pPrazo']) $(id).oninput = () => { try{ localStorage.setItem(PARAM, JSON.stringify(param())); }catch{} if(dados){ pintarCartoes(); pintar(); } };
+function reposicao(i){
+  const { cobertura, prazo } = param();
+  let porDia = i.media_dia || 0, fonte = NOME;
+  if(!porDia && !(i.estoque_full > 0) && i.vendas_deposito_30 > 0){ porDia = i.vendas_deposito_30 / 30; fonte = NA_AMAZON ? 'envio próprio' : 'depósito'; }
+  const caminho = NA_AMAZON ? (i.estoque_deposito || 0) : 0;
+  const alvo = Math.ceil(porDia * (cobertura + prazo) - 1e-9);
+  const enviar = porDia > 0 ? Math.max(0, alvo - (i.estoque_full || 0) - caminho) : 0;
+  return { enviar, alvo, porDia, fonte, deposito: NA_AMAZON ? null : i.estoque_deposito };
+}
 $('btAtualizar').onclick = () => carregar(true);
 function kpi(rot, valor, nota){ const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); return c; }
 function pintar(){
@@ -90,12 +118,15 @@ function pintar(){
     if(filtro === 'acabando' && !(i.dias_estoque != null && i.dias_estoque < 15)) return false;
     if(filtro === 'parado' && !(i.estoque_full > 0 && !i.vendas_full_30)) return false;
     if(filtro === 'zerado' && i.estoque_full > 0) return false;
+    if(filtro === 'enviar' && !(reposicao(i).enviar > 0)) return false;
     return !q || i.id.toLowerCase().includes(q) || (i.titulo || '').toLowerCase().includes(q);
   });
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
   const t = el('table'); const cab = el('tr');
-  const cols = NA_AMAZON ? ['Produto', 'Disponível no FBA', 'A caminho do FBA', 'Vendas FBA 30d', '60d', '90d', 'Média/dia', 'Dias de estoque', 'Envio próprio 30d']
-    : ['Anúncio', 'Estoque Full', 'No depósito', 'Vendas Full 30d', '60d', '90d', 'Média/dia', 'Dias de estoque', 'Vendas depósito 30d'];
+  const cols = NA_AMAZON ? ['Produto', 'Disponível no FBA', 'A caminho do FBA', 'Vendas FBA 30d', '60d', '90d', 'Média/dia', 'Dias de estoque', 'Envio próprio 30d', 'Enviar ao FBA']
+    : ['Anúncio', 'Estoque Full', 'No depósito', 'Vendas Full 30d', '60d', '90d', 'Média/dia', 'Dias de estoque', 'Vendas depósito 30d', 'Enviar ao Full'];
+  // quem precisa enviar primeiro (mais unidades), depois a ordem de antes
+  if(filtro === 'enviar') itens.sort((a, b) => reposicao(b).enviar - reposicao(a).enviar);
   for(const h of cols) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
@@ -110,25 +141,41 @@ function pintar(){
       el('td', null, numero(i.vendas_full_30)), el('td', null, numero(i.vendas_full_60)), el('td', null, numero(i.vendas_full_90)),
       el('td', null, i.media_dia ? i.media_dia.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'),
       el('td', 'dias ' + cls, dd == null ? (i.estoque_full > 0 ? 'sem venda' : '—') : `${numero(dd)} dias`),
-      el('td', null, numero(i.vendas_deposito_30)));
+      el('td', null, numero(i.vendas_deposito_30)), celulaEnviar(i));
     tb.appendChild(tr);
   }
   t.appendChild(tb); box.appendChild(t);
+}
+function celulaEnviar(i){
+  const r = reposicao(i);
+  const td = el('td', 'enviar' + (r.enviar > 0 ? ' sim' : ''));
+  if(!r.porDia){ td.textContent = '—'; td.title = 'Sem venda nos últimos 30 dias'; return td; }
+  td.textContent = r.enviar > 0 ? `${numero(r.enviar)} un.` : 'não precisa';
+  const notas = [`para ${numero(r.alvo)} un. (${r.porDia.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}/dia${r.fonte !== NOME ? ' pelo ' + r.fonte : ''})`];
+  if(r.enviar > 0 && r.deposito != null && r.deposito < r.enviar) notas.push(`só ${numero(r.deposito)} no depósito`);
+  td.appendChild(el('small', null, notas.join(' · ')));
+  return td;
+}
+function pintarCartoes(){
+  const v = dados.vendas_30, { cobertura, prazo } = param();
+  const rep = dados.itens.map(reposicao).filter((r) => r.enviar > 0);
+  const box = $('cartoes'); box.innerHTML = '';
+  box.append(
+    kpi(`Unidades no ${NOME}`, numero(dados.unidades_full), `${numero(dados.com_estoque)} de ${numero(dados.total_anuncios)} ${NA_AMAZON ? 'produtos' : 'anúncios'} com estoque`
+      + (NA_AMAZON && dados.unidades_caminho ? ` · ${numero(dados.unidades_caminho)} a caminho` : '')),
+    kpi(`Vendas do ${NOME} (30 dias)`, real(v.full_faturamento), `${numero(v.full_pedidos)} pedidos · ${numero(v.full_unidades)} un.`),
+    kpi(`Participação do ${NOME}`, pct(v.participacao), `de ${real(v.total_faturamento)} faturados em 30 dias`),
+    kpi('Acabando', numero(dados.acabando), `${NA_AMAZON ? 'produtos' : 'anúncios'} com menos de 15 dias de estoque no ${NOME}`),
+    kpi(`Enviar ao ${NOME}`, `${numero(rep.reduce((s, r) => s + r.enviar, 0))} un.`, `em ${numero(rep.length)} ${NA_AMAZON ? 'produto(s)' : 'anúncio(s)'} · ${cobertura} dias de venda + ${prazo} até chegar`),
+  );
+  $('subRepor').textContent = `Enviar = venda por dia × (${cobertura} + ${prazo} dias) − estoque no ${NOME}${NA_AMAZON ? ' − a caminho' : ''}. Mude os dias ao lado; vale para este navegador.`;
 }
 async function carregar(recarregar){
   erroTela('');
   $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', NA_AMAZON ? 'Carregando o estoque do FBA…' : 'Carregando… (consulta o estoque de cada produto no armazém do ML)'));
   try{
     dados = await api((NA_AMAZON ? '/api/amazon/full' : '/api/full') + (recarregar ? '?recarregar=1' : ''));
-    const v = dados.vendas_30;
-    const box = $('cartoes'); box.innerHTML = '';
-    box.append(
-      kpi(`Unidades no ${NOME}`, numero(dados.unidades_full), `${numero(dados.com_estoque)} de ${numero(dados.total_anuncios)} ${NA_AMAZON ? 'produtos' : 'anúncios'} com estoque`
-        + (NA_AMAZON && dados.unidades_caminho ? ` · ${numero(dados.unidades_caminho)} a caminho` : '')),
-      kpi(`Vendas do ${NOME} (30 dias)`, real(v.full_faturamento), `${numero(v.full_pedidos)} pedidos · ${numero(v.full_unidades)} un.`),
-      kpi(`Participação do ${NOME}`, pct(v.participacao), `de ${real(v.total_faturamento)} faturados em 30 dias`),
-      kpi('Acabando', numero(dados.acabando), `${NA_AMAZON ? 'produtos' : 'anúncios'} com menos de 15 dias de estoque no ${NOME}`),
-    );
+    pintarCartoes();
     $('subLista').textContent = `Dias de estoque = estoque no ${NOME} ÷ média diária de vendas do ${NOME}`
       + (dados.dias_base_media < 30 ? ` (média sobre ${dados.dias_base_media} dias: a primeira venda pelo Full foi em ${data(dados.primeira_venda_full)}).` : ' (últimos 30 dias).')
       + (dados.itens_pendentes ? ` A Amazon ainda está entregando os itens de ${numero(dados.itens_pendentes)} pedido(s): as vendas vão se completando.` : '');

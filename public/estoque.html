@@ -285,8 +285,8 @@ function saldoFiltrado(){
     && (!q || [p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => String(t || '').toLowerCase().includes(q))));
 }
 function pintarSaldo(){
-  const ORDEM = { 'Repor agora': 0, 'Próximo de repor': 1, 'Vender o restante': 2, Regular: 3, 'Não repor': 4, Descontinuado: 5 };
-  const lst = saldoFiltrado().sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || b.media - a.media);
+  // pelo número do produto no SKU (GA-101, DQ-102…: 001, 002…), não pelo nome nem pela situação
+  const lst = saldoFiltrado().sort((a, b) => (Number(a.numero) || 1e9) - (Number(b.numero) || 1e9) || String(a.sku || '').localeCompare(String(b.sku || ''), 'pt-BR', { numeric: true }));
   const box = $('sLista'); box.innerHTML = '';
   if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum produto com esse filtro.')); return; }
   box.appendChild(tabela([['Produto'], ['Fornecedor'], ['Saldo', 'n'], ['Média/mês', 'n'], ['Mínimo', 'n'], ['Máximo', 'n'], ['Em pedido', 'n'], ['Sugestão', 'n'], ['Status'], ['Custo médio', 'n'], ['Valor', 'n'], ['Dias', 'n']],

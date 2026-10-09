@@ -264,6 +264,8 @@ html[data-tema="escuro"][data-pagina="financeiro"] .editor textarea{border:1px s
 html[data-tema="escuro"][data-pagina="full"] .dias.critico{color:hsl(0,74%,72%)}
 html[data-tema="escuro"][data-pagina="full"] .dias.alerta{color:hsl(26,90%,72%)}
 html[data-tema="escuro"][data-pagina="full"] .dias.ok{color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .repor-param input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="full"] td.enviar.sim{color:hsl(17,88%,72%)}
 /* geral.html */
 html[data-tema="escuro"][data-pagina="geral"] .pilula{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="geral"] .pilula.lucro b{color:hsl(142,72%,72%)}
