@@ -86,6 +86,7 @@
         <p class="sub" id="criarSub"></p>
       </div>
     </div>
+    <div id="mgCriar" hidden></div>
     <div class="filtros">
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
         <button type="button" data-f="todos" aria-pressed="true">Todos</button>
@@ -124,6 +125,7 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/magalu-promocoes.js?v=1"></script>
 <script>
 // ?conta=amazon | leroy. Os dados vêm de /api/{canal}/campanhas; criar e encerrar mudam a loja
 // (só pelo clique, com confirmação). Nada desta tela vai para o MCP.
@@ -135,7 +137,7 @@ $('titulo').textContent = 'Campanhas — ' + NOME;
 document.title = 'Campanhas ' + NOME;
 $('topoTxt').textContent = `Promoções e descontos na ${NOME}, com o resultado de cada um: vendas e lucro no período contra os mesmos dias antes.`;
 $('criarSub').textContent = CANAL === 'magalu'
-  ? 'Na Magalu, o painel ainda só lê: o desconto por anúncio entra quando a API de preços for ligada.'
+  ? ''
   : CANAL === 'leroy'
   ? 'Preço promocional com início e fim em cada oferta. A Leroy aceita uma mudança de preços por minuto e leva alguns minutos para aplicar. Se o Bling também manda preço para a Leroy, ele pode sobrescrever o desconto.'
   : 'Preço promocional (preço de oferta) com início e fim em cada anúncio. A Amazon leva alguns minutos para aplicar. Cupons, ofertas relâmpago e descontos Prime só no Seller Central.';
@@ -167,7 +169,13 @@ async function carregar(recarregar){
     dados = await api(`/api/${CANAL}/campanhas${recarregar ? '?recarregar=1' : ''}`);
     aviso(dados.erro_leitura ? `Não consegui ler as novidades da ${NOME} agora (${dados.erro_leitura}). Os números são da última leitura.` : '');
     // Magalu: por enquanto sem a lista de anúncios (só promoções e resultado)
-    if(CANAL === 'magalu'){ $('segFiltro').closest('section').hidden = true; $('grupos').closest('section').hidden = true; }
+    if(CANAL === 'magalu'){
+      $('grupos').closest('section').hidden = true;
+      for(const id of ['lista', 'btMais', 'painelAcao']) $(id).hidden = true;
+      $('segFiltro').closest('.filtros').hidden = true; $('btMais').closest('.acoes-camp').hidden = true;
+      $('segFiltro').closest('section').querySelector('h2').textContent = 'Criar promoção da loja';
+      $('mgCriar').hidden = false; if(!$('mgCriar').firstChild) MagaluPromocoes.pintarCriar($('mgCriar'));
+    }
     pintarCartoes(); pintarParticipar(); pintarPromocoes(); pintarGrupos(); pintarLista();
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
 }
@@ -180,7 +188,7 @@ function pintarCartoes(){
   if(CANAL === 'magalu'){
     box.append(cartao('Promoções com venda', numero(dados.promocoes.filter((p) => p.id).length), 'últimos 5 meses', true),
       cartao('Vendido com promoções', real(pr.fat), `${real(pr.desc)} de desconto ao cliente`),
-      cartao('Disponíveis para entrar', dados.promocoes_loja ? numero(dados.promocoes_loja.length) : '—', 'promoções abertas pela Magalu'));
+      cartao('Disponíveis para entrar', dados.promocoes_loja ? numero(MagaluPromocoes.disponiveis(dados)) : '—', 'promoções abertas pela Magalu'));
     return;
   }
   box.append(
@@ -192,17 +200,7 @@ function pintarCartoes(){
 
 function pintarParticipar(){
   const box = $('participar'); box.innerHTML = '';
-  if(CANAL === 'magalu'){
-    const lst = dados.promocoes_loja;
-    if(lst == null){ box.appendChild(el('p', 'sub', 'Não consegui ler as promoções disponíveis da Magalu agora.')); return; }
-    if(!lst.length){ box.appendChild(el('p', 'sub', 'A Magalu não tem nenhuma promoção disponível para a sua loja agora. Quando abrir uma (ex.: "Acelere suas vendas", cupons de categoria), ela aparece aqui.')); return; }
-    const t = el('table'); const cab = el('tr');
-    for(const h of ['Promoção', 'Tipo', 'Situação', 'Período']) cab.appendChild(el('th', null, h));
-    t.appendChild(cab);
-    for(const p of lst){ const tr = el('tr'); tr.append(el('td', null, p.nome || p.id), el('td', null, p.tipo || '—'), el('td', null, p.situacao || '—'), el('td', null, `${dataBR(p.inicio)} a ${dataBR(p.fim)}`)); t.appendChild(tr); }
-    box.appendChild(t);
-    return;
-  }
+  if(CANAL === 'magalu'){ MagaluPromocoes.pintarLista(box, dados); return; }
   if(CANAL === 'amazon'){
     box.appendChild(el('p', 'sub', 'A Amazon não deixa outros sistemas lerem os convites de promoção (cupons, ofertas relâmpago, descontos Prime e ofertas da Amazon). Veja as que você pode participar no Seller Central; o resultado de cada uma aparece abaixo assim que houver venda com ela.'));
     const l = el('div', 'links-canal');

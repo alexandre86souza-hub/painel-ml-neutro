@@ -194,17 +194,19 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     return acesso.token;
   }
 
-  // GET na API do vendedor. 401 = renova o token uma vez; 429 = espera e tenta de novo.
+  // Chamada à API do vendedor (GET; metodo/corpo só nas promoções, pelo clique da tela). 401 = renova o
+  // token uma vez; 429 = espera e tenta de novo.
   // pessoais: só a tela de comandas (o nome do cliente vai impresso); o resto sai sem.
-  async function mg(caminho, params = {}, { pessoais = false } = {}) {
+  async function mg(caminho, params = {}, { pessoais = false, metodo = 'GET', corpo } = {}) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v != null && v !== '') qs.set(k, String(v));
     let r, renovou = false;
     for (let tentativa = 0; ; tentativa++) {
       const tk = await tokenAcesso(renovou);
       try {
-        r = await fetch(`${API}${caminho}${qs.size ? '?' + qs : ''}`, { signal: AbortSignal.timeout(30000),
-          headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json' } });
+        r = await fetch(`${API}${caminho}${qs.size ? '?' + qs : ''}`, { method: metodo, signal: AbortSignal.timeout(30000),
+          headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json', ...(corpo ? { 'Content-Type': 'application/json' } : {}) },
+          body: corpo ? JSON.stringify(corpo) : undefined });
       } catch (e) { throw erro(`A Magalu não respondeu (${e.message}).`, 502); }
       if (r.status === 401 && !renovou) { renovou = true; continue; }
       if (r.status === 429 && tentativa < 3) { await new Promise((ok) => setTimeout(ok, 3000 * (tentativa + 1))); continue; }
@@ -213,7 +215,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     const j = await r.json().catch(() => null);
     if (r.status === 401 || r.status === 403) throw erro(`A Magalu recusou o acesso (${r.status}${j?.message ? ': ' + j.message : ''}). Confira se a loja autorizou todas as permissões.`, 401);
     if (!r.ok) throw erro(`Magalu: ${j?.message || j?.detail?.[0]?.msg || j?.error || `HTTP ${r.status}`}`, r.status >= 500 ? 502 : r.status);
-    return pessoais ? j : semPessoais(j);
+    return pessoais ? j : semPessoais(j ?? {});
   }
 
   // Cópia local: pedidos e análise financeira (1ª leitura 152 dias, em janelas de 15 dias pela data
@@ -304,38 +306,235 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     return lendoAnuncios;
   }
 
+  // Anúncios com custo (pelo SKU ou pelo SKU do painel digitado) e a taxa média do SKU no financeiro:
+  // a tela Anúncios e o lucro no preço das promoções.
+  async function anunciosComCusto() {
+    const e = empresa();
+    const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
+    const vinc = D.skuVinculos('magalu');
+    const r = await linhas(new Date(Date.now() - 90 * 864e5).toISOString(), new Date(Date.now() + 60e3).toISOString());
+    const porSku = new Map(); let fatT = 0, tarT = 0;
+    const desde30 = new Date(Date.now() - 30 * 864e5).toISOString();
+    for (const l of r.linhas) {
+      if (!l.valida || !l.sku_magalu) continue;
+      const x = porSku.get(l.sku_magalu) || { fat: 0, tar: 0, v30: 0, foto: null, final: 0 };
+      if (!l.estimado) { x.fat += l.faturamento; x.tar += n(l.tarifa) + n(l.frete); fatT += l.faturamento; tarT += n(l.tarifa) + n(l.frete); }
+      if (l.data >= desde30) x.v30 += l.quantidade;
+      x.foto = x.foto || l.foto;
+      porSku.set(l.sku_magalu, x);
+    }
+    const media = fatT > 0 ? tarT / fatT : null;
+    const trocasMg = D.skuTrocas('magalu');
+    const itens = D.magaluAnuncios().map((a) => {
+      const skuPainel = vinc.get(a.sku) || null;
+      const trocado = C.skuNaData(trocasMg, skuPainel || a.sku);
+      const cs = C.custoDoSku(trocado, mapa);
+      const x = porSku.get(a.sku);
+      return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: a.preco, preco_lista: a.preco_lista,
+        estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
+        faltando: cs.faltando, vendas_30: x?.v30 || 0, taxa_pct: x && x.fat > 0 ? x.tar / x.fat : media, taxa_do_produto: !!(x && x.fat > 0),
+        foto: x?.foto || null, link: a.url };
+    }).sort((a, b) => (b.vendas_30 - a.vendas_30) || (a.status === 'PUBLISHED' ? -1 : 1) - (b.status === 'PUBLISHED' ? -1 : 1) || String(a.titulo).localeCompare(String(b.titulo)));
+    return { itens, imposto_pct: C.impostoTotal(e), embalagem_pedido: e.embalagem_padrao || 0 };
+  }
+
+  // ---------- Promoções (Open API de Promoções, conferida na doc em 09/10/2026) ----------
+  // Lista = as que a loja pode entrar ou já entrou (ativas e planejadas). Entrar = POST …/subscriptions
+  // (aceita a coparticipação da campanha); sair = DELETE …/subscriptions; produtos = PUT/DELETE …/skus/{sku}
+  // (ficam "pending" e, com a loja já participando, valem só depois do POST …/apply). Criar = POST
+  // /seller/v1/promotions (promoção da própria loja). Valores inteiros ÷ normalizer (100). Escrita só
+  // pelo clique da tela, com confirmação; nada no MCP.
+  const CANAL_MAGALU = { id: '9fe0d853-732b-4e4a-a0b0-cff988ed043d', name: 'magalu' };   // channel.id dos pedidos e do financeiro
+  const idPromo = (v) => { const s = String(v ?? '').trim(); if (!/^[\w-]{6,64}$/.test(s)) throw erro('Código da promoção inválido.'); return s; };
+  const valorDe = (v) => {
+    if (!v || typeof v !== 'object') return null;
+    const nz = n(v.normalizer) || 100;
+    if (v.type === 'variable' || v.min != null) return { tipo: v.type === 'value' ? 'reais' : 'pct', min: n(v.min) / nz, max: n(v.max) / nz, variavel: true };
+    return { tipo: v.type === 'value' ? 'reais' : v.type === 'variable' ? 'variavel' : 'pct', valor: n(v.value) / nz };
+  };
+  const promoDe = (x) => ({
+    id: x.id, nome: x.name || null, descricao: x.description || null, tipo: x.type?.id || null, tipo_nome: x.type?.description || null,
+    origem: x.origin || null, situacao: x.status || null, escopo: x.scope || null,
+    inicio: x.validity?.starts_at || null, fim: x.validity?.ends_at || null, prazo: x.validity?.subscription_deadline || null,
+    aderiu_em: x.subscribed_at || null, canal_id: x.channel?.id || null, cupom: x.benefits?.code || null,
+    desconto: valorDe(x.benefits?.total), voce: valorDe(x.benefits?.investment?.seller?.total), magalu: valorDe(x.benefits?.investment?.channel),
+    pagamentos: (x.benefits?.payment_methods || []).map((p) => p.description || p.id),
+    regras: (x.rules || []).map((r) => r.description || r.id).filter(Boolean),
+  });
+  async function promocoesDaLoja() {
+    const todas = [];
+    for (let off = 0; off < 1000; off += 50) {
+      const r = await mg('/seller/v1/promotions', { _limit: 50, _offset: off });
+      const l = r.results || [];
+      todas.push(...l.map(promoDe));
+      if (l.length < 50) break;
+    }
+    return todas;
+  }
+  const promocao = async (id) => promoDe(await mg(`/seller/v1/promotions/${encodeURIComponent(idPromo(id))}`));
+  // até 3 chamadas ao mesmo tempo; cada item devolve ok ou o motivo da Magalu
+  async function emLotes(lista, fn) {
+    const out = [];
+    for (let i = 0; i < lista.length; i += 3) out.push(...await Promise.all(lista.slice(i, i + 3).map(async (x) => {
+      try { return { ...(await fn(x)), ok: true }; } catch (e) { return { ok: false, erro: e.message, ...(typeof x === 'object' ? { sku: x.sku, id: x.id } : { id: x, sku: x }) }; }
+    })));
+    return out;
+  }
+  const MOTIVOS = ['low_margin', 'out_of_stock', 'price_conflict', 'not_interested', 'wrong_products', 'other'];
+  const motivoDe = (b) => {
+    const code = MOTIVOS.includes(b?.motivo) ? b.motivo : null;
+    if (!code) return undefined;
+    const description = String(b?.motivo_texto ?? '').trim().slice(0, 500);
+    if (code === 'other' && !description) throw erro('Escreva o motivo.');
+    return { reason: code === 'other' ? { code, description } : { code } };
+  };
+  const centavos = (v) => Math.round(Number(v) * 100);
+  // lucro de uma unidade no preço: preço − taxa média do SKU (comissão, tarifa e frete) − imposto − custo − embalagem
+  const lucroNoPreco = (a, ctx, preco) => (a && a.custo_unit != null && a.taxa_pct != null && preco > 0
+    ? r2(preco * (1 - a.taxa_pct - ctx.imposto_pct / 100) - a.custo_unit - (ctx.embalagem_pedido || 0)) : null);
+  // data do formulário (AAAA-MM-DD, horário de Brasília) -> ISO
+  const dataBR = (d, fimDoDia) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) throw erro('Informe as datas de início e fim.');
+    return new Date(`${d}T${fimDoDia ? '23:59:59' : '00:00:00'}-03:00`).toISOString().replace('.000Z', 'Z');
+  };
+
+  const rotasPromocoes = {
+    // Uma promoção pelo código (o do endereço do portal: …/promocoes-disponiveis/detalhes/{código})
+    'GET /api/magalu/campanhas/promocao': async (url) => ({ promocao: await promocao(url.searchParams.get('id')) }),
+    // Produtos de uma promoção, com o lucro no preço promocional, e os anúncios para incluir
+    'GET /api/magalu/campanhas/skus': async (url) => {
+      const id = idPromo(url.searchParams.get('id'));
+      const skus = [];
+      for (let off = 0; off < 5000; off += 50) {
+        const r = await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus`, { _limit: 50, _offset: off });
+        const l = r.results || [];
+        skus.push(...l);
+        if (l.length < 50) break;
+      }
+      const an = await anunciosComCusto();
+      const ctx = { imposto_pct: an.imposto_pct, embalagem_pedido: an.embalagem_pedido };
+      const porSku = new Map(an.itens.map((a) => [a.sku, a]));
+      const dentro = new Set();
+      const itens = skus.map((s) => {
+        const a = porSku.get(String(s.sku)); dentro.add(String(s.sku));
+        const original = valorDe(s.price?.original)?.valor ?? a?.preco ?? null;
+        const promo = valorDe(s.price?.promotional)?.valor ?? null;
+        return { sku: String(s.sku), titulo: s.name || a?.titulo || null, situacao: s.status || null, preco: original, preco_promo: promo,
+          voce: valorDe(s.investment?.seller), magalu: valorDe(s.investment?.channel),
+          limite: s.inventory?.limit ?? null, vendidos: s.inventory?.reserved ?? null, estoque: a?.estoque ?? null, sku_painel: a?.sku_painel || null,
+          custo_unit: a?.custo_unit ?? null, taxa_pct: a?.taxa_pct ?? null,
+          lucro_promo: lucroNoPreco(a, ctx, promo), lucro_cheio: lucroNoPreco(a, ctx, original) };
+      });
+      const anuncios = an.itens.filter((a) => a.ativo && !dentro.has(a.sku)).map((a) => ({ sku: a.sku, titulo: a.titulo, preco: a.preco, estoque: a.estoque,
+        sku_painel: a.sku_painel, custo_unit: a.custo_unit, taxa_pct: a.taxa_pct, vendas_30: a.vendas_30 }));
+      return { id, itens, anuncios, ...ctx };
+    },
+    // Entrar em uma ou várias promoções da Magalu (aceita a coparticipação de cada uma)
+    'POST /api/magalu/campanhas/aderir': async (_u, body) => {
+      const ids = [...new Set((Array.isArray(body?.ids) ? body.ids : []).map(idPromo))];
+      if (!ids.length || ids.length > 50) throw erro('Escolha de 1 a 50 promoções.');
+      const resultado = await emLotes(ids, async (id) => {
+        const p = await promocao(id);
+        await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/subscriptions`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } });
+        return { id, nome: p.nome };
+      });
+      return { resultado, aderidas: resultado.filter((x) => x.ok).length };
+    },
+    'POST /api/magalu/campanhas/sair': async (_u, body) => {
+      const id = idPromo(body?.id);
+      await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/subscriptions`, {}, { metodo: 'DELETE', corpo: motivoDe(body) });
+      return { ok: true };
+    },
+    // Incluir ou mudar produtos (preço promocional e limite de unidades); com a loja já participando, confirma (apply)
+    'POST /api/magalu/campanhas/skus': async (_u, body) => {
+      const id = idPromo(body?.id);
+      const itens = (Array.isArray(body?.itens) ? body.itens : []).map((x) => ({ sku: String(x?.sku ?? '').trim(), preco: x?.preco == null || x.preco === '' ? null : Number(x.preco),
+        limite: x?.limite == null || x.limite === '' ? null : Math.floor(Number(x.limite)) }));
+      if (!itens.length || itens.length > 500) throw erro('Escolha de 1 a 500 produtos.');
+      for (const x of itens) {
+        if (!x.sku || x.sku.length > 80) throw erro('SKU inválido.');
+        if (x.preco != null && !(x.preco > 0 && x.preco < 1e6)) throw erro(`Preço promocional inválido em ${x.sku}.`);
+        if (x.limite != null && !(x.limite >= 1)) throw erro(`Limite de unidades inválido em ${x.sku}.`);
+      }
+      const p = await promocao(id);
+      const canal = { id: p.canal_id || CANAL_MAGALU.id };
+      const resultado = await emLotes(itens, async (x) => {
+        const corpo = { channel: canal };
+        if (x.preco != null) corpo.price = { promotional: { value: centavos(x.preco), normalizer: 100, currency: 'BRL' } };
+        if (x.limite != null) corpo.inventory = { limit: x.limite };
+        const r = await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus/${encodeURIComponent(x.sku)}`, {}, { metodo: 'PUT', corpo });
+        return { sku: x.sku, situacao: r?.status || null, desconto_pct: r?.price?.discount_percentage ?? null };
+      });
+      let aplicado = null;
+      if (p.aderiu_em && resultado.some((x) => x.ok)) {
+        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST' }); aplicado = true; } catch (e) { aplicado = e.message; }
+      }
+      return { resultado, alterados: resultado.filter((x) => x.ok).length, aplicado, participa: !!p.aderiu_em };
+    },
+    'POST /api/magalu/campanhas/skus/remover': async (_u, body) => {
+      const id = idPromo(body?.id);
+      const skus = [...new Set((Array.isArray(body?.skus) ? body.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];
+      if (!skus.length || skus.length > 500) throw erro('Escolha de 1 a 500 produtos.');
+      const motivo = motivoDe(body);
+      const p = await promocao(id);
+      const resultado = await emLotes(skus, async (sku) => {
+        await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus/${encodeURIComponent(sku)}`, {}, { metodo: 'DELETE', corpo: motivo });
+        return { sku };
+      });
+      let aplicado = null;
+      if (p.aderiu_em && resultado.some((x) => x.ok)) {
+        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST' }); aplicado = true; } catch (e) { aplicado = e.message; }
+      }
+      return { resultado, removidos: resultado.filter((x) => x.ok).length, aplicado };
+    },
+    'POST /api/magalu/campanhas/aplicar': async (_u, body) => {
+      await mg(`/seller/v1/promotions/${encodeURIComponent(idPromo(body?.id))}/apply`, {}, { metodo: 'POST' });
+      return { ok: true };
+    },
+    // Promoção da própria loja: preço promocional (absolute_discount, produtos escolhidos depois), desconto à vista
+    // (percentage_discount), Cliente Ouro (fidelity_discount) ou cupom (coupon_discount).
+    'POST /api/magalu/campanhas/criar': async (_u, b) => {
+      const tipos = { absolute_discount: 'Preço Promocional', percentage_discount: 'Desconto à Vista', fidelity_discount: 'Cliente Ouro', coupon_discount: 'Cupom de Desconto' };
+      const tipo = Object.keys(tipos).includes(b?.tipo) ? b.tipo : null;
+      if (!tipo) throw erro('Escolha o tipo da promoção.');
+      const nome = String(b?.nome ?? '').trim();
+      if (!nome || nome.length > 120) throw erro('Dê um nome à promoção (até 120 letras).');
+      const starts = dataBR(b?.inicio, false), ends = dataBR(b?.fim, true);
+      if (ends <= starts) throw erro('O fim tem de ser depois do início.');
+      const escopo = tipo === 'absolute_discount' ? 'seller_choice' : (b?.escopo === 'full_catalog' ? 'full_catalog' : 'seller_choice');
+      const corpo = { name: nome, description: String(b?.descricao ?? '').trim().slice(0, 500) || nome, validity: { starts_at: starts, ends_at: ends },
+        channel: CANAL_MAGALU, type: { id: tipo, description: tipos[tipo] }, scope: escopo };
+      const rules = [];
+      if (tipo === 'percentage_discount' || tipo === 'fidelity_discount') {
+        const pctv = Number(b?.pct);
+        if (!(pctv >= 1 && pctv <= 90)) throw erro('Informe o desconto entre 1% e 90%.');
+        corpo.benefits = { investment: { seller: { total: { value: centavos(pctv), normalizer: 100 } } } };
+      }
+      if (tipo === 'coupon_discount') {
+        const codigo = String(b?.cupom ?? '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{5,11}$/.test(codigo)) throw erro('O código do cupom tem de 5 a 11 letras/números (a Magalu exige que comece pelos 4 primeiros dígitos do ID da sua loja).');
+        const emReais = b?.cupom_tipo === 'value';
+        const v = Number(b?.cupom_valor);
+        if (!(v > 0) || (!emReais && v > 90)) throw erro(emReais ? 'Informe o valor do cupom em reais.' : 'Informe o desconto do cupom entre 1% e 90%.');
+        const total = Math.floor(Number(b?.cupom_total)), porCpf = Math.floor(Number(b?.cupom_por_cpf) || 1);
+        if (!(total >= 1)) throw erro('Informe quantos cupons ficam disponíveis.');
+        corpo.benefits = { code: codigo, limit: { total, per_document_number: Math.max(1, porCpf) },
+          investment: { seller: { total: { type: emReais ? 'value' : 'percentage', value: centavos(v), normalizer: 100, ...(emReais ? { currency: 'BRL' } : {}) } } } };
+        if (b?.divulgar) rules.push({ id: 'allow_disclosure' });
+      }
+      if (b?.limitar_unidades && escopo === 'seller_choice' && ['absolute_discount', 'fidelity_discount'].includes(tipo)) rules.push({ id: 'allow_limit_sku_sales' });
+      if (rules.length) corpo.rules = rules;
+      const r = await mg('/seller/v1/promotions', {}, { metodo: 'POST', corpo });
+      return { id: r?.id || null, escopo };
+    },
+  };
+
   const rotas = {
     // Anúncios da Magalu (tela magalu-anuncios.html): SKU, preço, estoque, situação, vendas de 30 dias,
     // custo (pelo SKU ou pelo SKU do painel digitado) e a taxa média do SKU no financeiro.
     'GET /api/magalu/anuncios': async (url) => {
       lerAnuncios(url.searchParams.get('recarregar') === '1').catch(() => null);
-      const e = empresa();
-      const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
-      const vinc = D.skuVinculos('magalu');
-      const r = await linhas(new Date(Date.now() - 90 * 864e5).toISOString(), new Date(Date.now() + 60e3).toISOString());
-      const porSku = new Map(); let fatT = 0, tarT = 0;
-      const desde30 = new Date(Date.now() - 30 * 864e5).toISOString();
-      for (const l of r.linhas) {
-        if (!l.valida || !l.sku_magalu) continue;
-        const x = porSku.get(l.sku_magalu) || { fat: 0, tar: 0, v30: 0, foto: null, final: 0 };
-        if (!l.estimado) { x.fat += l.faturamento; x.tar += n(l.tarifa) + n(l.frete); fatT += l.faturamento; tarT += n(l.tarifa) + n(l.frete); }
-        if (l.data >= desde30) x.v30 += l.quantidade;
-        x.foto = x.foto || l.foto;
-        porSku.set(l.sku_magalu, x);
-      }
-      const media = fatT > 0 ? tarT / fatT : null;
-      const trocasMg = D.skuTrocas('magalu');
-      const itens = D.magaluAnuncios().map((a) => {
-        const skuPainel = vinc.get(a.sku) || null;
-        const trocado = C.skuNaData(trocasMg, skuPainel || a.sku);
-        const cs = C.custoDoSku(trocado, mapa);
-        const x = porSku.get(a.sku);
-        return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: a.preco, preco_lista: a.preco_lista,
-          estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
-          faltando: cs.faltando, vendas_30: x?.v30 || 0, taxa_pct: x && x.fat > 0 ? x.tar / x.fat : media, taxa_do_produto: !!(x && x.fat > 0),
-          foto: x?.foto || null, link: a.url };
-      }).sort((a, b) => (b.vendas_30 - a.vendas_30) || (a.status === 'PUBLISHED' ? -1 : 1) - (b.status === 'PUBLISHED' ? -1 : 1) || String(a.titulo).localeCompare(String(b.titulo)));
-      return { itens, imposto_pct: C.impostoTotal(e), embalagem_pedido: e.embalagem_padrao || 0, lendo: !!lendoAnuncios, faltam: progresso?.faltam ?? null,
+      return { ...(await anunciosComCusto()), lendo: !!lendoAnuncios, faltam: progresso?.faltam ?? null,
         lido_em: D.configLer('magalu_anuncios_lido_em') };
     },
     // SKU do painel para um anúncio da Magalu que usa outro código. Vazio = apaga o vínculo.
@@ -397,15 +596,12 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     'GET /api/magalu/campanhas': async () => {
       const agora = Date.now();
       const r = await linhas(new Date(agora - 152 * 864e5).toISOString(), new Date(agora + 60e3).toISOString());
-      let disponiveis = null;
-      try {
-        const p = await mg('/seller/v1/promotions', { _limit: 50 });
-        disponiveis = (p.results || []).map((x) => ({ id: x.id ?? null, nome: x.name || x.title || x.description || null, tipo: x.type || null,
-          situacao: x.status || null, inicio: x.start_at || x.starts_at || x.start_date || null, fim: x.end_at || x.ends_at || x.end_date || null }));
-      } catch { /* a tela mostra só o resultado */ }
+      let disponiveis = null, erroPromocoes = null;
+      try { disponiveis = await promocoesDaLoja(); } catch (e) { erroPromocoes = e.message; }
       return { canal: 'magalu', imposto_pct: r.impostoPct, erro_leitura: r.erroLeitura, anuncios: [],
-        promocoes: require('./campanhas-canais.js').resultadoPromocoes(r.linhas), promocoes_loja: disponiveis };
+        promocoes: require('./campanhas-canais.js').resultadoPromocoes(r.linhas), promocoes_loja: disponiveis, erro_promocoes: erroPromocoes };
     },
+    ...rotasPromocoes,
 
     'GET /api/magalu/config': async (url) => {
       const c = config();

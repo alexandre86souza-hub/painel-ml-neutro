@@ -257,12 +257,17 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   api.magalu.com/seller/v1 (orders, financial-analysis/orders em janelas de 15 dias, promotions). Diagnóstico mostra
   a forma, sem dado de comprador (`semPessoais`). Nada no MCP (`test-magalu.js`).
   Vendas e lucro: conta externa `magalu` (como a Leroy: lista do topo, `empresa:magalu`, "Todas as contas",
-  Campanhas só leitura). Cópia em `magalu_pedidos` (`pedidoDe`) e `magalu_financeiro` (`transacoesDe`), janelas de 15 dias
+  promoções na tela Campanhas: `public/magalu-promocoes.js`). Cópia em `magalu_pedidos` (`pedidoDe`) e `magalu_financeiro` (`transacoesDe`), janelas de 15 dias
   (1ª leitura 152 dias por purchased_at, depois updated_at). Recebido = créditos − débitos da análise financeira, SEM
   os débitos ABSOLUTE_DISCOUNT (preço promocional, regra da doc) e as linhas not_applicable (`financeiroDo`); tarifa =
   faturamento − frete debitado − recebido; frete = SHIPPING_COST + SHIPPING_SHARE (o frete pago pelo cliente fica com
   a Magalu: a SALE não o inclui). Sem financeiro: amounts.commission do pedido (= comissão + tarifa fixa + MDR,
   medido) como estimado. O financeiro NÃO diz em qual depósito (semanal, às segundas) o pedido foi pago.
+  Promoções da Magalu (`magalu.js#rotasPromocoes`, `/api/magalu/campanhas/*`, Open API de Promoções): lista (ativas e planejadas que a loja
+  pode entrar ou já entrou; a API pode trazer menos que o portal: a tela abre uma pelo código do endereço do portal), entrar em
+  várias (POST subscriptions = aceita a coparticipação), sair, produtos (PUT/DELETE skus ficam pending; com a loja já participando
+  o painel confirma com POST apply) com lucro no preço promocional (`anunciosComCusto`) e criar promoção da loja (Preço Promocional,
+  Desconto à Vista, Cliente Ouro, Cupom). channel.id da Magalu = o dos pedidos. Escrita só pelo clique, com confirmação; nada no MCP.
   Anúncios da Magalu (tela `magalu-anuncios.html`; o menu troca `/anuncios.html` por ela): `/portfolios/skus` (100 por
   página; 1.692 SKUs medidos) + preço e estoque UM SKU por chamada (`/portfolios/prices|stocks/{sku}`; a lista sem SKU dá
   404), em segundo plano, 3 por vez, relidos a cada 6 h (`magalu_anuncios`). Vários anúncios usam um código numérico da
