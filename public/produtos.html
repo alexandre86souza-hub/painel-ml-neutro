@@ -620,10 +620,16 @@ async function outrosCanais(de, para, box, todas){
   if(!r.canais.length){ sec.appendChild(el('h3', 'troca-canal', todas ? 'Outros canais' : 'Esta loja'));
     sec.appendChild(el('p', 'sub', todas ? 'Nenhum anúncio da Shopee, Amazon, Leroy ou Magalu usa esse produto no SKU.' : 'Nenhum anúncio desta loja usa esse produto no SKU.')); return; }
   const linhas = [];
+  // barra no topo (como a do Mercado Livre): selecionar todos de todas as lojas e trocar; cada loja tem a sua caixa no cabeçalho
+  const barra = el('div', 'troca-barra'); sec.appendChild(barra);
   for(const c of r.canais){
     sec.appendChild(el('h3', 'troca-canal', c.nome + (c.modo === 'painel' ? ' · troca no painel' : ' · troca no anúncio')));
     const t = el('table'); const cab = el('tr');
-    for(const h of ['', 'Anúncio', 'Situação', 'SKU atual', 'SKU novo', '']) cab.appendChild(el('th', null, h));
+    const ckLoja = el('input'); ckLoja.type = 'checkbox'; ckLoja.title = 'Marcar todos os anúncios desta loja'; ckLoja.setAttribute('aria-label', 'Marcar todos de ' + c.nome);
+    ckLoja.onchange = () => { for(const l of linhas) if(l.c === c && !l.ck.disabled) l.ck.checked = ckLoja.checked; contar(); };
+    c.ckLoja = ckLoja;
+    const th0 = el('th'); th0.appendChild(ckLoja); cab.appendChild(th0);
+    for(const h of ['Anúncio', 'Situação', 'SKU atual', 'SKU novo', '']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); t.appendChild(th);
     const tb = el('tbody');
     for(const a of c.anuncios){
@@ -639,13 +645,24 @@ async function outrosCanais(de, para, box, todas){
     }
     t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); sec.appendChild(rol);
   }
-  const barra = el('div', 'troca-barra');
   const todos = el('label'); const ckTodos = el('input'); ckTodos.type = 'checkbox';
   todos.append(ckTodos, document.createTextNode(` Selecionar todos (${numero(linhas.length)})`));
+  const qtd = el('span', 'sub');
   const ok = el('button', 'bt primario', 'Trocar nos selecionados'); ok.type = 'button'; ok.disabled = true;
-  barra.append(todos, ok); sec.appendChild(barra);
-  const contar = () => { const n = linhas.filter((l) => l.ck.checked && !l.ck.disabled).length; ok.disabled = !n;
-    ok.textContent = n ? `Trocar em ${numero(n)} anúncio(s) dos outros canais` : 'Trocar nos selecionados'; };
+  barra.append(todos, qtd, ok);
+  // o mesmo botão também no fim da lista
+  const barraFim = el('div', 'troca-barra'); const okFim = el('button', 'bt primario', 'Trocar nos selecionados'); okFim.type = 'button'; okFim.disabled = true;
+  okFim.onclick = () => ok.click(); barraFim.appendChild(okFim); sec.appendChild(barraFim);
+  function contar(){
+    const n = linhas.filter((l) => l.ck.checked && !l.ck.disabled).length;
+    ok.disabled = okFim.disabled = !n;
+    ok.textContent = okFim.textContent = n ? `Trocar em ${numero(n)} anúncio(s) dos outros canais` : 'Trocar nos selecionados';
+    qtd.textContent = `${numero(n)} selecionado(s)`;
+    const livres = linhas.filter((l) => !l.ck.disabled);
+    ckTodos.checked = livres.length > 0 && livres.every((l) => l.ck.checked);
+    for(const c of r.canais){ const lc = livres.filter((l) => l.c === c); if(c.ckLoja) c.ckLoja.checked = lc.length > 0 && lc.every((l) => l.ck.checked); }
+  }
+  contar();
   for(const l of linhas) l.ck.onchange = contar;
   ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled) l.ck.checked = ckTodos.checked; contar(); };
   ok.onclick = async () => {

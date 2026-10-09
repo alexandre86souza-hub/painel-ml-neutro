@@ -67,6 +67,9 @@ assert.strictEqual(ls[1].frete_estimado, true, 'sem frete digitado: custo médio
 
 // pedido cancelado: não é venda
 const canc = L.linhasDe([L.pedidoDe({ order_id: '2-A', order_state: 'CANCELED', order_lines: [{ order_line_id: '2-A-1', order_line_state: 'CANCELED', price: 0, quantity: 1 }] })], { mapa: new Map() });
+// pagamento ainda não aprovado: não entra como venda (pedido real de 09/10/2026)
+for (const st of ['STAGING', 'WAITING_ACCEPTANCE', 'WAITING_DEBIT', 'WAITING_DEBIT_PAYMENT'])
+  assert.strictEqual(L.linhasDe([L.pedidoDe({ order_id: '3-A', order_state: st, order_lines: [{ order_line_id: '3-A-1', order_line_state: st, price: 132.77, quantity: 1 }] })], { mapa: new Map() }).length, 0);
 assert.strictEqual(canc[0].valida, false);
 assert.strictEqual(canc[0].lucro, 0);
 

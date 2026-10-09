@@ -69,6 +69,9 @@ function semPessoais(v) {
 
 // Situações do pedido/linha que não são venda.
 const INVALIDAS = new Set(['CANCELED', 'REFUSED']);
+// Antes do pagamento aprovado (análise de fraude, aguardando aceite, aguardando o débito/pagamento do cliente): ainda não
+// é venda — fica fora de Pedidos, Performance, ABC, Vendas e Todas as contas até a Leroy aprovar.
+const SEM_PAGAMENTO = new Set(['STAGING', 'WAITING_ACCEPTANCE', 'WAITING_DEBIT', 'WAITING_DEBIT_PAYMENT']);
 
 // Foto do produto: a Mirakl dá o caminho (/media/product/image/{uuid}) e a imagem é pública em
 // {host}/mmp{caminho} (medido: abre sem chave). Só esse formato é aceito.
@@ -109,6 +112,7 @@ function pedidoDe(o) {
 function linhasDe(pedidos, ctx) {
   const out = [];
   for (const p of pedidos) {
+    if (SEM_PAGAMENTO.has(p.status)) continue;
     const validaPedido = !INVALIDAS.has(p.status);
     const fatPedido = p.linhas.reduce((s, l) => s + (INVALIDAS.has(l.estado) ? 0 : n(l.preco)), 0);
     const informado = ctx.fretes?.has(p.order_id) || false;
@@ -531,4 +535,4 @@ function criar({ D, janela }) {
   return { rotas, rotasParam: [], config, mk, sincronizar, ofertas };
 }
 
-module.exports = { criar, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };
+module.exports = { SEM_PAGAMENTO, criar, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };
