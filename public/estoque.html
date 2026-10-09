@@ -81,6 +81,7 @@
       <select id="sStatus" aria-label="Status"><option value="">Todos os status</option><option>Repor agora</option><option>Próximo de repor</option><option>Regular</option><option>Vender o restante</option><option>Não repor</option><option>Descontinuado</option></select>
       <select id="sForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sAtivos" checked> Só ativos</label>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center" title="Produto que não vai mais ser comprado (descontinuado ou fornecedor descontinuado) e ainda tem saldo"><input type="checkbox" id="sDescEst"> Descontinuado com estoque</label>
       <button type="button" class="bt" id="sCsv">Baixar CSV</button>
       <button type="button" class="bt" id="sReler">Dar baixa agora</button>
     </div>
@@ -278,8 +279,9 @@ async function carregarSaldo(recarregar){
   }
 }
 function saldoFiltrado(){
-  const q = $('sBusca').value.trim().toLowerCase(), st = $('sStatus').value, f = $('sForn').value, at = $('sAtivos').checked;
-  return visao.produtos.filter((p) => (!at || p.situacao === 'Ativo' || st === 'Vender o restante') && (!st || p.status === st) && (!f || p.fornecedor === f)
+  const q = $('sBusca').value.trim().toLowerCase(), st = $('sStatus').value, f = $('sForn').value, at = $('sAtivos').checked, de = $('sDescEst').checked;
+  // Descontinuado com estoque = não compra mais e ainda tem saldo (status 'Vender o restante'); ignora o 'Só ativos'
+  return visao.produtos.filter((p) => (de ? p.status === 'Vender o restante' && p.saldo > 0 : (!at || p.situacao === 'Ativo' || st === 'Vender o restante')) && (!st || p.status === st) && (!f || p.fornecedor === f)
     && (!q || [p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => String(t || '').toLowerCase().includes(q))));
 }
 function pintarSaldo(){
@@ -299,7 +301,7 @@ function pintarSaldo(){
       return tr;
     })));
 }
-for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => visao && pintarSaldo());
+for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos', 'sDescEst']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => visao && pintarSaldo());
 $('sReler').onclick = () => carregarSaldo(true);
 $('sCsv').onclick = () => csv(`estoque-${hoje()}.csv`, ['SKU', 'Produto', 'Fornecedor', 'Situação', 'Saldo', 'Saídas 6m', 'Média/mês', 'Prazo (meses)', 'Mínimo', 'Máximo', 'Em pedido', 'Sugestão', 'Status', 'Custo médio', 'Valor', 'Dias'],
   saldoFiltrado().map((p) => [p.sku, p.nome, p.fornecedor, p.situacao, p.saldo, p.saidas6m, String(p.media).replace('.', ','), p.prazo, p.minimo, p.maximo, p.em_pedido, p.sugestao, p.status,
