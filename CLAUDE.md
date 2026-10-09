@@ -173,6 +173,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   relâmpago e cupons da loja (com as vendas dos itens no período); devoluções em janelas de 15 dias
   (`returns/get_return_list`), sem o campo `user`. Campanhas da própria Shopee não têm API.
   Itens (e vendas) só dos descontos ativos, agendados ou encerrados há até 60 dias, 4 por vez.
+  "Últimas campanhas criadas" (15 descontos mais novos): vendas no período e desconto dado = unidades × (preço original do desconto
+  − preço pago), por variação (`vendasDoDesconto`), e a faixa de %. Criar: anúncios marcados em massa ("Marcar todos da busca").
   Criar (escrita só pela tela, com confirmação; nada no MCP): `POST /api/shopee/campanhas/desconto`
   (add_discount + add_discount_item; sem nenhum item aceito apaga a campanha vazia), `/relampago`
   (horários de `GET …/horarios` = get_time_slot_id, 1 por dia 00h–24h; até 50 itens com estoque da

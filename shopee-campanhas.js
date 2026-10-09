@@ -172,15 +172,38 @@ function criar({ D, daLoja, vendas }) {
     const v = await fn(); cache.set(chave, { em: Date.now(), v }); return v;
   };
 
-  // vendas dos itens de uma promoção no período dela (cópia local dos pedidos da Shopee)
-  const vendasDosItens = (shopId, itens, de, ate) => {
-    if (!itens.length) return { pedidos: 0, unidades: 0, faturamento: 0 };
-    const r = D.db.prepare(`SELECT COUNT(DISTINCT p.order_sn) AS pedidos, COALESCE(SUM(i.quantidade),0) AS unidades, COALESCE(SUM(i.quantidade * i.preco_unit),0) AS fat
-      FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn WHERE p.shop_id=? AND p.data >= ? AND p.data < ?
-      AND p.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') AND i.item_id IN (${itens.map(() => '?').join(',')})`).get(shopId, de, ate, ...itens);
-    return { pedidos: r.pedidos, unidades: r.unidades, faturamento: r2(r.fat) };
-  };
   const iso = (s) => (s ? new Date(s * 1000).toISOString() : null);
+  // Desconto: vendas dos itens no período com o desconto dado ao cliente = unidades × (preço original do
+  // desconto − preço pago), por variação (model) e, sem ela, pelo item. Também a faixa de % do desconto.
+  const vendasDoDesconto = (shopId, itens, de, ate) => {
+    const orig = new Map(), pcts = [];
+    for (const i of itens) {
+      const ms = i.model_list?.length ? i.model_list : [{ model_id: 0, model_original_price: i.item_original_price, model_promotion_price: i.item_promotion_price }];
+      for (const m of ms) {
+        const o = Number(m.model_original_price ?? i.item_original_price), p = Number(m.model_promotion_price ?? i.item_promotion_price);
+        if (!(o > 0)) continue;
+        orig.set(`${i.item_id}:${m.model_id || 0}`, o);
+        if (!orig.has(`${i.item_id}:*`)) orig.set(`${i.item_id}:*`, o);
+        if (p > 0 && p < o) pcts.push(1 - p / o);
+      }
+    }
+    const ids = [...new Set(itens.map((i) => Number(i.item_id)))];
+    const s = { pedidos: 0, unidades: 0, faturamento: 0, desconto: 0 };
+    if (ids.length) {
+      const rs = D.db.prepare(`SELECT p.order_sn, i.item_id, i.model_id, i.quantidade, i.preco_unit FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
+        WHERE p.shop_id=? AND p.data >= ? AND p.data < ? AND p.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') AND i.item_id IN (${ids.map(() => '?').join(',')})`).all(shopId, de, ate, ...ids);
+      const peds = new Set();
+      for (const r of rs) {
+        const q = Number(r.quantidade) || 0, pu = Number(r.preco_unit) || 0;
+        const o = orig.get(`${r.item_id}:${r.model_id || 0}`) ?? orig.get(`${r.item_id}:*`);
+        peds.add(r.order_sn); s.unidades += q; s.faturamento += q * pu;
+        if (o > pu) s.desconto += q * (o - pu);
+      }
+      s.pedidos = peds.size;
+    }
+    return { pedidos: s.pedidos, unidades: s.unidades, faturamento: r2(s.faturamento), desconto: r2(s.desconto),
+      pct_min: pcts.length ? Math.min(...pcts) : null, pct_max: pcts.length ? Math.max(...pcts) : null };
+  };
 
   const rotas = {
     'GET /api/shopee/campanhas': async (url) => {
@@ -218,7 +241,7 @@ function criar({ D, daLoja, vendas }) {
               inicio: iso(d.start_time), fim: iso(d.end_time), itens: ids ? ids.length : null,
               exemplos: (itens || []).slice(0, 3).map((i) => ({ nome: i.item_name || null, preco_original: i.item_original_price ?? i.model_list?.[0]?.model_original_price ?? null,
                 preco_promo: i.item_promotion_price ?? i.model_list?.[0]?.model_promotion_price ?? null })),
-              vendas: ids ? vendasDosItens(shopId, ids, iso(d.start_time), iso(d.end_time)) : null };
+              vendas: ids ? vendasDoDesconto(shopId, itens, iso(d.start_time), iso(d.end_time)) : null };
           }
         };
         await Promise.all([trabalhar(), trabalhar(), trabalhar(), trabalhar()]);

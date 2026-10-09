@@ -280,7 +280,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       const agora = Date.now();
       const comandas = D.comandasListar([...p.chaves, ...D.comandasManuaisAbertas()]).map((c) => ({ ...c, situacao_prazo: situacaoPrazo(c.prazo, agora),
         unidades: c.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0) }))
-        .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || x.dia.localeCompare(y.dia) || x.numero - y.numero);
+        .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || y.dia.localeCompare(x.dia) || y.numero - x.numero);   // maior número (a mais nova) primeiro
       return { em: new Date(p.em).toISOString(), erros: p.erros, categorias: CATEGORIAS, comandas };
     },
     // Histórico: comandas impressas num dia (Brasília) ou pelo número da venda — inclusive as que já saíram.

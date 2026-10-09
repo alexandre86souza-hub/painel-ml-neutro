@@ -39,6 +39,8 @@
   .recusas{margin-top:8px;font-size:13px;color:#b42318}
   .bt.pequeno{padding:4px 10px;font-size:12px}
   #resultado[hidden]{display:none}
+  .barra-achados{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+  .achados .linha input[type=checkbox]{width:16px;height:16px;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -85,6 +87,12 @@
           <label class="sub" style="display:flex;align-items:center;gap:6px">Desconto para todos
             <input id="pctTodos" type="number" min="1" max="90" step="0.5" value="5" style="width:80px;font:inherit;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px">%</label>
         </div>
+        <div class="barra-achados">
+          <button type="button" class="bt pequeno" id="btMarcarBusca">Marcar todos da busca</button>
+          <button type="button" class="bt pequeno" id="btDesmarcar">Desmarcar</button>
+          <button type="button" class="bt pequeno primario" id="btAddMarcados" disabled>Adicionar marcados</button>
+          <span class="sub" id="infoAchados"></span>
+        </div>
         <div class="achados" id="achados"><p class="carregando" style="padding:10px">Carregando os anúncios…</p></div>
         <h3 style="margin:16px 0 6px;font-size:15px">Anúncios escolhidos <span class="chip" id="qtdEsc">0</span></h3>
         <div class="tabela-rolagem escolhidos" id="escolhidos"></div>
@@ -96,6 +104,12 @@
       </div>
       <div class="recusas" id="recusas"></div>
     </form>
+  </section>
+
+  <section class="bloco">
+    <h2>Últimas campanhas criadas</h2>
+    <p class="sub">Descontos da loja, do mais novo para o mais antigo: vendas dos anúncios do desconto no período dele (pedidos não cancelados) e quanto o cliente deixou de pagar (preço original − preço pago).</p>
+    <div class="tabela-rolagem" id="ultimas"></div>
   </section>
 
   <section class="bloco">
@@ -167,7 +181,35 @@ async function carregar(recarregar){
     }
     if(!r.campanhas.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma promoção da loja.'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); }
     tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
+    pintarUltimas(r.campanhas);
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
+}
+
+// ---------- últimas campanhas criadas (descontos) ----------
+function pintarUltimas(campanhas){
+  const box = $('ultimas'); box.innerHTML = '';
+  const lst = campanhas.filter((c) => c.tipo === 'Desconto').sort((a, b) => String(b.inicio).localeCompare(String(a.inicio))).slice(0, 15);
+  if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum desconto criado na loja.')); return; }
+  const faixa = (v) => v?.pct_min == null ? '—' : Math.abs(v.pct_max - v.pct_min) < 0.005 ? pct(v.pct_min) : `${pct(v.pct_min)} a ${pct(v.pct_max)}`;
+  const tab = el('table'); const cab = el('tr');
+  for(const h of ['Campanha', 'Período', '% de desconto', 'Vendas', 'Valor total vendido', 'Total em desconto', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+  const tot = { un: 0, ped: 0, fat: 0, desc: 0 };
+  for(const c of lst){
+    const v = c.vendas, tr = el('tr');
+    const t0 = el('td'); t0.appendChild(document.createTextNode(c.nome || 'Desconto')); t0.appendChild(el('span', 'pequeno', c.situacao));
+    const t3 = el('td'); if(v){ t3.appendChild(document.createTextNode(`${numero(v.unidades)} un.`)); t3.appendChild(el('span', 'pequeno', `${numero(v.pedidos)} pedido(s)`)); } else t3.textContent = '—';
+    const bt = el('button', 'bt pequeno', 'Ver resultado'); bt.type = 'button'; bt.onclick = () => verResultado(c); const t6 = el('td'); t6.appendChild(bt);
+    tr.append(t0, el('td', null, `${dataHora(c.inicio)} a ${dataHora(c.fim)}`), el('td', null, faixa(v)), t3,
+      el('td', 'dinheiro', v ? real(v.faturamento) : '—'), el('td', 'dinheiro', v ? real(v.desconto) : '—'), t6);
+    if(!v) tr.title = 'Desconto encerrado há mais de 60 dias: a Shopee não é consultada sobre os itens dele.';
+    tb.appendChild(tr);
+    if(v){ tot.un += v.unidades; tot.ped += v.pedidos; tot.fat += v.faturamento; tot.desc += v.desconto; }
+  }
+  const tr = el('tr'); tr.style.fontWeight = '700';
+  tr.append(el('td', null, 'Total'), el('td'), el('td'), el('td', null, `${numero(tot.un)} un. · ${numero(tot.ped)} pedido(s)`), el('td', 'dinheiro', real(tot.fat)), el('td', 'dinheiro', real(tot.desc)), el('td'));
+  tb.appendChild(tr);
+  tab.appendChild(tb); box.appendChild(tab);
 }
 
 // ---------- resultado de uma campanha ----------
@@ -279,25 +321,51 @@ async function carregarAnuncios(){
     pintarAchados();
   }catch(e){ $('achados').innerHTML = ''; $('achados').appendChild(el('p', 'vazio', 'Não foi possível carregar os anúncios: ' + e.message)); }
 }
+// Vários de uma vez: marque na lista (ou "Marcar todos da busca") e clique "Adicionar marcados".
+const marcados = new Set();
+const LIMITE = { relampago: 50, cupom: 100, desconto: 1000 };
+const daBusca = () => { const q = $('buscaAn').value.trim().toLowerCase();
+  return anuncios.filter((a) => !q || (a.titulo || '').toLowerCase().includes(q) || (a.nome_shopee || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q)); };
+function contarMarcados(){
+  const n = marcados.size;
+  $('btAddMarcados').disabled = !n; $('btAddMarcados').textContent = n ? `Adicionar marcados (${numero(n)})` : 'Adicionar marcados';
+}
+$('btMarcarBusca').onclick = () => { if(!anuncios) return; for(const a of daBusca()) if(!escolhidos.has(chave(a))) marcados.add(chave(a)); pintarAchados(); };
+$('btDesmarcar').onclick = () => { marcados.clear(); if(anuncios) pintarAchados(); };
+$('btAddMarcados').onclick = () => {
+  const porChave = new Map(anuncios.map((a) => [chave(a), a]));
+  const max = LIMITE[tipo] || 1000, novos = [...marcados].filter((k) => !escolhidos.has(k) && porChave.has(k));
+  const cabem = Math.max(0, max - escolhidos.size);
+  for(const k of novos.slice(0, cabem)) escolher(porChave.get(k), false);
+  marcados.clear(); pintarEscolhidos(); pintarAchados();
+  if(novos.length > cabem) aviso(`A Shopee aceita até ${numero(max)} anúncios neste tipo de campanha: entraram ${numero(cabem)} de ${numero(novos.length)}.`);
+};
 function pintarAchados(){
-  const q = $('buscaAn').value.trim().toLowerCase();
-  const lista = anuncios.filter((a) => !q || (a.titulo || '').toLowerCase().includes(q) || (a.nome_shopee || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q)).slice(0, 40);
+  const todos = daBusca();
+  const lista = todos.slice(0, 200);
+  $('infoAchados').textContent = `${numero(todos.length)} anúncio(s) na busca` + (todos.length > lista.length ? ` (mostrando ${numero(lista.length)}; "Marcar todos da busca" pega todos)` : '');
   const box = $('achados'); box.innerHTML = '';
   for(const a of lista){
     const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(a.foto) im.src = a.foto;
+    const ck = el('input'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Marcar ' + (a.sku || a.item_id));
+    ck.checked = marcados.has(chave(a)); ck.disabled = escolhidos.has(chave(a));
+    ck.onchange = () => { ck.checked ? marcados.add(chave(a)) : marcados.delete(chave(a)); contarMarcados(); };
+    ln.appendChild(ck);
     const tx = el('div', 'tx'); tx.append(el('b', null, (a.nome_shopee || a.titulo) + (a.variacao ? ` — ${a.variacao}` : '')),
       el('span', null, `${a.sku || 'sem SKU'} · ${real(a.preco_original)} · estoque ${numero(a.estoque)} · ${numero(a.vendas_30)} vendido(s) em 30 dias`));
     const ja = escolhidos.has(chave(a));
     const bt = el('button', 'bt pequeno' + (ja ? '' : ' primario'), ja ? 'Escolhido' : '+ Escolher'); bt.type = 'button'; bt.disabled = ja;
-    bt.onclick = () => { escolher(a); bt.disabled = true; bt.textContent = 'Escolhido'; bt.className = 'bt pequeno'; };
+    bt.onclick = () => { escolher(a); bt.disabled = true; bt.textContent = 'Escolhido'; bt.className = 'bt pequeno'; ck.checked = false; ck.disabled = true; contarMarcados(); };
     ln.append(im, tx, bt); box.appendChild(ln);
   }
   if(!lista.length) box.appendChild(el('p', 'vazio', 'Nenhum anúncio com essa busca.'));
+  contarMarcados();
 }
-function escolher(a){
+function escolher(a, pintar = true){
   const p = Number($('pctTodos').value) || 0;
+  marcados.delete(chave(a));
   escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p / 100) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0 });
-  pintarEscolhidos();
+  if(pintar) pintarEscolhidos();
 }
 function pintarEscolhidos(){
   const box = $('escolhidos'); box.innerHTML = '';
@@ -393,7 +461,7 @@ $('formCamp').onsubmit = async (ev) => {
     if(r.apagada) aviso('A Shopee recusou todos os anúncios; a campanha vazia foi apagada. Veja os motivos abaixo.');
     else{
       aviso(tipo === 'cupom' ? 'Cupom criado na Shopee.' : `Campanha criada na Shopee com ${r.aceitos} anúncio(s).`, 'ok');
-      if(!r.recusados?.length){ escolhidos.clear(); pintarEscolhidos(); }
+      if(!r.recusados?.length){ escolhidos.clear(); marcados.clear(); pintarEscolhidos(); if(anuncios) pintarAchados(); }
       carregar(true);
     }
   }catch(e){ aviso('A Shopee recusou: ' + e.message); }
