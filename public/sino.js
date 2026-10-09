@@ -121,6 +121,6 @@
 // Comanda nova (faixa, som e notificação) para quem tem a Expedição: public/comandas-aviso.js
 (function () {
   if (document.querySelector('script[src^="/comandas-aviso.js"]')) return;
-  const s = document.createElement('script'); s.src = '/comandas-aviso.js?v=4'; s.defer = true;
+  const s = document.createElement('script'); s.src = '/comandas-aviso.js?v=5'; s.defer = true;
   document.head.appendChild(s);
 })();

@@ -4,7 +4,7 @@
 // no navegador (localStorage), divididas entre as abas: só uma aba toca para a mesma comanda.
 (function () {
   if (document.getElementById('avisoComanda')) return;
-  const CHAVE = 'painel.comandas.vistas', SOM = 'painel.comandas.som';
+  const CHAVE = 'painel.comandas.vistas', SOM = 'painel.comandas.som', TIPO = 'painel.comandas.tipo_som';
   const ler = (k, padrao) => { try { const v = localStorage.getItem(k); return v == null ? padrao : JSON.parse(v); } catch { return padrao; } };
   const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
   const somLigado = () => ler(SOM, true) !== false;
@@ -29,39 +29,60 @@
   const box = document.createElement('div');
   box.id = 'avisoComanda'; box.hidden = true; box.setAttribute('role', 'alert');
   box.innerHTML = '<span class="ic" aria-hidden="true">📦</span><b></b><div class="lista"></div><div class="acoes">'
-    + '<a href="/comandas.html">Abrir comandas</a><button type="button" data-x="ok">Ok, vi</button><button type="button" data-x="som"></button></div>';
+    + '<a href="/comandas.html">Abrir comandas</a><button type="button" data-x="ok">Ok, vi</button><button type="button" data-x="som"></button>'
+    + '<button type="button" data-x="tipo" title="Troca o som do aviso e toca para ouvir"></button></div>';
   document.body.appendChild(box);
-  const titulo = box.querySelector('b'), lista = box.querySelector('.lista'), btSom = box.querySelector('[data-x="som"]');
+  const titulo = box.querySelector('b'), lista = box.querySelector('.lista'), btSom = box.querySelector('[data-x="som"]'), btTipo = box.querySelector('[data-x="tipo"]');
   const pintarSom = () => { btSom.textContent = somLigado() ? '🔔 Som ligado' : '🔕 Som desligado'; };
   pintarSom();
 
-  // Som: três toques (ding-dong) feitos pelo Web Audio. O navegador só libera o áudio depois de um clique
-  // ou tecla na página; até lá vale a notificação do Windows (que tem o som do sistema).
+  // Som gerado pelo Web Audio (sem arquivo). O navegador só libera o áudio depois de um clique ou tecla na
+  // página; até lá vale a notificação do Windows. O volume já sai no máximo (compressor + ganho, sem distorcer):
+  // o que faz soar MAIS ALTO é a frequência — o ouvido é mais sensível entre 2.500 e 3.500 Hz (faixa de alarme)
+  // — e a duração. Três opções, escolhidas no próprio aviso (por navegador):
+  //   alarme    = bipes agudos rápidos (2.900/3.400 Hz), ~3 s — padrão
+  //   sirene    = subida e descida de 900 a 3.200 Hz, 3 vezes
+  //   campainha = o ding-dong antigo, mais grave
+  const SONS = { alarme: 'Alarme', sirene: 'Sirene', campainha: 'Campainha' };
+  const tipoSom = () => (SONS[ler(TIPO, 'alarme')] ? ler(TIPO, 'alarme') : 'alarme');
   let ctx = null;
   const audio = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch {} return ctx; };
   for (const ev of ['click', 'keydown']) document.addEventListener(ev, () => audio(), { once: true, capture: true });
   function tocar() {
     const c = audio(); if (!c) return;
-    if (c.state !== 'running') c.resume().catch(() => {});   // suspenso: as notas tocam quando o navegador liberar
-    // Alto: onda quadrada (mais harmônicos = soa mais forte que a triangular) + a mesma nota uma oitava acima,
-    // tudo num compressor com ganho final no máximo — fica alto sem distorcer.
+    if (c.state !== 'running') c.resume().catch(() => {});   // suspenso: toca quando o navegador liberar
     const comp = c.createDynamicsCompressor();
-    comp.threshold.value = -18; comp.knee.value = 6; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.2;
-    const mestre = c.createGain(); mestre.gain.value = 1.8;
+    comp.threshold.value = -20; comp.knee.value = 4; comp.ratio.value = 12; comp.attack.value = 0.002; comp.release.value = 0.15;
+    const mestre = c.createGain(); mestre.gain.value = 2.2;
     comp.connect(mestre).connect(c.destination);
-    const nota = (freq, ini, dur) => {
-      for (const [tipo, f, vol] of [['square', freq, 0.6], ['triangle', freq * 2, 0.5]]) {
-        const o = c.createOscillator(), g = c.createGain();
-        o.type = tipo; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, c.currentTime + ini);
-        g.gain.exponentialRampToValueAtTime(vol, c.currentTime + ini + 0.015);
-        g.gain.setValueAtTime(vol, c.currentTime + ini + dur * 0.5);
-        g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + ini + dur);
-        o.connect(g).connect(comp); o.start(c.currentTime + ini); o.stop(c.currentTime + ini + dur + 0.05);
-      }
+    const t0 = c.currentTime + 0.05;
+    // uma nota: onda e volume, com subida rápida e corte limpo (sem estalo)
+    const nota = (tipo, freq, ini, dur, vol = 0.9, freqFim) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = tipo; o.frequency.setValueAtTime(freq, t0 + ini);
+      if (freqFim) o.frequency.linearRampToValueAtTime(freqFim, t0 + ini + dur);
+      g.gain.setValueAtTime(0.0001, t0 + ini);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + ini + 0.01);
+      g.gain.setValueAtTime(vol, t0 + ini + dur - 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + ini + dur);
+      o.connect(g).connect(comp); o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
     };
-    for (let i = 0; i < 3; i++) { nota(988, i * 0.95, 0.4); nota(784, i * 0.95 + 0.35, 0.55); }
+    const t = tipoSom();
+    if (t === 'alarme') {
+      // 3 rajadas de 4 bipes (bi-bi-bi-bip), cada bipe com a quadrada + a quinta acima
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 4; k++) {
+        const ini = r * 1.0 + k * 0.16;
+        nota('square', k % 2 ? 3400 : 2900, ini, 0.11, 0.8); nota('sawtooth', (k % 2 ? 3400 : 2900) * 1.5, ini, 0.11, 0.35);
+      }
+    } else if (t === 'sirene') {
+      for (let r = 0; r < 3; r++) { nota('sawtooth', 900, r * 1.1, 0.55, 0.9, 3200); nota('sawtooth', 3200, r * 1.1 + 0.55, 0.5, 0.9, 900); }
+    } else {
+      for (let i = 0; i < 3; i++) { nota('square', 988, i * 0.95, 0.4, 0.6); nota('triangle', 1976, i * 0.95, 0.4, 0.5);
+        nota('square', 784, i * 0.95 + 0.35, 0.55, 0.6); nota('triangle', 1568, i * 0.95 + 0.35, 0.55, 0.5); }
+    }
   }
+  const pintarTipo = () => { btTipo.textContent = '🔊 Som: ' + SONS[tipoSom()] + ' (trocar)'; };
+  pintarTipo();
 
   // Título piscando enquanto o aviso estiver aberto
   const tituloOriginal = document.title;
@@ -71,6 +92,7 @@
 
   box.querySelector('[data-x="ok"]').onclick = fechar;
   btSom.onclick = () => { gravar(SOM, !somLigado()); pintarSom(); if (somLigado()) { audio(); tocar(); } };
+  btTipo.onclick = () => { const ks = Object.keys(SONS); gravar(TIPO, ks[(ks.indexOf(tipoSom()) + 1) % ks.length]); pintarTipo(); audio(); tocar(); };
 
   let pendentes = [];
   function mostrar(novas) {
