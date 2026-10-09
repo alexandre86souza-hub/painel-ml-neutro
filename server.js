@@ -317,6 +317,21 @@ async function ml(pathname, opts = {}, contaId = null) {
   return json;
 }
 
+// Arquivo da API do ML (PDF da etiqueta de envio): mesma conta e renovação do ml(), devolve os bytes.
+async function mlArquivo(pathname, contaId) {
+  let conta = D.contaObter(contaId);
+  if (!conta) throw Object.assign(new Error(SEM_CONTA), { status: 401 });
+  if (Date.now() > conta.expires_at) conta = await renovar(conta);
+  const call = (c) => fetch(API + pathname, { headers: { Authorization: `Bearer ${c.access_token}` }, signal: AbortSignal.timeout(60000) });
+  let res = await call(conta);
+  if (res.status === 401) { conta = await renovar(conta); res = await call(conta); }
+  if (!res.ok) {
+    const j = await res.json().catch(() => null);
+    throw Object.assign(new Error(mensagemDoML(j, res.statusText)), { status: res.status, body: j });
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 // Cliente do scraper local. Ele escuta em 127.0.0.1 e dirige um navegador com a
 // sessão logada do vendedor: NUNCA exponha essa porta pelo túnel.
 // A porta é escolhida pelo iniciar.js na hora de subir (a primeira livre a partir de 8100).
@@ -2135,6 +2150,9 @@ Object.assign(routes, estoqueMod.rotas);
 const comandasMod = require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
   estoque: estoqueMod });
 Object.assign(routes, comandasMod.rotas);
+// Etiquetas de envio (etiquetas.js): a etiqueta liberada pelo ML e pela Shopee, em PDF para a térmica 10×15.
+const etiquetasMod = require('./etiquetas.js').criar({ D, mlArquivo, daLoja: shopeeMod.daLoja, comandas: comandasMod });
+Object.assign(routes, etiquetasMod.rotas);
 // "Precisa de atenção" da tela Todas as contas: resumo do estoque (situação de reposição) e da fila de
 // comandas. Cada parte que falhar ou demorar vem null. Fora do MCP (estoque e comandas não vão ao Claude).
 routes['GET /api/contas/atencao'] = async () => {
@@ -2591,6 +2609,23 @@ async function tratarPainelNoContexto(req, res, online = false) {
     }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
     return res.end(Buffer.from(await r.arrayBuffer()));
+  }
+
+  // Etiqueta de envio (etiquetas.js): PDF, não JSON. Tem endereço do comprador: vai direto ao navegador, sem
+  // guardar (no-store). Falha parcial vem no cabeçalho X-Etiquetas-Falhas (JSON codificado).
+  if (req.method === 'POST' && url.pathname === '/api/etiquetas/pdf') {
+    try {
+      const b = JSON.parse(await lerCorpo(req, 64 * 1024) || '{}');
+      const r = await etiquetasMod.pdf(b.chaves);
+      D.auditoriaGravar(quem.login, 'POST', url.pathname, 200);
+      if (!r.pdf) return send(422, { error: 'Nenhuma etiqueta saiu.', falhas: r.falhas });
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store', ...SEGURANCA,
+        'X-Etiquetas-Ok': encodeURIComponent(JSON.stringify(r.ok)), 'X-Etiquetas-Falhas': encodeURIComponent(JSON.stringify(r.falhas)) });
+      return res.end(r.pdf);
+    } catch (e) {
+      D.auditoriaGravar(quem.login, 'POST', url.pathname, e.status || 500);
+      return send(e.status || 500, { error: e.message });
+    }
   }
 
   // Importar a planilha de estoque (.xlsx em bytes crus). Só o administrador (usuarios.js não libera).

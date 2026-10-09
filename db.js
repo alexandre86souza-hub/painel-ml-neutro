@@ -1890,7 +1890,13 @@ function comandasAtualizar(lista) {
 function comandasListar(chaves) {
   const st = db.prepare('SELECT * FROM comandas WHERE chave=?');
   return chaves.map((c) => st.get(c)).filter(Boolean).map((r) => ({ chave: r.chave, categoria: r.categoria, dia: r.dia, numero: r.numero,
-    criada_em: r.criada_em, impressa_em: r.impressa_em, impressoes: r.impressoes, ...JSON.parse(r.dados) }));
+    criada_em: r.criada_em, impressa_em: r.impressa_em, impressoes: r.impressoes, etiqueta_em: r.etiqueta_em || null, ...JSON.parse(r.dados) }));
+}
+function comandasEtiqueta(chaves) {
+  const st = db.prepare('UPDATE comandas SET etiqueta_em=? WHERE chave=?');
+  const em = new Date().toISOString();
+  db.exec('BEGIN');
+  try { for (const c of chaves) st.run(em, c); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 // Comanda de um dia anterior que não foi impressa ganha o número de hoje (a impressa mantém o do papel).
 function comandasRenumerar(lista) {
@@ -1941,6 +1947,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS compras_pedido ON compras(pedido);
 `);
 try { db.exec('ALTER TABLE comandas ADD COLUMN concluida_em TEXT'); } catch { /* já existe */ }
+// Etiqueta de envio (etiquetas.js): quando foi baixada para imprimir pelo painel (a etiqueta em si não fica guardada).
+try { db.exec('ALTER TABLE comandas ADD COLUMN etiqueta_em TEXT'); } catch { /* já existe */ }
 try { db.exec('ALTER TABLE fornecedores ADD COLUMN situacao TEXT'); } catch { /* já existe */ }
 
 const estoqueProdutos = () => db.prepare('SELECT * FROM estoque_produtos').all();
@@ -2088,7 +2096,7 @@ module.exports = {
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
-  comandasManuaisAbertas, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
+  comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar,

@@ -295,6 +295,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som
   (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Comanda: pedido no topo (sem código de
   barras, pedido do vendedor; `public/codigo128.js` segue testado, sem uso). Nada no MCP (`test-comandas.js`).
+- Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
+  libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas
+  (`comandas.js#fila`) com o número da comanda. ML: substatus ready_to_print/printed, `GET /shipment_labels?shipment_ids=&response_type=pdf`
+  (`server.js#mlArquivo`; baixar marca impresso no ML); o envio sem etiqueta é relido a cada 3 min. Shopee: PROCESSED, get_tracking_number ->
+  create_shipping_document (THERMAL_AIR_WAYBILL quando dá) -> get_shipping_document_result -> download_shipping_document (`daLoja(…, true)`).
+  `POST /api/etiquetas/pdf` (binário, até 50, uma conta/loja por arquivo, falhas no cabeçalho X-Etiquetas-Falhas). A etiqueta tem endereço do
+  comprador: não é guardada (só `comandas.etiqueta_em`) e nada vai ao MCP. Magalu: `POST /seller/v1/logistics/shipping-labels` (deliveries,
+  label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).
+  Amazon: a etiqueta do Easy Ship pede o papel restrito Direct-to-Consumer Shipping + RDT — contra o compromisso de não ler dado de comprador; fica no Seller Central.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,

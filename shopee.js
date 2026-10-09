@@ -67,10 +67,12 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
   const agoraS = () => Math.floor(Date.now() / 1000);
 
   // Uma chamada à Shopee. Erro da Shopee (HTTP 200 com "error") vira exceção com a mensagem dela.
-  async function pedir(url, opts = {}) {
+  // arquivo = a resposta pode ser um arquivo (PDF da etiqueta): vem como Buffer; JSON continua sendo erro/resposta.
+  async function pedir(url, opts = {}, arquivo = false) {
     let r;
     try { r = await fetch(url, { ...opts, signal: AbortSignal.timeout(30000) }); }
     catch (e) { throw erro(`A Shopee não respondeu (${e.message}).`, 502); }
+    if (arquivo && r.ok && !/json/i.test(r.headers.get('content-type') || '')) return Buffer.from(await r.arrayBuffer());
     const txt = await r.text();
     let j = null;
     try { j = txt ? JSON.parse(txt) : null; } catch {}
@@ -103,7 +105,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
   }
 
   // Chamada da loja (GET com parâmetros, ou POST com corpo). Token vencido renova e repete uma vez.
-  async function daLoja(shopId, caminho, params = {}, corpo = null) {
+  async function daLoja(shopId, caminho, params = {}, corpo = null, arquivo = false) {
     const c = exigeConfig();
     let loja = D.shopeeLojaObter(shopId);
     if (!loja) throw erro('Loja da Shopee não conectada.', 404);
@@ -113,7 +115,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const qs = new URLSearchParams({ partner_id: c.partner_id, timestamp: String(ts), access_token: l.access_token,
         shop_id: String(l.shop_id), sign: assinar(c.partner_key, c.partner_id, caminho, ts, l.access_token, l.shop_id) });
       for (const [k, v] of Object.entries(params)) if (v != null && v !== '') qs.set(k, Array.isArray(v) ? v.join(',') : String(v));
-      return pedir(`${c.host}${caminho}?${qs}`, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : {});
+      return pedir(`${c.host}${caminho}?${qs}`, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : {}, arquivo);
     };
     try { return await chamar(loja); }
     catch (e) {

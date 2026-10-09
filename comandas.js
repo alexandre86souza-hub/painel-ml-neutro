@@ -82,10 +82,12 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   const cacheEnvio = new Map();   // envio -> { tipo, cliente, prazo, em }
   async function envioMl(id, contaId) {
     const c = cacheEnvio.get(id);
-    if (c && Date.now() - c.em < 30 * 60e3) return c;
+    // com a etiqueta ainda presa (nota fiscal…), relê a cada 3 min: a tela Etiquetas espera a liberação
+    const validade = c && (c.sub === 'ready_to_print' || c.sub === 'printed') ? 30 * 60e3 : 3 * 60e3;
+    if (c && Date.now() - c.em < validade) return c;
     const s = await ml(`/shipments/${id}`, {}, contaId);
-    let prazo = null;
-    try { prazo = (await ml(`/shipments/${id}/sla`, {}, contaId))?.expected_date || null; } catch { /* sem prazo */ }
+    let prazo = c?.prazo || null;
+    if (!prazo) try { prazo = (await ml(`/shipments/${id}/sla`, {}, contaId))?.expected_date || null; } catch { /* sem prazo */ }
     const x = { tipo: s.logistic_type || null, cliente: s.receiver_address?.receiver_name || null, status: s.status, sub: s.substatus || null,
       saiu: jaSaiuMl(s.substatus, s.substatus_history), prazo, em: Date.now() };
     cacheEnvio.set(id, x);
@@ -278,15 +280,17 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     return cache;
   }
 
+  // A fila da tela (também usada pela tela Etiquetas, etiquetas.js)
+  async function fila(recarregar) {
+    const p = await pendentes(recarregar);
+    const agora = Date.now();
+    const comandas = D.comandasListar([...p.chaves, ...D.comandasManuaisAbertas()]).map((c) => ({ ...c, situacao_prazo: situacaoPrazo(c.prazo, agora),
+      unidades: c.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0) }))
+      .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || y.dia.localeCompare(x.dia) || y.numero - x.numero);   // maior número (a mais nova) primeiro
+    return { em: new Date(p.em).toISOString(), erros: p.erros, categorias: CATEGORIAS, comandas };
+  }
   const rotas = {
-    'GET /api/comandas': async (url) => {
-      const p = await pendentes(url.searchParams.get('recarregar') === '1');
-      const agora = Date.now();
-      const comandas = D.comandasListar([...p.chaves, ...D.comandasManuaisAbertas()]).map((c) => ({ ...c, situacao_prazo: situacaoPrazo(c.prazo, agora),
-        unidades: c.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0) }))
-        .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || y.dia.localeCompare(x.dia) || y.numero - x.numero);   // maior número (a mais nova) primeiro
-      return { em: new Date(p.em).toISOString(), erros: p.erros, categorias: CATEGORIAS, comandas };
-    },
+    'GET /api/comandas': async (url) => fila(url.searchParams.get('recarregar') === '1'),
     // Histórico: comandas impressas num dia (Brasília) ou pelo número da venda — inclusive as que já saíram.
     'GET /api/comandas/historico': async (url) => {
       const q = url.searchParams;
@@ -362,7 +366,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       atrasadas: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'atrasado').length,
       hoje: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'hoje').length };
   }
-  return { rotas, rotasParam: [], resumoFila };
+  return { rotas, rotasParam: [], resumoFila, fila };
 }
 
 module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, CATEGORIAS };

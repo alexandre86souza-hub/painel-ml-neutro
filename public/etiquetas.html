@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etiquetas de envio</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
+<style>
+  .abas{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .abas button{font:inherit;font-size:14px;font-weight:600;padding:9px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);cursor:pointer;display:flex;gap:8px;align-items:center}
+  .abas button[aria-pressed="true"]{background:#1f2937;color:#fff;border-color:#1f2937}
+  .abas .qtd{font-size:12px;background:#eef1f6;color:#334155;border-radius:999px;padding:1px 8px}
+  .abas button[aria-pressed="true"] .qtd{background:#fff;color:#1f2937}
+  .abas .qtd.alerta{background:#fde8e1;color:#b4441e}
+  .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .seg{display:inline-flex;border:1px solid #d5d7db;border-radius:10px;overflow:hidden}
+  .seg button{font:inherit;font-size:13px;padding:7px 12px;border:0;background:#fff;cursor:pointer;color:#334155}
+  .seg button[aria-pressed="true"]{background:#c96f50;color:#fff}
+  .filtros input[type=search]{flex:1 1 220px;font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .chip.liberada{background:#fdeee8;color:#b4441e;border-color:#f3c3b1}
+  .chip.impressa{background:#e7f4ee;color:#1f6b4a;border-color:#b9dfcc}
+  .chip.espera{background:#eef1f6;color:#475569}
+  .chip.atrasado{background:#fde8e8;color:#b42318}.chip.hoje{background:#fff4d6;color:#7a5600}.chip.amanha{background:#eef1f6;color:#475569}
+  td.num{font-family:ui-monospace,Consolas,monospace;font-weight:700;white-space:nowrap}
+  td .pequeno{display:block;font-size:11px;color:var(--muted)}
+  .bt.imprimir{background:#c96f50;color:#fff;border-color:#c96f50}
+  .acoes{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+  th:last-child,td:last-child{text-align:right}
+  dialog{border:0;border-radius:16px;padding:0;max-width:96vw;width:760px;background:#faf8f3;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(15,23,42,.45)}
+  .dlg-topo{padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:1px solid #ece7dc}
+  .dlg-topo h2{margin:2px 0 0;font-size:20px}
+  .dlg-corpo{max-height:72vh;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
+  .arquivo{border:1px solid #e3ddd0;border-radius:12px;background:#fff;padding:12px}
+  .arquivo-topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .arquivo iframe{width:100%;height:420px;border:1px solid #e3ddd0;border-radius:8px;background:#f4f4f4}
+  .falhas{margin:6px 0 0;padding-left:18px;color:#b42318;font-size:13px}
+  .dlg-pe{padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #ece7dc}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=36"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Etiquetas de envio</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>A etiqueta da transportadora que o Mercado Livre e a Shopee liberam depois da nota fiscal, para a térmica 10×15. Ao lado, a comanda do mesmo envio. Magalu e Amazon ainda não.</p>
+    <div class="acoes"><button type="button" class="bt" id="btReler">Atualizar agora</button></div>
+  </div>
+  <div class="abas" id="abas" role="group" aria-label="Lojas"></div>
+  <section class="bloco">
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Situação" id="segSit">
+        <button type="button" data-f="liberada" aria-pressed="true">Para imprimir</button>
+        <button type="button" data-f="impressa" aria-pressed="false">Já impressas</button>
+        <button type="button" data-f="aguardando" aria-pressed="false">Aguardando nota</button>
+        <button type="button" data-f="todas" aria-pressed="false">Todas</button>
+      </div>
+      <input type="search" id="busca" placeholder="Buscar pedido, cliente ou comanda" aria-label="Buscar etiqueta">
+      <button type="button" class="bt imprimir" id="btSel" disabled>Imprimir selecionadas</button>
+    </div>
+    <p class="sub" id="nota"></p>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Buscando os envios de todas as lojas…</p></div>
+    <p class="sub">Na impressora: papel 100 × 150 mm no driver da impressora térmica e, no diálogo de impressão, escala "Tamanho real" (ou "Ajustar" se a etiqueta sair cortada).
+      Cada arquivo é de uma conta ou loja (até 50 etiquetas), na ordem das comandas. O Mercado Livre marca o envio como impresso ao baixar a etiqueta.</p>
+  </section>
+  </main>
+  </div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgTitulo">
+  <div class="dlg-topo"><div><h2 id="dlgTitulo">Etiquetas</h2><p class="sub" id="dlgSub" style="margin:4px 0 0"></p></div>
+    <button type="button" class="bt" id="dlgFechar" aria-label="Fechar">✕</button></div>
+  <div class="dlg-corpo" id="dlgCorpo"></div>
+  <div class="dlg-pe"><button type="button" class="bt" id="dlgFechar2">Fechar</button></div>
+</dialog>
+
+<script src="/comum.js?v=8"></script>
+<script>
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
+const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+const CANAL = { ml: 'Mercado Livre', shopee: 'Shopee' };
+const PRAZO = { atrasado: 'atrasado', hoje: 'hoje', 'amanhã': 'amanhã' };
+const nomeComanda = (e) => `${e.categoria} ${e.numero}`;
+const nomeGrupo = (e) => `${e.canal === 'ml' ? 'ML' : 'Shopee'} · ${e.loja}`;
+const impressa = (e) => !!(e.etiqueta_em || e.impressa_no_canal);
+let dados = null, aba = 'Todas', sit = 'liberada';
+const sel = new Set();
+
+async function carregar(recarregar){
+  try{
+    dados = await api('/api/etiquetas' + (recarregar ? '?recarregar=1' : ''));
+    aviso(dados.erros?.length ? 'Não consegui ler: ' + dados.erros.join(' · ') : '');
+    const existem = new Set(dados.etiquetas.map((e) => e.chave));
+    for(const k of [...sel]) if(!existem.has(k)) sel.delete(k);
+    pintar();
+  }catch(e){ aviso(e.message); $('lista').innerHTML = ''; }
+}
+
+function pintar(){
+  const abas = $('abas'); abas.innerHTML = '';
+  const nomes = ['Todas', ...new Set(dados.etiquetas.map(nomeGrupo))];
+  if(!nomes.includes(aba)) aba = 'Todas';
+  for(const k of nomes){
+    const lst = dados.etiquetas.filter((e) => k === 'Todas' || nomeGrupo(e) === k);
+    const falta = lst.filter((e) => e.situacao === 'liberada' && !impressa(e)).length;
+    const b = el('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(aba === k));
+    b.append(document.createTextNode(k), el('span', 'qtd' + (falta ? ' alerta' : ''), falta ? `${falta} para imprimir` : String(lst.length)));
+    b.onclick = () => { aba = k; pintar(); };
+    abas.appendChild(b);
+  }
+  $('nota').textContent = `Atualizado ${horaBR(dados.em)}. A etiqueta aparece em "Para imprimir" quando a loja libera (depois da nota fiscal); "Atualizar agora" confere já.`;
+  pintarLista();
+}
+
+function filtradas(){
+  const q = $('busca').value.trim().toLowerCase();
+  return dados.etiquetas.filter((e) => {
+    if(aba !== 'Todas' && nomeGrupo(e) !== aba) return false;
+    if(sit === 'liberada' && !(e.situacao === 'liberada' && !impressa(e))) return false;
+    if(sit === 'impressa' && !(e.situacao === 'liberada' && impressa(e))) return false;
+    if(sit === 'aguardando' && e.situacao !== 'aguardando') return false;
+    if(q && ![e.pedido, e.cliente, nomeComanda(e), e.loja].some((t) => String(t || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function pintarSel(){
+  const n = sel.size;
+  $('btSel').disabled = !n;
+  $('btSel').textContent = n ? `Imprimir ${n} selecionada(s)` : 'Imprimir selecionadas';
+}
+
+function pintarLista(){
+  const lst = filtradas();
+  const box = $('lista'); box.innerHTML = '';
+  pintarSel();
+  if(!lst.length){ box.appendChild(el('p', 'vazio', sit === 'liberada' ? 'Nenhuma etiqueta liberada para imprimir aqui.' : 'Nenhuma etiqueta com esse filtro.')); return; }
+  const podem = lst.filter((e) => e.situacao === 'liberada');
+  const t = el('table'); const cab = el('tr');
+  const thT = el('th'); const todas = el('input'); todas.type = 'checkbox'; todas.setAttribute('aria-label', 'Selecionar todas as mostradas');
+  todas.disabled = !podem.length; todas.checked = podem.length > 0 && podem.every((e) => sel.has(e.chave));
+  todas.onchange = () => { for(const e of podem) todas.checked ? sel.add(e.chave) : sel.delete(e.chave); pintarLista(); };
+  thT.appendChild(todas); cab.appendChild(thT);
+  for(const h of ['Comanda', 'Pedido', 'Loja', 'Envio', 'Cliente', 'Prazo', 'Etiqueta', '']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const e of lst){
+    const tr = el('tr');
+    const tdX = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = sel.has(e.chave); cb.disabled = e.situacao !== 'liberada';
+    cb.setAttribute('aria-label', 'Selecionar ' + nomeComanda(e));
+    cb.onchange = () => { cb.checked ? sel.add(e.chave) : sel.delete(e.chave); pintarSel(); };
+    tdX.appendChild(cb);
+    const tdC = el('td', 'num', nomeComanda(e)); tdC.appendChild(el('span', 'pequeno', e.comanda_impressa_em ? 'comanda impressa' : 'comanda não impressa'));
+    const tdPr = el('td'); tdPr.appendChild(document.createTextNode(e.prazo ? horaBR(e.prazo) : '—'));
+    if(PRAZO[e.situacao_prazo]) tdPr.appendChild(el('span', 'chip ' + (e.situacao_prazo === 'amanhã' ? 'amanha' : e.situacao_prazo), PRAZO[e.situacao_prazo]));
+    const tdS = el('td');
+    if(e.situacao !== 'liberada') tdS.appendChild(el('span', 'chip espera', e.motivo || 'Aguardando'));
+    else if(impressa(e)){
+      tdS.appendChild(el('span', 'chip impressa', 'Impressa'));
+      tdS.appendChild(el('span', 'pequeno', e.etiqueta_em ? horaBR(e.etiqueta_em) + ' pelo painel' : 'pelo site do ML'));
+    } else tdS.appendChild(el('span', 'chip liberada', 'Liberada'));
+    const tdA = el('td');
+    if(e.situacao === 'liberada'){
+      const b = el('button', 'bt ' + (impressa(e) ? '' : 'imprimir'), impressa(e) ? 'Reimprimir' : 'Imprimir'); b.type = 'button';
+      b.onclick = () => imprimir([e.chave]);
+      tdA.appendChild(b);
+    }
+    tr.append(tdX, tdC, el('td', null, e.pedido), el('td', null, `${e.loja} · ${CANAL[e.canal] || e.canal}`), el('td', null, e.envio || '—'),
+      el('td', null, e.cliente || '—'), tdPr, tdS, tdA);
+    t.appendChild(tr);
+  }
+  box.appendChild(t);
+}
+
+// Um arquivo por conta/loja, até 50 por arquivo, na ordem das comandas. O PDF fica só na memória da tela.
+const urls = [];
+async function imprimir(chaves){
+  const porChave = new Map(dados.etiquetas.map((e) => [e.chave, e]));
+  const grupos = new Map();
+  for(const k of chaves){ const e = porChave.get(k); if(!e || e.situacao !== 'liberada') continue; const g = grupos.get(e.grupo) || []; g.push(e); grupos.set(e.grupo, g); }
+  if(!grupos.size) return;
+  for(const u of urls.splice(0)) URL.revokeObjectURL(u);
+  const corpo = $('dlgCorpo'); corpo.innerHTML = '';
+  $('dlgSub').textContent = 'Buscando as etiquetas nas lojas…';
+  $('dlg').showModal();
+  let total = 0;
+  for(const lista of grupos.values()){
+    lista.sort((a, b) => a.categoria.localeCompare(b.categoria) || a.numero - b.numero);
+    for(let i = 0; i < lista.length; i += 50){
+      const parte = lista.slice(i, i + 50);
+      const caixa = el('div', 'arquivo');
+      const topo = el('div', 'arquivo-topo');
+      topo.appendChild(el('b', null, `${nomeGrupo(parte[0])} · ${parte.length} etiqueta(s)`));
+      caixa.appendChild(topo); corpo.appendChild(caixa);
+      const st = el('p', 'sub', 'Gerando…'); caixa.appendChild(st);
+      try{
+        const r = await fetch('/api/etiquetas/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaves: parte.map((e) => e.chave) }) });
+        if(!r.ok){
+          const j = await r.json().catch(() => ({}));
+          st.textContent = j.error || 'Falhou';
+          if(j.falhas?.length) caixa.appendChild(listaFalhas(j.falhas, porChave));
+          continue;
+        }
+        const ok = JSON.parse(decodeURIComponent(r.headers.get('X-Etiquetas-Ok') || '%5B%5D'));
+        const falhas = JSON.parse(decodeURIComponent(r.headers.get('X-Etiquetas-Falhas') || '%5B%5D'));
+        const url = URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: 'application/pdf' })); urls.push(url);
+        total += ok.length;
+        st.textContent = 'Comandas: ' + ok.map((k) => porChave.get(k)).filter(Boolean).map(nomeComanda).join(', ');
+        const fr = el('iframe'); fr.src = url; fr.title = 'Etiquetas ' + nomeGrupo(parte[0]);
+        const bI = el('button', 'bt imprimir', 'Imprimir'); bI.type = 'button';
+        bI.onclick = () => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch{ window.open(url, '_blank'); } };
+        const aN = el('a', 'bt', 'Abrir em outra aba'); aN.href = url; aN.target = '_blank'; aN.rel = 'noopener';
+        const ac = el('div', 'acoes'); ac.append(aN, bI); topo.appendChild(ac);
+        caixa.appendChild(fr);
+        if(falhas.length) caixa.appendChild(listaFalhas(falhas, porChave));
+      }catch(x){ st.textContent = x.message; }
+    }
+  }
+  $('dlgSub').textContent = total ? `${total} etiqueta(s) prontas. Clique em Imprimir em cada arquivo.` : 'Nenhuma etiqueta saiu.';
+  for(const k of chaves) sel.delete(k);
+  carregar(false);
+}
+function listaFalhas(falhas, porChave){
+  const ul = el('ul', 'falhas');
+  for(const f of falhas){ const e = porChave.get(f.chave); ul.appendChild(el('li', null, `${e ? nomeComanda(e) + ' (' + e.pedido + ')' : f.chave}: ${f.motivo}`)); }
+  return ul;
+}
+
+for(const b of $('segSit').querySelectorAll('button')) b.onclick = () => {
+  sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
+$('busca').oninput = () => pintarLista();
+$('btReler').onclick = () => carregar(true);
+$('btSel').onclick = () => imprimir([...sel]);
+for(const id of ['dlgFechar', 'dlgFechar2']) $(id).onclick = () => $('dlg').close();
+carregar(false);
+setInterval(() => { if(!$('dlg').open) carregar(false); }, 3 * 60e3);
+</script>
+<script src="/sino.js?v=4" defer></script>
+</body>
+</html>

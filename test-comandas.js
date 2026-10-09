@@ -63,4 +63,16 @@ assert.ok(B.codigo128Svg('2000018846143466').startsWith('<svg'));
 const mcp = require('node:fs').readFileSync(require('node:path').join(__dirname, 'mcp.js'), 'utf8');
 assert.ok(!/\/api\/comandas/.test(mcp), 'comandas fora do MCP');
 
-console.log('Comandas: categorias, numeração do dia, prazo, código de barras e fora do MCP: ok');
+// etiquetas de envio: quando a loja libera, tipo térmico da Shopee, fora do MCP
+const ET = require('./etiquetas.js');
+assert.deepStrictEqual(ET.situacaoEtiqueta({ canal: 'ml', etapa: 'ready_to_print' }), { situacao: 'liberada' });
+assert.deepStrictEqual(ET.situacaoEtiqueta({ canal: 'ml', etapa: 'printed' }), { situacao: 'liberada', impressa_no_canal: true });
+assert.strictEqual(ET.situacaoEtiqueta({ canal: 'ml', etapa: 'invoice_pending' }).situacao, 'aguardando');
+assert.strictEqual(ET.situacaoEtiqueta({ canal: 'shopee', etapa: 'PROCESSED' }).situacao, 'liberada');
+assert.strictEqual(ET.situacaoEtiqueta({ canal: 'shopee', etapa: 'READY_TO_SHIP' }).situacao, 'aguardando');
+assert.strictEqual(ET.situacaoEtiqueta({ canal: 'manual' }), null);
+assert.strictEqual(ET.situacaoEtiqueta({ canal: 'amazon' }), null);
+assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_WAYBILL', selectable_shipping_document_type: ['NORMAL_AIR_WAYBILL', 'THERMAL_AIR_WAYBILL'] }), 'THERMAL_AIR_WAYBILL');
+assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_WAYBILL', selectable_shipping_document_type: ['NORMAL_AIR_WAYBILL'] }), 'NORMAL_AIR_WAYBILL');
+assert.ok(!/\/api\/etiquetas/.test(mcp), 'etiquetas fora do MCP');
+console.log('Comandas: categorias, numeração do dia, prazo, código de barras, etiquetas de envio e fora do MCP: ok');

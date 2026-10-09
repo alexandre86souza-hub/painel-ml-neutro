@@ -24,6 +24,7 @@
     leroy: '<path d="M3 11 12 4l9 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
     magalu: '<path d="M4 7h16v12H4z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12l3 3 3-3"/>',
     comandas: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    etiquetas: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
     estoque: '<path d="M3 9l9-5 9 5v10H3z"/><path d="M7 19v-6h10v6M7 16h10"/>',
     publicar: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 9v6M9 12h6"/>',
     navegador: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.4 2.6 2.4 12.8 0 16M12 4c-2.4 2.6-2.4 12.8 0 16"/>',
@@ -42,6 +43,7 @@
       ['/vendas.html?dias=1', 'Vendas hoje', 'hoje']] },
     { nome: 'Operação', itens: [
       ['/comandas.html', 'Comandas', 'comandas'],
+      ['/etiquetas.html', 'Etiquetas de envio', 'etiquetas'],
       ['/estoque.html', 'Estoque', 'estoque'],
       ['/mensagens.html', 'Mensagens', 'mensagens'],
       ['/devolucoes.html', 'Devoluções', 'devolucoes']] },
@@ -146,7 +148,7 @@
   };
   // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
   // fica na mesma tela, só com a loja escolhida na lista.
-  const DE_TODAS = ['/geral.html', '/comandas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+  const DE_TODAS = ['/geral.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
     '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);

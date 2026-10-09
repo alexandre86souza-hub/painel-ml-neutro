@@ -164,7 +164,7 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
       assert.strictEqual(r.status, 403, `${m} ${rota} recusado para a expedição`);
     }
     r = await pedir(P, '/api/eu', { headers: MARIA });
-    assert.deepStrictEqual(JSON.parse(r.corpo).paginas, ['/comandas.html']);
+    assert.deepStrictEqual(JSON.parse(r.corpo).paginas, ['/comandas.html', '/etiquetas.html']);
     r = await pedir(P, '/api/marca', { headers: MARIA });
     assert.strictEqual(r.status, 200);
 
