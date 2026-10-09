@@ -58,9 +58,12 @@ function numerar(novos, existentes, dia) {
 const atrasadasDaFila = (fila, dia) => fila.filter((c) => !c.impressa_em && c.dia < dia);
 
 // O ML deixa o envio em ready_to_ship até a transportadora marcar "shipped": entregue no ponto (dropped_off),
-// coletado (picked_up) ou já no centro (in_hub) = já saiu daqui, sai da fila. Medido em 08/10/2026. Função pura: testada.
-const SAIU_ML = new Set(['dropped_off', 'picked_up', 'in_hub', 'in_transit', 'out_for_delivery']);
-const jaSaiuMl = (substatus) => SAIU_ML.has(String(substatus || ''));
+// coletado (picked_up) ou já no centro (in_hub) = já saiu daqui, sai da fila. Depois vêm outras etapas ainda em
+// ready_to_ship (in_packing_list, medido em 09/10/2026): vale também o HISTÓRICO — passou por uma delas, já saiu.
+// Função pura: testada.
+const SAIU_ML = new Set(['dropped_off', 'picked_up', 'in_hub', 'in_packing_list', 'in_transit', 'out_for_delivery']);
+const jaSaiuMl = (substatus, historico) => SAIU_ML.has(String(substatus || ''))
+  || (Array.isArray(historico) && historico.some((h) => SAIU_ML.has(String(h?.substatus || ''))));
 
 // Prazo -> situação para a tela. Função pura: testada.
 function situacaoPrazo(prazo, agora = Date.now()) {
@@ -83,7 +86,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     const s = await ml(`/shipments/${id}`, {}, contaId);
     let prazo = null;
     try { prazo = (await ml(`/shipments/${id}/sla`, {}, contaId))?.expected_date || null; } catch { /* sem prazo */ }
-    const x = { tipo: s.logistic_type || null, cliente: s.receiver_address?.receiver_name || null, status: s.status, sub: s.substatus || null, prazo, em: Date.now() };
+    const x = { tipo: s.logistic_type || null, cliente: s.receiver_address?.receiver_name || null, status: s.status, sub: s.substatus || null,
+      saiu: jaSaiuMl(s.substatus, s.substatus_history), prazo, em: Date.now() };
     cacheEnvio.set(id, x);
     return x;
   }
@@ -122,7 +126,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       await fotosDoMl([...porEnvio.values()].flatMap((x) => x.itens.map((i) => i.item_id)), conta.ml_user_id);
       for (const x of porEnvio.values()) for (const i of x.itens) { i.foto = fotosMl.get(i.item_id) || null; delete i.item_id; }
       for (const { id, s } of envios) {
-        if (!s || jaSaiuMl(s.sub)) continue;
+        if (!s || s.saiu) continue;
         const cat = categoriaDe('ml', s.tipo);
         if (!cat) continue;
         const x = porEnvio.get(id);

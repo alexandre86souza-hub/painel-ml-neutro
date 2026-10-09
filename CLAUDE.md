@@ -282,8 +282,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   numeradas por categoria e DIA na 1ª vez que aparecem (`numerar`, tabela `comandas`); a que ficou de um dia anterior SEM
   imprimir entra na numeração de hoje (`atrasadasDaFila`, `comandasRenumerar`); impressa mantém o número do papel. ML:
   /orders/search?shipping.status=ready_to_ship agrupado pelo envio (pack) + /shipments/{id} (tipo, receiver_name) +
-  /shipments/{id}/sla (prazo de despacho), fora os substatus dropped_off/picked_up/in_hub (`jaSaiuMl`: já saiu, mas o ML
-  só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
+  /shipments/{id}/sla (prazo de despacho), fora os substatus dropped_off/picked_up/in_hub/in_packing_list, atuais OU no substatus_history (`jaSaiuMl`: já saiu,
+  mas o ML só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
   Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
   (vai impresso, em letra grande, para as câmeras). Cada item sai com a foto de capa (cinza, 24 mm): ML pictures[0] por /items?ids= (20 por chamada, memória), Shopee
   image_info, Magalu info.images, Leroy product_medias ({host}/mmp…), Amazon amazon_fotos; a impressão espera as fotos (até 4 s). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor

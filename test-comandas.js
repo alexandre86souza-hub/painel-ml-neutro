@@ -35,6 +35,10 @@ assert.deepStrictEqual(K.atrasadasDaFila(fila, dia).map((c) => c.chave), ['x']);
 // ML: entregue no ponto / coletado / no centro ainda é ready_to_ship, mas já saiu
 assert.ok(K.jaSaiuMl('dropped_off') && K.jaSaiuMl('picked_up') && K.jaSaiuMl('in_hub'));
 assert.ok(!K.jaSaiuMl('ready_to_print') && !K.jaSaiuMl('printed') && !K.jaSaiuMl(null));
+// etapa nova depois de sair (in_packing_list) e qualquer outra: o histórico manda (envio real de 09/10/2026)
+assert.ok(K.jaSaiuMl('in_packing_list'));
+assert.ok(K.jaSaiuMl('etapa_nova', [{ substatus: 'ready_to_print' }, { substatus: 'dropped_off' }, { substatus: 'etapa_nova' }]));
+assert.ok(!K.jaSaiuMl('printed', [{ substatus: 'invoice_pending' }, { substatus: 'ready_to_print' }, { substatus: 'printed' }]));
 
 // prazo em relação a hoje (Brasília)
 const ag = Date.parse('2026-10-07T15:00:00Z');
