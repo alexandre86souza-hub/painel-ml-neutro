@@ -281,12 +281,24 @@ function pintarLista(){
   box.appendChild(t);
 }
 
-// SKU em pedaços inteiros: AMG-854.713.743.698 só pode virar a linha em "AMG-" / "854." / "713."…
+// SKU em pedaços inteiros: AMG-854.713.743.698 só vira a linha depois de um separador, e o separador do fim
+// da linha some (ajustarSkus, depois de desenhar): SKU: AMG-854 / 713.743.698
 function skuEl(sku){
   const d = el('div', 'c-sku');
   d.appendChild(el('span', null, 'SKU:')); d.appendChild(document.createTextNode(' '));
-  for(const p of String(sku || '—').match(/[^-._/]+[-._/]*|[-._/]+/g) || ['—']){ d.appendChild(el('span', null, p)); d.appendChild(el('wbr')); }
+  for(const p of String(sku || '—').match(/[^-._/]+[-._/]*|[-._/]+/g) || ['—']){
+    const [, txt, sep] = p.match(/^(.*?)([-._/]*)$/);
+    const pc = el('span', 'c-peca', txt); if(sep) pc.appendChild(el('span', 'c-sep', sep));
+    d.append(pc, el('wbr'));
+  }
   return d;
+}
+function ajustarSkus(raiz){
+  for(const d of raiz.querySelectorAll('.c-sku')){
+    const pc = [...d.querySelectorAll('.c-peca')];
+    for(const s of d.querySelectorAll('.c-sep')) s.style.display = '';
+    pc.forEach((p, k) => { const s = p.querySelector('.c-sep'); if(s && pc[k + 1] && pc[k + 1].offsetTop > p.offsetTop) s.style.display = 'none'; });
+  }
 }
 // a comanda impressa (80 mm): pedido no topo; número, envio e cliente em letra grande para as câmeras
 function comandaEl(c){
@@ -326,6 +338,7 @@ function previa(lista){
   for(const c of lista) corpo.appendChild(comandaEl(c));
   $('dlgTitulo').textContent = lista.length > 1 ? `${lista.length} comandas prontas para impressão` : `Comanda ${nomeComanda(lista[0])} pronta para impressão`;
   $('dlg').showModal();
+  ajustarSkus(corpo);
 }
 async function marcar(chaves, impressa){
   await api('/api/comandas/impressas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaves, impressa }) });
@@ -336,6 +349,9 @@ async function marcar(chaves, impressa){
 $('dlgImprimir').onclick = async () => {
   const area = $('impressao'); area.innerHTML = '';
   for(const c of naPrevia) area.appendChild(comandaEl(c));
+  // a área de impressão não aparece na tela: copia da prévia (mesma largura) onde o SKU virou a linha
+  const sepsPrevia = [...$('dlgCorpo').querySelectorAll('.c-sep')];
+  area.querySelectorAll('.c-sep').forEach((s, k) => { s.style.display = sepsPrevia[k]?.style.display || ''; });
   // espera as fotos (já vistas na prévia, vêm do cache) para não sair a comanda sem elas; no máximo 4 s
   const fotos = [...area.querySelectorAll('img')].filter((i) => !i.complete);
   if(fotos.length) await Promise.race([Promise.all(fotos.map((i) => new Promise((ok) => { i.addEventListener('load', ok); i.addEventListener('error', ok); }))),
