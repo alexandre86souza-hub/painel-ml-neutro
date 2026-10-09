@@ -65,6 +65,9 @@
   .comanda .c-foto{width:24mm;height:24mm;object-fit:contain;flex:0 0 24mm;filter:grayscale(1) contrast(1.15)}
   .comanda .c-rodape{font-size:11pt;font-weight:900;text-align:center;margin-top:2.5mm;padding-top:1.5mm;border-top:0.5mm dashed #000}
   .comanda .c-rodape small{display:block;font-size:8pt;font-weight:700;letter-spacing:.15em}
+  /* etiqueta da venda direta: o mesmo padrão da comanda + observação e volume */
+  .comanda .e-obs{font-size:11pt;font-weight:800;border:0.5mm solid #000;padding:1.5mm;margin:2mm 0;word-break:break-word}
+  .comanda .e-volume{font-size:13pt;font-weight:900;text-align:center;margin-top:3mm;padding-top:2mm;border-top:0.5mm solid #000}
   .hist-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px}
   .hist-filtros label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
   .hist-filtros input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
@@ -262,7 +265,9 @@ function pintarLista(){
       const bX = el('button', 'bt', 'Cancelar venda'); bX.type = 'button';
       bX.onclick = async () => { if(!confirm(`Cancelar a venda de ${c.cliente}? Os produtos voltam para o estoque e a comanda é apagada.`)) return;
         try{ await api('/api/comandas/manual/cancelar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave: c.chave }) }); aviso('Venda cancelada; produtos devolvidos ao estoque.', 'ok'); carregar(false); }catch(e){ aviso(e.message); } };
-      ac.append(bC, bX);
+      const bE = el('button', 'bt leve', 'Etiqueta'); bE.type = 'button'; bE.title = 'Etiqueta 80 mm para colar no pacote';
+      bE.onclick = () => imprimirEtiqueta(c);
+      ac.append(bE, bC, bX);
     }
     if(c.impressa_em){
       const bV = el('button', 'bt leve', 'Voltar para a fila'); bV.type = 'button';
@@ -299,6 +304,26 @@ function ajustarSkus(raiz){
     for(const s of d.querySelectorAll('.c-sep')) s.style.display = '';
     pc.forEach((p, k) => { const s = p.querySelector('.c-sep'); if(s && pc[k + 1] && pc[k + 1].offsetTop > p.offsetTop) s.style.display = 'none'; });
   }
+}
+// Etiqueta da venda direta (80 mm, para colar no pacote): o MESMO padrão da comanda, mais a observação e o
+// volume (preenchido à mão). Imprimir a etiqueta não muda a situação da comanda.
+function etiquetaEl(c){
+  const d = comandaEl(c);
+  const rod = d.querySelector('.c-rodape');
+  if(c.etapa) d.insertBefore(el('div', 'e-obs', 'OBS: ' + c.etapa), rod);
+  d.insertBefore(el('div', 'e-volume', 'VOLUME ____ DE ____'), rod);
+  const tit = rod.querySelector('small'); if(tit) tit.textContent = 'ETIQUETA IMPRESSA EM';
+  return d;
+}
+function imprimirEtiqueta(c){
+  const area = $('impressao'); area.innerHTML = '';
+  area.appendChild(etiquetaEl(c));
+  // o SKU quebra só no separador (como na prévia): mostra a área um instante para medir as linhas
+  area.style.cssText = 'display:block;position:fixed;left:-9999px;top:0'; ajustarSkus(area); area.style.cssText = '';
+  const fotos = [...area.querySelectorAll('img')].filter((i) => !i.complete);
+  const ir = () => window.print();
+  if(fotos.length) Promise.race([Promise.all(fotos.map((i) => new Promise((ok) => { i.addEventListener('load', ok); i.addEventListener('error', ok); }))),
+    new Promise((ok) => setTimeout(ok, 4000))]).then(ir); else ir();
 }
 // a comanda impressa (80 mm): pedido no topo; número, envio e cliente em letra grande para as câmeras
 function comandaEl(c){
@@ -401,6 +426,7 @@ async function buscarHistorico(){
     const tdI = el('td', null, c.impressa_em ? horaBR(c.impressa_em) : '—'); if(c.impressoes > 1) tdI.appendChild(el('span', 'pequeno', `${c.impressoes} impressões`));
     const tdS = el('td'); tdS.appendChild(el('span', 'chip ' + (c.pendente ? 'aguarda' : 'impressa'), c.pendente ? 'Ainda na fila' : c.canal === 'manual' ? 'Concluída' : 'Já despachada'));
     const tdA = el('td'); const b = el('button', 'bt', 'Reimprimir'); b.type = 'button'; b.onclick = () => previa([c]); tdA.appendChild(b);
+    if(c.canal === 'manual'){ const be = el('button', 'bt leve', 'Etiqueta'); be.type = 'button'; be.onclick = () => imprimirEtiqueta(c); tdA.append(' ', be); }
     tr.append(tdC, el('td', null, c.pedido), el('td', null, c.comprado_em ? horaBR(c.comprado_em) : '—'), el('td', null, `${c.loja} · ${CANAL[c.canal] || c.canal}`), el('td', null, c.envio || '—'), el('td', null, c.cliente || '—'),
       el('td', null, `${(c.itens || []).length} item(ns) · ${c.unidades} un.`), tdI, tdS, tdA);
     t.appendChild(tr);
