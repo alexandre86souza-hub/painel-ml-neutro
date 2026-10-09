@@ -57,11 +57,12 @@
   .comanda .c-item{padding:1.5mm 0;border-bottom:0.3mm solid #000}
   .comanda .c-item:last-child{border-bottom:0}
   .comanda .c-qtd{font-size:18pt;font-weight:900}
-  .comanda .c-sku{font-size:12pt;font-weight:900;word-break:break-all}
-  .comanda .c-tit{font-size:9.5pt;font-weight:700;margin-top:0.5mm}
-  .comanda .c-item.com-foto{display:flex;gap:2mm;align-items:flex-start}
+  /* SKU: só quebra depois de um separador (- . _ /), nunca no meio de um número (skuEl) */
+  .comanda .c-sku{font-size:12pt;font-weight:900;word-break:normal;overflow-wrap:break-word}
+  .comanda .c-sku span{white-space:nowrap}
+  .comanda .c-tit{font-size:9.5pt;font-weight:700;flex:1;min-width:0}
+  .comanda .c-item-topo{display:flex;gap:2mm;align-items:center;margin-bottom:1mm}
   .comanda .c-foto{width:24mm;height:24mm;object-fit:contain;flex:0 0 24mm;filter:grayscale(1) contrast(1.15)}
-  .comanda .c-item-txt{flex:1;min-width:0}
   .comanda .c-rodape{font-size:11pt;font-weight:900;text-align:center;margin-top:2.5mm;padding-top:1.5mm;border-top:0.5mm dashed #000}
   .comanda .c-rodape small{display:block;font-size:8pt;font-weight:700;letter-spacing:.15em}
   .hist-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px}
@@ -280,6 +281,13 @@ function pintarLista(){
   box.appendChild(t);
 }
 
+// SKU em pedaços inteiros: AMG-854.713.743.698 só pode virar a linha em "AMG-" / "854." / "713."…
+function skuEl(sku){
+  const d = el('div', 'c-sku');
+  d.appendChild(el('span', null, 'SKU:')); d.appendChild(document.createTextNode(' '));
+  for(const p of String(sku || '—').match(/[^-._/]+[-._/]*|[-._/]+/g) || ['—']){ d.appendChild(el('span', null, p)); d.appendChild(el('wbr')); }
+  return d;
+}
 // a comanda impressa (80 mm): pedido no topo; número, envio e cliente em letra grande para as câmeras
 function comandaEl(c){
   const d = el('div', 'comanda');
@@ -293,15 +301,16 @@ function comandaEl(c){
   d.append(linha('LOJA', c.loja), linha('COMPRA', c.comprado_em ? horaBR(c.comprado_em) : '—'), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), linha('ITENS', `${c.unidades} UN.`), el('hr'));
   d.appendChild(el('div', 'c-rot', 'ITENS A SEPARAR'));
   for(const i of c.itens){
+    // foto de capa e nome do anúncio lado a lado; quantidade e SKU embaixo, na largura toda
     const it = el('div', 'c-item');
-    const txt = el('div', 'c-item-txt');
-    txt.append(el('div', 'c-qtd', `QTD: ${i.qtd}`), el('div', 'c-sku', `SKU: ${i.sku || '—'}`), el('div', 'c-tit', [i.titulo, i.variacao].filter(Boolean).join(' — ')));
-    // foto de capa do anúncio (só https; sem foto ou se não carregar, a linha fica só com o texto)
-    if(/^https:\/\//.test(i.foto || '')){
+    const topo = el('div', 'c-item-topo');
+    if(/^https:\/\//.test(i.foto || '')){   // só https; sem foto ou se não carregar, fica só o nome
       const img = el('img', 'c-foto'); img.alt = ''; img.referrerPolicy = 'no-referrer'; img.src = i.foto;
-      img.onerror = () => { img.remove(); it.classList.remove('com-foto'); };
-      it.classList.add('com-foto'); it.append(img, txt);
-    }else it.appendChild(txt);
+      img.onerror = () => img.remove();
+      topo.appendChild(img);
+    }
+    topo.appendChild(el('div', 'c-tit', [i.titulo, i.variacao].filter(Boolean).join(' — ') || '—'));
+    it.append(topo, el('div', 'c-qtd', `QTD: ${i.qtd}`), skuEl(i.sku));
     d.appendChild(it);
   }
   const rod = el('div', 'c-rodape'); const agora = new Date().toISOString();
