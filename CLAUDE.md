@@ -277,6 +277,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Desconto à Vista, Cliente Ouro, Cupom). channel.id da Magalu = o dos pedidos. Escrita só pelo clique, com confirmação; nada no MCP.
   Lista vazia: botão "Gerar log para o suporte da Magalu" (`GET /api/magalu/campanhas/log`, `logDaRequisicao`): requisição e resposta
   inteiras, token como [oculto], do token só sub/tenant/scope/client_id — para o chamado da allowlist.
+  Lista SEMPRE com período (`filtroPromocoes`: start_at 180 dias atrás a +120, end_at ≥ agora): sem filtro a Magalu põe
+  start_date entre agora e +30 dias e as promoções em andamento somem (medido em 09/10/2026).
   Anúncios da Magalu (tela `magalu-anuncios.html`; o menu troca `/anuncios.html` por ela): `/portfolios/skus` (100 por
   página; 1.692 SKUs medidos) + preço e estoque UM SKU por chamada (`/portfolios/prices|stocks/{sku}`; a lista sem SKU dá
   404), em segundo plano, 3 por vez, relidos a cada 6 h (`magalu_anuncios`). Vários anúncios usam um código numérico da

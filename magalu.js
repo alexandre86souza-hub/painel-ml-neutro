@@ -386,10 +386,16 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     pagamentos: (x.benefits?.payment_methods || []).map((p) => p.description || p.id),
     regras: (x.rules || []).map((r) => r.description || r.id).filter(Boolean),
   });
+  // Sem filtro de data a Magalu põe sozinha start_date entre AGORA e +30 dias (medido em 09/10/2026 no
+  // meta.links.self): as promoções JÁ em andamento ficavam de fora e a lista vinha vazia. O painel manda o
+  // período: começou até 180 dias atrás (ou começa nos próximos 120) e ainda não terminou.
+  const filtroPromocoes = (agora = Date.now()) => ({ start_at__gte: new Date(agora - 180 * 864e5).toISOString(),
+    start_at__lte: new Date(agora + 120 * 864e5).toISOString(), end_at__gte: new Date(agora).toISOString() });
   async function promocoesDaLoja() {
     const todas = [];
+    const filtro = filtroPromocoes();
     for (let off = 0; off < 1000; off += 50) {
-      const r = await mg('/seller/v1/promotions', { _limit: 50, _offset: off });
+      const r = await mg('/seller/v1/promotions', { ...filtro, _limit: 50, _offset: off });
       const l = r.results || [];
       todas.push(...l.map(promoDe));
       if (l.length < 50) break;
@@ -426,7 +432,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   const rotasPromocoes = {
     'GET /api/magalu/campanhas/log': async () => {
       const tk = await tokenAcesso(false);
-      const url = `${API}/seller/v1/promotions?_limit=50&_offset=0`;
+      const url = `${API}/seller/v1/promotions?${new URLSearchParams({ ...filtroPromocoes(), _limit: '50', _offset: '0' })}`;
       const em = new Date().toISOString();
       let r;
       try { r = await fetch(url, { headers: { Authorization: `Bearer ${tk}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) }); }
