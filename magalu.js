@@ -235,6 +235,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       } catch (e) { throw erro(`A Magalu não respondeu (${e.message}).`, 502); }
       if (r.status === 401 && !renovou) { renovou = true; continue; }
       if (r.status === 429 && tentativa < 3) { await new Promise((ok) => setTimeout(ok, 3000 * (tentativa + 1))); continue; }
+      // 502/503/504 = o gateway da Magalu tropeçou (passa em segundos, medido em 13/10/2026): tenta de novo até 2 vezes
+      if ([502, 503, 504].includes(r.status) && tentativa < 2) { await new Promise((ok) => setTimeout(ok, 2000 * (tentativa + 1))); continue; }
       break;
     }
     const j = await r.json().catch(() => null);

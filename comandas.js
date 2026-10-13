@@ -75,7 +75,8 @@ function situacaoPrazo(prazo, agora = Date.now()) {
 }
 
 function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
-  const passo = async (nome, fn, erros) => { try { return await fn(); } catch (e) { erros.push(`${nome}: ${e.message}`); return []; } };
+  // a mensagem que já começa com o nome do canal ("Magalu: HTTP 502") não ganha o nome de novo
+  const passo = async (nome, fn, erros) => { try { return await fn(); } catch (e) { erros.push(e.message.startsWith(nome + ':') ? e.message : `${nome}: ${e.message}`); return []; } };
   const lotes = async (lista, n, fn) => { const out = []; for (let i = 0; i < lista.length; i += n) out.push(...await Promise.all(lista.slice(i, i + n).map(fn))); return out; };
 
   // ---- Mercado Livre (todas as contas conectadas)
