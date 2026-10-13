@@ -320,7 +320,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, janela, fret
       const novo = quebra({ preco, ...base, tarifaPct: t.pct, tarifaFixa: t.fixa });
       const cruza79 = (item.price >= 79) !== (preco >= 79);
       return {
-        id, margem_desejada: margemPct, preco_atual: item.price, preco_sugerido: preco,
+        id, titulo: item.title, margem_desejada: margemPct, preco_atual: item.price, preco_sugerido: preco,
         atual, novo, tarifa_pct: t.pct, frete_fonte: fr.fonte, frete_amostra: fr.amostra,
         tem_variacoes: (item.variations || []).length > 0,
         aviso: cruza79 ? 'O novo preço cruza R$ 79: o frete pago por você muda nessa faixa. Confira o resultado depois das próximas vendas.' : null,

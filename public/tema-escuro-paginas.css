@@ -24,6 +24,7 @@ html[data-tema="escuro"][data-pagina="amazon-anuncios"] .conc-resumo b.nao{color
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.destaque{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.voce{background:hsla(214,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .margem-max input{border:1px solid var(--line)}
 /* amazon.html */
 html[data-tema="escuro"][data-pagina="amazon"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="amazon"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -44,6 +45,8 @@ html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens{background:
 html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button:hover{background:rgba(125,211,252,.06)}
 html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button.perigo{color:hsl(5,88%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] details.menu .itens button.perigo:hover{background:hsla(5,79%,60%,.14)}
+html[data-tema="escuro"][data-pagina="anuncios"] .massa-preco .mp-erro{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .massa-preco .mp-ok{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.active{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.paused{background:hsla(39,90%,60%,.14);color:hsl(36,95%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.closed{background:rgba(125,211,252,.06);color:var(--muted)}
@@ -333,6 +336,7 @@ html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg button{background:r
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input.salvo{background:hsla(135,50%,60%,.14)}
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .margem-max input{border:1px solid var(--line)}
 /* magalu.html */
 html[data-tema="escuro"][data-pagina="magalu"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="magalu"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -410,6 +414,8 @@ html[data-tema="escuro"][data-pagina="produtos"] .troca input{border:1px solid h
 html[data-tema="escuro"][data-pagina="produtos"] .dup{color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="produtos"] tr.duplica td{background:hsla(48,90%,60%,.14)}
 html[data-tema="escuro"][data-pagina="produtos"] .alerta-troca{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] .comp input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="produtos"] .ok-comp{color:hsl(145,81%,72%)}
 /* promocoes.html */
 html[data-tema="escuro"][data-pagina="promocoes"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="promocoes"] .seg button{background:rgba(14,24,44,.72)}
@@ -431,6 +437,7 @@ html[data-tema="escuro"][data-pagina="promocoes"] .chip.verde{background:hsla(13
 html[data-tema="escuro"][data-pagina="promocoes"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .chip.vermelho{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .itens .precos .pct-desc{color:hsl(26,90%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .form-adesao{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="promocoes"] .form-adesao input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="promocoes"] .busca input{border:1px solid var(--line)}
@@ -497,6 +504,7 @@ html[data-tema="escuro"][data-pagina="shopee-anuncios"] .preco-novo input{border
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.promo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .margem-max input{border:1px solid var(--line)}
 /* shopee-campanhas.html */
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
@@ -517,6 +525,9 @@ html[data-tema="escuro"][data-pagina="shopee-campanhas"] .escolhidos table input
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .pos{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .recusas{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] tr.com-alerta td{background:hsla(4,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .alerta-txt{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .sel-pequeno{border:1px solid var(--line);background:rgba(14,24,44,.72)}
 /* shopee-devolucoes.html */
 html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}

@@ -66,10 +66,29 @@ function criar({ D, shopee, amazon, leroy, magalu, quem }) {
     return { canais: canais.filter((c) => c.anuncios.length), erros };
   }
 
+  // "Só no painel": o SKU continua no anúncio e a composição (custos.js, sku_vinculos 'composicao') troca o produto.
+  function trocarNaComposicao(skus, de, para) {
+    const out = [];
+    for (const s of [...new Set(skus.filter(Boolean))]) {
+      const atual = C.composicaoDe(s) || s;
+      if (!C.componentes(atual, { cru: true }).includes(de)) continue;
+      const novo = 'KIT-' + C.componentes(C.trocarComponente(atual, de, para), { cru: true }).map((n) => String(n).padStart(3, '0')).join('.');
+      D.skuVinculoGravar('composicao', s, novo);
+      out.push({ antes: atual, depois: novo, sku: s });
+    }
+    C.usarComposicoes(D.skuVinculos('composicao'));
+    return out;
+  }
+
   // Shopee: troca no anúncio (o item sem variação muda o item_sku; com variação, o model_sku de cada uma).
-  async function trocarShopee(loja, itemId, refs, de, para) {
+  // soPainel (ou SKU que já tem composição no painel): não mexe no anúncio, troca na composição.
+  async function trocarShopee(loja, itemId, refs, de, para, soPainel = false) {
     const linhas = D.shopeeAnuncios(loja).filter((a) => a.item_id === itemId && (!refs?.length || refs.includes(String(a.model_id || 0))) && tem(a.sku, de));
     if (!linhas.length) return { ok: false, erro: 'o SKU deste anúncio não tem mais esse produto (releia os anúncios da Shopee)' };
+    if (soPainel || linhas.some((a) => C.composicaoDe(a.sku))) {
+      const trocas = trocarNaComposicao(linhas.map((a) => a.sku), de, para);
+      return trocas.length ? { ok: true, trocas, no_painel: true } : { ok: false, erro: 'o SKU deste anúncio não tem mais esse produto' };
+    }
     const trocas = linhas.map((a) => ({ model_id: a.model_id || 0, antes: a.sku, depois: C.trocarComponente(a.sku, de, para) }));
     const modelos = trocas.filter((t) => t.model_id);
     if (modelos.length) await shopee.daLoja(loja, '/api/v2/product/update_model', {}, { item_id: itemId, model: modelos.map((t) => ({ model_id: t.model_id, model_sku: t.depois })) });
@@ -102,7 +121,7 @@ function criar({ D, shopee, amazon, leroy, magalu, quem }) {
           if (canal === 'shopee') {
             const loja = Number(it.loja), itemId = Number(id);
             if (!D.shopeeLojasListar().some((l) => l.shop_id === loja) || !Number.isInteger(itemId)) throw erro('Anúncio da Shopee inválido.');
-            resultado.push({ canal, loja, id, ...(await trocarShopee(loja, itemId, Array.isArray(it.refs) ? it.refs.map(String) : null, de, para)) });
+            resultado.push({ canal, loja, id, ...(await trocarShopee(loja, itemId, Array.isArray(it.refs) ? it.refs.map(String) : null, de, para, !!body?.so_painel)) });
           } else if (['amazon', 'leroy', 'magalu'].includes(canal)) {
             if (!id || id.length > 80) throw erro('SKU inválido.');
             // o SKU que vale hoje (com o "SKU do painel" da Magalu e as trocas anteriores) ganha a troca a partir de agora

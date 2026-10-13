@@ -26,6 +26,8 @@
   .sku-painel input.salvo{border-color:#86c79a;background:#f3fbf5}
   .riscado{text-decoration:line-through;color:#94a3b8;font-size:11px;display:block}
   #msg.ok{background:#e6f4ea;color:#0b6b33;border-color:#b7e1c4}
+  .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-left:6px}
+  .margem-max input{width:60px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:8px}
 </style>
 </head>
 <body>
@@ -56,8 +58,12 @@
         <button type="button" data-f="publicados" aria-pressed="true">Publicados</button>
         <button type="button" data-f="semcusto" aria-pressed="false">Sem custo</button>
         <button type="button" data-f="vendem" aria-pressed="false">Venderam em 30 dias</button>
+        <button type="button" data-f="promocao" aria-pressed="false">Em promoção</button>
+        <button type="button" data-f="pausados" aria-pressed="false">Pausados</button>
+        <button type="button" data-f="baixa" aria-pressed="false">Margem abaixo de</button>
         <button type="button" data-f="todos" aria-pressed="false">Todos</button>
       </div>
+      <label class="margem-max">abaixo de <input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
       <input type="search" id="busca" placeholder="Buscar por título ou SKU" aria-label="Buscar anúncio">
     </div>
     <p class="sub" id="nota"></p>
@@ -104,12 +110,19 @@ function pintar(){
   pintarLista();
 }
 
+// margem escolhida no filtro "Margem abaixo de" (padrão 10%)
+const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
+$('fMargemMax').oninput = () => { if(filtro === 'baixa' && dados){ mostrar = 200; pintarLista(); } };
+
 function pintarLista(){
   const q = $('busca').value.trim().toLowerCase();
   const itens = dados.itens.filter((x) => {
     if(filtro === 'publicados' && x.status !== 'PUBLISHED') return false;
     if(filtro === 'semcusto' && (x.custo_unit != null || x.status !== 'PUBLISHED')) return false;
     if(filtro === 'vendem' && !x.vendas_30) return false;
+    if(filtro === 'promocao' && !(x.preco_lista && x.preco != null && x.preco_lista > x.preco + 0.009)) return false;
+    if(filtro === 'pausados' && x.status === 'PUBLISHED') return false;
+    if(filtro === 'baixa'){ const lu = lucroDe(x); if(lu == null || !x.preco || lu / x.preco >= margemMax()) return false; }
     if(q && ![x.titulo, x.sku, x.sku_painel].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });

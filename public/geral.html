@@ -220,7 +220,7 @@ function pintarDestaques(r){
     if(e?.inicio){ item('Produtos para repor agora', e.repor, '/estoque.html', ''); item('Descontinuados com estoque (vender o restante)', e.vender_restante, '/estoque.html', 'am');
       if(e.negativos) item('Produtos com saldo negativo', e.negativos, '/estoque.html'); }
     const semCusto = r.contas.filter((c) => !c.erro).reduce((a, c) => a + (c.sem_custo || 0), 0);
-    item('Anúncios/SKUs vendidos sem custo cadastrado', semCusto, '/produtos.html', 'am');
+    item('Anúncios/SKUs vendidos sem custo cadastrado', semCusto, '/produtos.html#sem-custo', 'am');
     if(!atencao) ul.appendChild(el('li', 'sub', 'Lendo estoque e comandas…'));
     s.appendChild(ul);
   }

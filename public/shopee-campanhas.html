@@ -38,9 +38,14 @@
   .acoes-camp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
   .recusas{margin-top:8px;font-size:13px;color:#b42318}
   .bt.pequeno{padding:4px 10px;font-size:12px}
-  #resultado[hidden]{display:none}
+  #resultado[hidden],#itensCamp[hidden]{display:none}
   .barra-achados{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
   .achados .linha input[type=checkbox]{width:16px;height:16px;flex:0 0 auto}
+  tr.com-alerta td{background:#fff1f0}
+  .alerta-txt{color:#b42318;font-size:12px;display:block;white-space:normal}
+  td.botoes{white-space:nowrap}
+  td.botoes .bt+.bt{margin-left:4px}
+  .sel-pequeno{font:inherit;font-size:13px;padding:5px 8px;border:1px solid #d5d7db;border-radius:8px;background:#fff}
 </style>
 </head>
 <body>
@@ -89,6 +94,11 @@
         </div>
         <div class="barra-achados">
           <button type="button" class="bt pequeno" id="btMarcarBusca">Marcar todos da busca</button>
+          <select id="selMarcarN" class="sel-pequeno" aria-label="Marcar uma quantidade de anúncios da busca">
+            <option value="">Marcar os primeiros…</option>
+            <option>100</option><option>200</option><option>300</option><option>400</option><option>500</option>
+            <option>600</option><option>700</option><option>800</option><option>900</option><option>1000</option>
+          </select>
           <button type="button" class="bt pequeno" id="btDesmarcar">Desmarcar</button>
           <button type="button" class="bt pequeno primario" id="btAddMarcados" disabled>Adicionar marcados</button>
           <span class="sub" id="infoAchados"></span>
@@ -110,6 +120,23 @@
     <h2>Últimas campanhas criadas</h2>
     <p class="sub">Descontos da loja, do mais novo para o mais antigo: vendas dos anúncios do desconto no período dele (pedidos não cancelados) e quanto o cliente deixou de pagar (preço original − preço pago).</p>
     <div class="tabela-rolagem" id="ultimas"></div>
+  </section>
+
+  <section class="bloco" id="itensCamp" hidden>
+    <div class="topo-bloco">
+      <div>
+        <h2 id="icTitulo">Anúncios da campanha</h2>
+        <p class="sub" id="icSub"></p>
+      </div>
+      <button type="button" class="bt" id="icFechar">Fechar</button>
+    </div>
+    <div class="barra-achados">
+      <label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="icSoAlerta"> só os com problema</label>
+      <button type="button" class="bt pequeno" id="icMarcarAlerta">Marcar os com problema</button>
+      <button type="button" class="bt pequeno primario" id="icTirar" disabled>Tirar da campanha</button>
+      <span class="sub" id="icInfo"></span>
+    </div>
+    <div class="tabela-rolagem" id="icLista"></div>
   </section>
 
   <section class="bloco">
@@ -199,7 +226,10 @@ function pintarUltimas(campanhas){
     const v = c.vendas, tr = el('tr');
     const t0 = el('td'); t0.appendChild(document.createTextNode(c.nome || 'Desconto')); t0.appendChild(el('span', 'pequeno', c.situacao));
     const t3 = el('td'); if(v){ t3.appendChild(document.createTextNode(`${numero(v.unidades)} un.`)); t3.appendChild(el('span', 'pequeno', `${numero(v.pedidos)} pedido(s)`)); } else t3.textContent = '—';
-    const bt = el('button', 'bt pequeno', 'Ver resultado'); bt.type = 'button'; bt.onclick = () => verResultado(c); const t6 = el('td'); t6.appendChild(bt);
+    const bt = el('button', 'bt pequeno', 'Ver resultado'); bt.type = 'button'; bt.onclick = () => verResultado(c);
+    const btI = el('button', 'bt pequeno', 'Anúncios'); btI.type = 'button'; btI.title = 'Ver os anúncios da campanha, os travados (infração) e tirar da campanha'; btI.onclick = () => verItens(c);
+    const btC = el('button', 'bt pequeno', 'Clonar'); btC.type = 'button'; btC.title = 'Criar outra campanha igual: você muda nome, datas, % e anúncios antes de criar'; btC.onclick = () => clonar(c, btC);
+    const t6 = el('td', 'botoes'); t6.append(bt, btI, btC);
     tr.append(t0, el('td', null, `${dataHora(c.inicio)} a ${dataHora(c.fim)}`), el('td', null, faixa(v)), t3,
       el('td', 'dinheiro', v ? real(v.faturamento) : '—'), el('td', 'dinheiro', v ? real(v.desconto) : '—'), t6);
     if(!v) tr.title = 'Desconto encerrado há mais de 60 dias: a Shopee não é consultada sobre os itens dele.';
@@ -256,6 +286,102 @@ async function verResultado(c){
   }catch(e){ $('resSub').textContent = 'Não foi possível ler o resultado: ' + e.message; }
 }
 $('resFechar').onclick = () => { $('resultado').hidden = true; };
+
+// ---------- anúncios de uma campanha: o que está travado (infração) e tirar da campanha ----------
+let icCamp = null, icItens = [];
+const icMarcados = new Set();
+const icChave = (x) => `${x.item_id}:${x.model_id || 0}`;
+async function verItens(c){
+  icCamp = c; icItens = []; icMarcados.clear();
+  const sec = $('itensCamp'); sec.hidden = false;
+  $('icTitulo').textContent = `Anúncios: ${c.nome || 'Desconto'}`;
+  $('icSub').textContent = 'Lendo a campanha na Shopee…'; $('icLista').innerHTML = '';
+  sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  try{
+    const r = await api(`/api/shopee/campanhas/desconto/itens?loja=${LOJA}&id=${c.id}`);
+    icItens = r.itens;
+    $('icSub').textContent = `${numero(r.itens.length)} anúncio(s)/variação(ões) de ${dataHora(r.inicio)} a ${dataHora(r.fim)}. `
+      + (r.com_alerta ? `${numero(r.com_alerta)} com problema (em vermelho): preço que subiu depois do desconto (a Shopee trata como infração e trava o desconto), anúncio fora do ar ou sem estoque.` : 'Nenhum com problema encontrado.')
+      + ' A conferência usa a cópia dos anúncios da loja (relida a cada 6 h).';
+    pintarItens();
+  }catch(e){ $('icSub').textContent = 'Não foi possível ler: ' + e.message; }
+}
+function pintarItens(){
+  const box = $('icLista'); box.innerHTML = '';
+  const lista = $('icSoAlerta').checked ? icItens.filter((x) => x.alertas.length) : icItens;
+  const tab = el('table'); const cab = el('tr');
+  for(const h of ['', 'Anúncio', 'Preço na campanha', '% desconto', 'Preço hoje', 'Problema']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+  for(const x of lista){
+    const tr = el('tr'); if(x.alertas.length) tr.className = 'com-alerta';
+    const ck = el('input'); ck.type = 'checkbox'; ck.checked = icMarcados.has(icChave(x)); ck.setAttribute('aria-label', 'Tirar ' + (x.sku || x.item_id));
+    ck.onchange = () => { ck.checked ? icMarcados.add(icChave(x)) : icMarcados.delete(icChave(x)); contarItens(); };
+    const c0 = el('td'); c0.appendChild(ck);
+    const td = el('td'); const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(x.foto) im.src = x.foto;
+    const tx = el('div', 'tx'); tx.append(el('b', null, (x.nome || String(x.item_id)) + (x.variacao ? ` — ${x.variacao}` : '')), el('span', null, x.sku || String(x.item_id)));
+    ln.append(im, tx); td.appendChild(ln);
+    tr.append(c0, td, el('td', 'dinheiro', `${real(x.preco_original)} → ${real(x.preco_promo)}`), el('td', null, pct(x.pct)),
+      el('td', 'dinheiro', real(x.preco_atual)), el('td', 'alerta-txt', x.alertas.join(' · ') || '—'));
+    tb.appendChild(tr);
+  }
+  if(!lista.length){ const tr = el('tr'); const td = el('td', null, 'Nenhum anúncio.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
+  tab.appendChild(tb); box.appendChild(tab);
+  contarItens();
+}
+function contarItens(){
+  const n = icMarcados.size;
+  $('icTirar').disabled = !n; $('icTirar').textContent = n ? `Tirar ${numero(n)} da campanha` : 'Tirar da campanha';
+  $('icInfo').textContent = `${numero(icItens.filter((x) => x.alertas.length).length)} com problema`;
+}
+$('icSoAlerta').onchange = pintarItens;
+$('icMarcarAlerta').onclick = () => { for(const x of icItens) if(x.alertas.length) icMarcados.add(icChave(x)); pintarItens(); };
+$('icFechar').onclick = () => { $('itensCamp').hidden = true; };
+$('icTirar').onclick = async () => {
+  const itens = icItens.filter((x) => icMarcados.has(icChave(x))).map((x) => ({ item_id: x.item_id, model_id: x.model_id }));
+  if(!itens.length || !icCamp) return;
+  if(!confirm(`Tirar ${itens.length} anúncio(s) da campanha "${icCamp.nome || 'Desconto'}" na Shopee?\n\nEles voltam ao preço normal. O resto da campanha continua.`)) return;
+  $('icTirar').disabled = true; $('icTirar').textContent = 'Tirando…';
+  try{
+    const r = await post('/api/shopee/campanhas/desconto/remover', { id: icCamp.id, itens });
+    const falhas = r.resultado.filter((x) => !x.ok);
+    aviso(`${numero(r.tirados)} anúncio(s) tirado(s) da campanha.` + (falhas.length ? ` ${falhas.length} não saíram: ${falhas.slice(0, 3).map((f) => f.erro).join('; ')}` : ''), falhas.length && !r.tirados ? '' : 'ok');
+    verItens(icCamp);
+  }catch(e){ aviso('A Shopee recusou: ' + e.message); contarItens(); }
+};
+
+// ---------- clonar uma campanha: abre o "Criar campanha" com tudo preenchido ----------
+async function clonar(c, bt){
+  bt.disabled = true; bt.textContent = 'Copiando…';
+  try{
+    const r = await api(`/api/shopee/campanhas/desconto/itens?loja=${LOJA}&id=${c.id}`);
+    $('segTipo').querySelector('[data-tipo="desconto"]').click();
+    await carregarAnuncios();
+    if(!anuncios){ aviso('Os anúncios da loja ainda estão sendo lidos: tente clonar de novo em 1 minuto.'); return; }
+    $('cNome').value = ('Cópia de ' + (r.nome || c.nome || 'Desconto')).slice(0, 100);
+    // mesma duração da original, começando daqui a 2 horas (o vendedor muda as datas)
+    const dur = Math.min(179 * 864e5, Math.max(3600e3, Date.parse(r.fim) - Date.parse(r.inicio) || 7 * 864e5));
+    const ini = new Date(Date.now() + 2 * 3600e3); ini.setMinutes(0, 0, 0);
+    $('cInicio').value = local(ini); $('cFim').value = local(new Date(ini.getTime() + dur));
+    const pcts = r.itens.map((x) => x.pct).filter((x) => x != null).map((x) => Math.round(x * 1000) / 10);
+    const moda = pcts.sort((a, b) => pcts.filter((v) => v === b).length - pcts.filter((v) => v === a).length)[0];
+    if(moda != null) $('pctTodos').value = moda;
+    escolhidos.clear(); marcados.clear();
+    const porChave = new Map(anuncios.map((a) => [chave(a), a]));
+    const fora = [];
+    for(const x of r.itens){
+      const a = porChave.get(icChave(x));
+      if(!a){ fora.push(x.nome || x.item_id); continue; }
+      const p = x.pct ?? (moda != null ? moda / 100 : 0);
+      escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: x.limite || 0,
+        recusa: x.alertas.find((t) => t.startsWith('preço subiu')) || null });
+    }
+    pintarEscolhidos(); pintarAchados();
+    $('formCamp').scrollIntoView({ behavior:'smooth', block:'start' });
+    aviso(`Campanha copiada com ${numero(escolhidos.size)} anúncio(s), cada um com o % da original sobre o preço de hoje. Confira o nome, as datas, o % e os anúncios e clique "Criar na Shopee".`
+      + (fora.length ? ` ${numero(fora.length)} anúncio(s) da original ficaram de fora (fora do ar ou não encontrados na loja).` : ''), 'ok');
+  }catch(e){ aviso('Não foi possível copiar: ' + e.message); }
+  finally{ bt.disabled = false; bt.textContent = 'Clonar'; }
+}
 
 // ---------- criar campanha ----------
 let tipo = null, anuncios = null, imposto = 0, horarios = null;
@@ -332,6 +458,16 @@ function contarMarcados(){
 }
 $('btMarcarBusca').onclick = () => { if(!anuncios) return; for(const a of daBusca()) if(!escolhidos.has(chave(a))) marcados.add(chave(a)); pintarAchados(); };
 $('btDesmarcar').onclick = () => { marcados.clear(); if(anuncios) pintarAchados(); };
+// marca os N primeiros da busca (100 a 1.000; a Shopee aceita até 1.000 anúncios num desconto)
+$('selMarcarN').onchange = () => {
+  const n = Number($('selMarcarN').value); $('selMarcarN').value = '';
+  if(!anuncios || !n) return;
+  marcados.clear();
+  const cabe = Math.max(0, (LIMITE[tipo] || 1000) - escolhidos.size);
+  for(const a of daBusca()){ if(marcados.size >= Math.min(n, cabe)) break; if(!escolhidos.has(chave(a))) marcados.add(chave(a)); }
+  pintarAchados();
+  if(n > cabe) aviso(`Cabem mais ${numero(cabe)} anúncio(s) neste tipo de campanha (limite da Shopee: ${numero(LIMITE[tipo] || 1000)}).`);
+};
 $('btAddMarcados').onclick = () => {
   const porChave = new Map(anuncios.map((a) => [chave(a), a]));
   const max = LIMITE[tipo] || 1000, novos = [...marcados].filter((k) => !escolhidos.has(k) && porChave.has(k));
@@ -380,6 +516,8 @@ function pintarEscolhidos(){
     const a = x.a, tr = el('tr');
     const td = el('td'); const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; if(a.foto) im.src = a.foto;
     const tx = el('div', 'tx'); tx.append(el('b', null, (a.nome_shopee || a.titulo) + (a.variacao ? ` — ${a.variacao}` : '')), el('span', null, a.sku || ''));
+    // recusado pela Shopee (ou com preço que subiu desde a campanha copiada): mostra o motivo, o vendedor tira ou mantém
+    if(x.recusa){ tr.className = 'com-alerta'; tx.appendChild(el('span', 'alerta-txt', x.recusa)); }
     ln.append(im, tx); td.appendChild(ln); tr.append(td, el('td', 'dinheiro', real(a.preco_original)));
     const rm = el('button', 'bt pequeno', 'Tirar'); rm.type = 'button'; rm.onclick = () => { escolhidos.delete(k); pintarEscolhidos(); if(anuncios) pintarAchados(); };
     if(!cupom){
@@ -457,6 +595,12 @@ $('formCamp').onsubmit = async (ev) => {
       const ul = el('ul');
       for(const x of r.recusados){ const a = anuncios?.find((y) => y.item_id === x.item_id); ul.appendChild(el('li', null, `${a ? (a.nome_shopee || a.titulo) : x.item_id}: ${x.motivo}`)); }
       $('recusas').appendChild(ul);
+      // marca os recusados na lista dos escolhidos e deixa tirar todos de uma vez
+      for(const x of r.recusados) for(const [k, e] of escolhidos) if(e.a.item_id === x.item_id && (!x.model_id || (e.a.model_id || 0) === x.model_id)) e.recusa = 'Recusado pela Shopee: ' + x.motivo;
+      const tirar = el('button', 'bt pequeno', 'Tirar os recusados da lista'); tirar.type = 'button';
+      tirar.onclick = () => { for(const [k, e] of [...escolhidos]) if(e.recusa) escolhidos.delete(k); pintarEscolhidos(); if(anuncios) pintarAchados(); tirar.remove(); };
+      $('recusas').appendChild(tirar);
+      pintarEscolhidos();
     }
     if(r.apagada) aviso('A Shopee recusou todos os anúncios; a campanha vazia foi apagada. Veja os motivos abaixo.');
     else{

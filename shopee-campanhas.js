@@ -134,6 +134,33 @@ function corpoCupom(b, agora = Date.now()) {
   return corpo;
 }
 
+// Itens de um desconto (get_discount item_list) -> uma linha por variação, com o que pode estar travando o item na
+// campanha, comparando com a cópia local dos anúncios (shopee_anuncios): a Shopee bloqueia o desconto de quem SUBIU o
+// preço depois (vira "infração"), de anúncio fora do ar e sem estoque. atuais: Map "item:model" -> linha. Função pura: testada.
+const SITUACAO_ANUNCIO = { BANNED: 'bloqueado pela Shopee', UNLIST: 'oculto (despublicado)', REVIEWING: 'em revisão da Shopee', SELLER_DELETE: 'apagado', SHOPEE_DELETE: 'apagado pela Shopee' };
+const brl = (v) => Number(v).toFixed(2).replace('.', ',');
+function itensDoDesconto(itemList, atuais = new Map()) {
+  const out = [];
+  for (const i of itemList || []) {
+    const ms = i.model_list?.length ? i.model_list : [{ model_id: 0, model_original_price: i.item_original_price, model_promotion_price: i.item_promotion_price }];
+    for (const m of ms) {
+      const orig = Number(m.model_original_price ?? i.item_original_price) || null, promo = Number(m.model_promotion_price ?? i.item_promotion_price) || null;
+      const a = atuais.get(`${i.item_id}:${m.model_id || 0}`) || null;
+      const alertas = [];
+      if (!a) alertas.push('anúncio não está na cópia da loja (apagado ou ainda não lido)');
+      else {
+        if (a.status && a.status !== 'NORMAL') alertas.push('anúncio ' + (SITUACAO_ANUNCIO[a.status] || a.status));
+        if (orig && a.preco_original > orig + 0.009) alertas.push(`preço subiu de R$ ${brl(orig)} para R$ ${brl(a.preco_original)} depois do desconto (a Shopee trava o desconto: infração de aumento de preço)`);
+        if (a.estoque === 0) alertas.push('sem estoque');
+      }
+      out.push({ item_id: Number(i.item_id), model_id: Number(m.model_id) || 0, nome: i.item_name || a?.nome || null, variacao: a?.variacao || null,
+        sku: a?.sku || null, foto: a?.imagem || null, preco_original: orig, preco_promo: promo,
+        pct: orig && promo && promo < orig ? 1 - promo / orig : null, limite: Number(i.purchase_limit) || 0, preco_atual: a?.preco_original ?? null, alertas });
+    }
+  }
+  return out;
+}
+
 // ---------- métricas de uma campanha (cópia local dos pedidos da Shopee) ----------
 // Linhas de venda (shopee-vendas.js#linhasDe) -> resumo e anúncios que mais venderam. Função pura: testada.
 function metricasDe(linhas, filtro) {
@@ -318,6 +345,45 @@ function criar({ D, daLoja, vendas }) {
         dias: r2(dur / 864e5), ...m, anuncios: m.anuncios.slice(0, 20), antes };
     },
 
+    // Itens de um desconto (para clonar a campanha e para ver/tirar os que estão travados).
+    'GET /api/shopee/campanhas/desconto/itens': async (url) => {
+      const shopId = exigeLoja(url);
+      const id = url.searchParams.get('id') || '';
+      if (!/^\d{1,20}$/.test(id)) throw erro('Campanha inválida.');
+      let itens = [], d = null;
+      for (let pag = 1; pag <= 30; pag++) {
+        d = resposta(await daLoja(shopId, '/api/v2/discount/get_discount', { discount_id: id, page_no: pag, page_size: 100 }));
+        itens = itens.concat(d.item_list || []);
+        if (!d.more) break;
+      }
+      const atuais = new Map(D.shopeeAnuncios(shopId).map((a) => [`${a.item_id}:${a.model_id || 0}`, a]));
+      const linhas = itensDoDesconto(itens, atuais);
+      return { loja: shopId, id, nome: d?.discount_name || null, status: d?.status || null, inicio: iso(d?.start_time), fim: iso(d?.end_time),
+        itens: linhas, com_alerta: linhas.filter((l) => l.alertas.length).length };
+    },
+
+    // Tira anúncios de um desconto (delete_discount_item, um por chamada). Escrita: só pelo clique, com confirmação.
+    'POST /api/shopee/campanhas/desconto/remover': async (_u, b) => {
+      const shopId = lojaDe(b?.loja);
+      const id = String(b?.id || '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Campanha inválida.');
+      const itens = Array.isArray(b?.itens) ? b.itens : [];
+      if (!itens.length) throw erro('Escolha os anúncios para tirar da campanha.');
+      if (itens.length > 1000) throw erro('No máximo 1.000 por vez.');
+      const resultado = [];
+      for (const x of itens) {
+        const item = Number(x.item_id), model = Number(x.model_id) || 0;
+        if (!Number.isInteger(item) || item <= 0) { resultado.push({ item_id: x.item_id, model_id: model, ok: false, erro: 'anúncio inválido' }); continue; }
+        try {
+          const r = resposta(await daLoja(shopId, '/api/v2/discount/delete_discount_item', {}, { discount_id: Number(id), item_id: item, ...(model ? { model_id: model } : {}) }));
+          const e = (r.error_list || [])[0];
+          resultado.push(e ? { item_id: item, model_id: model, ok: false, erro: e.fail_message || e.fail_error || 'recusado' } : { item_id: item, model_id: model, ok: true });
+        } catch (e) { resultado.push({ item_id: item, model_id: model, ok: false, erro: e.message }); }
+      }
+      cache.delete(`camp:${shopId}`);
+      return { tirados: resultado.filter((r) => r.ok).length, resultado };
+    },
+
     // Horários disponíveis para oferta relâmpago da loja (próximos 7 dias).
     'GET /api/shopee/campanhas/horarios': async (url) => {
       const shopId = exigeLoja(url);
@@ -394,4 +460,4 @@ function criar({ D, daLoja, vendas }) {
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, devolucaoDe, resumoDevolucoes, MOTIVOS, periodoValido, agruparItens, itensDesconto, itensRelampago, corpoCupom, metricasDe };
+module.exports = { criar, itensDoDesconto, devolucaoDe, resumoDevolucoes, MOTIVOS, periodoValido, agruparItens, itensDesconto, itensRelampago, corpoCupom, metricasDe };

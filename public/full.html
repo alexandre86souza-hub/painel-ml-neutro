@@ -22,6 +22,7 @@
   td.enviar{font-weight:800;white-space:nowrap}
   td.enviar.sim{color:#c2410c}
   td.enviar small{display:block;font-weight:600;font-size:11px;color:#64748b}
+  #armazenagem[hidden],#armazRes[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -66,6 +67,18 @@
       </div>
     </div>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando… (consulta o estoque de cada produto no armazém do ML)</p></div>
+  </section>
+
+  <section class="bloco" id="armazenagem">
+    <h2>Armazenagem no Full</h2>
+    <p class="sub">Quais produtos estão pagando armazenagem por tempo no Full, quanto já pagaram e quais estão perto de pagar. Para montar essa conta
+      com os números certos, o painel precisa ler uma vez como o Mercado Livre manda o faturamento do Full desta conta. Clique abaixo, copie o
+      resultado e mande para o Claude (só a forma dos dados, sem nome de cliente).</p>
+    <button type="button" class="bt" id="btArmaz">Gerar leitura da armazenagem</button>
+    <div id="armazRes" hidden style="margin-top:10px">
+      <textarea id="armazTxt" readonly rows="10" style="width:100%;font:12px/1.4 ui-monospace,Consolas,monospace"></textarea>
+      <button type="button" class="bt" id="btArmazCopiar">Copiar</button>
+    </div>
   </section>
 </main>
   </div>
@@ -183,6 +196,14 @@ async function carregar(recarregar){
   }catch(e){ erroTela(e.message); $('lista').innerHTML = ''; }
 }
 carregar();
+if(NA_AMAZON) $('armazenagem').hidden = true;
+$('btArmaz').onclick = async () => {
+  const b = $('btArmaz'); b.disabled = true; b.textContent = 'Lendo no Mercado Livre…';
+  try{ const r = await api('/api/full/armazenagem/diagnostico'); $('armazTxt').value = JSON.stringify(r, null, 1); $('armazRes').hidden = false; }
+  catch(e){ erroTela(e.message); }
+  b.disabled = false; b.textContent = 'Gerar leitura da armazenagem';
+};
+$('btArmazCopiar').onclick = async () => { try{ await navigator.clipboard.writeText($('armazTxt').value); $('btArmazCopiar').textContent = 'Copiado'; }catch{ $('armazTxt').select(); } };
 </script>
 <script src="/sino.js?v=4" defer></script>
 </body>

@@ -23,6 +23,8 @@
   .chip-st.ok{background:#e6f4ea;color:#0b6b33}
   .chip-st.promo{background:#fff4d6;color:#7a5600}
   td.est{white-space:nowrap}
+  .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-left:6px}
+  .margem-max input{width:60px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:8px}
 </style>
 </head>
 <body>
@@ -55,8 +57,9 @@
         <button type="button" data-f="promocao">Em promoção</button>
         <button type="button" data-f="pausados">Pausados</button>
         <button type="button" data-f="semcusto">Sem custo</button>
-        <button type="button" data-f="baixa">Margem abaixo de 10%</button>
+        <button type="button" data-f="baixa">Margem abaixo de</button>
       </div>
+      <label class="margem-max">abaixo de <input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
     </div>
     <p class="sub" id="subLista"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando os anúncios da Shopee…</p></div>
@@ -95,6 +98,10 @@ $('segFiltro').onclick = (ev) => {
 $('busca').oninput = () => pintar();
 $('btAtualizar').onclick = () => carregar(true);
 
+// margem escolhida no filtro "Margem abaixo de" (padrão 10%)
+const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
+$('fMargemMax').oninput = () => { if(filtro === 'baixa') pintar(); };
+
 function pintar(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
@@ -105,7 +112,7 @@ function pintar(){
     if(filtro === 'promocao' && !i.promocao) return false;
     if(filtro === 'pausados' && i.status !== 'UNLIST') return false;
     if(filtro === 'semcusto' && i.custo_unit != null) return false;
-    if(filtro === 'baixa' && !(e && e.margem < 0.10)) return false;
+    if(filtro === 'baixa' && !(e && e.margem < margemMax())) return false;
     return !q || [i.titulo, i.nome_shopee, i.sku, String(i.item_id), i.variacao].some((t) => (t || '').toLowerCase().includes(q));
   });
   $('subLista').textContent = (dados.lendo ? 'Lendo os anúncios na Shopee (a primeira vez leva cerca de 1 minuto); a tela se atualiza sozinha. ' : '')

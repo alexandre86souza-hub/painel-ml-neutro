@@ -96,6 +96,17 @@ const mt = SCx.metricasDe(lm, () => true);
 assert.deepStrictEqual(mt.resumo, { pedidos: 3, unidades: 4, faturamento: 450, lucro: 30, margem: 0.2, cupom: 5 });
 assert.deepStrictEqual(mt.anuncios.map((a) => [a.sku, a.pedidos, a.faturamento, a.lucro]), [['S8', 1, 300, null], ['S7', 2, 150, 30]]);
 
+// ---------- Shopee: itens de um desconto e o que trava cada um ----------
+{
+  const atuais = new Map([['1:0', { status: 'NORMAL', preco_original: 120, estoque: 5, sku: 'A' }], ['2:7', { status: 'BANNED', preco_original: 50, estoque: 0 }]]);
+  const it = SCx.itensDoDesconto([{ item_id: 1, item_name: 'X', item_original_price: 100, item_promotion_price: 90, purchase_limit: 2 },
+    { item_id: 2, model_list: [{ model_id: 7, model_original_price: 50, model_promotion_price: 45 }] }, { item_id: 3, item_original_price: 10, item_promotion_price: 9 }], atuais);
+  assert.strictEqual(it.length, 3);
+  assert.ok(it[0].alertas[0].includes('preço subiu') && Math.abs(it[0].pct - 0.1) < 1e-9 && it[0].limite === 2, 'preço subiu depois do desconto = infração');
+  assert.deepStrictEqual(it[1].alertas, ['anúncio bloqueado pela Shopee', 'sem estoque']);
+  assert.ok(it[2].alertas[0].includes('não está na cópia'));
+}
+
 // ---------- Shopee: devoluções (nada do comprador) ----------
 const SC = require('./shopee-campanhas.js');
 const dv = SC.devolucaoDe({ return_sn: 123, order_sn: 'SN1', create_time: 1790000000, reason: 'CHANGE_MIND', status: 'ACCEPTED', refund_amount: 27.37,

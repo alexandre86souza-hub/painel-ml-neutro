@@ -1104,12 +1104,37 @@ const routes = {
     const soProduto = produto ? new Set(await custosMod.idsComProduto(conta, produto)) : null;
     // Só os anúncios com concorrentes marcados (Detalhes → Concorrentes), junto com o filtro por produto.
     const soConc = url.searchParams.get('concorrentes') ? new Set(D.concItensMarcados(conta.ml_user_id)) : null;
-    const comProduto = soProduto && soConc ? new Set([...soProduto].filter((x) => soConc.has(x))) : (soProduto || soConc);
+    // Filtros rápidos (iguais aos da tela da Shopee): venderam no período, em promoção (preço < original), sem custo,
+    // margem abaixo de X% (margem do que vendeu no período, a mesma do cartão). Também passam pela lista local.
+    const filtro = ['venderam', 'promocao', 'semcusto', 'margem'].includes(url.searchParams.get('filtro')) ? url.searchParams.get('filtro') : null;
+    let soFiltro = null;
+    if (filtro === 'promocao') {
+      soFiltro = new Set((await custosMod.anuncios(conta)).filter((it) => it.original_price && it.price < it.original_price).map((it) => it.id));
+    } else if (filtro) {
+      const [todos] = await Promise.all([idsDaConta(conta, statusOk, q), sincronizarVendas(conta, dias)]);
+      const jf = janela(dias);
+      const rf = Object.fromEntries(D.vendasResumo(conta.ml_user_id, jf).map((x) => [x.item_id, x]));
+      if (filtro === 'venderam') soFiltro = new Set(todos.ids.filter((id) => rf[id]?.unidades > 0));
+      else if (filtro === 'semcusto') { const cs = D.custosDe(todos.ids); soFiltro = new Set(todos.ids.filter((id) => cs[id]?.custo == null)); }
+      else {
+        const max = Number(String(url.searchParams.get('margem_max') ?? '10').replace(',', '.')) / 100;
+        const comVenda = todos.ids.filter((id) => rf[id]?.unidades > 0);
+        const cs = D.custosDe(comVenda), imp = D.impostoLer(conta.ml_user_id);
+        soFiltro = new Set(comVenda.filter((id) => {
+          const f = D.fretePorUnidade(id, jf);
+          const m = A.economia({ faturamento: rf[id].faturamento, unidades: rf[id].unidades, tarifas: rf[id].tarifas,
+            freteUnidade: f?.unidades ? f.custo / f.unidades : null, custo: cs[id]?.custo ?? null, outros: cs[id]?.outros_total ?? null, impostoPct: imp }).margem;
+          return m != null && m < max;
+        }));
+      }
+    }
+    const juntar = (...cs) => cs.filter(Boolean).reduce((a, c) => (a ? new Set([...a].filter((x) => c.has(x))) : c), null);
+    const comProduto = juntar(soProduto, soConc, soFiltro);
 
     let ids, total, aviso = null;
     if (comProduto && !comProduto.size) return { total: 0, offset, dias, itens: [], aviso: soConc && !soConc.size
       ? 'Nenhum anúncio tem concorrente marcado ainda: abra Detalhes → Concorrentes num anúncio e marque os iguais ao seu.'
-      : soConc ? 'Nenhum anúncio com concorrente marcado neste filtro.' : `Nenhum anúncio tem o produto ${produto} no SKU.` };
+      : soFiltro && !soFiltro.size ? 'Nenhum anúncio neste filtro.' : soConc ? 'Nenhum anúncio com concorrente marcado neste filtro.' : `Nenhum anúncio tem o produto ${produto} no SKU.` };
     if (ORDENS_PERIODO.includes(ordem) || comProduto) {
       // O ML só ordena pelo total de sempre. "No período" e curva ABC saem da cópia local
       // dos pedidos: pega todos os anúncios do filtro, ordena aqui e corta a página.
@@ -2261,6 +2286,26 @@ routes['GET /api/dashboard/resumo'] = async () => {
       com_estoque: fullR.com_estoque, unidades: fullR.unidades_full, acabando: fullR.acabando },
     imposto_pct: mes?.imposto_pct ?? null,
   };
+};
+
+// Tela Produtos (e "Precisa de atenção" de Todas as contas): o que vendeu nos últimos 30 dias sem custo, em TODAS as
+// contas e lojas, para escolher os produtos de cada anúncio (composição no painel, custos.js) sem mudar o SKU.
+routes['GET /api/produtos/sem-custo'] = async () => {
+  const pedir = async (caminho) => { try { return await routes[`GET ${caminho.split('?')[0]}`](new URL(caminho, 'http://painel')); } catch (e) { return { erro: e.message }; } };
+  const itens = [], erros = [];
+  for (const x of await custosMod.semCustoMl(30)) (x.erro ? erros.push(`${x.loja}: ${x.erro}`) : itens.push(x));
+  const externas = [];
+  if (D.configLer('amazon_refresh_token')) externas.push(['amazon', 'Amazon', '/api/amazon/vendas?dias=30']);
+  externas.push(['leroy', 'Leroy Merlin', '/api/leroy/vendas?dias=30'], ['magalu', 'Magalu', '/api/magalu/vendas?dias=30']);
+  for (const l of D.shopeeLojasListar()) externas.push(['shopee', l.nome || `Shopee ${l.shop_id}`, `/api/shopee/vendas?loja=${l.shop_id}&dias=30`, l.shop_id]);
+  for (const [canal, nome, caminho, loja] of externas) {
+    const r = await pedir(caminho);
+    if (r?.erro) { if (!/conect|configur/i.test(r.erro)) erros.push(`${nome}: ${r.erro}`); continue; }
+    for (const s of r?.sem_custo || []) if (s.sku) itens.push({ canal, conta: loja ?? canal, loja: r.nome || nome, titulo: s.titulo || null, sku: s.sku, faltando: s.faltando || [], vendas: s.vendas, chave: s.sku });
+  }
+  const mapa = custosMod.catalogoMapa();
+  for (const i of itens) i.composicao = custosMod.descreverComposicao(i.chave, mapa);
+  return { itens: itens.sort((a, b) => b.vendas - a.vendas), erros };
 };
 
 // ---------- despacho ----------

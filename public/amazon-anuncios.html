@@ -31,6 +31,8 @@
   .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#eef1f6;color:#475569;margin-right:4px}
   .tag.destaque{background:#fff4d6;color:#7a5600}
   .tag.voce{background:#dbeafe;color:#1d4ed8}
+  .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-left:6px}
+  .margem-max input{width:60px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:8px}
 </style>
 </head>
 <body>
@@ -60,13 +62,16 @@
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
         <button type="button" data-f="" aria-pressed="true">Todos</button>
         <button type="button" data-f="venderam">Venderam em 30 dias</button>
+        <button type="button" data-f="promocao">Em promoção</button>
+        <button type="button" data-f="pausados" title="Fora de venda (sem o status à venda na Amazon)">Pausados</button>
         <button type="button" data-f="concorrentes">Com concorrentes</button>
         <button type="button" data-f="semdestaque">Sem o destaque</button>
         <button type="button" data-f="fba">FBA</button>
         <button type="button" data-f="proprio">Envio próprio</button>
         <button type="button" data-f="semcusto">Sem custo</button>
-        <button type="button" data-f="baixa">Margem abaixo de 10%</button>
+        <button type="button" data-f="baixa">Margem abaixo de</button>
       </div>
+      <label class="margem-max">abaixo de <input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
     </div>
     <p class="sub" id="subLista"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando os anúncios da Amazon…</p></div>
@@ -107,6 +112,10 @@ $('segFiltro').onclick = (ev) => {
 $('busca').oninput = () => pintar();
 $('btAtualizar').onclick = () => carregar(true);
 
+// margem escolhida no filtro "Margem abaixo de" (padrão 10%)
+const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
+$('fMargemMax').oninput = () => { if(filtro === 'baixa') pintar(); };
+
 function pintar(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
@@ -114,12 +123,14 @@ function pintar(){
   const itens = dados.itens.filter((i) => {
     const e = estimar(i, i.preco);
     if(filtro === 'venderam' && !i.vendas_30) return false;
+    if(filtro === 'promocao' && !((i.desconto && (!i.desconto.fim || i.desconto.fim > new Date().toISOString())) || (i.cheio && i.preco != null && i.preco < i.cheio - 0.009))) return false;
+    if(filtro === 'pausados' && (i.status || []).includes('BUYABLE')) return false;
     if(filtro === 'concorrentes' && !(i.conc?.outros > 0)) return false;
     if(filtro === 'semdestaque' && !(i.conc?.outros > 0 && !i.conc.voce_destaque)) return false;
     if(filtro === 'fba' && i.canal !== 'FBA') return false;
     if(filtro === 'proprio' && i.canal !== 'proprio') return false;
     if(filtro === 'semcusto' && i.custo_unit != null) return false;
-    if(filtro === 'baixa' && !(e && e.margem < 0.10)) return false;
+    if(filtro === 'baixa' && !(e && e.margem < margemMax())) return false;
     return !q || [i.titulo, i.sku, i.asin, i.nome_amazon].some((t) => (t || '').toLowerCase().includes(q));
   });
   $('subLista').textContent = (dados.conc_pendentes ? `Lendo os concorrentes de ${numero(dados.conc_pendentes)} produto(s) na Amazon (20 a cada 10 segundos); a tela se atualiza sozinha. ` : '')

@@ -87,6 +87,7 @@
   .itens .s{font-size:12px;color:var(--muted);margin:2px 0 0}
   .itens .precos{font-size:13px;margin:3px 0 0;font-variant-numeric:tabular-nums}
   .itens .precos s{color:var(--muted)}
+  .itens .precos .pct-desc{color:#b45309;font-weight:700;margin-left:3px}
   .acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
   .form-adesao{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
     background:#f8f9fa;border:1px solid var(--line);border-radius:10px;padding:12px}
@@ -647,7 +648,10 @@ function linhaItem(it, p, itemId){
       document.createTextNode(` (−${pct(1 - p.preco / orig, 0)})`));
   }else if(orig){
     pr.appendChild(document.createTextNode('Preço atual ' + real(orig)));
-    if(p.preco_sugerido) pr.appendChild(document.createTextNode(' · sugerido ' + real(p.preco_sugerido)));
+    // % de desconto que o preço da promoção dá sobre o preço atual
+    const desc = (v) => v && v < orig ? ` (−${pct(1 - v / orig, 1)})` : '';
+    if(p.preco_sugerido){ pr.appendChild(document.createTextNode(' · sugerido ' + real(p.preco_sugerido))); pr.appendChild(el('b', 'pct-desc', desc(p.preco_sugerido))); }
+    if(p.preco_max && p.preco_max !== p.preco_sugerido){ pr.appendChild(document.createTextNode(' · aceita até ' + real(p.preco_max))); pr.appendChild(el('b', 'pct-desc', desc(p.preco_max))); }
   }
   meio.appendChild(pr);
   // Últimos preços pelos quais o anúncio vendeu (da cópia local dos pedidos).

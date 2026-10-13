@@ -390,6 +390,54 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
     'GET /api/performance/logistica': async (url) => logistica(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
     'GET /api/abc': async (url) => abc(contaOuErro(), dia(url, 30, [15, 30, 60, 90, 150])),
     'GET /api/full': async (url) => { if (url.searchParams.get('recarregar')) cacheFull = null; return full(contaOuErro()); },
+    // Armazenagem do Full (quanto já pagou e o que está perto de pagar): ainda sem a forma real das respostas
+    // do ML. Esta leitura mostra só a FORMA (campos e um exemplo curto de cada, sem dado de comprador) do
+    // faturamento (billing) e das operações de estoque de um anúncio do Full, para construir a conta certa.
+    'GET /api/full/armazenagem/diagnostico': async () => {
+      const conta = contaOuErro();
+      const PESSOAL = /buyer|nickname|first_name|last_name|address|document|doc_number|email|phone|receiver/i;
+      const forma = (v, prof = 0) => {
+        if (Array.isArray(v)) return v.length ? [`(${v.length} itens)`, forma(v[0], prof + 1)] : [];
+        if (v && typeof v === 'object') {
+          if (prof > 5) return '{…}';
+          return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, PESSOAL.test(k) ? '[oculto]' : forma(x, prof + 1)]));
+        }
+        return typeof v === 'string' ? v.slice(0, 60) : v;
+      };
+      const tentar = async (rotulo, caminho) => {
+        try { const r = await ml(caminho); return { rotulo, caminho, ok: true, forma: forma(r), _r: r }; }
+        catch (e) { return { rotulo, caminho, ok: false, erro: e.message.slice(0, 300) }; }
+      };
+      const saida = [];
+      const per = await tentar('períodos do faturamento', '/billing/integration/monthly/periods?group=ML&document_type=BILL&offset=0&limit=3');
+      saida.push(per);
+      const chave = per._r?.results?.[0]?.key || per._r?.results?.[0]?.period?.key || null;
+      if (chave) {
+        const det = await tentar('detalhe do faturamento (1º período)', `/billing/integration/periods/key/${chave}/group/ML/details?document_type=BILL&offset=0&limit=150`);
+        // só os tipos de cobrança (nome e quantas linhas) e até 3 linhas que falem de armazenagem/Full
+        const linhas = det._r?.results || [];
+        const tipo = (l) => [l.charge_info?.detail_type, l.charge_info?.detail_sub_type, l.charge_info?.transaction_detail].filter(Boolean).join(' | ') || JSON.stringify(l).slice(0, 80);
+        const tipos = {}; for (const l of linhas) tipos[tipo(l)] = (tipos[tipo(l)] || 0) + 1;
+        det.tipos = tipos; det.exemplos_armazenagem = linhas.filter((l) => /armaz|storage|almac|full|fulfill/i.test(JSON.stringify(l))).slice(0, 3).map((l) => forma(l));
+        delete det.forma.results; saida.push(det);
+        saida.push(await tentar('detalhe do Full no faturamento', `/billing/integration/periods/key/${chave}/group/ML/full/details?offset=0&limit=50`));
+      }
+      // um anúncio do Full com estoque: inventory_id, estoque no armazém e operações dos últimos 120 dias
+      const dados = await full(conta).catch(() => null);
+      const umItem = dados?.itens?.find((i) => i.estoque_full > 0);
+      if (umItem) {
+        const it = await ml(`/items/${umItem.id}?attributes=id,inventory_id,user_product_id,variations`).catch(() => null);
+        const inv = it?.inventory_id || it?.variations?.find((v) => v.inventory_id)?.inventory_id || null;
+        saida.push({ rotulo: 'anúncio do Full usado', ok: true, forma: { id: umItem.id, inventory_id: inv, user_product_id: it?.user_product_id || null, estoque_full: umItem.estoque_full } });
+        if (inv) {
+          saida.push(await tentar('estoque no Full', `/inventories/${inv}/stock/fulfillment`));
+          const de = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10), ate = new Date().toISOString().slice(0, 10);
+          saida.push(await tentar('operações de estoque (120 dias)', `/stock/fulfillment/operations/search?seller_id=${conta.ml_user_id}&inventory_id=${inv}&date_from=${de}&date_to=${ate}&limit=50`));
+        }
+      }
+      for (const s of saida) delete s._r;
+      return { em: new Date().toISOString(), leituras: saida };
+    },
     'GET /api/anuncios/qualidade': async (url) => {
       const conta = contaOuErro();
       if (url.searchParams.get('recarregar')) cacheAtivos = null;

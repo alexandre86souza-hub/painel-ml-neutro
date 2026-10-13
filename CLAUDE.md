@@ -134,6 +134,12 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   renomear o SKU, então a troca fica no painel (`sku_trocas`, `custos.js#skuNaData`) e vale A PARTIR da data para custo,
   lucro e baixa do estoque (venda anterior = produto antigo). Comandas mostram o SKU novo em todos os canais (ML e Shopee
   também gravam a troca em `sku_trocas`, só para isso). Fora do MCP.
+- Composição no painel (`custos.js`, `sku_vinculos` canal `composicao`): SKU do canal (ou id do anúncio do ML sem SKU) -> "KIT-005.408";
+  `componentes()` já devolve os produtos escolhidos (`{ cru: true }` = o que está escrito), então custo, lucro, estoque e comandas de
+  TODOS os canais seguem a escolha sem mudar o SKU no marketplace. Tela Produtos: "Anúncios vendidos sem custo" (`GET /api/produtos/sem-custo`,
+  todas as contas, 30 dias; link do "Precisa de atenção") e `PUT /api/produtos/composicoes`; a troca de produto tem "só no painel" (`so_painel`).
+- Preço pela margem em massa (Anúncios do ML, barra de seleção): `GET /api/items/:id/preco-margem` por anúncio (3 por vez), prévia e PUT só
+  nos marcados. Filtros rápidos do ML: `/api/items?filtro=venderam|promocao|semcusto|margem&margem_max=` (lista local, como o filtro por produto).
 - Atacado em massa (`precos.js`, bloco na tela Produtos): `GET /api/atacado` lista os anúncios
   ativos com o atacado de cada um (uma chamada por anúncio, guardada em `anuncio_atacado`);
   `POST /api/atacado/aplicar` e `/remover` usam o mesmo `gravarAtacado` do anúncio individual.
@@ -175,7 +181,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `shopee-devolucoes.html`; o menu troca Campanhas/Devoluções por elas): descontos, ofertas
   relâmpago e cupons da loja (com as vendas dos itens no período); devoluções em janelas de 15 dias
   (`returns/get_return_list`), sem o campo `user`. Campanhas da própria Shopee não têm API.
-  Itens (e vendas) só dos descontos ativos, agendados ou encerrados há até 60 dias, 4 por vez.
+  Itens (e vendas) só dos descontos ativos, agendados ou encerrados há até 60 dias, 4 por vez. Por desconto: "Anúncios"
+  (`GET …/desconto/itens`, `itensDoDesconto`: preço que SUBIU depois do desconto = infração, fora do ar, sem estoque, pela cópia
+  `shopee_anuncios`) com "Tirar da campanha" (`POST …/desconto/remover` = delete_discount_item) e "Clonar" (abre o Criar preenchido).
   "Últimas campanhas criadas" (15 descontos mais novos): vendas no período e desconto dado = unidades × (preço original do desconto
   − preço pago), por variação (`vendasDoDesconto`), e a faixa de %. Criar: anúncios marcados em massa ("Marcar todos da busca").
   Criar (escrita só pela tela, com confirmação; nada no MCP): `POST /api/shopee/campanhas/desconto`
@@ -312,6 +320,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   comprador: não é guardada (só `comandas.etiqueta_em`) e nada vai ao MCP. Magalu: `POST /seller/v1/logistics/shipping-labels` (deliveries,
   label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).
   Amazon: a etiqueta do Easy Ship pede o papel restrito Direct-to-Consumer Shipping + RDT — contra o compromisso de não ler dado de comprador; fica no Seller Central.
+- Armazenagem do Full: ainda sem a forma real do faturamento do ML; `GET /api/full/armazenagem/diagnostico` (botão na tela Full)
+  mostra só a forma do billing e das operações de estoque de um anúncio. Construir a conta a partir dessa leitura.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,

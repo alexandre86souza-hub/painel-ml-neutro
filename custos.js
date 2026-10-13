@@ -50,8 +50,17 @@ function lerCatalogo(texto) {
 // Números dos componentes de um SKU de anúncio. "KIT-407.408" -> [407, 408];
 // "DQ-407" (um produto só) -> [407]. Sem número -> []. Hífen também separa: a Amazon usa
 // "KIT-795-615-746-698" para os produtos 795 + 615 + 746 + 698 (SKU da Amazon não se troca).
-function componentes(sku) {
-  const s = String(sku || '').trim();
+//
+// Composição escolhida no painel (tela Produtos): o anúncio é vendido com um SKU que não diz os produtos certos
+// ("DB-005.4" = DQ-005 + BP-408) e o vendedor não quer mudar o SKU no canal. sku_vinculos canal 'composicao':
+// SKU do canal (ou o id do anúncio do ML sem SKU) -> SKU do painel ("KIT-005.408"). Vale em TODOS os canais e em
+// tudo que lê os produtos de um SKU (custo, lucro, estoque, comandas). Carregada por criar() e a cada gravação.
+let composicoes = new Map();
+const usarComposicoes = (m) => { composicoes = m instanceof Map ? m : new Map(); };
+const composicaoDe = (sku) => composicoes.get(String(sku || '').trim()) || null;
+function componentes(sku, { cru = false } = {}) {
+  const s0 = String(sku || '').trim();
+  const s = (!cru && composicoes.get(s0)) || s0;
   if (!s) return [];
   const resto = s.includes('-') ? s.slice(s.indexOf('-') + 1) : s;
   return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);
@@ -98,7 +107,8 @@ function skuNaData(trocas, sku, data = new Date().toISOString()) {
 // SKUs de um anúncio: o do próprio anúncio e o de cada variação.
 function skusDoAnuncio(it) {
   const doAttr = (attrs) => (attrs || []).find((a) => a.id === 'SELLER_SKU')?.value_name || null;
-  const base = it.seller_custom_field || doAttr(it.attributes);
+  // anúncio do ML sem SKU com produtos escolhidos no painel: o id faz o papel do SKU (componentes acha pela composição)
+  const base = it.seller_custom_field || doAttr(it.attributes) || (it.id && composicoes.has(it.id) ? it.id : null);
   const vars = (it.variations || []).map((v) => ({ id: v.id, sku: v.seller_custom_field || doAttr(v.attributes) || null,
     nome: (v.attribute_combinations || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null }));
   return { base, variacoes: vars };
@@ -223,6 +233,7 @@ function contaDaLinha(l, ctx) {
 }
 
 function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela, baixarPedidos, idsDaConta, D }) {
+  usarComposicoes(D.skuVinculos('composicao'));
   const empresaDe = (conta) => lerEmpresa(D.configLer(`empresa:${conta.ml_user_id}`));
   const catalogoMapa = () => new Map(D.catalogoListar().map((p) => [p.numero, p]));
 
@@ -237,7 +248,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     const lotes = [];
     for (let i = 0; i < ids.length; i += 20) lotes.push(ids.slice(i, i + 20));
     const lista = (await emLotes(lotes, 4, (lote) => ml(`/items?ids=${lote.join(',')}&attributes=id,title,`
-      + 'thumbnail,permalink,status,price,available_quantity,seller_custom_field,attributes,variations')))
+      + 'thumbnail,permalink,status,price,original_price,available_quantity,seller_custom_field,attributes,variations')))
       .flat().filter((x) => x.code === 200).map((x) => x.body);
     cacheAnuncios = { conta: conta.ml_user_id, em: Date.now(), lista };
     return lista;
@@ -311,7 +322,67 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     }).map((it) => it.id);
   }
 
+  // Grava a composição de um SKU (ou id de anúncio sem SKU). produtos = números da tabela; vazio apaga.
+  function gravarComposicao(sku, numeros) {
+    const chave = String(sku || '').trim();
+    if (!chave || chave.length > 80) throw erro('SKU inválido.');
+    if (!numeros.length) D.skuVinculoGravar('composicao', chave, null);
+    else D.skuVinculoGravar('composicao', chave, 'KIT-' + numeros.map((n) => String(n).padStart(3, '0')).join('.'));
+    usarComposicoes(D.skuVinculos('composicao'));
+    cacheAnuncios = null;
+  }
+  // Troca de produto "só no painel" (tela Produtos): o SKU continua no canal; a composição troca o número.
+  function trocarComposicao(skus, de, para) {
+    const out = [];
+    for (const s of skus) {
+      const atual = composicaoDe(s) || s;
+      if (!componentes(atual, { cru: true }).includes(de)) continue;
+      const novo = trocarComponente(atual, de, para);
+      gravarComposicao(s, componentes(novo, { cru: true }));
+      out.push({ antes: atual, depois: composicaoDe(s), sku: s });
+    }
+    return out;
+  }
+  const descreverComposicao = (sku, mapa = catalogoMapa()) => {
+    const painel = composicaoDe(sku);
+    if (!painel) return null;
+    return { sku_painel: painel, produtos: componentes(painel, { cru: true }).map((n) => ({ numero: n, sku: mapa.get(n)?.sku || String(n).padStart(3, '0'),
+      nome: mapa.get(n)?.nome || null, custo: mapa.get(n)?.custo ?? null })) };
+  };
+
+  // Anúncios do ML vendidos (30 dias) sem custo, de TODAS as contas (tela Produtos, "Precisa de atenção").
+  async function semCustoMl(dias = 30) {
+    const out = [];
+    for (const c of D.contasListar()) {
+      try {
+        const r = await vendasDaConta(D.contaObter(c.ml_user_id), dias);
+        for (const s of r.sem_custo) out.push({ canal: 'ml', conta: c.ml_user_id, loja: c.nickname, ...s, chave: s.sku || s.item_id });
+      } catch (e) { out.push({ canal: 'ml', conta: c.ml_user_id, loja: c.nickname, erro: e.message }); }
+    }
+    return out;
+  }
+
   const rotas = {
+    // Composições escolhidas no painel (SKU do canal -> produtos), com nome e custo de cada produto.
+    'GET /api/produtos/composicoes': async () => {
+      const mapa = catalogoMapa();
+      return { composicoes: [...D.skuVinculos('composicao').keys()].sort().map((sku) => ({ sku, ...descreverComposicao(sku, mapa) })) };
+    },
+    // Escolhe os produtos de um SKU sem mudar o SKU no canal. produtos: ["DQ-005", "BP-408"] (repetir = 2 unidades).
+    'PUT /api/produtos/composicoes': async (_u, body) => {
+      const sku = String(body?.sku ?? '').trim();
+      const lista = Array.isArray(body?.produtos) ? body.produtos : [];
+      if (lista.length > 30) throw erro('No máximo 30 produtos num anúncio.');
+      const mapa = catalogoMapa();
+      const numeros = lista.map((p) => numeroDoProduto(p));
+      const fora = numeros.filter((n) => !mapa.has(n));
+      if (fora.length) throw erro(`Produto fora da tabela: ${fora.map((n) => String(n).padStart(3, '0')).join(', ')}. Cadastre-o primeiro (Cadastrar produto).`);
+      gravarComposicao(sku, numeros);
+      // recalcula o custo dos anúncios do ML (custos origem 'sku') de cada conta, em segundo plano
+      (async () => { for (const c of D.contasListar()) { try { cacheAnuncios = null; await aplicarCatalogo(D.contaObter(c.ml_user_id)); } catch {} } })();
+      return { sku, composicao: descreverComposicao(sku, mapa) };
+    },
+
     // ?conta=amazon: os dados da empresa que valem para a Amazon (amazon.js#empresaAmazon).
     // Enquanto não forem salvos, a tela mostra os da conta do ML usada até então.
     'GET /api/empresa': async (url) => {
@@ -491,7 +562,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         embalagem: 0, imposto: 0, lucro: 0, com_lucro_fat: 0, cancelados: 0 };
       for (const l of linhas) {
         const valida = ['paid', 'partially_refunded'].includes(l.status);
-        const cSku = custoDoSku(l.sku, mapa);
+        const cSku = custoDoSku(l.sku || (composicoes.has(l.item_id) ? l.item_id : null), mapa);
         const cItem = custos[l.item_id];
         const custoUnit = cItem?.origem === 'manual' ? cItem.custo : (cSku.custo ?? cItem?.custo ?? null);
         const emb = (cItem?.outros ?? empresa.embalagem_padrao ?? 0) + (cItem?.extra || 0);   // embalagem + outro custo do anúncio
@@ -627,7 +698,21 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       if (ids.length > 200) throw erro('No máximo 200 anúncios por vez.');
       ids.forEach(exigeItemId);
       const attrSku = (attrs) => (attrs || []).find((a) => a.id === 'SELLER_SKU')?.value_name || null;
-      const tem = (sku) => componentes(sku).includes(de);
+      if (body?.so_painel) {
+        const resultado = await emLotes(ids, 3, async (id) => {
+          try {
+            const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field`);
+            const { base, variacoes } = skusDoAnuncio(it);
+            const skus = [...new Set([base, ...variacoes.map((v) => v.sku)].filter(Boolean))];
+            const trocas = trocarComposicao(skus.length ? skus : [id], de, para);
+            return trocas.length ? { id, ok: true, trocas, no_painel: true } : { id, ok: false, erro: 'o SKU deste anúncio não tem mais esse produto' };
+          } catch (e) { return { id, ok: false, erro: e.message }; }
+        });
+        cacheAnuncios = null;
+        return { de, para, novo_na_tabela: catalogoMapa().has(para), pedidos: ids.length, no_painel: true,
+          alterados: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => !r.ok), resultado };
+      }
+      const tem = (sku) => componentes(sku, { cru: true }).includes(de);
       const mapa = catalogoMapa();
       const resultado = await emLotes(ids, 3, async (id) => {
         try {
@@ -743,8 +828,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     } },
   ];
 
-  return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa };
+  return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa, anuncios: anunciosComSku, semCustoMl, descreverComposicao, trocarComposicao };
 }
 
-module.exports = { criar, freteFlex, lerCatalogo, componentes, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
+module.exports = { criar, freteFlex, lerCatalogo, componentes, usarComposicoes, composicaoDe, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
   impostoTotal, contaDaLinha, dinheiro };

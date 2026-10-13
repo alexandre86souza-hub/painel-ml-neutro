@@ -15,6 +15,16 @@ assert.deepStrictEqual(C.componentes('KIT-795-615-746-698'), [795, 615, 746, 698
 assert.deepStrictEqual(C.componentes('KIT-801.714'), [801, 714]);
 assert.strictEqual(C.trocarComponente('KIT-795-615-746', 795, 854), 'KIT-854-615-746');
 assert.deepStrictEqual(C.componentes('MLB3526851685'), [], 'SKU que é o código do anúncio não tem componentes');
+// composição escolhida no painel: o SKU do canal continua, os produtos vêm da escolha
+C.usarComposicoes(new Map([['DB-005.4', 'KIT-005.408'], ['MLB720389757', 'KIT-005']]));
+assert.deepStrictEqual(C.componentes('DB-005.4'), [5, 408], 'DB-005.4 = DQ-005 + BP-408 sem mudar o SKU');
+assert.deepStrictEqual(C.componentes('DB-005.4', { cru: true }), [5, 4], 'cru: o que está escrito no SKU');
+assert.deepStrictEqual(C.skusDoAnuncio({ id: 'MLB720389757', attributes: [] }).base, 'MLB720389757', 'anúncio sem SKU com composição usa o id');
+assert.deepStrictEqual(C.componentes('MLB720389757'), [5]);
+assert.strictEqual(C.custoDoSku('DB-005.4', new Map([[5, { sku: 'DQ-005', custo: 35.48 }], [408, { sku: 'BP-408', custo: 10 }]])).custo, 45.48);
+C.usarComposicoes(new Map());
+assert.deepStrictEqual(C.componentes('DB-005.4'), [5, 4]);
+
 
 // ---------- tabela colada ----------
 const { produtos, ignorados } = C.lerCatalogo([

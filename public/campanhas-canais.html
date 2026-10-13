@@ -136,6 +136,8 @@ document.documentElement.style.setProperty('--cor-canal2', { leroy: '#3d6e0f', m
 $('titulo').textContent = 'Campanhas — ' + NOME;
 document.title = 'Campanhas ' + NOME;
 $('topoTxt').textContent = `Promoções e descontos na ${NOME}, com o resultado de cada um: vendas e lucro no período contra os mesmos dias antes.`;
+// Leroy: criar/encerrar desconto é o uso do dia a dia -> logo abaixo dos números, antes das promoções e resultados
+if(CANAL === 'leroy') $('cartoes').after($('segFiltro').closest('section'));
 $('criarSub').textContent = CANAL === 'magalu'
   ? ''
   : CANAL === 'leroy'

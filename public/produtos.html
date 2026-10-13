@@ -74,6 +74,10 @@
   .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
   .todas-lojas{flex-direction:row!important;align-items:center;gap:6px;font-size:13px;font-weight:600;align-self:center}
   .troca-canal{font-size:14px;font-weight:700;margin:16px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
+  #semCusto table td{vertical-align:top}
+  .comp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .comp input{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #d5dbe5;border-radius:8px;width:120px;text-transform:uppercase;background:#fff}
+  .ok-comp{font-size:12px;color:#0b6b33;margin-top:4px}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
@@ -110,6 +114,15 @@
     <div class="cartao"><p class="rotulo">Usados sem custo</p><div class="valor" id="vUsoSem">—</div></div>
   </div>
 
+  <section class="bloco" id="sem-custo">
+    <h2>Anúncios vendidos sem custo (últimos 30 dias)</h2>
+    <p class="sub">Todas as contas e lojas. O SKU do anúncio não diz os produtos certos? Escolha aqui os produtos que vão no anúncio
+      (ex.: DB-005.4 = <b>DQ-005 + BP-408</b>): o painel passa a usar esses produtos no custo, lucro, estoque e comandas, e o
+      <b>SKU do anúncio não muda</b> no marketplace. Produto repetido = 2 unidades no kit.</p>
+    <div id="semCusto"><p class="sub">Lendo as vendas de cada conta…</p></div>
+    <details id="compBox" style="margin-top:10px"><summary>Produtos escolhidos no painel (<span id="compN">0</span>)</summary><div id="compLista"></div></details>
+  </section>
+
   <section class="bloco" id="blocoTroca">
     <h2>Trocar um produto no SKU dos anúncios</h2>
     <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
@@ -122,6 +135,7 @@
       <datalist id="listaProdutosTroca"></datalist>
       <button class="bt primario">Buscar anúncios</button>
       <label class="todas-lojas"><input type="checkbox" id="tTodas"> Todas as lojas</label>
+      <label class="todas-lojas" title="O SKU continua igual no Mercado Livre e na Shopee; o painel troca o produto só no custo, lucro, estoque e comandas"><input type="checkbox" id="tPainel"> Não mudar o SKU do anúncio (troca só no painel)</label>
     </form>
     <div id="trocaLista"></div>
   </section>
@@ -246,6 +260,7 @@ async function carregar(){
     const dl = $('listaProdutosTroca'); dl.innerHTML = '';
     for(const p of produtos){ const o = el('option'); o.value = p.sku; o.label = p.nome || ''; dl.appendChild(o); }
     pintar();
+    if(!semCustoLido){ semCustoLido = true; carregarSemCusto(); carregarComposicoes(); }
   }catch(e){ $('tabela').innerHTML = ''; $('tabela').appendChild(el('p', 'sub', 'Não foi possível carregar: ' + e.message)); }
 }
 
@@ -583,7 +598,10 @@ $('formTroca').onsubmit = async (ev) => {
       const escolhidos = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
       const nomeDe = $('tDe').value.trim().toUpperCase(), nomePara = $('tPara').value.trim().toUpperCase();
       const dup = escolhidos.filter((l) => l.duplica).length;
-      if(!confirm(`Trocar ${nomeDe} por ${nomePara} no SKU de ${escolhidos.length} anúncio(s)?\n\nMuda o SKU no Mercado Livre. O preço, o estoque e o resto do SKU não mudam.`
+      const soPainel = $('tPainel').checked;
+      if(!confirm(`Trocar ${nomeDe} por ${nomePara} ${soPainel ? 'nos produtos' : 'no SKU'} de ${escolhidos.length} anúncio(s)?\n\n` + (soPainel
+        ? 'O SKU continua igual no Mercado Livre: a troca fica no painel (custo, lucro, estoque e comandas).'
+        : 'Muda o SKU no Mercado Livre. O preço, o estoque e o resto do SKU não mudam.')
         + (dup ? `\n\nAtenção: ${dup} deles vão ficar com o mesmo SKU de outro anúncio da conta.` : ''))) return;
       ok.disabled = true; ok.textContent = 'Trocando…';
       let feitos = 0, falhas = 0;
@@ -591,10 +609,10 @@ $('formTroca').onsubmit = async (ev) => {
       for(let i = 0; i < escolhidos.length; i += 50){
         const lote = escolhidos.slice(i, i + 50);
         try{
-          const x = await enviar('POST', `/api/produtos/${de}/trocar-sku`, { novo: para, ids: lote.map((l) => l.a.id) });
+          const x = await enviar('POST', `/api/produtos/${de}/trocar-sku`, { novo: para, ids: lote.map((l) => l.a.id), so_painel: soPainel || undefined });
           for(const rr of x.resultado){
             const l = lote.find((q) => q.a.id === rr.id); if(!l) continue;
-            if(rr.ok){ feitos++; l.res.textContent = 'trocado'; l.ck.checked = false; l.ck.disabled = true; l.tr.classList.remove('sujo'); }
+            if(rr.ok){ feitos++; l.res.textContent = rr.no_painel ? 'trocado no painel' : 'trocado'; l.ck.checked = false; l.ck.disabled = true; l.tr.classList.remove('sujo'); }
             else{ falhas++; l.res.textContent = 'não trocou: ' + rr.erro; l.res.style.color = '#8c1d18'; }
           }
         }catch(e){ falhas += lote.length; for(const l of lote){ l.res.textContent = 'não trocou: ' + e.message; l.res.style.color = '#8c1d18'; } }
@@ -668,14 +686,15 @@ async function outrosCanais(de, para, box, todas){
   ok.onclick = async () => {
     const esc = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
     const nomeDe = $('tDe').value.trim().toUpperCase(), nomePara = $('tPara').value.trim().toUpperCase();
-    const nShopee = esc.filter((l) => l.c.canal === 'shopee').length, nPainel = esc.length - nShopee;
+    const soPainel = $('tPainel').checked;
+    const nShopee = soPainel ? 0 : esc.filter((l) => l.c.canal === 'shopee').length, nPainel = esc.length - nShopee;
     if(!confirm(`Trocar ${nomeDe} por ${nomePara} em ${esc.length} anúncio(s)?\n\n`
       + (nShopee ? `• ${nShopee} da Shopee: muda o SKU no anúncio da Shopee.\n` : '')
       + (nPainel ? `• ${nPainel} da Amazon/Leroy/Magalu: a troca fica no painel; a partir de agora custo, lucro, estoque e comandas usam ${nomePara}. As vendas anteriores continuam com ${nomeDe}.\n` : '')
       + '\nO preço e o estoque no marketplace não mudam.')) return;
     ok.disabled = true; ok.textContent = 'Trocando…';
     try{
-      const x = await enviar('POST', `/api/produtos/${de}/trocar-sku-canais`, { novo: para,
+      const x = await enviar('POST', `/api/produtos/${de}/trocar-sku-canais`, { novo: para, so_painel: soPainel || undefined,
         itens: esc.map((l) => ({ canal: l.c.canal, loja: l.c.loja, id: l.a.id, refs: l.c.canal === 'shopee' ? l.a.skus.map((s) => s.ref) : undefined })) });
       for(const rr of x.resultado){
         const l = esc.find((q) => q.c.canal === rr.canal && String(q.a.id) === String(rr.id) && (rr.loja == null || q.c.loja === rr.loja)); if(!l) continue;
@@ -686,6 +705,89 @@ async function outrosCanais(de, para, box, todas){
     }catch(e){ aviso(e.message); }
     contar();
   };
+}
+
+// ---- anúncios vendidos sem custo: escolher os produtos sem mudar o SKU (PUT /api/produtos/composicoes) ----
+let semCustoLido = false;
+const CANAL_NOME = { ml: 'Mercado Livre', shopee: 'Shopee', amazon: 'Amazon', leroy: 'Leroy Merlin', magalu: 'Magalu' };
+const textoProdutos = (c) => (c?.produtos || []).map((p) => p.sku).join(' + ');
+const realC = (v) => v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// editor: uma caixa por produto (com a lista da tabela) e "+ produto"
+function editorProdutos(inicial, aoSalvar, rotuloBotao = 'Vincular'){
+  const box = el('div', 'comp');
+  const caixas = [];
+  const mais = el('button', 'bt', '+ produto'); mais.type = 'button';
+  const ok = el('button', 'bt primario', rotuloBotao); ok.type = 'button';
+  box.append(mais, ok);
+  const nova = (v = '') => { const i = el('input'); i.setAttribute('list', 'listaProdutosTroca'); i.placeholder = 'DQ-005'; i.value = v; i.setAttribute('aria-label', 'Produto do anúncio');
+    caixas.push(i); box.insertBefore(i, mais); return i; };
+  mais.onclick = () => nova().focus();
+  (inicial.length ? inicial : ['', '']).forEach((v) => nova(v));
+  ok.onclick = async () => {
+    const lista = caixas.map((i) => i.value.trim().toUpperCase()).filter(Boolean);
+    if(!lista.length) return aviso('Informe pelo menos um produto (ex.: DQ-005).');
+    ok.disabled = true;
+    try{ await aoSalvar(lista); }catch(e){ aviso(e.message); }
+    ok.disabled = false;
+  };
+  return box;
+}
+const gravarComposicao = (sku, lista) => enviar('PUT', '/api/produtos/composicoes', { sku, produtos: lista });
+async function carregarSemCusto(){
+  const box = $('semCusto');
+  let r; try{ r = await api('/api/produtos/sem-custo'); }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'sub', 'Não foi possível ler: ' + e.message)); return; }
+  box.innerHTML = '';
+  for(const e of r.erros || []) box.appendChild(el('p', 'alerta-troca', e));
+  if(!r.itens.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio vendido sem custo nos últimos 30 dias.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Conta', 'Anúncio', 'Vendas', 'Falta na tabela', 'Produtos do anúncio']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const i of r.itens){
+    const tr = el('tr');
+    const c1 = el('td'); c1.append(el('b', null, CANAL_NOME[i.canal] || i.canal), el('br'), el('span', 'sub', i.loja || ''));
+    const c2 = el('td');
+    if(i.canal === 'ml' && i.item_id){ const a = el('a', null, i.titulo || i.item_id); a.href = 'https://produto.mercadolivre.com.br/' + i.item_id.replace(/^MLB/, 'MLB-'); a.target = '_blank'; a.rel = 'noopener'; c2.appendChild(a); }
+    else c2.appendChild(el('span', null, i.titulo || i.sku));
+    c2.append(el('br'), el('span', 'chip cinza', i.sku ? 'SKU ' + i.sku : 'sem SKU · ' + i.item_id));
+    const c5 = el('td');
+    const feito = el('div', 'ok-comp');
+    if(i.composicao) feito.textContent = 'No painel: ' + textoProdutos(i.composicao);
+    c5.append(editorProdutos((i.composicao?.produtos || []).map((p) => p.sku), async (lista) => {
+      const x = await gravarComposicao(i.chave, lista);
+      const sem = (x.composicao?.produtos || []).filter((p) => p.custo == null).map((p) => p.sku);
+      feito.textContent = 'Vinculado: ' + textoProdutos(x.composicao) + (sem.length ? ' · ainda sem custo: ' + sem.join(', ') : ' · o custo passa a ser calculado');
+      feito.style.color = sem.length ? '#7a5600' : '';
+      carregarComposicoes();
+    }), feito);
+    tr.append(c1, c2, el('td', 'num', numero(i.vendas)), el('td', 'sku', (i.faltando || []).join(', ') || '—'), c5);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); box.appendChild(rol);
+}
+async function carregarComposicoes(){
+  let r; try{ r = await api('/api/produtos/composicoes'); }catch{ return; }
+  $('compN').textContent = numero(r.composicoes.length);
+  const box = $('compLista'); box.innerHTML = '';
+  if(!r.composicoes.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio com produtos escolhidos no painel.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['SKU no marketplace', 'Produtos no painel', 'Custo', '']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const c of r.composicoes){
+    const tr = el('tr');
+    const custo = c.produtos.every((p) => p.custo != null) ? realC(c.produtos.reduce((s, p) => s + p.custo, 0)) : 'falta custo';
+    const rem = el('button', 'bt', 'Voltar ao SKU'); rem.type = 'button'; rem.title = 'Apaga a escolha: o painel volta a ler os produtos pelo SKU';
+    rem.onclick = async () => {
+      if(!confirm('Apagar os produtos escolhidos para ' + c.sku + '? O painel volta a ler os produtos pelo SKU do anúncio.')) return;
+      try{ await gravarComposicao(c.sku, []); aviso('Pronto: ' + c.sku + ' volta a usar o SKU.', 'ok'); carregarComposicoes(); }catch(e){ aviso(e.message); }
+    };
+    const edt = editorProdutos(c.produtos.map((p) => p.sku), async (lista) => { await gravarComposicao(c.sku, lista); aviso('Produtos de ' + c.sku + ' salvos.', 'ok'); carregarComposicoes(); }, 'Salvar');
+    const tdEd = el('td'); tdEd.appendChild(edt); const tdRem = el('td'); tdRem.appendChild(rem);
+    tr.append(el('td', 'sku', c.sku), tdEd, el('td', 'num', custo), tdRem);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); box.appendChild(rol);
 }
 
 $('formNovo').onsubmit = async (ev) => {
