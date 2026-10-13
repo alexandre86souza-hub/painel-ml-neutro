@@ -368,6 +368,15 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const mapa = catalogoMapa();
       return { composicoes: [...D.skuVinculos('composicao').keys()].sort().map((sku) => ({ sku, ...descreverComposicao(sku, mapa) })) };
     },
+    // Os produtos que valem hoje para um SKU (a escolha do painel ou o que está escrito no SKU), para o botão
+    // "Produtos" das telas de anúncios de todos os canais (public/composicao.js).
+    'GET /api/produtos/composicao': async (url) => {
+      const sku = String(url.searchParams.get('sku') || '').trim();
+      if (!sku || sku.length > 80) throw erro('SKU inválido.');
+      const mapa = catalogoMapa();
+      const desc = (ns) => ns.map((n) => ({ numero: n, sku: mapa.get(n)?.sku || String(n).padStart(3, '0'), nome: mapa.get(n)?.nome || null, custo: mapa.get(n)?.custo ?? null }));
+      return { sku, escolhida: !!composicaoDe(sku), produtos: desc(componentes(sku)), do_sku: desc(componentes(sku, { cru: true })) };
+    },
     // Escolhe os produtos de um SKU sem mudar o SKU no canal. produtos: ["DQ-005", "BP-408"] (repetir = 2 unidades).
     'PUT /api/produtos/composicoes': async (_u, body) => {
       const sku = String(body?.sku ?? '').trim();

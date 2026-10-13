@@ -604,6 +604,28 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         lido_em: D.configLer('magalu_anuncios_lido_em') };
     },
     // SKU do painel para um anúncio da Magalu que usa outro código. Vazio = apaga o vínculo.
+    // Muda o preço de um SKU na Magalu (escrita: só pela tela, com confirmação; nada no MCP). Ainda sem medição real:
+    // lê o preço atual, manda o MESMO formato de volta (centavos com o normalizer lido) só com o preço novo e CONFERE
+    // lendo de novo — não bateu, devolve erro (a tela para no primeiro que não confirmar).
+    'POST /api/magalu/anuncios/preco': async (_u, body) => {
+      const sku = String(body?.sku ?? '').trim();
+      if (!sku || sku.length > 80) throw erro('Informe o SKU.');
+      const v = Number(String(body?.preco ?? '').replace(',', '.'));
+      if (!Number.isFinite(v) || v <= 0 || v > 1e6) throw erro('Preço inválido.');
+      const caminho = `/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`;
+      const atual = (await mg(caminho)).results?.[0];
+      if (!atual) throw erro('A Magalu não devolveu o preço atual deste SKU.', 404);
+      const norm = n(atual.normalizer) || 100;
+      const novo = Math.round(v * norm);
+      const corpo = { ...atual, price: novo, list_price: Math.max(n(atual.list_price), novo) };
+      delete corpo.sku; delete corpo.updated_at; delete corpo.created_at;
+      await mg(caminho, {}, { metodo: 'PUT', corpo });
+      const conf = (await mg(caminho)).results?.[0];
+      const lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
+      if (lido == null || Math.abs(lido - Math.round(v * 100) / 100) > 0.01) throw erro(`a Magalu aceitou, mas o preço lido de volta é ${lido ?? '—'} (esperado ${v.toFixed(2)}). Confira no portal.`, 502);
+      D.magaluPrecoGravar(sku, lido, n(conf.list_price) / (n(conf.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
+      return { sku, preco: lido, conferido: true };
+    },
     'PUT /api/magalu/sku-vinculo': async (_u, body) => {
       const sku = String(body?.sku ?? '').trim();
       if (!sku || sku.length > 80) throw erro('Informe o SKU da Magalu.');

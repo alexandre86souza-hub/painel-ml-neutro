@@ -219,7 +219,7 @@ function pintarUltimas(campanhas){
   if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum desconto criado na loja.')); return; }
   const faixa = (v) => v?.pct_min == null ? '—' : Math.abs(v.pct_max - v.pct_min) < 0.005 ? pct(v.pct_min) : `${pct(v.pct_min)} a ${pct(v.pct_max)}`;
   const tab = el('table'); const cab = el('tr');
-  for(const h of ['Campanha', 'Período', '% de desconto', 'Vendas', 'Valor total vendido', 'Total em desconto', '']) cab.appendChild(el('th', null, h));
+  for(const h of ['Campanha', 'Período', 'Anúncios', '% de desconto', 'Vendas', 'Valor total vendido', 'Total em desconto', '']) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
   const tot = { un: 0, ped: 0, fat: 0, desc: 0 };
   for(const c of lst){
@@ -230,14 +230,14 @@ function pintarUltimas(campanhas){
     const btI = el('button', 'bt pequeno', 'Anúncios'); btI.type = 'button'; btI.title = 'Ver os anúncios da campanha, os travados (infração) e tirar da campanha'; btI.onclick = () => verItens(c);
     const btC = el('button', 'bt pequeno', 'Clonar'); btC.type = 'button'; btC.title = 'Criar outra campanha igual: você muda nome, datas, % e anúncios antes de criar'; btC.onclick = () => clonar(c, btC);
     const t6 = el('td', 'botoes'); t6.append(bt, btI, btC);
-    tr.append(t0, el('td', null, `${dataHora(c.inicio)} a ${dataHora(c.fim)}`), el('td', null, faixa(v)), t3,
+    tr.append(t0, el('td', null, `${dataHora(c.inicio)} a ${dataHora(c.fim)}`), el('td', null, c.itens != null ? numero(c.itens) : '—'), el('td', null, faixa(v)), t3,
       el('td', 'dinheiro', v ? real(v.faturamento) : '—'), el('td', 'dinheiro', v ? real(v.desconto) : '—'), t6);
     if(!v) tr.title = 'Desconto encerrado há mais de 60 dias: a Shopee não é consultada sobre os itens dele.';
     tb.appendChild(tr);
     if(v){ tot.un += v.unidades; tot.ped += v.pedidos; tot.fat += v.faturamento; tot.desc += v.desconto; }
   }
   const tr = el('tr'); tr.style.fontWeight = '700';
-  tr.append(el('td', null, 'Total'), el('td'), el('td'), el('td', null, `${numero(tot.un)} un. · ${numero(tot.ped)} pedido(s)`), el('td', 'dinheiro', real(tot.fat)), el('td', 'dinheiro', real(tot.desc)), el('td'));
+  tr.append(el('td', null, 'Total'), el('td'), el('td'), el('td'), el('td', null, `${numero(tot.un)} un. · ${numero(tot.ped)} pedido(s)`), el('td', 'dinheiro', real(tot.fat)), el('td', 'dinheiro', real(tot.desc)), el('td'));
   tb.appendChild(tr);
   tab.appendChild(tb); box.appendChild(tab);
 }

@@ -25,6 +25,9 @@ html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag{background:hsla(218
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.destaque{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.voce{background:hsla(214,90%,60%,.14)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .margem-max input{border:1px solid var(--line)}
+/* amazon-devolucoes.html */
+html[data-tema="escuro"][data-pagina="amazon-devolucoes"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="amazon-devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 /* amazon.html */
 html[data-tema="escuro"][data-pagina="amazon"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="amazon"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -318,6 +321,12 @@ html[data-tema="escuro"][data-pagina="inicio"] .r-card:hover{border-color:hsla(2
 html[data-tema="escuro"][data-pagina="inicio"] .r-card b.neg{color:hsl(0,74%,72%)}
 html[data-tema="escuro"][data-pagina="inicio"] .r-card b.pos{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="inicio"] #msg{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
+/* leroy-anuncios.html */
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st.promo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .margem-max input{border:1px solid var(--line)}
 /* leroy.html */
 html[data-tema="escuro"][data-pagina="leroy"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="leroy"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -451,6 +460,10 @@ html[data-tema="escuro"][data-pagina="promocoes"] .ultimas.parado{color:hsl(35,9
 html[data-tema="escuro"][data-pagina="promocoes"] .lucro b.pos{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .lucro b.neg{color:hsl(0,74%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .lucro.sem{color:hsl(35,95%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .dif-chip.cai{background:hsla(0,84%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .dif-chip.sobe{background:hsla(142,51%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .dif-chip.igual{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="promocoes"] .pct-camp{background:hsla(33,90%,60%,.14);color:hsl(26,90%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros input,
 html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros select{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros .pa-num{color:var(--muted)}

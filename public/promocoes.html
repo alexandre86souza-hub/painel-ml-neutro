@@ -122,6 +122,9 @@
   .lucro b.pos{color:#15803d}.lucro b.neg{color:#b91c1c}
   .lucro.sem{color:#9a5b00}
   .lucro .dif{font-weight:600;color:var(--ink)}
+  .dif-chip{display:inline-block;font-weight:700;font-size:12px;padding:1px 8px;border-radius:999px;margin-left:2px}
+  .dif-chip.cai{background:#fde8e8;color:#b91c1c}.dif-chip.sobe{background:#e3f6ea;color:#15803d}.dif-chip.igual{background:#eef1f6;color:#475569}
+  .pct-camp{display:inline-block;font-weight:800;font-size:13px;padding:1px 9px;border-radius:999px;background:#fff1e0;color:#b45309;margin-left:4px}
   .lucro .ml-banca{color:#1d4ed8}
   .carregando-lucro{font-style:italic}
   .form-adesao .lucro{flex-basis:100%;margin:0}
@@ -645,13 +648,13 @@ function linhaItem(it, p, itemId){
   const orig = p.preco_original;
   if(p.preco && orig && p.preco < orig){
     pr.append(el('s', null, real(orig)), document.createTextNode(' → '), el('b', null, real(p.preco)),
-      document.createTextNode(` (−${pct(1 - p.preco / orig, 0)})`));
+      document.createTextNode(' '), el('span', 'pct-camp', `−${pct(1 - p.preco / orig, 1)}`));
   }else if(orig){
     pr.appendChild(document.createTextNode('Preço atual ' + real(orig)));
     // % de desconto que o preço da promoção dá sobre o preço atual
-    const desc = (v) => v && v < orig ? ` (−${pct(1 - v / orig, 1)})` : '';
-    if(p.preco_sugerido){ pr.appendChild(document.createTextNode(' · sugerido ' + real(p.preco_sugerido))); pr.appendChild(el('b', 'pct-desc', desc(p.preco_sugerido))); }
-    if(p.preco_max && p.preco_max !== p.preco_sugerido){ pr.appendChild(document.createTextNode(' · aceita até ' + real(p.preco_max))); pr.appendChild(el('b', 'pct-desc', desc(p.preco_max))); }
+    const desc = (v) => v && v < orig ? `−${pct(1 - v / orig, 1)}` : '';
+    if(p.preco_sugerido){ pr.appendChild(document.createTextNode(' · sugerido ' + real(p.preco_sugerido))); pr.appendChild(el('span', 'pct-camp', desc(p.preco_sugerido))); }
+    if(p.preco_max && p.preco_max !== p.preco_sugerido){ pr.appendChild(document.createTextNode(' · aceita até ' + real(p.preco_max))); pr.appendChild(el('span', 'pct-camp', desc(p.preco_max))); }
   }
   meio.appendChild(pr);
   // Últimos preços pelos quais o anúncio vendeu (da cópia local dos pedidos).
@@ -720,7 +723,10 @@ function pintarLucro(alvo, x, precoOutro){
   if(x.atual?.lucro != null){
     alvo.appendChild(document.createTextNode(` · hoje ${real(x.atual.lucro)} (${pct(x.atual.margem)})`));
     const dif = promo.lucro - x.atual.lucro;
-    if(Math.abs(dif) >= 0.01) alvo.appendChild(el('span', 'dif', ` ${dif < 0 ? '−' : '+'}${real(Math.abs(dif))} por venda`));
+    // comparação com hoje bem clara: a promoção aumenta ou diminui o lucro de cada venda
+    alvo.appendChild(document.createTextNode(' '));
+    alvo.appendChild(Math.abs(dif) < 0.01 ? el('span', 'dif-chip igual', '= mesmo lucro de hoje')
+      : el('span', 'dif-chip ' + (dif < 0 ? 'cai' : 'sobe'), `${dif < 0 ? '▼ diminui' : '▲ aumenta'} o lucro em ${real(Math.abs(dif))} por venda`));
   }
   if(promo.parte_ml > 0) alvo.appendChild(el('span', 'ml-banca', ` · o ML banca ${real(promo.parte_ml)}`));
   alvo.title = `Preço ${real(precoOutro ?? x.preco)} − tarifa ${real(promo.tarifa)} − imposto ${real(promo.imposto)} − frete ${real(x.frete)}`

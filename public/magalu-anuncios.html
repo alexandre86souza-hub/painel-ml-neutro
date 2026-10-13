@@ -49,6 +49,7 @@
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
     <p>Os anúncios da sua loja na Magalu, com preço, estoque, vendas de 30 dias e o lucro estimado em cada um. Quando o anúncio usa um código da Magalu no lugar do seu SKU, digite o <b>SKU do painel</b> (ex.: KIT-630): ele passa a dar o custo do produto aqui e nos Pedidos.</p>
+    <button type="button" class="bt" id="btMargemMassa" title="Novo preço dos anúncios do filtro pela margem desejada">Preço pela margem</button>
     <button type="button" class="bt" id="btReler">Atualizar da Magalu</button>
   </div>
   <div class="cartoes" id="cartoes"><p class="carregando">Carregando…</p></div>
@@ -74,6 +75,8 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/composicao.js?v=1"></script>
+<script src="/margem-massa.js?v=1"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 function cartao(rot, valor, nota){ const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); return c; }
@@ -114,6 +117,35 @@ function pintar(){
 const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
 $('fMargemMax').oninput = () => { if(filtro === 'baixa' && dados){ mostrar = 200; pintarLista(); } };
 
+// Preço pela margem em massa: os anúncios do filtro da tela. Preço = (custo + embalagem) ÷ (1 − taxa média − imposto − margem).
+function precoPelaMargem(a, m){
+  if(a.custo_unit == null || a.taxa_pct == null) return null;
+  const sobra = 1 - a.taxa_pct - (dados.imposto_pct || 0) / 100 - m;
+  return sobra > 0.01 ? Math.ceil((a.custo_unit + (dados.embalagem_pedido || 0)) / sobra * 100) / 100 : null;
+}
+let naTela = [];
+$('btMargemMassa').onclick = () => {
+  if(!naTela.length) return aviso('Nenhum anúncio na tela.');
+  MargemMassa.abrir({ canal: 'Magalu', itens: naTela.slice(0, 500).filter((a) => a.preco != null).map((a) => ({ chave: a.sku, titulo: a.titulo, sub: a.sku + (a.sku_painel ? ' · ' + a.sku_painel : ''),
+      preco: a.preco, precoPara: (m) => precoPelaMargem(a, m), margemEm: (p) => { const lu = lucroDe({ ...a, preco: p }); return lu == null || !p ? null : lu / p; }, a })),
+    nota: 'A Magalu confere cada preço lendo de novo; se o primeiro não confirmar, o painel para.',
+    aplicar: async (lista, andamento) => {
+      const out = [];
+      for(const [k, x] of lista.entries()){
+        try{
+          const r = await api('/api/magalu/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku: x.item.a.sku, preco: x.preco }) });
+          x.item.a.preco = r.preco; out.push({ chave: x.item.chave, ok: true, texto: 'preço mudado (conferido)' });
+        }catch(e){
+          out.push({ chave: x.item.chave, ok: false, erro: e.message });
+          if(k === 0){ for(const y of lista.slice(1)) out.push({ chave: y.item.chave, ok: false, erro: 'não tentado: o primeiro não confirmou' }); break; }
+        }
+        andamento(k + 1);
+      }
+      pintarLista();
+      return out;
+    } });
+};
+
 function pintarLista(){
   const q = $('busca').value.trim().toLowerCase();
   const itens = dados.itens.filter((x) => {
@@ -126,6 +158,7 @@ function pintarLista(){
     if(q && ![x.titulo, x.sku, x.sku_painel].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
+  naTela = itens;
   const box = $('lista'); box.innerHTML = '';
   if(!itens.length){ box.appendChild(el('p', 'vazio', dados.itens.length ? 'Nenhum anúncio com esse filtro.' : 'Lendo os anúncios da Magalu…')); $('btMais').hidden = true; return; }
   const t = el('table'); const cab = el('tr');
@@ -148,6 +181,7 @@ function pintarLista(){
       }catch(e){ aviso(e.message); inp.disabled = false; }
     });
     box2.appendChild(inp); vinc.appendChild(box2);
+    vinc.appendChild(Composicao.botao(a.sku_painel || a.sku, { titulo: a.titulo, aoSalvar: () => setTimeout(() => carregar(false), 1300) }));
     const custo = el('td', 'dinheiro');
     if(a.custo_unit == null) custo.appendChild(el('span', 'chip amarelo', a.faltando?.length ? 'sem custo: ' + a.faltando.join(', ') : 'sem custo'));
     else { custo.textContent = real(a.custo_unit); if(a.componentes.length > 1) custo.title = a.componentes.map((c) => `${c.sku}: ${real(c.custo)}`).join('\n'); }

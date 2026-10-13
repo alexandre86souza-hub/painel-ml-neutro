@@ -424,6 +424,53 @@ function criar({ D, janela }) {
       const v = CC.validarDesconto(body, new Map([...mapa].map(([k, o]) => [k, o.cheio])));
       return importarPrecos(v.itens.map((i) => ({ ...i, inicio: v.inicio, fim: v.fim })));
     },
+    // Anúncios (ofertas) da Leroy com custo, vendas de 30 dias e a taxa média de cada SKU (tela leroy-anuncios.html):
+    // taxa = (comissão + reembolsos + frete líquido) ÷ faturamento das vendas de 90 dias do SKU (sem venda: a média da
+    // loja). Usada no lucro estimado e no "Preço pela margem".
+    'GET /api/leroy/anuncios': async (url) => {
+      const lista = await ofertas(url.searchParams.get('recarregar') === '1');
+      const agora = Date.now();
+      const r = await linhas(new Date(agora - 90 * 864e5).toISOString(), new Date(agora + 60e3).toISOString());
+      const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
+      const trocas = D.skuTrocas('leroy');
+      const porSku = new Map(); const loja = { fat: 0, taxa: 0 };
+      const d30 = new Date(agora - 30 * 864e5).toISOString();
+      for (const l of r.linhas) {
+        if (!l.valida || !l.sku) continue;
+        const x = porSku.get(l.sku) || { fat: 0, taxa: 0, v30: 0, foto: null };
+        x.foto ||= l.foto;
+        if (l.data >= d30) x.v30 += n(l.quantidade);
+        if (l.frete != null) { x.fat += n(l.faturamento); x.taxa += n(l.tarifa) + n(l.frete); loja.fat += n(l.faturamento); loja.taxa += n(l.tarifa) + n(l.frete); }
+        porSku.set(l.sku, x);
+      }
+      const media = loja.fat > 0 ? loja.taxa / loja.fat : null;
+      const e = empresa();
+      return { imposto_pct: r.impostoPct, embalagem_pedido: e.embalagem_padrao || 0, erro_leitura: r.erroLeitura, taxa_media: media,
+        itens: lista.map((o) => {
+          const cs = C.custoDoSku(C.skuNaData(trocas, o.sku), mapa);
+          const x = porSku.get(o.sku);
+          const ativo = o.desconto && (!o.desconto.fim || Date.parse(o.desconto.fim) > agora) && (!o.desconto.inicio || Date.parse(o.desconto.inicio) <= agora);
+          return { ...o, foto: x?.foto || null, preco: ativo ? o.desconto.preco : o.cheio, em_desconto: !!ativo, vendas_30: x?.v30 || 0,
+            custo_unit: cs.custo, faltando: cs.faltando, taxa_pct: x?.fat > 0 ? x.taxa / x.fat : media, taxa_do_produto: !!(x?.fat > 0) };
+        }).sort((a, b) => (b.vendas_30 - a.vendas_30) || String(a.titulo).localeCompare(String(b.titulo))) };
+    },
+    // Muda o preço cheio de várias ofertas num PRI01 só (1 por minuto). O desconto que estiver valendo é mandado de
+    // novo junto (o PRI01 apaga o que não vai); desconto que ficaria maior ou igual ao preço novo cai.
+    'POST /api/leroy/anuncios/preco': async (_u, body) => {
+      const itens = (Array.isArray(body?.itens) ? body.itens : []).map((i) => ({ sku: String(i?.sku ?? '').trim(), preco: r2(Number(String(i?.preco ?? '').replace(',', '.'))) }));
+      if (!itens.length || itens.length > 200) throw erro('Escolha de 1 a 200 ofertas.');
+      for (const i of itens) if (!i.sku || !(i.preco > 0) || i.preco > 1e6) throw erro(`Preço inválido em ${i.sku || 'oferta'}.`);
+      const mapa = await ofertasEditaveis(itens.map((i) => i.sku));
+      const agora = Date.now();
+      const caidos = [];
+      const r = await importarPrecos(itens.map((i) => {
+        const d = mapa.get(i.sku).desconto;
+        const vale = d && (!d.fim || Date.parse(d.fim) > agora);
+        if (vale && d.preco >= i.preco) caidos.push(i.sku);
+        return vale && d.preco < i.preco ? { sku: i.sku, cheio: i.preco, preco: d.preco, inicio: d.inicio, fim: d.fim } : { sku: i.sku, cheio: i.preco, preco: null };
+      }));
+      return { ...r, descontos_caidos: caidos };
+    },
     // Encerra o desconto (manda só o preço cheio).
     'POST /api/leroy/campanhas/encerrar': async (_u, body) => {
       const skus = [...new Set((Array.isArray(body?.skus) ? body.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];

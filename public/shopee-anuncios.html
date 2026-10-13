@@ -46,6 +46,7 @@
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
     <p id="topoTxt">Os anúncios da loja na Shopee com preço, estoque, vendas e a margem no preço atual. Para mudar o preço, digite o novo valor ou a margem desejada (%): o lucro estimado aparece antes de salvar.</p>
+    <button type="button" class="bt" id="btMargemMassa" title="Novo preço dos anúncios do filtro pela margem desejada">Preço pela margem</button>
     <button type="button" class="bt" id="btAtualizar">Atualizar da Shopee</button>
   </div>
   <section class="bloco">
@@ -68,6 +69,8 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/composicao.js?v=1"></script>
+<script src="/margem-massa.js?v=1"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
 let dados = null, filtro = '';
@@ -102,6 +105,21 @@ $('btAtualizar').onclick = () => carregar(true);
 const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
 $('fMargemMax').oninput = () => { if(filtro === 'baixa') pintar(); };
 
+// Preço pela margem em massa: os anúncios do filtro da tela (até 500), com a mesma conta da coluna de lucro.
+let naTela = [];
+$('btMargemMassa').onclick = () => {
+  if(!naTela.length) return aviso('Nenhum anúncio na tela.');
+  MargemMassa.abrir({ canal: 'Shopee', itens: naTela.slice(0, 500).map((i) => ({ chave: `${i.item_id}:${i.model_id || 0}`, titulo: i.titulo + (i.variacao ? ` — ${i.variacao}` : ''),
+      sub: `${i.sku || 'sem SKU'} · nº ${i.item_id}`, preco: i.preco_original ?? i.preco, precoPara: (m) => precoPelaMargem(i, m), margemEm: (p) => estimar(i, p)?.margem ?? null, i })),
+    nota: 'Muda o preço original (o da promoção, se houver, continua até ela acabar).',
+    aplicar: (lista, andamento) => MargemMassa.umPorUm(lista, async (x) => {
+      const r = await api('/api/shopee/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ loja: LOJA, item_id: x.item.i.item_id, model_id: x.item.i.model_id, preco: x.preco }) });
+      x.item.i.preco_original = r.preco_original; if(r.preco_atual != null) x.item.i.preco = r.preco_atual;
+      return r.conferido ? 'preço mudado (conferido)' : 'a Shopee aceitou';
+    }, andamento).then((res) => { pintar(); return res; }) });
+};
+
 function pintar(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
@@ -117,6 +135,7 @@ function pintar(){
   });
   $('subLista').textContent = (dados.lendo ? 'Lendo os anúncios na Shopee (a primeira vez leva cerca de 1 minuto); a tela se atualiza sozinha. ' : '')
     + `${numero(itens.length)} de ${numero(dados.itens.length)} anúncio(s). Lucro e margem estimados com o que a Shopee tira em média de cada produto (repasses dos últimos 90 dias) e os impostos de ${String(dados.imposto_pct).replace('.', ',')}%.`;
+  naTela = itens;
   if(!itens.length){ box.appendChild(el('p', 'vazio', dados.lendo ? 'Carregando…' : 'Nada por aqui.')); return; }
   const t = el('table'); const cab = el('tr');
   for(const h of ['Produto', 'Estoque', 'Vendas 30d', 'Preço', 'Custo', 'Lucro · margem no preço atual', 'Novo preço']) cab.appendChild(el('th', null, h));
@@ -130,6 +149,7 @@ function pintar(){
     else if(i.atacado_ou_campanha) st.appendChild(el('span', 'chip-st', 'atacado'));
     const prod = celulaProduto(i.foto, i.titulo + (i.variacao ? ` — ${i.variacao}` : ''), `${i.sku || 'sem SKU'} · nº ${i.item_id}`, i.link);
     prod.querySelector('.prod > div').appendChild(st);
+    prod.querySelector('.prod > div').appendChild(Composicao.botao(i.sku, { titulo: i.titulo, aoSalvar: () => setTimeout(() => carregar(), 1300) }));
     const e = estimar(i, i.preco);
     const precoTd = el('td', null, real(i.preco));
     if(i.preco_original != null && i.preco != null && Math.abs(i.preco_original - i.preco) >= 0.01) precoTd.appendChild(el('span', 'pequeno', `de ${real(i.preco_original)}`));

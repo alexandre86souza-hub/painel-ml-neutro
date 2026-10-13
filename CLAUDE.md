@@ -320,8 +320,16 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   comprador: não é guardada (só `comandas.etiqueta_em`) e nada vai ao MCP. Magalu: `POST /seller/v1/logistics/shipping-labels` (deliveries,
   label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).
   Amazon: a etiqueta do Easy Ship pede o papel restrito Direct-to-Consumer Shipping + RDT — contra o compromisso de não ler dado de comprador; fica no Seller Central.
-- Armazenagem do Full: ainda sem a forma real do faturamento do ML; `GET /api/full/armazenagem/diagnostico` (botão na tela Full)
-  mostra só a forma do billing e das operações de estoque de um anúncio. Construir a conta a partir dessa leitura.
+- Armazenagem do Full (`GET /api/full/armazenagem`, tela Full): medido em 13/10/2026, o billing traz "Tarifa pelo serviço de
+  armazenamento Full" (CFWA) UMA por dia para a conta toda, SEM produto (items_info null): só dá o total pago (por mês, 30 dias).
+  Por produto (quem paga / perto de pagar) falta a forma das operações (`/stock/fulfillment/operations/search`, máx. 60 dias por
+  consulta): `GET /api/full/armazenagem/diagnostico` (botão na tela Full) mostra a forma; construir a idade das unidades com ela.
+- Botões comuns das telas de anúncios de todos os canais: `public/composicao.js` ("Produtos": composição sem mudar o SKU,
+  `GET /api/produtos/composicao?sku=`) e `public/margem-massa.js` ("Preço pela margem" nos anúncios do filtro). Shopee update_price,
+  Amazon `/api/amazon/anuncios/preco`, Magalu `POST /api/magalu/anuncios/preco` (PUT do mesmo formato lido e CONFERE lendo de novo;
+  a tela para no 1º que não confirmar — ainda sem medição real), Leroy `leroy-anuncios.html` + `POST /api/leroy/anuncios/preco`
+  (um PRI01 com o desconto que estiver valendo). Devoluções da Amazon (`amazon-devolucoes.html`, `GET /api/amazon/devolucoes`,
+  `devolucoesDe`): reembolsos dos lançamentos + a venda do mesmo pedido; custo = tarifas e frete da venda + do reembolso.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,

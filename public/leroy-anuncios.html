@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anúncios Leroy Merlin</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .chip-st{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;background:#eef1f6;color:#475569;margin-right:4px}
+  .chip-st.ok{background:#e6f4ea;color:#0b6b33}
+  .chip-st.promo{background:#fff4d6;color:#7a5600}
+  td.est{white-space:nowrap}
+  .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-left:6px}
+  .margem-max input{width:60px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=36"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Anúncios — Leroy Merlin</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="topoTxt">As ofertas da loja na Leroy Merlin com preço, estoque, vendas e a margem no preço atual. "Produtos" escolhe os produtos de cada oferta sem mudar o SKU; "Preço pela margem" muda o preço das ofertas do filtro.</p>
+    <button type="button" class="bt" id="btMargemMassa" title="Novo preço das ofertas do filtro pela margem desejada">Preço pela margem</button>
+    <button type="button" class="bt" id="btAtualizar">Atualizar da Leroy</button>
+  </div>
+  <section class="bloco">
+    <div class="filtros">
+      <input id="busca" type="search" placeholder="Buscar por produto ou SKU" aria-label="Buscar oferta">
+      <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
+        <button type="button" data-f="" aria-pressed="true">Todos</button>
+        <button type="button" data-f="venderam">Venderam em 30 dias</button>
+        <button type="button" data-f="promocao">Em promoção</button>
+        <button type="button" data-f="pausados">Pausados</button>
+        <button type="button" data-f="semcusto">Sem custo</button>
+        <button type="button" data-f="baixa">Margem abaixo de</button>
+      </div>
+      <label class="margem-max">abaixo de <input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
+    </div>
+    <p class="sub" id="subLista"></p>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando as ofertas da Leroy…</p></div>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=8"></script>
+<script src="/composicao.js?v=1"></script>
+<script src="/margem-massa.js?v=1"></script>
+<script>
+// Ofertas da Leroy (GET /api/leroy/anuncios). Preço muda pelo PRI01 (uma importação por minuto, todas as ofertas
+// escolhidas de uma vez); o desconto que estiver valendo continua. Nada desta tela vai para o MCP.
+let dados = null, filtro = '', naTela = [];
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+// lucro estimado num preço: taxa média do SKU na Leroy (comissão, reembolsos e frete líquido), custo, embalagem e imposto
+function estimar(i, preco){
+  if(preco == null || i.custo_unit == null || i.taxa_pct == null) return null;
+  const lucro = preco - preco * i.taxa_pct - i.custo_unit - (dados.embalagem_pedido || 0) - preco * (dados.imposto_pct || 0) / 100;
+  return { lucro, margem: preco > 0 ? lucro / preco : null };
+}
+function precoPelaMargem(i, m){
+  if(i.custo_unit == null || i.taxa_pct == null) return null;
+  const sobra = 1 - i.taxa_pct - (dados.imposto_pct || 0) / 100 - m;
+  return sobra > 0.01 ? Math.ceil((i.custo_unit + (dados.embalagem_pedido || 0)) / sobra * 100) / 100 : null;
+}
+const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
+const txtMargem = (e) => (e ? `${real(e.lucro)} · ${pct(e.margem)}` : '—');
+
+$('segFiltro').onclick = (ev) => {
+  const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f;
+  for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  pintar();
+};
+$('busca').oninput = () => pintar();
+$('fMargemMax').oninput = () => { if(filtro === 'baixa') pintar(); };
+$('btAtualizar').onclick = () => carregar(true);
+
+function pintar(){
+  const box = $('lista'); box.innerHTML = '';
+  if(!dados) return;
+  const q = $('busca').value.trim().toLowerCase();
+  const itens = dados.itens.filter((i) => {
+    const e = estimar(i, i.preco);
+    if(filtro === 'venderam' && !i.vendas_30) return false;
+    if(filtro === 'promocao' && !i.em_desconto) return false;
+    if(filtro === 'pausados' && i.ativa) return false;
+    if(filtro === 'semcusto' && i.custo_unit != null) return false;
+    if(filtro === 'baixa' && !(e && e.margem < margemMax())) return false;
+    return !q || [i.titulo, i.sku].some((t) => (t || '').toLowerCase().includes(q));
+  });
+  naTela = itens;
+  $('subLista').textContent = `${numero(itens.length)} de ${numero(dados.itens.length)} oferta(s). Lucro e margem estimados com o que a Leroy tira em média de cada produto (vendas dos últimos 90 dias; sem venda, a média da loja) e os impostos de ${String(dados.imposto_pct).replace('.', ',')}%.`;
+  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
+  const t = el('table'); const cab = el('tr');
+  for(const h of ['Produto', 'Estoque', 'Vendas 30d', 'Preço', 'Custo', 'Lucro · margem no preço atual']) cab.appendChild(el('th', null, h));
+  const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+  const tb = el('tbody');
+  for(const i of itens.slice(0, 500)){
+    const tr = el('tr');
+    const st = el('span');
+    st.appendChild(el('span', 'chip-st' + (i.ativa ? ' ok' : ''), i.ativa ? 'ativa' : 'inativa'));
+    if(i.em_desconto) st.appendChild(el('span', 'chip-st promo', 'em promoção'));
+    if(i.complexo) st.appendChild(el('span', 'chip-st', 'preço por canal: muda no portal'));
+    const prod = celulaProduto(i.foto, i.titulo, i.sku, null);
+    prod.querySelector('.prod > div').append(st, Composicao.botao(i.sku, { titulo: i.titulo, aoSalvar: () => setTimeout(() => carregar(), 1300) }));
+    const e = estimar(i, i.preco);
+    const precoTd = el('td', null, real(i.preco));
+    if(i.em_desconto) precoTd.appendChild(el('span', 'pequeno', `de ${real(i.cheio)}`));
+    tr.append(prod, el('td', 'est', i.estoque == null ? '—' : numero(i.estoque)), el('td', null, numero(i.vendas_30)), precoTd,
+      el('td', null, i.custo_unit == null ? 'sem custo' : real(i.custo_unit)),
+      el('td', e == null ? null : e.lucro < 0 ? 'neg' : 'pos', txtMargem(e) + (i.taxa_do_produto ? '' : (i.taxa_pct != null ? ' (taxa média da loja)' : ''))));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); box.appendChild(t);
+  if(itens.length > 500) box.appendChild(el('p', 'sub', `Mostrando 500 de ${numero(itens.length)}. Use a busca.`));
+}
+
+// Preço pela margem: muda o preço CHEIO (o desconto que estiver valendo continua) num PRI01 só, até 200 ofertas.
+$('btMargemMassa').onclick = () => {
+  if(!naTela.length) return aviso('Nenhuma oferta na tela.');
+  MargemMassa.abrir({ canal: 'Leroy Merlin', itens: naTela.slice(0, 500).filter((i) => !i.complexo).map((i) => ({ chave: i.sku, titulo: i.titulo, sub: i.sku + (i.em_desconto ? ' · em promoção' : ''),
+      preco: i.cheio, precoPara: (m) => precoPelaMargem(i, m), margemEm: (p) => estimar(i, p)?.margem ?? null, i })),
+    nota: 'Muda o preço cheio; o desconto que estiver valendo continua. A Leroy aceita uma mudança de preços por minuto (até 200 ofertas de uma vez) e leva alguns minutos para aplicar.',
+    aplicar: async (lista, andamento) => {
+      const out = [];
+      for(let k = 0; k < lista.length; k += 200){
+        const lote = lista.slice(k, k + 200);
+        if(k) await new Promise((ok) => setTimeout(ok, 62000));   // 1 importação por minuto
+        try{
+          const r = await api('/api/leroy/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ itens: lote.map((x) => ({ sku: x.item.i.sku, preco: x.preco })) }) });
+          for(const x of lote) out.push({ chave: x.item.chave, ok: true, texto: 'enviado à Leroy' + ((r.descontos_caidos || []).includes(x.item.i.sku) ? ' (o desconto caiu: ficaria maior que o preço)' : '') });
+        }catch(e){ for(const x of lote) out.push({ chave: x.item.chave, ok: false, erro: e.message }); }
+        andamento(Math.min(k + 200, lista.length));
+      }
+      aviso('Preços enviados à Leroy. Ela aplica em alguns minutos; clique em "Atualizar da Leroy" depois para conferir.', 'ok');
+      return out;
+    } });
+};
+
+async function carregar(recarregar){
+  try{
+    dados = await api('/api/leroy/anuncios' + (recarregar ? '?recarregar=1' : ''));
+    aviso(dados.erro_leitura ? `Não consegui ler as novidades da Leroy agora (${dados.erro_leitura}). Os números são da última leitura.` : '');
+    pintar();
+  }catch(e){ aviso(e.message); $('lista').innerHTML = ''; }
+}
+carregar();
+</script>
+<script src="/sino.js?v=4" defer></script>
+</body>
+</html>

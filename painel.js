@@ -385,11 +385,49 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
 
   const dia = (url, padrao, ok) => { const d = Number(url.searchParams.get('dias')) || padrao; return ok.includes(d) ? d : padrao; };
 
+  const cacheArmaz = new Map();
   const rotas = {
     'GET /api/performance': async (url) => performance(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
     'GET /api/performance/logistica': async (url) => logistica(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
     'GET /api/abc': async (url) => abc(contaOuErro(), dia(url, 30, [15, 30, 60, 90, 150])),
     'GET /api/full': async (url) => { if (url.searchParams.get('recarregar')) cacheFull = null; return full(contaOuErro()); },
+    // Quanto a conta já pagou de armazenagem do Full. Medido em 13/10/2026: o faturamento do ML traz a cobrança
+    // "Tarifa pelo serviço de armazenamento Full" (detail_sub_type CFWA) UMA POR DIA para a conta toda, sem o produto
+    // (items_info null). Soma por mês dos últimos períodos; guardado 6 h.
+    'GET /api/full/armazenagem': async (url) => {
+      const conta = contaOuErro();
+      const chaveCache = `armaz:${conta.ml_user_id}`;
+      const c = cacheArmaz.get(chaveCache);
+      if (c && !url.searchParams.get('recarregar') && Date.now() - c.em < 6 * 3600e3) return c.v;
+      const per = await ml('/billing/integration/monthly/periods?group=ML&document_type=BILL&offset=0&limit=6');
+      const dias = new Map(), vistos = new Set();   // detail_id: a mesma cobrança não conta duas vezes
+      for (const p of per.results || []) {
+        for (let off = 0; off < 3000; off += 150) {
+          const r = await ml(`/billing/integration/periods/key/${p.key}/group/ML/details?document_type=BILL&offset=${off}&limit=150`);
+          for (const l of r.results || []) {
+            const ci = l.charge_info || {};
+            if (ci.detail_sub_type !== 'CFWA' && !/armazenamento full/i.test(ci.transaction_detail || '')) continue;
+            if (ci.detail_id != null) { if (vistos.has(ci.detail_id)) continue; vistos.add(ci.detail_id); }
+            const dia = String(ci.creation_date_time || '').slice(0, 10);
+            if (!dia) continue;
+            const v = (ci.detail_type === 'BONUS' || ci.detail_type === 'CREDIT' ? -1 : 1) * (Number(ci.detail_amount) || 0);
+            dias.set(dia, (dias.get(dia) || 0) + v);
+          }
+          if ((r.results || []).length < 150) break;
+        }
+      }
+      const lista = [...dias.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dia, valor]) => ({ dia, valor: r2(valor) }));
+      const meses = new Map();
+      for (const d of lista) { const m = d.dia.slice(0, 7); const x = meses.get(m) || { mes: m, valor: 0, dias: 0 }; x.valor += d.valor; x.dias++; meses.set(m, x); }
+      const desde = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+      const soma = (de) => r2(lista.filter((d) => d.dia >= de).reduce((a, d) => a + d.valor, 0));
+      const v = { total: r2(lista.reduce((a, d) => a + d.valor, 0)), ultimos_30: soma(desde(30)), ultimos_7: soma(desde(7)),
+        media_dia_30: r2(soma(desde(30)) / 30), primeiro_dia: lista[0]?.dia || null, ultimo_dia: lista.at(-1)?.dia || null,
+        por_mes: [...meses.values()].map((x) => ({ ...x, valor: r2(x.valor) })).reverse(), ultimos_dias: lista.slice(-30).reverse(),
+        nota: 'O Mercado Livre cobra a armazenagem do Full uma vez por dia para a conta toda, sem dizer o produto.' };
+      cacheArmaz.set(chaveCache, { em: Date.now(), v });
+      return v;
+    },
     // Armazenagem do Full (quanto já pagou e o que está perto de pagar): ainda sem a forma real das respostas
     // do ML. Esta leitura mostra só a FORMA (campos e um exemplo curto de cada, sem dado de comprador) do
     // faturamento (billing) e das operações de estoque de um anúncio do Full, para construir a conta certa.
@@ -431,8 +469,11 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
         saida.push({ rotulo: 'anúncio do Full usado', ok: true, forma: { id: umItem.id, inventory_id: inv, user_product_id: it?.user_product_id || null, estoque_full: umItem.estoque_full } });
         if (inv) {
           saida.push(await tentar('estoque no Full', `/inventories/${inv}/stock/fulfillment`));
-          const de = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10), ate = new Date().toISOString().slice(0, 10);
-          saida.push(await tentar('operações de estoque (120 dias)', `/stock/fulfillment/operations/search?seller_id=${conta.ml_user_id}&inventory_id=${inv}&date_from=${de}&date_to=${ate}&limit=50`));
+          // o ML aceita no máximo 60 dias por consulta: as duas últimas janelas de 59 dias
+          for (const [rot, a, b] of [['operações de estoque (últimos 59 dias)', 59, 0], ['operações de estoque (59 dias antes)', 118, 59]]) {
+            const de = new Date(Date.now() - a * 864e5).toISOString().slice(0, 10), ate = new Date(Date.now() - b * 864e5).toISOString().slice(0, 10);
+            saida.push(await tentar(rot, `/stock/fulfillment/operations/search?seller_id=${conta.ml_user_id}&inventory_id=${inv}&date_from=${de}&date_to=${ate}&limit=50`));
+          }
         }
       }
       for (const s of saida) delete s._r;

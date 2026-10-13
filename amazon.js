@@ -213,6 +213,34 @@ function contaDoLancamento(l, ctx) {
     imposto: x(imposto), lucro: x(lucro), margem: lucro != null && l.receita > 0 ? lucro / l.receita : null };
 }
 
+// Devoluções da Amazon pelos lançamentos financeiros (RefundEventList): um reembolso por pedido + SKU, com a venda
+// original do mesmo pedido. Custo da devolução = o que a Amazon cobrou e NÃO devolveu: tarifas e frete da venda +
+// tarifas e frete do reembolso (a taxa de administração do reembolso fica; a comissão volta quase toda). O valor
+// devolvido ao cliente sai do faturamento (não é custo). Sem RDT: nada do comprador. Função pura: testada.
+function devolucoesDe(lancs) {
+  const vendas = new Map(), reembolsos = new Map();
+  const k = (l) => `${l.pedido || ''}|${l.sku || ''}`;
+  for (const l of lancs) {
+    if (!l.pedido) continue;
+    const m = l.tipo === 'venda' ? vendas : l.tipo === 'reembolso' ? reembolsos : null;
+    if (!m) continue;
+    const x = m.get(k(l)) || { pedido: l.pedido, sku: l.sku, canal: l.canal, data: l.data, quantidade: 0, receita: 0, tarifa: 0, frete: 0 };
+    x.quantidade += l.quantidade || 0; x.receita += l.receita || 0; x.tarifa += l.tarifa || 0; x.frete += l.frete || 0;
+    if (l.data > x.data && m === reembolsos) x.data = l.data;
+    if (l.data < x.data && m === vendas) x.data = l.data;
+    m.set(k(l), x);
+  }
+  return [...reembolsos.values()].map((d) => {
+    const v = vendas.get(k(d)) || null;
+    const devolvido = r2(-d.receita);
+    const custo = r2((v ? v.tarifa + v.frete : 0) + d.tarifa + d.frete);
+    return { pedido: d.pedido, sku: d.sku, canal: d.canal || v?.canal || null, data: d.data, data_venda: v?.data || null,
+      quantidade: d.quantidade || v?.quantidade || 0, valor_venda: v ? r2(v.receita) : null, devolvido,
+      parcial: !!v && devolvido < v.receita - 0.01, tarifas_venda: v ? r2(v.tarifa) : null, frete_venda: v ? r2(v.frete) : null,
+      tarifas_reembolso: r2(d.tarifa), frete_reembolso: r2(d.frete), custo, venda_encontrada: !!v };
+  }).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+}
+
 // Resumo no mesmo formato das contas do Mercado Livre (tela "Todas as contas"). Pedidos e
 // unidades contam só as vendas. Função pura: testada.
 function resumoAmazon(linhas) {
@@ -1206,6 +1234,37 @@ function criar({ D, janela }) {
   Object.assign(rotas, {
     // Vendas e lucro do período (tela Amazon e a linha da Amazon em "Todas as contas").
     // Nunca exposta ao MCP: dados da Amazon não vão a terceiros.
+    // Devoluções (reembolsos) dos últimos 30/60/90 dias com o custo de cada uma. A venda original é procurada até
+    // 90 dias antes (a cópia dos lançamentos guarda 92 dias na 1ª leitura).
+    'GET /api/amazon/devolucoes': async (url) => {
+      const c = config();
+      if (!c.client_id || !c.refresh_token) return { conectada: false };
+      const dias = [30, 60, 90].includes(Number(url.searchParams.get('dias'))) ? Number(url.searchParams.get('dias')) : 90;
+      let erroLeitura = null;
+      try { await sincronizar(url.searchParams.get('recarregar') === '1'); } catch (e) { erroLeitura = e.message; }
+      const agora = Date.now();
+      const de = new Date(agora - dias * 864e5).toISOString();
+      const todas = devolucoesDe(D.amazonLancPeriodo(new Date(agora - (dias + 90) * 864e5).toISOString(), new Date(agora + 60e3).toISOString())).filter((d) => d.data >= de);
+      const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
+      const fotos = D.amazonFotos();
+      for (const d of todas) {
+        const cs = d.sku ? C.custoDoSku(d.sku, mapa) : null;
+        d.titulo = cs?.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || d.sku;
+        d.foto = (d.sku && fotos.get(d.sku)?.foto) || null;
+        d.link = `https://sellercentral.amazon.com.br/orders-v3/order/${encodeURIComponent(d.pedido)}`;
+      }
+      const soma = (f) => r2(todas.reduce((a, d) => a + (f(d) || 0), 0));
+      const porSku = new Map();
+      for (const d of todas) { const x = porSku.get(d.sku) || { sku: d.sku, titulo: d.titulo, casos: 0, unidades: 0, devolvido: 0, custo: 0 };
+        x.casos++; x.unidades += d.quantidade; x.devolvido += d.devolvido; x.custo += d.custo; porSku.set(d.sku, x); }
+      const vendidas = D.amazonLancPeriodo(de, new Date(agora + 60e3).toISOString()).filter((l) => l.tipo === 'venda').reduce((a, l) => a + (l.quantidade || 0), 0);
+      return { dias, erro_leitura: erroLeitura,
+        resumo: { casos: todas.length, unidades: todas.reduce((a, d) => a + d.quantidade, 0), devolvido: soma((d) => d.devolvido), custo: soma((d) => d.custo),
+          parciais: todas.filter((d) => d.parcial).length, fba: todas.filter((d) => d.canal === 'FBA').length, vendidas,
+          taxa: vendidas ? todas.reduce((a, d) => a + d.quantidade, 0) / vendidas : null },
+        por_produto: [...porSku.values()].map((x) => ({ ...x, devolvido: r2(x.devolvido), custo: r2(x.custo) })).sort((a, b) => b.casos - a.casos).slice(0, 30),
+        devolucoes: todas };
+    },
     'GET /api/amazon/vendas': async (url) => {
       const mes = url.searchParams.get('mes');
       const dias = mes === 'atual' || mes === 'anterior' ? janelaDoMes(mes) : Math.min(90, Math.max(1, Number(url.searchParams.get('dias')) || 30));
@@ -1218,5 +1277,5 @@ function criar({ D, janela }) {
   return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon };
 }
 
-module.exports = { criar, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
+module.exports = { criar, devolucoesDe, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
   pedidoDe, itemDe, janelaVendas, taxasDosLancamentos, linhaDoPedido, ofertasDe, BR, HOST };

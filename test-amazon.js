@@ -228,4 +228,15 @@ assert.strictEqual(pf[0].moeda, 'BRL');
 const fonteMcp = require('node:fs').readFileSync(require.resolve('./mcp.js'), 'utf8');
 assert.ok(!/api\/amazon|amazon\.js/i.test(fonteMcp), 'nenhuma ferramenta do MCP aponta para a Amazon');
 
+// devoluções: reembolso + venda do mesmo pedido; custo = tarifas e frete que a Amazon não devolveu
+{
+  const dv = A.devolucoesDe([
+    { tipo: 'venda', pedido: 'P1', sku: 'AMG-1', canal: 'FBA', data: '2026-09-01T00:00:00Z', quantidade: 1, receita: 100, tarifa: 20, frete: 0 },
+    { tipo: 'reembolso', pedido: 'P1', sku: 'AMG-1', canal: 'FBA', data: '2026-09-10T00:00:00Z', quantidade: 1, receita: -100, tarifa: -16, frete: 0 },
+    { tipo: 'venda', pedido: 'P2', sku: 'AMG-2', canal: 'proprio', data: '2026-09-02T00:00:00Z', quantidade: 1, receita: 50, tarifa: 8, frete: 12 },
+  ]);
+  assert.strictEqual(dv.length, 1, 'só o pedido com reembolso');
+  assert.deepStrictEqual({ d: dv[0].devolvido, c: dv[0].custo, p: dv[0].parcial }, { d: 100, c: 4, p: false }, 'custo = 20 de tarifa − 16 devolvidos');
+}
+
 console.log('Amazon: credenciais, sem dados pessoais, forma sem valores e fora do MCP: ok');

@@ -593,6 +593,7 @@
 
 <script src="/mascaras.js"></script>
 <script src="/analise.js"></script>
+<script src="/composicao.js?v=1"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const msg = $('msg');
@@ -1019,6 +1020,11 @@ function pintarDetalhes(it, alvo){
       }catch(e){ aviso('O Mercado Livre recusou: ' + e.message, 'err'); bt.disabled = false; }
     };
     bloco.appendChild(f);
+    // produtos do anúncio escolhidos no painel, sem mudar o SKU no Mercado Livre (composicao.js)
+    const linhaComp = el('p', 'nota'); linhaComp.style.display = 'flex'; linhaComp.style.gap = '8px'; linhaComp.style.alignItems = 'center';
+    linhaComp.append(Composicao.botao(c.sku || it.id, { titulo: it.title, rotulo: 'Mudar os produtos sem mudar o SKU', pequeno: false, aoSalvar: () => setTimeout(() => carregar(), 1300) }),
+      document.createTextNode('o SKU no Mercado Livre continua o mesmo; custo, lucro e estoque usam os produtos escolhidos'));
+    bloco.appendChild(linhaComp);
 
     if(c.produtos.length){
       const t = el('table', 'det-tab');
