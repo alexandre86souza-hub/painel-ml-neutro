@@ -49,7 +49,7 @@ function listar(pasta) {
 
 // Copia o banco aberto (`db`, node:sqlite) para a pasta, confere e apaga as que sobram.
 function fazer(db, pasta) {
-  fs.mkdirSync(pasta, { recursive: true });
+  fs.mkdirSync(pasta, { recursive: true, mode: 0o700 });
   const agora = new Date();
   const final = path.join(pasta, nomeDe(agora));
   const tmp = final + '.parcial';
@@ -66,6 +66,8 @@ function fazer(db, pasta) {
   } finally { c.close(); }
   try { fs.unlinkSync(final); } catch {}
   fs.renameSync(tmp, final);
+  // a cópia tem tudo do banco (tokens cifrados, vendas, clientes): só o usuário do painel lê (no Windows não faz nada)
+  try { fs.chmodSync(final, 0o600); } catch {}
   const apagadas = paraApagar(listar(pasta), agora.getTime());
   for (const nome of apagadas) { try { fs.unlinkSync(path.join(pasta, nome)); } catch {} }
   return { arquivo: final, tamanho: fs.statSync(final).size, vendas, em: agora.toISOString(), apagadas };
