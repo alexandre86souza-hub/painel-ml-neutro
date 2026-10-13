@@ -385,48 +385,80 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
 
   const dia = (url, padrao, ok) => { const d = Number(url.searchParams.get('dias')) || padrao; return ok.includes(d) ? d : padrao; };
 
-  const cacheArmaz = new Map();
-  const rotas = {
-    'GET /api/performance': async (url) => performance(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
-    'GET /api/performance/logistica': async (url) => logistica(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
-    'GET /api/abc': async (url) => abc(contaOuErro(), dia(url, 30, [15, 30, 60, 90, 150])),
-    'GET /api/full': async (url) => { if (url.searchParams.get('recarregar')) cacheFull = null; return full(contaOuErro()); },
-    // Quanto a conta já pagou de armazenagem do Full. Medido em 13/10/2026: o faturamento do ML traz a cobrança
-    // "Tarifa pelo serviço de armazenamento Full" (detail_sub_type CFWA) UMA POR DIA para a conta toda, sem o produto
-    // (items_info null). Soma por mês dos últimos períodos; guardado 6 h.
-    'GET /api/full/armazenagem': async (url) => {
-      const conta = contaOuErro();
-      const chaveCache = `armaz:${conta.ml_user_id}`;
-      const c = cacheArmaz.get(chaveCache);
-      if (c && !url.searchParams.get('recarregar') && Date.now() - c.em < 6 * 3600e3) return c.v;
-      const per = await ml('/billing/integration/monthly/periods?group=ML&document_type=BILL&offset=0&limit=6');
-      const dias = new Map(), vistos = new Set();   // detail_id: a mesma cobrança não conta duas vezes
+  // Leitura da armazenagem do Full (faturamento do ML: 5 consultas por minuto). Uma consulta a cada 13 s; as cobranças por dia
+  // somam às já guardadas (o histórico cresce a cada leitura). Erro (limite, sem permissão) fica guardado e a tela segue.
+  const lendoArmaz = new Set();
+  const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  async function lerArmazenagem(conta, chave, salvo) {
+    const dias = { ...(salvo?.dias || {}) }, vistos = new Set(salvo?.vistos || []);
+    let erro = null;
+    try {
+      const per = await ml('/billing/integration/monthly/periods?group=ML&document_type=BILL&offset=0&limit=2', {}, conta.ml_user_id);
       for (const p of per.results || []) {
-        for (let off = 0; off < 3000; off += 150) {
-          const r = await ml(`/billing/integration/periods/key/${p.key}/group/ML/details?document_type=BILL&offset=${off}&limit=150`);
+        for (let off = 0; off < 1500; off += 150) {
+          await espera(13000);
+          const r = await ml(`/billing/integration/periods/key/${p.key}/group/ML/details?document_type=BILL&offset=${off}&limit=150`, {}, conta.ml_user_id);
           for (const l of r.results || []) {
             const ci = l.charge_info || {};
             if (ci.detail_sub_type !== 'CFWA' && !/armazenamento full/i.test(ci.transaction_detail || '')) continue;
             if (ci.detail_id != null) { if (vistos.has(ci.detail_id)) continue; vistos.add(ci.detail_id); }
             const dia = String(ci.creation_date_time || '').slice(0, 10);
             if (!dia) continue;
-            const v = (ci.detail_type === 'BONUS' || ci.detail_type === 'CREDIT' ? -1 : 1) * (Number(ci.detail_amount) || 0);
-            dias.set(dia, (dias.get(dia) || 0) + v);
+            dias[dia] = (dias[dia] || 0) + (ci.detail_type === 'BONUS' || ci.detail_type === 'CREDIT' ? -1 : 1) * (Number(ci.detail_amount) || 0);
           }
           if ((r.results || []).length < 150) break;
         }
       }
-      const lista = [...dias.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dia, valor]) => ({ dia, valor: r2(valor) }));
+    } catch (e) { erro = e.message.slice(0, 200); }
+    D.configGravar(chave, JSON.stringify({ em: erro ? salvo?.em || null : new Date().toISOString(), tentado: new Date().toISOString(), dias, vistos: [...vistos].slice(-5000), erro }));
+  }
+  const rotas = {
+    'GET /api/performance': async (url) => performance(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
+    'GET /api/performance/logistica': async (url) => logistica(contaOuErro(), dia(url, 30, [7, 15, 30, 60, 75])),
+    'GET /api/abc': async (url) => abc(contaOuErro(), dia(url, 30, [15, 30, 60, 90, 150])),
+    'GET /api/full': async (url) => { if (url.searchParams.get('recarregar')) cacheFull = null; return full(contaOuErro()); },
+    // Armazenagem do Full. Medido em 13/10/2026: o faturamento do ML traz "Tarifa pelo serviço de armazenamento Full"
+    // (detail_sub_type CFWA) UMA POR DIA para a conta toda, sem o produto (items_info null), e a API de faturamento aceita
+    // só 5 consultas POR MINUTO. Então: leitura em segundo plano, uma consulta a cada 13 s, no máximo a cada 12 h, e as
+    // cobranças por dia guardadas em `estado` (full_armaz:{conta}) — a tela lê o que está guardado. Por produto não há
+    // dado do ML (as operações de estoque deram "over quota"): o custo do dia é dividido pelas unidades de cada anúncio
+    // no Full (estimativa: a tarifa real depende do tamanho do produto).
+    'GET /api/full/armazenagem': async (url) => {
+      const conta = contaOuErro();
+      const chave = `full_armaz:${conta.ml_user_id}`;
+      let salvo = null; try { salvo = JSON.parse(D.configLer(chave) || 'null'); } catch {}
+      const velho = !salvo?.em || Date.now() - Date.parse(salvo.em) > 12 * 3600e3 || url.searchParams.get('recarregar');
+      const tentouAgora = salvo?.tentado && Date.now() - Date.parse(salvo.tentado) < 15 * 60e3;   // depois de erro: espera 15 min
+      if (velho && !tentouAgora && !lendoArmaz.has(conta.ml_user_id)) {
+        lendoArmaz.add(conta.ml_user_id);
+        lerArmazenagem(conta, chave, salvo).finally(() => lendoArmaz.delete(conta.ml_user_id));
+      }
+      const lista = Object.entries(salvo?.dias || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([dia, valor]) => ({ dia, valor: r2(valor) }));
       const meses = new Map();
       for (const d of lista) { const m = d.dia.slice(0, 7); const x = meses.get(m) || { mes: m, valor: 0, dias: 0 }; x.valor += d.valor; x.dias++; meses.set(m, x); }
       const desde = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
       const soma = (de) => r2(lista.filter((d) => d.dia >= de).reduce((a, d) => a + d.valor, 0));
-      const v = { total: r2(lista.reduce((a, d) => a + d.valor, 0)), ultimos_30: soma(desde(30)), ultimos_7: soma(desde(7)),
-        media_dia_30: r2(soma(desde(30)) / 30), primeiro_dia: lista[0]?.dia || null, ultimo_dia: lista.at(-1)?.dia || null,
+      const ult30 = lista.filter((d) => d.dia >= desde(30));
+      const mediaDia = ult30.length ? soma(desde(30)) / ult30.length : 0;
+      // por produto: o custo médio do dia dividido pelas unidades de cada anúncio no Full
+      const f = await full(conta).catch(() => null);
+      const comEstoque = (f?.itens || []).filter((i) => i.estoque_full > 0);
+      const unidades = comEstoque.reduce((a, i) => a + i.estoque_full, 0);
+      const produtos = comEstoque.map((i) => {
+        const dia = unidades ? mediaDia * i.estoque_full / unidades : 0;
+        return { id: i.id, titulo: i.titulo, foto: i.foto, link: i.link, estoque_full: i.estoque_full, vendas_full_30: i.vendas_full_30,
+          dias_estoque: i.dias_estoque, custo_dia: r2(dia), custo_30: r2(dia * 30),
+          // até o estoque acabar no ritmo de venda de hoje (sem venda: 90 dias, para comparar)
+          custo_ate_acabar: r2(dia * (i.dias_estoque != null ? Math.min(i.dias_estoque, 365) : 90)),
+          situacao: !i.vendas_full_30 ? 'parado' : i.dias_estoque != null && i.dias_estoque > 90 ? 'demora' : 'gira' };
+      }).sort((a, b) => b.custo_ate_acabar - a.custo_ate_acabar);
+      return { lendo: lendoArmaz.has(conta.ml_user_id), lido_em: salvo?.em || null, erro: salvo?.erro || null,
+        total: r2(lista.reduce((a, d) => a + d.valor, 0)), ultimos_30: soma(desde(30)), ultimos_7: soma(desde(7)), media_dia_30: r2(mediaDia),
+        primeiro_dia: lista[0]?.dia || null, ultimo_dia: lista.at(-1)?.dia || null,
         por_mes: [...meses.values()].map((x) => ({ ...x, valor: r2(x.valor) })).reverse(), ultimos_dias: lista.slice(-30).reverse(),
-        nota: 'O Mercado Livre cobra a armazenagem do Full uma vez por dia para a conta toda, sem dizer o produto.' };
-      cacheArmaz.set(chaveCache, { em: Date.now(), v });
-      return v;
+        unidades_full: unidades, produtos,
+        parados: produtos.filter((p) => p.situacao === 'parado').length, demorados: produtos.filter((p) => p.situacao === 'demora').length,
+        nota: 'O Mercado Livre cobra a armazenagem do Full uma vez por dia para a conta toda, sem dizer o produto. O custo por produto é o do dia dividido pelas unidades no Full (estimativa: produto maior paga mais).' };
     },
     // Armazenagem do Full (quanto já pagou e o que está perto de pagar): ainda sem a forma real das respostas
     // do ML. Esta leitura mostra só a FORMA (campos e um exemplo curto de cada, sem dado de comprador) do

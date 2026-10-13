@@ -321,9 +321,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).
   Amazon: a etiqueta do Easy Ship pede o papel restrito Direct-to-Consumer Shipping + RDT — contra o compromisso de não ler dado de comprador; fica no Seller Central.
 - Armazenagem do Full (`GET /api/full/armazenagem`, tela Full): medido em 13/10/2026, o billing traz "Tarifa pelo serviço de
-  armazenamento Full" (CFWA) UMA por dia para a conta toda, SEM produto (items_info null): só dá o total pago (por mês, 30 dias).
-  Por produto (quem paga / perto de pagar) falta a forma das operações (`/stock/fulfillment/operations/search`, máx. 60 dias por
-  consulta): `GET /api/full/armazenagem/diagnostico` (botão na tela Full) mostra a forma; construir a idade das unidades com ela.
+  armazenamento Full" (CFWA) UMA por dia para a conta toda, SEM produto (items_info null), e aceita só 5 consultas POR MINUTO:
+  `lerArmazenagem` lê em segundo plano (1 a cada 13 s, no máx. a cada 12 h; depois de erro espera 15 min) e guarda as cobranças
+  por dia em `estado` (full_armaz:{conta}). As operações de estoque (`/stock/fulfillment/operations/search`) deram "over quota"
+  e vazio: sem idade das unidades. Por produto = custo médio do dia ÷ unidades no Full (estimativa); parado = sem venda em 30 dias.
 - Botões comuns das telas de anúncios de todos os canais: `public/composicao.js` ("Produtos": composição sem mudar o SKU,
   `GET /api/produtos/composicao?sku=`) e `public/margem-massa.js` ("Preço pela margem" nos anúncios do filtro). Shopee update_price,
   Amazon `/api/amazon/anuncios/preco`, Magalu `POST /api/magalu/anuncios/preco` (PUT do mesmo formato lido e CONFERE lendo de novo;

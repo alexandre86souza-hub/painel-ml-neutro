@@ -22,7 +22,9 @@
   td.enviar{font-weight:800;white-space:nowrap}
   td.enviar.sim{color:#c2410c}
   td.enviar small{display:block;font-weight:600;font-size:11px;color:#64748b}
-  #armazenagem[hidden],#armazRes[hidden]{display:none}
+  #armazenagem[hidden]{display:none}
+  .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
+  .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}
 </style>
 </head>
 <body>
@@ -74,13 +76,9 @@
     <p class="sub" id="armazSub">Quanto a conta já pagou de armazenagem do Full (faturamento do Mercado Livre).</p>
     <div class="cartoes" id="armazCartoes"><p class="carregando">Lendo o faturamento…</p></div>
     <div class="tabela-rolagem" id="armazMeses"></div>
-    <p class="sub" style="margin-top:12px">Quais produtos estão pagando e quais estão perto de pagar: o ML não diz o produto na cobrança. Para calcular há quantos dias
-      cada unidade está no armazém, o painel precisa de mais uma leitura: clique abaixo, copie e mande para o Claude.</p>
-    <button type="button" class="bt" id="btArmaz">Gerar leitura da armazenagem</button>
-    <div id="armazRes" hidden style="margin-top:10px">
-      <textarea id="armazTxt" readonly rows="10" style="width:100%;font:12px/1.4 ui-monospace,Consolas,monospace"></textarea>
-      <button type="button" class="bt" id="btArmazCopiar">Copiar</button>
-    </div>
+    <h3 style="margin:16px 0 6px;font-size:15px">Por produto (estimativa)</h3>
+    <p class="sub">O custo do dia dividido pelas unidades de cada anúncio no Full. Parado = estoque no Full sem venda em 30 dias: é o que mais vale tirar ou promover.</p>
+    <div class="tabela-rolagem" id="armazProdutos"></div>
   </section>
 </main>
   </div>
@@ -199,27 +197,40 @@ async function carregar(recarregar){
 }
 carregar();
 if(NA_AMAZON) $('armazenagem').hidden = true;
-else (async () => {
+else lerArmaz();
+// Armazenagem do Full: o pago (faturamento do ML, lido em segundo plano: 5 consultas por minuto) e a estimativa por produto.
+const SIT_ARMAZ = { parado: ['parado: sem venda em 30 dias', 'vermelho'], demora: ['estoque para mais de 90 dias', 'amarelo'], gira: ['vendendo', 'verde'] };
+async function lerArmaz(){
   try{
     const r = await api('/api/full/armazenagem');
     const box = $('armazCartoes'); box.innerHTML = '';
     const cart = (rot, v, nota) => { const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', v), el('p', 'nota', nota || '')); return c; };
+    if(!r.lido_em && r.lendo){ box.appendChild(el('p', 'carregando', 'Lendo o faturamento do Mercado Livre (ele aceita 5 consultas por minuto: leva uns 2 minutos). A tela se atualiza sozinha.')); setTimeout(lerArmaz, 30000); return; }
     box.append(cart('Pago nos últimos 30 dias', real(r.ultimos_30), `média de ${real(r.media_dia_30)} por dia`), cart('Últimos 7 dias', real(r.ultimos_7), ''),
-      cart('Total lido', real(r.total), r.primeiro_dia ? `de ${data(r.primeiro_dia + 'T12:00:00')} a ${data(r.ultimo_dia + 'T12:00:00')}` : 'nenhuma cobrança'));
-    $('armazSub').textContent = r.nota + ' Soma das cobranças diárias por mês.';
+      cart('Produtos parados no Full', numero(r.parados), `${numero(r.demorados)} com estoque para mais de 90 dias · ${numero(r.unidades_full)} unidade(s) no Full`),
+      cart('Total lido', real(r.total), r.primeiro_dia ? `de ${data(r.primeiro_dia)} a ${data(r.ultimo_dia)}` : 'nenhuma cobrança'));
+    $('armazSub').textContent = r.nota + (r.lido_em ? ` Faturamento lido em ${new Date(r.lido_em).toLocaleString('pt-BR')}.` : '') + (r.erro ? ` Última tentativa: ${r.erro}` : '') + (r.lendo ? ' Lendo de novo em segundo plano…' : '');
     const t = el('table'); const cab = el('tr'); for(const h of ['Mês', 'Dias cobrados', 'Valor']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); t.appendChild(th); const tb = el('tbody');
     for(const m of r.por_mes){ const tr = el('tr'); tr.append(el('td', null, m.mes.split('-').reverse().join('/')), el('td', null, numero(m.dias)), el('td', null, real(m.valor))); tb.appendChild(tr); }
     t.appendChild(tb); $('armazMeses').innerHTML = ''; $('armazMeses').appendChild(t);
+    // por produto
+    const t2 = el('table'); const c2 = el('tr');
+    for(const h of ['Produto', 'No Full', 'Vendas 30d (Full)', 'Dias de estoque', 'Custo por dia ≈', 'Custo em 30 dias ≈', 'Até o estoque acabar ≈', 'Situação']) c2.appendChild(el('th', null, h));
+    const th2 = el('thead'); th2.appendChild(c2); t2.appendChild(th2); const tb2 = el('tbody');
+    for(const p of r.produtos){
+      const tr = el('tr');
+      const td = el('td'); const a = el('a', null, p.titulo || p.id); a.href = p.link || '#'; a.target = '_blank'; a.rel = 'noopener'; td.append(a, el('span', 'pequeno', p.id));
+      const s = SIT_ARMAZ[p.situacao] || ['—', ''];
+      const ts = el('td'); ts.appendChild(el('span', 'chip ' + s[1], s[0]));
+      tr.append(td, el('td', null, numero(p.estoque_full)), el('td', null, numero(p.vendas_full_30)), el('td', null, p.dias_estoque == null ? 'sem venda' : numero(Math.round(p.dias_estoque))),
+        el('td', null, real(p.custo_dia)), el('td', null, real(p.custo_30)), el('td', null, real(p.custo_ate_acabar) + (p.dias_estoque == null ? ' (90 dias)' : '')), ts);
+      tb2.appendChild(tr);
+    }
+    if(!r.produtos.length){ const tr = el('tr'); const td = el('td', null, 'Nenhum produto com estoque no Full.'); td.colSpan = 8; tr.appendChild(td); tb2.appendChild(tr); }
+    t2.appendChild(tb2); $('armazProdutos').innerHTML = ''; $('armazProdutos').appendChild(t2);
   }catch(e){ $('armazCartoes').innerHTML = ''; $('armazCartoes').appendChild(el('p', 'sub', 'Não consegui ler o faturamento: ' + e.message)); }
-})();
-$('btArmaz').onclick = async () => {
-  const b = $('btArmaz'); b.disabled = true; b.textContent = 'Lendo no Mercado Livre…';
-  try{ const r = await api('/api/full/armazenagem/diagnostico'); $('armazTxt').value = JSON.stringify(r, null, 1); $('armazRes').hidden = false; }
-  catch(e){ erroTela(e.message); }
-  b.disabled = false; b.textContent = 'Gerar leitura da armazenagem';
-};
-$('btArmazCopiar').onclick = async () => { try{ await navigator.clipboard.writeText($('armazTxt').value); $('btArmazCopiar').textContent = 'Copiado'; }catch{ $('armazTxt').select(); } };
+}
 </script>
 <script src="/sino.js?v=4" defer></script>
 </body>

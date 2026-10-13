@@ -294,6 +294,10 @@ html[data-tema="escuro"][data-pagina="full"] .dias.alerta{color:hsl(26,90%,72%)}
 html[data-tema="escuro"][data-pagina="full"] .dias.ok{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="full"] .repor-param input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="full"] td.enviar.sim{color:hsl(17,88%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="full"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="full"] .chip.vermelho{background:hsla(2,88%,60%,.14);color:hsl(0,74%,72%)}
 /* geral.html */
 html[data-tema="escuro"][data-pagina="geral"] .pilula{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="geral"] .pilula.lucro b{color:hsl(142,72%,72%)}
