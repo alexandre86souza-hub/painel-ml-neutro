@@ -17,8 +17,10 @@
   .chip-st.ok{background:#e6f4ea;color:#0b6b33}
   .chip-st.promo{background:#fff4d6;color:#7a5600}
   td.est{white-space:nowrap}
-  .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-left:6px}
-  .margem-max input{width:60px;font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5d7db;border-radius:8px}
+  /* "abaixo de [x] %" dentro do grupo de filtros, logo depois do botão "Margem abaixo de" */
+  .seg .margem-max{display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:0 10px 0 6px;margin:0;border-left:1px solid var(--line,#e3e8f0)}
+  .seg .margem-max input{width:58px;font:inherit;font-size:13px;padding:4px 6px;border:1px solid #d5d7db;border-radius:7px}
+  .filtros .seg{flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -53,8 +55,8 @@
         <button type="button" data-f="pausados">Pausados</button>
         <button type="button" data-f="semcusto">Sem custo</button>
         <button type="button" data-f="baixa">Margem abaixo de</button>
+        <label class="margem-max"><input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
       </div>
-      <label class="margem-max">abaixo de <input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
     </div>
     <p class="sub" id="subLista"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Carregando as ofertas da Leroy…</p></div>
@@ -90,7 +92,7 @@ $('segFiltro').onclick = (ev) => {
   pintar();
 };
 $('busca').oninput = () => pintar();
-$('fMargemMax').oninput = () => { if(filtro === 'baixa') pintar(); };
+$('fMargemMax').oninput = () => { if(filtro !== 'baixa'){ $('segFiltro').querySelector('[data-f="baixa"]').click(); return; } if(filtro === 'baixa') pintar(); };
 $('btAtualizar').onclick = () => carregar(true);
 
 function pintar(){

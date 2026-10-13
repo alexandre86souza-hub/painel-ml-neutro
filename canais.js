@@ -156,4 +156,20 @@ function resumoGeral(linhas, { dias, de, ate, hojeDe, conta, topPorSku, mes, rot
   };
 }
 
-module.exports = { janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, resumoGeral };
+// Devoluções de um canal (Leroy, Magalu) -> o resumo e os produtos que mais voltam, no formato da tela de devoluções
+// (o mesmo de /api/amazon/devolucoes). vendidas = unidades vendidas no período. Função pura: testada.
+function resumoDevolucoes(devs, vendidas) {
+  const unidades = devs.reduce((a, d) => a + (d.quantidade || 0), 0);
+  const porSku = new Map();
+  for (const d of devs) {
+    const k = d.sku || d.titulo || d.pedido;
+    const x = porSku.get(k) || { sku: d.sku, titulo: d.titulo, casos: 0, unidades: 0, devolvido: 0, custo: 0 };
+    x.casos++; x.unidades += d.quantidade || 0; x.devolvido += d.devolvido || 0; x.custo += d.custo || 0; porSku.set(k, x);
+  }
+  return { resumo: { casos: devs.length, unidades, devolvido: r2(devs.reduce((a, d) => a + (d.devolvido || 0), 0)), custo: r2(devs.reduce((a, d) => a + (d.custo || 0), 0)),
+    parciais: devs.filter((d) => d.parcial).length, fba: 0, vendidas, taxa: vendidas ? unidades / vendidas : null,
+    sem_frete: devs.filter((d) => d.frete_desconhecido).length },
+  por_produto: [...porSku.values()].map((x) => ({ ...x, devolvido: r2(x.devolvido), custo: r2(x.custo) })).sort((a, b) => b.casos - a.casos).slice(0, 30) };
+}
+
+module.exports = { resumoDevolucoes, janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, resumoGeral };

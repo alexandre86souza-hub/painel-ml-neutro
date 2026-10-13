@@ -328,7 +328,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `GET /api/produtos/composicao?sku=`) e `public/margem-massa.js` ("Preço pela margem" nos anúncios do filtro). Shopee update_price,
   Amazon `/api/amazon/anuncios/preco`, Magalu `POST /api/magalu/anuncios/preco` (PUT do mesmo formato lido e CONFERE lendo de novo;
   a tela para no 1º que não confirmar — ainda sem medição real), Leroy `leroy-anuncios.html` + `POST /api/leroy/anuncios/preco`
-  (um PRI01 com o desconto que estiver valendo). Devoluções da Amazon (`amazon-devolucoes.html`, `GET /api/amazon/devolucoes`,
+  (um PRI01 com o desconto que estiver valendo). Devoluções da Amazon, Leroy e Magalu (`devolucoes-canais.html?conta=`, `GET /api/{amazon|leroy|magalu}/devolucoes`;
+  Leroy = linhas com reembolso, custo = comissão não devolvida + frete da entrega; Magalu = pedidos com REFUND no financeiro, custo =
+  tarifas que ficaram + frete; resumo em `canais.js#resumoDevolucoes`; Amazon:
   `devolucoesDe`): reembolsos dos lançamentos + a venda do mesmo pedido; custo = tarifas e frete da venda + do reembolso.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).

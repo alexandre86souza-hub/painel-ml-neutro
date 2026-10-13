@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Devoluções Amazon</title>
+<title>Devoluções</title>
 <link rel="stylesheet" href="/paginas.css?v=1">
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -12,12 +12,13 @@
 <link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
 <script src="/tema.js?v=1"></script>
 <style>
-  .cartao.destaque{background:linear-gradient(135deg,#232f3e,#ff9900);border-color:transparent;color:#fff}
+  .cartao.destaque{background:linear-gradient(135deg,var(--cor-canal,#232f3e),var(--cor-canal2,#ff9900));border-color:transparent;color:#fff}
   .cartao.destaque .rotulo,.cartao.destaque .nota{color:#fff3df}
   .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
   .chip.amarelo{background:#fff4d6;color:#7a5600}
   td.dinheiro{white-space:nowrap;text-align:right}
-  .prod{display:flex;gap:8px;align-items:center}.prod img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:#f1f5f9}
+  .prod{display:flex;gap:8px;align-items:center;min-width:300px}.prod img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:#f1f5f9}
+  #lista td{white-space:nowrap}#lista td:first-child{white-space:normal}
 </style>
 </head>
 <body>
@@ -29,7 +30,7 @@
   </aside>
   <div class="conteudo">
 <header>
-  <h1>Devoluções — Amazon</h1>
+  <h1 id="titulo">Devoluções</h1>
   <div id="barraContas">
     <label for="selConta" id="rotuloConta">Conta</label>
     <select id="selConta" aria-describedby="rotuloConta"></select>
@@ -38,7 +39,7 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
-    <p>Devoluções (reembolsos) da Amazon com o custo de cada uma: tarifas e frete que a Amazon cobrou na venda e no reembolso e não devolveu. O valor devolvido ao cliente sai do faturamento. Sem dados do comprador.</p>
+    <p id="topoTxt"></p>
     <div class="seg" role="group" aria-label="Período" id="segDias">
       <button type="button" data-dias="30">30 dias</button>
       <button type="button" data-dias="60">60 dias</button>
@@ -60,7 +61,17 @@
 </div>
 <script src="/comum.js?v=8"></script>
 <script>
-// GET /api/amazon/devolucoes (lançamentos financeiros da Amazon). Nada desta tela vai para o MCP.
+// Devoluções da Amazon, Leroy e Magalu (?conta=amazon|leroy|magalu): GET /api/{canal}/devolucoes, todas no mesmo formato.
+// Nada desta tela vai para o MCP.
+const CANAL = ['leroy', 'magalu'].includes(new URLSearchParams(location.search).get('conta')) ? new URLSearchParams(location.search).get('conta') : 'amazon';
+const NOME = { amazon: 'Amazon', leroy: 'Leroy Merlin', magalu: 'Magalu' }[CANAL];
+document.documentElement.style.setProperty('--cor-canal', { amazon: '#232f3e', leroy: '#3d6e0f', magalu: '#005bb5' }[CANAL]);
+document.documentElement.style.setProperty('--cor-canal2', { amazon: '#ff9900', leroy: '#78be20', magalu: '#0086ff' }[CANAL]);
+$('titulo').textContent = 'Devoluções — ' + NOME; document.title = 'Devoluções ' + NOME;
+const TOPO = { amazon: 'Devoluções (reembolsos) da Amazon com o custo de cada uma: tarifas e frete que a Amazon cobrou na venda e no reembolso e não devolveu. O valor devolvido ao cliente sai do faturamento. Sem dados do comprador.',
+  leroy: 'Vendas da Leroy com reembolso ao cliente e o custo de cada uma: a comissão que a Leroy não devolveu e o frete que você pagou na entrega. O valor devolvido sai do faturamento.',
+  magalu: 'Pedidos da Magalu com reembolso (análise financeira) e o custo de cada um: as tarifas que ficaram e o frete debitado. O valor devolvido sai do faturamento.' }[CANAL];
+$('topoTxt').textContent = TOPO;
 let dias = 90, dados = null;
 function cartao(rot, valor, nota, destaque){
   const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
@@ -82,10 +93,10 @@ function pintarLista(){
     if(d.parcial) cx.appendChild(el('span', 'chip amarelo', 'reembolso parcial'));
     p.append(im, cx); t0.appendChild(p);
     const t9 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t9.appendChild(a);
-    tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, dataBR(d.data)), el('td', null, d.canal === 'FBA' ? 'FBA' : 'envio próprio'),
+    tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, d.data ? dataBR(d.data) : '—'), el('td', null, d.envio || (d.canal === 'FBA' ? 'FBA' : 'envio próprio')),
       el('td', 'dinheiro', d.valor_venda == null ? 'fora do período lido' : real(d.valor_venda)), el('td', 'dinheiro', real(d.devolvido)),
-      el('td', 'dinheiro', d.venda_encontrada ? real((d.tarifas_venda || 0) + (d.frete_venda || 0)) : '—'),
-      el('td', 'dinheiro', real(d.tarifas_reembolso + d.frete_reembolso)), el('td', 'dinheiro ' + (d.custo > 0 ? 'neg' : ''), real(d.custo)), t9);
+      el('td', 'dinheiro', d.tarifas_venda == null ? '—' : real((d.tarifas_venda || 0) + (d.frete_venda || 0)) + (d.frete_desconhecido ? ' (sem o frete)' : '')),
+      el('td', 'dinheiro', d.tarifas_reembolso == null ? '—' : real(d.tarifas_reembolso + d.frete_reembolso)), el('td', 'dinheiro ' + (d.custo > 0 ? 'neg' : ''), real(d.custo)), t9);
     tb.appendChild(tr);
   }
   if(!itens.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma devolução por aqui.'); td.colSpan = 10; tr.appendChild(td); tb.appendChild(tr); }
@@ -93,16 +104,16 @@ function pintarLista(){
 }
 async function carregar(){
   erroTela('');
-  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Lendo os lançamentos da Amazon…'));
+  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', `Lendo as vendas da ${NOME}…`));
   try{
-    dados = await api(`/api/amazon/devolucoes?dias=${dias}`);
-    if(dados.conectada === false){ erroTela('Conecte a Amazon na tela Amazon.'); $('cartoes').innerHTML = ''; return; }
-    if(dados.erro_leitura) erroTela(`Não consegui ler as novidades da Amazon agora (${dados.erro_leitura}). Os números são da última leitura.`);
+    dados = await api(`/api/${CANAL}/devolucoes?dias=${dias}`);
+    if(dados.conectada === false){ erroTela(`Conecte a ${NOME} na tela de conexão.`); $('cartoes').innerHTML = ''; return; }
+    if(dados.erro_leitura) erroTela(`Não consegui ler as novidades da ${NOME} agora (${dados.erro_leitura}). Os números são da última leitura.`);
     const r = dados.resumo;
     const box = $('cartoes'); box.innerHTML = '';
     box.append(
-      cartao(`Custo das devoluções em ${dias} dias`, real(r.custo), 'tarifas e frete que a Amazon não devolveu', true),
-      cartao('Devoluções', numero(r.casos), `${numero(r.unidades)} unidade(s) · ${numero(r.fba)} do FBA · ${numero(r.parciais)} parcial(is)`),
+      cartao(`Custo das devoluções em ${dias} dias`, real(r.custo), `tarifas e frete que a ${NOME} não devolveu` + (r.sem_frete ? ` · ${numero(r.sem_frete)} sem o frete informado` : ''), true),
+      cartao('Devoluções', numero(r.casos), `${numero(r.unidades)} unidade(s)` + (CANAL === 'amazon' ? ` · ${numero(r.fba)} do FBA` : '') + ` · ${numero(r.parciais)} parcial(is)`),
       cartao('Devolvido aos clientes', real(r.devolvido), 'sai do faturamento'),
       cartao('Taxa de devolução', r.taxa == null ? '—' : pct(r.taxa), `${numero(r.unidades)} de ${numero(r.vendidas)} unidade(s) vendidas no período`),
     );
@@ -112,6 +123,7 @@ async function carregar(){
       tr.append(t0, el('td', null, numero(m.casos)), el('td', null, numero(m.unidades)), el('td', 'dinheiro', real(m.devolvido)), el('td', 'dinheiro', real(m.custo))); tb.appendChild(tr); }
     if(!dados.por_produto.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma devolução no período.'); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); }
     tab.appendChild(tb); $('produtos').innerHTML = ''; $('produtos').appendChild(tab);
+    $('topoTxt').textContent = TOPO + (dados.nota ? ' ' + dados.nota : '');
     pintarLista();
   }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
 }

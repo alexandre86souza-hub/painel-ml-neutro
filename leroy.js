@@ -153,6 +153,18 @@ function linhasDe(pedidos, ctx) {
   return out;
 }
 
+// Devoluções da Leroy: linhas de venda (linhasDe) com reembolso ao cliente. Custo da devolução = a comissão que a Leroy
+// NÃO devolveu + o frete que o vendedor pagou na entrega (sem o frete informado, fica marcado). A Mirakl não dá a data do
+// reembolso na cópia: vale a data da venda. Reembolso total = o produto volta. Sem dado do comprador. Função pura: testada.
+function devolucoesDe(linhas) {
+  return linhas.filter((l) => l.valida && n(l.reembolso) > 0).map((l) => ({
+    pedido: l.pedido, sku: l.sku, titulo: l.titulo, foto: l.foto, data_venda: l.data, data: null, envio: 'entrega própria',
+    quantidade: l.quantidade, valor_venda: r2(n(l.faturamento) + n(l.frete_cliente)), devolvido: r2(n(l.reembolso)), parcial: !l.devolvido,
+    tarifas_venda: r2(n(l.comissao)), frete_venda: l.frete, tarifas_reembolso: null, frete_reembolso: null,
+    custo: r2(n(l.comissao) + n(l.frete)), frete_desconhecido: l.frete == null, link: l.link,
+  })).sort((a, b) => String(b.data_venda).localeCompare(String(a.data_venda)));
+}
+
 // Oferta do OF21 -> o que a tela de campanhas usa. Preço cheio = o de origem (com desconto ativo
 // o price continua o cheio; medido: 833 de 972 ofertas com discount, todas de um só preço).
 // complexo = preço por canal ou por quantidade: o PRI01 apagaria esses preços, então o painel não
@@ -383,6 +395,16 @@ function criar({ D, janela }) {
       return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo });
     },
     // "Todas as contas": hoje, período, por dia e produtos (somados no navegador, como a Shopee).
+    // Devoluções (linhas com reembolso) das vendas dos últimos 30/60/90 dias, com o custo de cada uma.
+    'GET /api/leroy/devolucoes': async (url) => {
+      const dias = diasDe(url, [30, 60, 90], 90);
+      const j = janela(dias);
+      const r = await linhas(j.de, j.ate, { recarregar: url.searchParams.get('recarregar') === '1' });
+      const devs = devolucoesDe(r.linhas);
+      const vendidas = r.linhas.filter((l) => l.valida).reduce((a, l) => a + n(l.quantidade), 0);
+      return { canal: 'leroy', nome: D.configLer('leroy_loja_nome') || 'Leroy Merlin', dias, erro_leitura: r.erroLeitura, ...K.resumoDevolucoes(devs, vendidas), devolucoes: devs,
+        nota: 'A data é a da venda (a Leroy não dá a data do reembolso). Custo = comissão que a Leroy não devolveu + o frete que você pagou na entrega.' };
+    },
     'GET /api/leroy/vendas': async (url) => {
       const j = K.periodoDoPedido(url, [7, 15, 30, 60, 90], janela);
       const { dias } = j;
@@ -582,4 +604,4 @@ function criar({ D, janela }) {
   return { rotas, rotasParam: [], config, mk, sincronizar, ofertas };
 }
 
-module.exports = { SEM_PAGAMENTO, criar, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };
+module.exports = { SEM_PAGAMENTO, criar, devolucoesDe, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };

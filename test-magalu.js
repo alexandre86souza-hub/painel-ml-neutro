@@ -69,4 +69,11 @@ assert.ok(!/\/api\/magalu/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/m
   assert.ok(!log.includes(tk) && !log.includes('assinatura-secreta'), 'token fora do log');
   assert.ok(!/sessao=1/.test(log) && !/x@y/.test(log), 'sem cookie e sem e-mail');
   assert.ok(log.includes('Bearer [oculto]') && log.includes('x-request-id: abc') && log.includes('"tenant": "AMG"') && log.includes('"results":[]')); }
+// devoluções: pedido com REFUND; custo = tarifas que ficaram + frete
+{
+  const ts = [{ tipo: 'CREDIT', cat: 'SALE', valor: 100 }, { tipo: 'DEBIT', cat: 'COMMISSION', valor: 16 }, { tipo: 'CREDIT', cat: 'COMMISSION', valor: 12 },
+    { tipo: 'DEBIT', cat: 'SHIPPING_COST', valor: 20 }, { tipo: 'DEBIT', cat: 'REFUND', valor: 100, data: '2026-10-01T00:00:00Z' }];
+  const dv = M.devolucoesDe([{ code: 'X1', data: '2026-09-20T00:00:00Z', itens: [{ sku: 'AMG-1', quantidade: 1 }] }, { code: 'X2', itens: [] }], new Map([['X1', ts], ['X2', [{ tipo: 'CREDIT', cat: 'SALE', valor: 50 }]]]));
+  assert.deepStrictEqual(dv.map((d) => [d.pedido, d.devolvido, d.custo, d.parcial, d.data]), [['X1', 100, 24, false, '2026-10-01T00:00:00Z']]);
+}
 console.log('Magalu: credenciais, autorização da loja, sem dados de comprador, recebido pelo financeiro e fora do MCP: ok');

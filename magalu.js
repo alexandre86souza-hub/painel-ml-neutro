@@ -119,6 +119,32 @@ function financeiroDo(ts) {
   return { recebido, freteCusto, promocoes: [...promos.values()].map((p) => ({ ...p, magalu: r2(p.magalu), vendedor: r2(p.vendedor) })) };
 }
 
+// Devoluções da Magalu pela análise financeira: pedido com lançamento REFUND (reembolso ao cliente). Devolvido = REFUND
+// (débitos − créditos); custo = as tarifas que ficaram (comissão, tarifa fixa, MDR, já com os estornos) + o frete debitado.
+// Data = a do último REFUND. pedidos: magalu_pedidos (pedidoDe); financeiro: Map code -> transações. Função pura: testada.
+const FORA_TARIFA = new Set(['SALE', 'REFUND', 'DISCOUNT', 'PROMOTION']);
+function devolucoesDe(pedidos, financeiro) {
+  const out = [];
+  for (const p of pedidos) {
+    const ts = (financeiro.get(p.code) || []).filter(conta);
+    const ref = ts.filter((t) => t.cat === 'REFUND');
+    if (!ref.length) continue;
+    const devolvido = r2(-ref.reduce((a, t) => a + sinal(t), 0));
+    if (!(devolvido > 0)) continue;
+    const venda = r2(ts.filter((t) => t.cat === 'SALE').reduce((a, t) => a + sinal(t), 0));
+    const tarifas = r2(-ts.filter((t) => !FORA_TARIFA.has(t.cat) && !ehFrete(t)).reduce((a, t) => a + sinal(t), 0));
+    const frete = r2(-ts.filter(ehFrete).reduce((a, t) => a + sinal(t), 0));
+    const itens = p.itens || [];
+    out.push({ pedido: p.code, sku: itens.map((i) => i.sku).filter(Boolean).join(', ') || null, skus: itens.map((i) => i.sku).filter(Boolean),
+      titulo: itens.map((i) => i.titulo).filter(Boolean).join(' + ') || null, foto: itens[0]?.foto || null,
+      data_venda: p.data, data: ref.map((t) => t.data).filter(Boolean).sort().at(-1) || null, envio: 'Magalu',
+      quantidade: itens.reduce((a, i) => a + n(i.quantidade), 0), valor_venda: venda || null, devolvido, parcial: venda > 0 && devolvido < venda - 0.01,
+      tarifas_venda: tarifas, frete_venda: frete, tarifas_reembolso: null, frete_reembolso: null, custo: r2(tarifas + frete),
+      link: `https://sellercenter.magalu.com/pedidos/${encodeURIComponent(p.code)}` });
+  }
+  return out.sort((a, b) => String(b.data || b.data_venda).localeCompare(String(a.data || a.data_venda)));
+}
+
 const INVALIDAS = new Set(['cancelled', 'canceled']);
 // Linhas de venda (formato de canais.js). Com o financeiro: recebido exato; tarifa = faturamento −
 // frete pago − recebido (comissões, tarifa fixa, MDR, parte do vendedor nas promoções); frete = o
@@ -670,6 +696,22 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const r = await linhas(j.de, j.ate);
       return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo });
     },
+    // Devoluções (pedidos com REFUND na análise financeira) das vendas dos últimos 30/60/90 dias.
+    'GET /api/magalu/devolucoes': async (url) => {
+      const dias = diasDe(url, [30, 60, 90], 90);
+      const j = janela(dias);
+      const r = await linhas(j.de, j.ate, { recarregar: url.searchParams.get('recarregar') === '1' });
+      const peds = D.magaluPedidosPeriodo(j.de, j.ate);
+      const vinc = D.skuVinculos('magalu'), mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
+      const devs = devolucoesDe(peds, D.magaluFinanceiroDe(peds.map((p) => p.code)));
+      for (const d of devs) {   // título pelos produtos do painel (SKU do painel digitado na tela de anúncios)
+        const nomes = d.skus.map((s) => C.custoDoSku(vinc.get(s) || s, mapa).componentes.map((c) => c.nome).filter(Boolean).join(' + ')).filter(Boolean);
+        if (nomes.length) d.titulo = nomes.join(' · ');
+      }
+      const vendidas = r.linhas.filter((l) => l.valida).reduce((a, l) => a + n(l.quantidade), 0);
+      return { canal: 'magalu', nome: D.configLer('magalu_loja_nome') || 'Magalu', dias, erro_leitura: r.erroLeitura, ...K.resumoDevolucoes(devs, vendidas), devolucoes: devs,
+        nota: 'Pedidos com reembolso na análise financeira da Magalu. Custo = tarifas que ficaram (comissão, tarifa fixa, intermediação) + o frete debitado.' };
+    },
     'GET /api/magalu/vendas': async (url) => {
       const j = K.periodoDoPedido(url, [7, 15, 30, 60, 90], janela);
       const { dias } = j;
@@ -775,4 +817,4 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   return { rotas, rotasParam: [], callback, mg, config, sincronizar };
 }
 
-module.exports = { criar, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };
+module.exports = { criar, devolucoesDe, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };

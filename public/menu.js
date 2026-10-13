@@ -78,7 +78,7 @@
   // Contas de outros marketplaces: "amazon", "leroy" e "shopee-{loja}". As telas delas (e as do ML com
   // ?conta=…) mostram a identidade daquela conta e os dados dela.
   const PARAM = new URLSearchParams(location.search).get('conta');
-  const EXT = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html', '/amazon-devolucoes.html'].includes(location.pathname) ? 'amazon'
+  const EXT = ['/amazon.html', '/amazon-anuncios.html', '/amazon-ads.html'].includes(location.pathname) ? 'amazon'
     : location.pathname === '/leroy.html' ? 'leroy' : location.pathname === '/magalu.html' ? 'magalu'
     : /^(amazon|leroy|magalu|shopee-\d+)$/.test(PARAM || '') ? PARAM : null;
   const NA_AMAZON = EXT === 'amazon';
@@ -132,12 +132,13 @@
       if (u.pathname === '/ads.html') return '/amazon-ads.html';
       if (u.pathname === '/publicar.html') return '/publicar-canais.html?conta=amazon';
       if (u.pathname === '/promocoes.html') return '/campanhas-canais.html?conta=amazon';
-      if (u.pathname === '/devolucoes.html') return '/amazon-devolucoes.html?conta=amazon';
+      if (u.pathname === '/devolucoes.html') return '/devolucoes-canais.html?conta=amazon';
     } else if (tipo(ext) === 'leroy' || tipo(ext) === 'magalu') {
       if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
       if (u.pathname === '/promocoes.html') return `/campanhas-canais.html?conta=${ext}`;
       if (u.pathname === '/anuncios.html' && ext === 'magalu') return '/magalu-anuncios.html?conta=magalu';
       if (u.pathname === '/anuncios.html' && ext === 'leroy') return '/leroy-anuncios.html?conta=leroy';
+      if (u.pathname === '/devolucoes.html') return `/devolucoes-canais.html?conta=${ext}`;
     } else if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
     else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
     else if (u.pathname === '/ads.html') return `/shopee-ads.html?conta=${ext}`;
@@ -156,9 +157,10 @@
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);
     const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html', '/publicar.html'].includes(location.pathname)
       || ['/promocoes.html', '/campanhas-canais.html', '/shopee-campanhas.html'].includes(location.pathname)
-      || (['shopee', 'amazon'].includes(tipo(ext)) && location.pathname === '/devolucoes.html');
+      || location.pathname === '/devolucoes.html';
     // campanhas: de uma conta para outra, a tela de campanhas da outra
     if (['/campanhas-canais.html', '/shopee-campanhas.html'].includes(location.pathname)) return comConta('/promocoes.html', ext);
+    if (['/devolucoes-canais.html', '/shopee-devolucoes.html'].includes(location.pathname)) return comConta('/devolucoes.html', ext);
     if (aquiTem) { const u = new URL(location.href); u.searchParams.delete('conta'); return comConta(u.pathname + u.search, ext); }
     return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;   // Leroy: a tela Pedidos
   };
@@ -169,7 +171,7 @@
     if (location.pathname === '/amazon-ads.html' || location.pathname === '/shopee-ads.html') return '/ads.html';
     if (location.pathname === '/shopee-anuncios.html' || location.pathname === '/magalu-anuncios.html' || location.pathname === '/leroy-anuncios.html') return '/anuncios.html';
     if (location.pathname === '/shopee-campanhas.html' || location.pathname === '/campanhas-canais.html') return '/promocoes.html';
-    if (location.pathname === '/shopee-devolucoes.html' || location.pathname === '/amazon-devolucoes.html') return '/devolucoes.html';
+    if (location.pathname === '/shopee-devolucoes.html' || location.pathname === '/devolucoes-canais.html') return '/devolucoes.html';
     if (location.pathname === '/publicar-canais.html') return '/publicar.html';
     const u = new URL(location.href); u.searchParams.delete('conta');
     return u.pathname + u.search;
@@ -252,7 +254,7 @@
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
       || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html', '/magalu-anuncios.html', '/leroy-anuncios.html'].includes(aqui))
       || (caminho === '/ads.html' && ['/amazon-ads.html', '/shopee-ads.html'].includes(aqui))
-      || (caminho === '/promocoes.html' && ['/shopee-campanhas.html', '/campanhas-canais.html'].includes(aqui)) || (caminho === '/devolucoes.html' && ['/shopee-devolucoes.html', '/amazon-devolucoes.html'].includes(aqui)) || (caminho === '/publicar.html' && aqui === '/publicar-canais.html'))
+      || (caminho === '/promocoes.html' && ['/shopee-campanhas.html', '/campanhas-canais.html'].includes(aqui)) || (caminho === '/devolucoes.html' && ['/shopee-devolucoes.html', '/devolucoes-canais.html'].includes(aqui)) || (caminho === '/publicar.html' && aqui === '/publicar-canais.html'))
       && (caminho !== '/vendas.html' || (query === 'dias=1') === hoje);
     if (atual) a.setAttribute('aria-current', 'page');
     a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONE[icone]}</svg>`;

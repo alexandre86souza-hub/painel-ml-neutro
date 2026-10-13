@@ -10,7 +10,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  main{max-width:1000px;margin:0 auto;padding:24px 16px 72px}
+  main{max-width:1440px;margin:0 auto;padding:24px 16px 72px}
   .painel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     padding:16px;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .painel label{font-size:13px;font-weight:500;display:block;margin-bottom:4px}
@@ -1731,7 +1731,7 @@ $('fRapido').onclick = (ev) => {
   for(const x of $('fRapido').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
   offset = 0; carregar();
 };
-$('fMargemMax').onchange = () => { if($('fRapido').querySelector('[data-f="margem"]').getAttribute('aria-pressed') === 'true'){ offset = 0; carregar(); } };
+$('fMargemMax').onchange = () => { const b = $('fRapido').querySelector('[data-f="margem"]'); if(b.getAttribute('aria-pressed') !== 'true'){ b.click(); return; } offset = 0; carregar(); };
 $('fOrdem').onchange = () => { offset = 0; lembrarFiltros(); carregar(); };
 $('fDias').onchange = () => { offset = 0; lembrarFiltros(); carregar(); };
 // Período e ordenação voltam como estavam (só neste navegador; sem armazenamento, segue o padrão).

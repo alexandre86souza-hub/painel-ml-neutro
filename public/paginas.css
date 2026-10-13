@@ -3,7 +3,7 @@
 :root{--bg:#f4f7fb;--card:#fff;--ink:#16213a;--muted:#5f6b7f;--line:#e3e8f0;--brand:#2563eb;--radius:8px}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif}
-main{max-width:1320px;margin:0 auto;padding:24px 16px 72px;width:100%}
+main{max-width:1680px;margin:0 auto;padding:24px 16px 72px;width:100%}
 h2{font-size:16px;margin:0 0 4px;font-weight:700}
 .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
 a{color:var(--brand)}

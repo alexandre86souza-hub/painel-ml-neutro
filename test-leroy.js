@@ -93,4 +93,13 @@ assert.strictEqual(rep.ciclos[0].vencido, true);
 const mcp = require('node:fs').readFileSync(require('node:path').join(__dirname, 'mcp.js'), 'utf8');
 assert.ok(!/\/api\/leroy/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/leroy');
 
+// devoluções: só linha com reembolso; custo = comissão retida + frete da entrega
+{
+  const dv = L.devolucoesDe([{ valida: true, reembolso: 0, pedido: 'A' }, { valida: true, reembolso: 100, devolvido: true, pedido: 'B', sku: 'AMG-1', faturamento: 100, frete_cliente: 0, comissao: 3, frete: 20, quantidade: 1 },
+    { valida: true, reembolso: 30, devolvido: false, pedido: 'C', faturamento: 100, frete_cliente: 10, comissao: 15, frete: null, quantidade: 1 }]);
+  assert.deepStrictEqual(dv.map((d) => [d.pedido, d.devolvido, d.custo, d.parcial, d.frete_desconhecido]), [['B', 100, 23, false, false], ['C', 30, 15, true, true]]);
+  const rs = require('./canais.js').resumoDevolucoes(dv, 10);
+  assert.deepStrictEqual({ c: rs.resumo.casos, t: rs.resumo.taxa, s: rs.resumo.sem_frete }, { c: 2, t: 0.2, s: 1 });
+}
+
 console.log('Leroy Merlin: endereço, chave, ID da loja, sem dados de comprador, lucro por linha, repasses e fora do MCP: ok');

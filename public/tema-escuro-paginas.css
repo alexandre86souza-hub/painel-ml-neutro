@@ -24,10 +24,8 @@ html[data-tema="escuro"][data-pagina="amazon-anuncios"] .conc-resumo b.nao{color
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.destaque{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="amazon-anuncios"] .tag.voce{background:hsla(214,90%,60%,.14)}
-html[data-tema="escuro"][data-pagina="amazon-anuncios"] .margem-max input{border:1px solid var(--line)}
-/* amazon-devolucoes.html */
-html[data-tema="escuro"][data-pagina="amazon-devolucoes"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
-html[data-tema="escuro"][data-pagina="amazon-devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .seg .margem-max{border-left:1px solid var(--line,hsla(217,30%,60%,.35))}
+html[data-tema="escuro"][data-pagina="amazon-anuncios"] .seg .margem-max input{border:1px solid var(--line)}
 /* amazon.html */
 html[data-tema="escuro"][data-pagina="amazon"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="amazon"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -191,6 +189,9 @@ html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-row{backgroun
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-icon{background:hsla(169,53%,60%,.14);color:hsl(177,82%,72%)}
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-action{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-password-form{background:rgba(14,24,44,.72)}
+/* devolucoes-canais.html */
+html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 /* devolucoes.html */
 html[data-tema="escuro"][data-pagina="devolucoes"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .seg button{background:rgba(14,24,44,.72)}
@@ -326,7 +327,8 @@ html[data-tema="escuro"][data-pagina="leroy-anuncios"] #msg.ok{background:hsla(1
 html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="leroy-anuncios"] .chip-st.promo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
-html[data-tema="escuro"][data-pagina="leroy-anuncios"] .margem-max input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .seg .margem-max{border-left:1px solid var(--line,hsla(217,30%,60%,.35))}
+html[data-tema="escuro"][data-pagina="leroy-anuncios"] .seg .margem-max input{border:1px solid var(--line)}
 /* leroy.html */
 html[data-tema="escuro"][data-pagina="leroy"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="leroy"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -345,7 +347,8 @@ html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg button{background:r
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] .sku-painel input.salvo{background:hsla(135,50%,60%,.14)}
 html[data-tema="escuro"][data-pagina="magalu-anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
-html[data-tema="escuro"][data-pagina="magalu-anuncios"] .margem-max input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg .margem-max{border-left:1px solid var(--line,hsla(217,30%,60%,.35))}
+html[data-tema="escuro"][data-pagina="magalu-anuncios"] .seg .margem-max input{border:1px solid var(--line)}
 /* magalu.html */
 html[data-tema="escuro"][data-pagina="magalu"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="magalu"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
@@ -517,7 +520,8 @@ html[data-tema="escuro"][data-pagina="shopee-anuncios"] .preco-novo input{border
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="shopee-anuncios"] .chip-st.promo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
-html[data-tema="escuro"][data-pagina="shopee-anuncios"] .margem-max input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .seg .margem-max{border-left:1px solid var(--line,hsla(217,30%,60%,.35))}
+html[data-tema="escuro"][data-pagina="shopee-anuncios"] .seg .margem-max input{border:1px solid var(--line)}
 /* shopee-campanhas.html */
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}

@@ -17,7 +17,7 @@ const re = (s) => new RegExp(`^${s}$`);
 const MODULOS = [
   { id: 'vendas', nome: 'Vendas e relatórios', descricao: 'Dashboard, Todas as contas, Pedidos, Performance, ABC, Full, Devoluções e Reputação',
     paginas: ['/inicio.html', '/geral.html', '/vendas.html', '/performance.html', '/abc.html', '/full.html', '/devolucoes.html',
-      '/shopee-devolucoes.html', '/amazon-devolucoes.html', '/reputacao.html'],
+      '/shopee-devolucoes.html', '/devolucoes-canais.html', '/reputacao.html'],
     rotas: ['GET /api/(dashboard|vendas|performance|abc|contas/resumo|contas/lojas|contas/atencao|full|reputacao|periodo|saude)(/.*)?',
       '(GET|POST|PUT) /api/devolucoes(/.*)?', `GET /api/${CANAIS}/(pedidos|performance|abc|vendas|full|devolucoes)(/.*)?`,
       'POST /api/leroy/frete'] },
