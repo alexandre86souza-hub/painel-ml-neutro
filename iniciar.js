@@ -117,6 +117,7 @@ async function main() {
     urlFixa: process.env.URL_PUBLICA || '', log, arquivoLog: path.join(LOGS, 'tunel.log'), arquivoEstado: TUNEL_SALVO,
   });
   process.env.SCRAPER_URL = scraper.url;
+  process.env.SCRAPER_CHAVE = scraper.chave;   // server.js manda no X-Scraper-Chave
 
   const S = require('./server.js');
   const D = require('./db.js');

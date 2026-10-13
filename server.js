@@ -344,10 +344,12 @@ const scraperFora = () => {
       : 'Suba o painel com "npm start": ele sobe o scraper junto.';
   return Object.assign(new Error(`O scraper não respondeu em ${SCRAPER()}. ${detalhe}`), { status: 503 });
 };
+// O scraper só atende com a chave da partida (scraper-processo.js), contra página da web que alcance o 127.0.0.1.
+const chaveScraper = () => (process.env.SCRAPER_CHAVE ? { 'X-Scraper-Chave': process.env.SCRAPER_CHAVE } : {});
 async function scraper(pathname, ms = 120000, opts = {}) {
   let r;
   try {
-    r = await fetch(SCRAPER() + pathname, { ...opts, signal: AbortSignal.timeout(ms) });
+    r = await fetch(SCRAPER() + pathname, { ...opts, headers: { ...opts.headers, ...chaveScraper() }, signal: AbortSignal.timeout(ms) });
   } catch (e) {
     // demorar não é estar fora do ar: o scraper está de pé, só lento (Mac sobrecarregado)
     if (e.name === 'TimeoutError') {
@@ -2339,6 +2341,26 @@ segurança.</p>
 <p>Dúvidas sobre este aviso: pelos canais de atendimento de ${nome} nos marketplaces em que vendemos.</p>`);
 }
 
+// /webhook é público (o ML exige): só grava a notificação do NOSSO app para uma conta conectada, no
+// formato do ML (tópico e caminho curtos, sem texto livre — ela chega ao Claude por ml_notificacoes).
+// O resto recebe 200 e some (erro faria o ML desativar a URL). Até 300 por minuto por IP.
+function webhookAceita(nota) {
+  if (!nota || typeof nota !== 'object') return false;
+  const { clientId } = credenciais();
+  if (!clientId || String(nota.application_id) !== String(clientId)) return false;
+  if (!D.contasListar().some((c) => String(c.ml_user_id) === String(nota.user_id))) return false;
+  return typeof nota.topic === 'string' && /^[a-z0-9_]{1,40}$/i.test(nota.topic)
+    && typeof nota.resource === 'string' && /^\/[A-Za-z0-9_\-/.?=&]{1,200}$/.test(nota.resource);
+}
+const webhookIps = new Map();
+function webhookNoLimite(ip) {
+  const agora = Date.now();
+  if (webhookIps.size > 5000) for (const [k, v] of webhookIps) if (agora - v.desde > 60000) webhookIps.delete(k);
+  let v = webhookIps.get(ip);
+  if (!v || agora - v.desde > 60000) webhookIps.set(ip, v = { n: 0, desde: agora });
+  return ++v.n <= 300;
+}
+
 async function tratarPublico(req, res) {
   const url = new URL(req.url, 'http://publico');
   const send = (code, obj) => enviarJson(res, code, obj);
@@ -2350,10 +2372,11 @@ async function tratarPublico(req, res) {
     if (req.method === 'GET') return send(200, { ok: true });
     if (req.method !== 'POST') return send(405, { error: 'use POST' });
     try {
+      if (!webhookNoLimite(ipDoCliente(req))) return send(200, { ok: true });
       const cru = await lerCorpo(req);
       let nota = null;
       try { nota = JSON.parse(cru); } catch {} // vem de fora: é dado, nunca comando
-      D.notificacaoSalvar(nota, cru);
+      if (webhookAceita(nota)) D.notificacaoSalvar(nota, cru);
     } catch (e) {
       console.error('webhook:', e.message);
     }
@@ -2601,7 +2624,7 @@ async function tratarPainelNoContexto(req, res, online = false) {
   if (req.method === 'GET' && url.pathname === '/api/navegador/tela') {
     let r;
     try {
-      r = await fetch(SCRAPER() + '/navegador/tela', { signal: AbortSignal.timeout(65000) });
+      r = await fetch(SCRAPER() + '/navegador/tela', { headers: chaveScraper(), signal: AbortSignal.timeout(65000) });
     } catch { return send(503, { error: scraperFora().message }); }
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));

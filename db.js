@@ -193,14 +193,20 @@ function produtoSincronizar(mlUserId, it) {
 }
 
 // ---------- notificações ----------
+// Vem da internet (porta pública): o server.js só grava a do app e das contas conectadas; aqui o tamanho é
+// cortado e a tabela guarda 30 dias / 5.000 linhas, para ninguém encher o disco mandando POST.
+const NOTIF_DIAS = 30, NOTIF_MAX = 5000;
 function notificacaoSalvar(nota, cru) {
-  db.prepare(`INSERT INTO notificacoes (recebida_em, topic, resource, ml_user_id,
+  const txt = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null);
+  const r = db.prepare(`INSERT INTO notificacoes (recebida_em, topic, resource, ml_user_id,
                                         application_id, attempts, payload)
               VALUES (?,?,?,?,?,?,?)`)
-    .run(agora(), nota?.topic ?? null, nota?.resource ?? null,
+    .run(agora(), txt(nota?.topic, 60), txt(nota?.resource, 300),
       Number.isInteger(nota?.user_id) ? nota.user_id : null,
-      nota?.application_id != null ? String(nota.application_id) : null,
-      Number.isInteger(nota?.attempts) ? nota.attempts : null, cru.slice(0, 20000));
+      nota?.application_id != null ? String(nota.application_id).slice(0, 40) : null,
+      Number.isInteger(nota?.attempts) ? nota.attempts : null, String(cru).slice(0, 4000));
+  db.prepare('DELETE FROM notificacoes WHERE id <= ? OR recebida_em < ?')
+    .run(Number(r.lastInsertRowid) - NOTIF_MAX, new Date(Date.now() - NOTIF_DIAS * 864e5).toISOString());
 }
 const notificacoesListar = (limite = 50) =>
   db.prepare(`SELECT id, recebida_em, topic, resource, ml_user_id, attempts

@@ -359,7 +359,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   marcados "igual ao meu" ficam em `ml_concorrentes` e o filtro `/api/items?concorrentes=1`
   usa a mesma lista de ids do filtro por produto. Anúncios das contas conectadas saem da lista
   (`classificarBusca` + nome do vendedor). Lucro em cada preço: `/api/items/:id/lucro-nos-precos`.
-- Scraper: `scraper-processo.js` sobe e reinicia o Python; ele escuta só em `127.0.0.1`.
+- Scraper: `scraper-processo.js` sobe e reinicia o Python; ele escuta só em `127.0.0.1`. Só atende Host
+  127.0.0.1/localhost e, com `SCRAPER_CHAVE` (gerada a cada partida, passada pelo iniciar.js), o cabeçalho `X-Scraper-Chave`
+  (contra DNS rebinding). `/webhook` (público) só grava a notificação do app (`ml_client_id`) para conta conectada, no
+  formato do ML, até 300/min por IP; a tabela guarda 30 dias / 5.000 linhas.
 - `mcp.js` expõe as MESMAS rotas do painel como ferramentas MCP (stdio, sem porta, sem OAuth:
   usa a conta já conectada). Ferramenta nova = uma linha na tabela `FERRAMENTAS` apontando
   para a rota; `server.js#despachar` é o único caminho, e `test-mcp.js` reprova ferramenta

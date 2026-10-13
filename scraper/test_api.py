@@ -2,7 +2,7 @@
 from fastapi.testclient import TestClient
 import api
 
-c = TestClient(api.app)
+c = TestClient(api.app, base_url="http://127.0.0.1:8100")
 PROD = '<h1 class="ui-pdp-title">X</h1><meta itemprop="price" content="9.90">'
 URL_OK = "https://www.mercadolivre.com.br/x/p/MLB1"
 
@@ -13,6 +13,14 @@ def _finge(html):
 
 def test():
     assert c.get("/health").json() == {"ok": True}
+
+    # DNS rebinding: Host de fora e recusado; com a chave do painel, so quem a manda entra
+    assert TestClient(api.app, base_url="http://atacante.example:8100").get("/health").status_code == 403
+    api.os.environ["SCRAPER_CHAVE"] = "k1"
+    assert c.get("/health").status_code == 403
+    assert c.get("/health", headers={"X-Scraper-Chave": "errada"}).status_code == 403
+    assert c.get("/health", headers={"X-Scraper-Chave": "k1"}).status_code == 200
+    del api.os.environ["SCRAPER_CHAVE"]
 
     # guarda de entrada: so https e so dominios do Mercado Livre
     for ruim in ["https://evil.example.com/x", "http://www.mercadolivre.com.br/x",

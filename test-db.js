@@ -49,6 +49,15 @@ D.notificacaoSalvar({ topic: 'items', resource: '/items/MLB1', user_id: 111, att
 D.notificacaoSalvar(null, 'isto nao e json');
 assert.strictEqual(D.notificacoesListar().length, 2);
 assert.strictEqual(D.notificacoesListar()[0].topic, null, 'payload inválido vira registro sem topic');
+D.notificacaoSalvar({ topic: 'x'.repeat(500), resource: '/' + 'y'.repeat(5000) }, 'z'.repeat(90000));
+assert.ok(D.notificacoesListar()[0].topic.length <= 60 && D.notificacoesListar()[0].resource.length <= 300, 'notificação é cortada');
+assert.ok(D.db.prepare('SELECT MAX(LENGTH(payload)) n FROM notificacoes').get().n <= 4000);
+D.db.prepare("UPDATE notificacoes SET recebida_em='2020-01-01T00:00:00.000Z' WHERE id=(SELECT MIN(id) FROM notificacoes)").run();
+D.notificacaoSalvar(null, 'nova');
+assert.strictEqual(D.notificacoesListar().length, 3, 'notificação com mais de 30 dias sai');
+D.db.exec('DELETE FROM notificacoes');
+D.notificacaoSalvar({ topic: 'items', resource: '/items/MLB1', user_id: 111, attempts: 1 }, '{...}');
+D.notificacaoSalvar(null, 'isto nao e json');
 
 // remover conta reaponta a ativa para a que sobrou
 D.contaRemover(222);

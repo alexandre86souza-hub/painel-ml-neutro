@@ -8,6 +8,7 @@
 // Escuta só em 127.0.0.1: ele dirige um navegador com a conta do ML logada.
 const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const P = require('./processos.js');
 
 const ESPERA_SUBIR_MS = 180000;          // 1ª vez o uv pode instalar dependências
@@ -22,6 +23,9 @@ class Scraper extends EventEmitter {
     this.dir = dir;
     this.porta = porta;
     this.url = `http://127.0.0.1:${porta}`;
+    // Segredo de cada partida: o Python só atende quem manda X-Scraper-Chave. Uma página da web que chegue ao
+    // 127.0.0.1 (DNS rebinding) não o conhece. Fica fora do info(), que vai para a tela.
+    this.chave = crypto.randomBytes(24).toString('hex');
     this.log = log;
     this.arquivoLog = arquivoLog;
     this.estado = 'parado';     // parado | iniciando | rodando | reiniciando | indisponivel
@@ -71,7 +75,7 @@ class Scraper extends EventEmitter {
     this._cauda = [];
     const args = ['run', '--frozen', 'python', '-m', 'uvicorn', 'api:app',
       '--host', '127.0.0.1', '--port', String(this.porta)];
-    const proc = P.iniciar(uv, args, { cwd: this.dir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+    const proc = P.iniciar(uv, args, { cwd: this.dir, env: { ...process.env, PYTHONUNBUFFERED: '1', SCRAPER_CHAVE: this.chave } });
     this._proc = proc;
     this.pid = proc.pid;
     // direto no arquivo: esta linha é nossa, não pode virar "motivo da queda"
@@ -106,7 +110,7 @@ class Scraper extends EventEmitter {
 
   async _saudavel() {
     try {
-      const r = await fetch(`${this.url}/health`, { signal: AbortSignal.timeout(4000) });
+      const r = await fetch(`${this.url}/health`, { headers: { 'X-Scraper-Chave': this.chave }, signal: AbortSignal.timeout(4000) });
       return r.ok;
     } catch { return false; }
   }

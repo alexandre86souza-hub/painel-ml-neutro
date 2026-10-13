@@ -54,6 +54,7 @@ echo "== HTTPS (Caddy)"
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMINIO {
 	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy 127.0.0.1:3101 {
 		header_up -Cf-Connecting-Ip
 	}

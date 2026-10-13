@@ -8,13 +8,16 @@ OpenAPI (para gerar cliente): http://127.0.0.1:8100/openapi.json
 Escuta so em 127.0.0.1. Nao exponha na rede: ela dirige um navegador
 com a SUA sessao logada do Mercado Livre.
 """
+import hmac
+import os
 import threading
 from concurrent.futures import TimeoutError as Demorou
 from contextlib import asynccontextmanager, contextmanager
 from typing import Literal
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import scrape_cli
@@ -56,6 +59,23 @@ app = FastAPI(
     description="Raspa produtos do Mercado Livre usando uma sessao de navegador ja logada.",
     lifespan=_ciclo,
 )
+
+# So o painel fala com esta API. Host diferente de 127.0.0.1/localhost = pagina da web chegando ao
+# loopback por DNS rebinding: recusa. Com SCRAPER_CHAVE (o painel gera uma por partida), todo pedido
+# precisa do cabecalho X-Scraper-Chave igual; uma pagina da web nao o conhece.
+HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
+
+
+@app.middleware("http")
+async def _so_o_painel(request: Request, chamar):
+    host = (request.headers.get("host") or "").lower()
+    nome = host.rsplit(":", 1)[0] if not host.endswith("]") else host
+    if nome not in HOSTS_LOCAIS:
+        return JSONResponse({"detail": "host recusado"}, status_code=403)
+    chave = os.environ.get("SCRAPER_CHAVE", "")
+    if chave and not hmac.compare_digest(request.headers.get("x-scraper-chave", ""), chave):
+        return JSONResponse({"detail": "chave do painel ausente"}, status_code=403)
+    return await chamar(request)
 
 
 class Produto(BaseModel):
