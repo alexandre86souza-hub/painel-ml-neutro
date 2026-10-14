@@ -1132,10 +1132,24 @@ const routes = {
     const comProduto = juntar(soProduto, soConc, soFiltro);
 
     let ids, total, aviso = null;
-    if (comProduto && !comProduto.size) return { total: 0, offset, dias, itens: [], aviso: soConc && !soConc.size
+    // Busca por código do anúncio (MLB123…, o link dos avisos do sino): a busca do ML é só no título e dava 0 anúncios.
+    // Abre o anúncio direto se for desta conta; de outra conta conectada, diz qual.
+    let soId = null;
+    if (/^[A-Z]{3}\d{6,}$/i.test(q)) {
+      const id = q.toUpperCase();
+      const it = await ml(`/items/${id}?attributes=id,seller_id`).catch(() => null);
+      if (it && String(it.seller_id) === String(conta.ml_user_id)) soId = [id];
+      else {
+        const outra = it && D.contasListar().find((c) => String(c.ml_user_id) === String(it.seller_id));
+        return { total: 0, offset, dias, itens: [], conta_do_anuncio: outra ? outra.ml_user_id : null, aviso: outra ? `O anúncio ${id} é da conta ${outra.nickname || outra.ml_user_id}: abrindo nela…`
+          : `O anúncio ${id} não é desta conta${it ? '' : ' (ou não foi encontrado no Mercado Livre)'}.` };
+      }
+    }
+    if (soId) { ids = soId; total = 1; }
+    else if (comProduto && !comProduto.size) return { total: 0, offset, dias, itens: [], aviso: soConc && !soConc.size
       ? 'Nenhum anúncio tem concorrente marcado ainda: abra Detalhes → Concorrentes num anúncio e marque os iguais ao seu.'
       : soFiltro && !soFiltro.size ? 'Nenhum anúncio neste filtro.' : soConc ? 'Nenhum anúncio com concorrente marcado neste filtro.' : `Nenhum anúncio tem o produto ${produto} no SKU.` };
-    if (ORDENS_PERIODO.includes(ordem) || comProduto) {
+    if (soId) { /* já tem o anúncio */ } else if (ORDENS_PERIODO.includes(ordem) || comProduto) {
       // O ML só ordena pelo total de sempre. "No período" e curva ABC saem da cópia local
       // dos pedidos: pega todos os anúncios do filtro, ordena aqui e corta a página.
       const semVenda90 = ordem === 'sem_venda_90';

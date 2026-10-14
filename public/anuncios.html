@@ -1710,6 +1710,13 @@ async function carregar(){
     $('total').textContent = `${total} anúncio(s)`;
     $('lista').innerHTML = '';
     if(r.aviso) aviso(r.aviso, 'ok');
+    // código de anúncio de outra conta conectada (aviso do sino): troca a conta e abre de novo com a mesma busca
+    if(r.conta_do_anuncio && !sessionStorage.getItem('trocou:' + $('fBusca').value)){
+      try{ sessionStorage.setItem('trocou:' + $('fBusca').value, '1'); }catch{}
+      await api('/api/accounts/active', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ml_user_id: Number(r.conta_do_anuncio) }) });
+      try{ localStorage.removeItem('painel.marca'); }catch{}
+      location.href = '/anuncios.html?q=' + encodeURIComponent($('fBusca').value); return;
+    }
     if(!r.itens.length){
       $('lista').innerHTML = '<li class="vazio">Nenhum anúncio com esse filtro.</li>';
       $('paginacao').hidden = true; return;
