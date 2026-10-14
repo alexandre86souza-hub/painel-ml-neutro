@@ -300,8 +300,8 @@ function cartaoConta(c, cor, total){
     txt.appendChild(tl);
   } else txt.appendChild(el('small', null, lojaDe(c)));
   nome.append(ic, txt);
-  const bt = el('button', 'abrir', (c.amazon ? 'Abrir Amazon' : c.externa ? 'Ver pedidos' : 'Abrir Dashboard') + ' →'); bt.type = 'button';
-  bt.setAttribute('aria-label', `${bt.textContent.replace(' →', '')}: ${nomeDe(c)}`);
+  const bt = el('button', 'abrir', 'Abrir Dashboard →'); bt.type = 'button';
+  bt.setAttribute('aria-label', `Abrir Dashboard: ${nomeDe(c)}`);  // mesmo nome em todas as lojas; leva ao Dashboard da loja no menu (Amazon: tela Amazon; Shopee, Leroy, Magalu: Pedidos)
   bt.onclick = () => (c.externa ? (location.href = c.tela) : abrirConta(c.ml_user_id));
   topo.append(nome, bt); k.appendChild(topo);
   if(c.erro){ k.appendChild(el('p', null, 'Não consegui ler esta conta: ' + c.erro)); return k; }
