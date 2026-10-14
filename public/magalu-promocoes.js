@@ -187,13 +187,32 @@
       const lp = el('label', 'sub'); lp.style.cssText = 'display:flex;gap:6px;align-items:center';
       const ipct = el('input'); ipct.type = 'number'; ipct.min = '1'; ipct.max = '90'; ipct.step = '0.5'; ipct.value = p.desconto && !p.desconto.variavel && p.desconto.tipo === 'pct' ? p.desconto.valor : 10; ipct.style.width = '70px';
       lp.append('Desconto (%)', ipct);
-      f.append(busca, lp); d.appendChild(f);
+      // filtros para escolher (somam com a busca): margem mínima no preço de hoje, palavra no título, produto do kit
+      const fIn = (ph, w) => { const i = el('input'); i.placeholder = ph; i.style.cssText = `width:${w}px;font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px`; return i; };
+      const fM = fIn('ex.: 30', 70), fT = fIn('ex.: autolimpante', 140), fP = fIn('ex.: BP-408', 110);
+      fM.type = 'number'; fM.setAttribute('aria-label', 'Margem mínima em %'); fT.setAttribute('aria-label', 'Palavra no título'); fP.setAttribute('aria-label', 'Produto do kit');
+      const rot = (t, i, depois) => { const l = el('label', 'sub'); l.style.cssText = 'display:flex;gap:6px;align-items:center'; l.append(t, i); if(depois) l.append(depois); return l; };
+      const bMarcar = el('button', 'bt pequeno', 'Marcar todos do filtro'); bMarcar.type = 'button';
+      const info = el('span', 'sub');
+      f.append(busca, lp, rot('Margem mínima', fM, '%'), rot('Título contém', fT), rot('Produto no kit', fP), bMarcar, info); d.appendChild(f);
+      const nums = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+      const filtrados = () => {
+        const q = busca.value.trim().toLowerCase(), tit = fT.value.trim().toLowerCase(), prods = nums(fP.value);
+        const mMin = fM.value.trim() === '' ? null : Number(fM.value.replace(',', '.')) / 100;
+        return r.anuncios.filter((a) => {
+          if(q && ![a.titulo, a.sku, a.sku_painel].some((t) => (t || '').toLowerCase().includes(q))) return false;
+          if(tit && !(a.titulo || '').toLowerCase().includes(tit)) return false;
+          if(prods.length){ const ns = a.produtos?.length ? a.produtos.map(Number) : nums(a.sku_painel || a.sku); if(!prods.every((p) => ns.includes(p))) return false; }
+          if(mMin != null){ const l = lucroDe(a, a.preco); if(l == null || l / a.preco < mMin) return false; }   // margem no preço de hoje
+          return true;
+        });
+      };
       const tb = el('div', 'tabela-rolagem'); d.appendChild(tb);
       const ac = el('div', 'acoes-camp'); d.appendChild(ac);
       const esc = new Set();
       const pintar = () => {
-        const q = busca.value.trim().toLowerCase();
-        const l = r.anuncios.filter((a) => !q || [a.titulo, a.sku, a.sku_painel].some((t) => (t || '').toLowerCase().includes(q))).slice(0, 300);
+        const todosF = filtrados(); const l = todosF.slice(0, 300);
+        info.textContent = `${numero(todosF.length)} anúncio(s) no filtro` + (todosF.length > l.length ? ` (mostrando ${numero(l.length)})` : '');
         const t = el('table'); const cab = el('tr');
         for(const h of ['', 'Anúncio', 'Preço', 'Preço promocional', 'Lucro na promoção', 'Vendas 30 d']) cab.appendChild(el('th', null, h));
         t.appendChild(cab);
@@ -214,6 +233,8 @@
           .map((a) => ({ sku: a.sku, preco: Math.round(a.preco * (1 - Number(ipct.value) / 100) * 100) / 100 })));
         ac.appendChild(b); };
       busca.oninput = pintar; ipct.oninput = () => { pintar(); bt(); };
+      fM.oninput = fT.oninput = fP.oninput = pintar;
+      bMarcar.onclick = () => { for(const a of filtrados()) esc.add(a.sku); pintar(); bt(); };
       d.ontoggle = () => { if(d.open && !tb.firstChild) pintar(); };
       box.appendChild(d);
     }

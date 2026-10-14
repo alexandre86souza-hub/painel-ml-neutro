@@ -1037,14 +1037,25 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS shopee_anun_loja ON shopee_anuncios(shop_id);
 `);
+// Campanhas da Shopee: a Shopee recusa anúncio cujo preço SUBIU há pouco (e por outras regras). subiu_em = quando o painel viu o
+// preço original subir (cópia a cada 6 h ou preço mudado pela tela); recusa/recusa_em = último motivo de recusa num desconto.
+colunaNova('shopee_anuncios', 'subiu_em TEXT');
+colunaNova('shopee_anuncios', 'recusa TEXT');
+colunaNova('shopee_anuncios', 'recusa_em TEXT');
 function shopeeAnunciosGravar(shopId, linhas) {
   const st = db.prepare(`INSERT OR REPLACE INTO shopee_anuncios (shop_id, item_id, model_id, nome, variacao, sku, preco, preco_original,
-    promocao, estoque, status, imagem, vendas_total, visitas, lido_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    promocao, estoque, status, imagem, vendas_total, visitas, lido_em, subiu_em, recusa, recusa_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const antes = db.prepare('SELECT preco_original, subiu_em, recusa, recusa_em FROM shopee_anuncios WHERE item_id=? AND model_id=?');
   const quando = agora();
   db.exec('BEGIN');
   try {
-    for (const a of linhas) st.run(shopId, a.item_id, a.model_id || 0, a.nome ?? null, a.variacao ?? null, a.sku ?? null, a.preco ?? null,
-      a.preco_original ?? null, a.promocao ? 1 : 0, a.estoque ?? null, a.status ?? null, a.imagem ?? null, a.vendas_total ?? null, a.visitas ?? null, quando);
+    for (const a of linhas) {
+      const v = antes.get(a.item_id, a.model_id || 0);
+      const subiu = v && v.preco_original != null && a.preco_original != null && a.preco_original > v.preco_original + 0.009 ? quando : v?.subiu_em ?? null;
+      st.run(shopId, a.item_id, a.model_id || 0, a.nome ?? null, a.variacao ?? null, a.sku ?? null, a.preco ?? null,
+        a.preco_original ?? null, a.promocao ? 1 : 0, a.estoque ?? null, a.status ?? null, a.imagem ?? null, a.vendas_total ?? null, a.visitas ?? null, quando,
+        subiu, v?.recusa ?? null, v?.recusa_em ?? null);
+    }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
@@ -1053,7 +1064,13 @@ const shopeeAnunciosLimparAntes = (shopId, quando) => db.prepare('DELETE FROM sh
 const shopeeSkuGravar = (itemId, modelId, sku) => db.prepare('UPDATE shopee_anuncios SET sku=? WHERE item_id=? AND model_id=?').run(sku, itemId, modelId || 0);
 const shopeeAnuncios = (shopId) => db.prepare('SELECT * FROM shopee_anuncios WHERE shop_id=? ORDER BY item_id, model_id').all(shopId);
 const shopeePrecoGravar = (itemId, modelId, preco, original) =>
-  db.prepare('UPDATE shopee_anuncios SET preco=?, preco_original=? WHERE item_id=? AND model_id=?').run(preco, original, itemId, modelId || 0);
+  db.prepare(`UPDATE shopee_anuncios SET preco=?, subiu_em=CASE WHEN ? > IFNULL(preco_original, 1e12) + 0.009 THEN ? ELSE subiu_em END, preco_original=?
+    WHERE item_id=? AND model_id=?`).run(preco, original, agora(), original, itemId, modelId || 0);
+// motivo da Shopee ao recusar o anúncio num desconto (model 0 = o anúncio todo)
+const shopeeRecusaGravar = (itemId, modelId, motivo) => db.prepare(`UPDATE shopee_anuncios SET recusa=?, recusa_em=? WHERE item_id=? AND (?=0 OR model_id=?)`)
+  .run(String(motivo || 'recusado').slice(0, 300), agora(), itemId, modelId || 0, modelId || 0);
+// aceito num desconto: a recusa antiga deixa de valer
+const shopeeRecusaLimpar = (itemId) => db.prepare('UPDATE shopee_anuncios SET recusa=NULL, recusa_em=NULL WHERE item_id=?').run(itemId);
 
 // Linhas de venda de uma loja na janela (pedido sem detalhe ainda não tem data: fica de fora).
 const shopeeVendasPeriodo = (shopId, de, ate) => db.prepare(`
@@ -2096,7 +2113,7 @@ module.exports = {
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
   shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,
   shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
-  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeePrecoGravar,
+  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeePrecoGravar, shopeeRecusaGravar, shopeeRecusaLimpar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,

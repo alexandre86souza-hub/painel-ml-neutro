@@ -408,6 +408,9 @@ function criar({ D, daLoja, vendas }) {
       }
       const recusadosItens = new Set(recusados.map((x) => x.item_id));
       const aceitos = lista.filter((x) => !recusadosItens.has(x.item_id)).length;
+      // guarda o motivo (a tela de criar deixa de fora quem a Shopee recusou há pouco); aceito = a recusa antiga sai
+      try { for (const x of recusados) D.shopeeRecusaGravar(x.item_id, x.model_id, x.motivo);
+        for (const x of lista) if (!recusadosItens.has(x.item_id)) D.shopeeRecusaLimpar(x.item_id); } catch { /* só aviso */ }
       let apagada = false;
       if (!aceitos) { try { await daLoja(shopId, '/api/v2/discount/delete_discount', {}, { discount_id: discountId }); apagada = true; } catch {} }
       cache.delete(`camp:${shopId}`);

@@ -2049,6 +2049,8 @@ for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), req
   if (m.composicao) custosMod = m;
   if (m.atualizarDevolucoes) devolucoesMod = m;
 }
+// Filtro "Produto no kit" ao escolher anúncios de uma promoção do ML (módulo campanhas): ids da conta com o produto no SKU
+routes['GET /api/promocoes/com-produto'] = async (url) => ({ ids: await custosMod.idsComProduto(contaOuErro(), url.searchParams.get('produto')) });
 
 // Histórico do Mercado Ads: a conta dia a dia + as campanhas. Medido em 29/09/2026:
 // campaigns/search com aggregation_type=DAILY devolve UMA linha por dia com os totais do
@@ -2782,7 +2784,10 @@ async function tratarPainelNoContexto(req, res, online = false) {
       let body = {};
       // A tabela de produtos colada da planilha passa de 64 KB (942 linhas deram ~66 KB).
       const max = url.pathname === '/api/produtos-custo' ? 2 * 1024 * 1024
-        : url.pathname === '/api/marca' ? 512 * 1024 : undefined;   // planilha colada e logo em base64
+        : url.pathname === '/api/marca' ? 512 * 1024   // planilha colada e logo em base64
+        // campanhas e preço em massa com centenas de anúncios marcados (14/10/2026: desconto da Shopee com ~1000 deu 413)
+        : /^\/api\/(shopee\/campanhas|magalu\/campanhas|campanhas-canais|leroy\/anuncios\/preco|amazon\/campanhas|leroy\/campanhas)/.test(url.pathname) ? 1024 * 1024
+        : undefined;
       if (req.method === 'POST' || req.method === 'PUT') body = JSON.parse((await lerCorpo(req, max)) || '{}');
       const resposta = await despachar(req.method, url, body);
       if (req.method !== 'GET') D.auditoriaGravar(quem.login, req.method, url.pathname, 200);

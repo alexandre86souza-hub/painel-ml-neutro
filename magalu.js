@@ -413,7 +413,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const ev = env[a.sku];
       return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: ev ? ev.preco : a.preco, preco_lista: a.preco_lista,
         preco_enviado_em: ev ? ev.em : null, preco_magalu: ev ? a.preco : null,
-        estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
+        estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, produtos: cs.componentes.map((c) => c.numero).filter((v) => v != null), componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
         faltando: cs.faltando, vendas_30: x?.v30 || 0, taxa_pct: x && x.fat > 0 ? x.tar / x.fat : media, taxa_do_produto: !!(x && x.fat > 0),
         foto: x?.foto || null, link: a.url };
     }).sort((a, b) => (b.vendas_30 - a.vendas_30) || (a.status === 'PUBLISHED' ? -1 : 1) - (b.status === 'PUBLISHED' ? -1 : 1) || String(a.titulo).localeCompare(String(b.titulo)));
@@ -547,7 +547,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
           lucro_promo: lucroNoPreco(a, ctx, promo), lucro_cheio: lucroNoPreco(a, ctx, original) };
       });
       const anuncios = an.itens.filter((a) => a.ativo && !dentro.has(a.sku)).map((a) => ({ sku: a.sku, titulo: a.titulo, preco: a.preco, estoque: a.estoque,
-        sku_painel: a.sku_painel, custo_unit: a.custo_unit, taxa_pct: a.taxa_pct, vendas_30: a.vendas_30 }));
+        sku_painel: a.sku_painel, custo_unit: a.custo_unit, taxa_pct: a.taxa_pct, vendas_30: a.vendas_30, produtos: a.produtos }));
       return { id, itens, anuncios, ...ctx };
     },
     // Entrar em uma ou várias promoções da Magalu (aceita a coparticipação de cada uma)

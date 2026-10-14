@@ -473,7 +473,8 @@ function criar({ D, janela }) {
           const x = porSku.get(o.sku);
           const ativo = o.desconto && (!o.desconto.fim || Date.parse(o.desconto.fim) > agora) && (!o.desconto.inicio || Date.parse(o.desconto.inicio) <= agora);
           return { ...o, foto: x?.foto || null, preco: ativo ? o.desconto.preco : o.cheio, em_desconto: !!ativo, vendas_30: x?.v30 || 0,
-            custo_unit: cs.custo, faltando: cs.faltando, taxa_pct: x?.fat > 0 ? x.taxa / x.fat : media, taxa_do_produto: !!(x?.fat > 0) };
+            custo_unit: cs.custo, faltando: cs.faltando, taxa_pct: x?.fat > 0 ? x.taxa / x.fat : media, taxa_do_produto: !!(x?.fat > 0),
+            produtos: cs.componentes.map((c) => c.numero).filter((v) => v != null) };   // números do kit (filtro das campanhas)
         }).sort((a, b) => (b.vendas_30 - a.vendas_30) || String(a.titulo).localeCompare(String(b.titulo))) };
     },
     // Muda o preço cheio de várias ofertas num PRI01 só (1 por minuto). O desconto que estiver valendo é mandado de

@@ -1020,7 +1020,8 @@ function criar({ D, janela }) {
       const desconto = dp?.value_with_tax != null ? { preco: Number(dp.value_with_tax), inicio: dp.start_at || null, fim: dp.end_at || null } : null;
       const cheio = po?.our_price?.[0]?.schedule?.[0]?.value_with_tax != null ? Number(po.our_price[0].schedule[0].value_with_tax) : null;
       const m = taxas.mediaSku(it.sku, fba ? 'FBA' : 'proprio') || taxas.mediaCanal(fba ? 'FBA' : 'proprio');
-      return { sku: it.sku, sku_painel: skuPainel !== it.sku ? skuPainel : null, asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
+      return { sku: it.sku, sku_painel: skuPainel !== it.sku ? skuPainel : null, produtos: cs.componentes.map((c) => c.numero).filter((v) => v != null),
+        asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
         nome_amazon: s.itemName || null, foto: s.mainImage?.link || fotos.get(it.sku)?.foto || null, status: s.status || [],
         tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null, cheio, desconto,
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',

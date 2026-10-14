@@ -152,6 +152,10 @@
     .itens img{width:40px;height:40px}
     .acoes{grid-column:1/-1;justify-content:flex-start}
   }
+  .filtros-esc{display:inline-flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;margin-right:10px}
+  .filtros-esc label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
+  .filtros-esc input{font:inherit;font-size:13px;padding:5px 8px;border:1px solid #d5d7db;border-radius:8px;width:120px}
+  .filtros-esc input#fMargemMin{width:64px}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -242,6 +246,13 @@
       </div>
     </div>
     <div class="lote" id="lote" hidden>
+      <!-- filtros para escolher (valem para os anúncios carregados; "Carregar mais" traz mais) -->
+      <span class="filtros-esc">
+        <label>Margem na promoção ≥ <input id="fMargemMin" type="number" step="1" min="-100" max="100" placeholder="ex.: 30" aria-label="Margem mínima na promoção em %"> %</label>
+        <label>Título contém <input id="fTitulo" type="text" placeholder="ex.: autolimpante" aria-label="Palavra no título"></label>
+        <label>Produto no kit <input id="fProduto" type="text" placeholder="ex.: BP-408" aria-label="Produto do kit"></label>
+        <span id="fInfo" class="lote-qtd"></span>
+      </span>
       <label class="marcar-todos"><input type="checkbox" id="ckTodos"> Selecionar todos da lista</label>
       <span id="loteQtd" class="lote-qtd">0 selecionado(s)</span>
       <span id="lotePreco" hidden>
@@ -533,8 +544,38 @@ function atualizarLote(){
   const caixas = [...$('itens').querySelectorAll('input.ck-item:not(:disabled)')];
   $('ckTodos').checked = caixas.length > 0 && caixas.every((c) => c.checked);
 }
+// ---------- filtros para escolher os anúncios (margem na promoção, título, produto do kit) ----------
+let idsProduto = null, prodPedido = '';
+async function lerProduto(){
+  const v = $('fProduto').value.trim(); prodPedido = v;
+  if(!v){ idsProduto = null; aplicarFiltros(); return; }
+  if(!/d/.test(v)) return;
+  try{ const r = await api('/api/promocoes/com-produto?produto=' + encodeURIComponent(v)); if(prodPedido === v){ idsProduto = new Set(r.ids); aplicarFiltros(); } }
+  catch(e){ aviso(e.message, 'erro'); }
+}
+let tmProd = null;
+$('fProduto').oninput = () => { clearTimeout(tmProd); tmProd = setTimeout(lerProduto, 400); };
+$('fTitulo').oninput = $('fMargemMin').oninput = () => aplicarFiltros();
+function aplicarFiltros(){
+  const tit = $('fTitulo').value.trim().toLowerCase();
+  const mTxt = $('fMargemMin').value.trim(); const mMin = mTxt === '' ? null : Number(mTxt.replace(',', '.')) / 100;
+  let vis = 0, tot = 0;
+  for(const li of $('itens').children){
+    if(!li._item) continue; tot++;
+    const x = li._item;
+    let ok = !tit || (x.titulo || '').toLowerCase().includes(tit);
+    if(ok && idsProduto) ok = idsProduto.has(x.id);
+    if(ok && mMin != null){ const m = li._lucro?.promo?.margem; ok = m != null && m >= mMin; }   // sem lucro calculado ainda: fica de fora
+    li.style.display = ok ? '' : 'none';
+    // escondido não fica selecionado
+    const ck = li.querySelector('input.ck-item'); if(!ok && ck?.checked){ ck.checked = false; ck.onchange(); }
+    if(ok) vis++;
+  }
+  const ativo = tit || idsProduto || mMin != null;
+  $('fInfo').textContent = ativo ? `${numero(vis)} de ${numero(tot)} carregado(s) no filtro` : '';
+}
 $('ckTodos').onchange = () => {
-  for(const c of $('itens').querySelectorAll('input.ck-item:not(:disabled)')){
+  for(const c of $('itens').querySelectorAll('li:not([style*="display: none"]) input.ck-item:not(:disabled)')){
     if(c.checked !== $('ckTodos').checked){ c.checked = $('ckTodos').checked; c.onchange(); }
   }
 };
@@ -619,7 +660,7 @@ async function carregarItens(doZero){
     for(const x of r.itens){
       const p = { ...x, id: promoAtual.id, tipo: promoAtual.tipo, nome: promoAtual.nome,
         precisa_preco: promoAtual.precisa_preco, precisa_estoque: promoAtual.tipo === 'LIGHTNING', precisa_datas: false };
-      const li = linhaItem(x, p, x.id);
+      const li = linhaItem(x, p, x.id); li._item = x;
       if(x.status === 'candidate'){
         const ck = el('input', 'ck-item'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Selecionar ' + (x.titulo || x.id));
         ck.onchange = () => { if(ck.checked) selecionados.set(x.id, { p, li }); else selecionados.delete(x.id); atualizarLote(); };
@@ -627,7 +668,7 @@ async function carregarItens(doZero){
       }
       ul.appendChild(li);
     }
-    atualizarLote();
+    atualizarLote(); aplicarFiltros();
     depois = r.depois;
     $('btMais').hidden = !depois || !r.itens.length;
     $('subItens').textContent = `${numero(r.total)} anúncio(s) · ` + promoAtual.tipo_nome;
@@ -709,6 +750,7 @@ async function esvaziarLucro(){
     try{
       const r = await post('/api/promocoes/lucro', { itens: lote.map((x, i) => ({ id: x.id, preco: x.preco, meli_pct: x.meli_pct, chave: i })) });
       for(const x of r.itens){ const ped = lote[x.chave]; if(ped){ ped.li._lucro = x; pintarLucro(ped.alvo, x); } }
+      if($('fMargemMin').value.trim() !== '') aplicarFiltros();
     }catch(e){ for(const ped of lote){ ped.alvo.className = 'lucro'; ped.alvo.textContent = 'Lucro: não calculado (' + e.message + ')'; } }
   }
 }

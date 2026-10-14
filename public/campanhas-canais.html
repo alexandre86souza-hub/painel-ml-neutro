@@ -37,6 +37,10 @@
   td input[type=checkbox]{width:16px;height:16px}
   .skus{font-size:12px;color:#64748b;margin-top:4px}
   [hidden]{display:none !important}
+  .filtros-an{font-size:13px}
+  .filtros-an label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
+  .filtros-an input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px;width:130px}
+  .filtros-an input#fMargemMin{width:70px}
 </style>
 </head>
 <body>
@@ -97,6 +101,15 @@
       </div>
       <input type="search" id="busca" placeholder="Buscar por produto ou SKU" aria-label="Buscar anúncio">
       <label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="soAtivos" checked> só anúncios ativos</label>
+    </div>
+    <!-- filtros para escolher os anúncios da campanha (somam com a busca) -->
+    <div class="filtros filtros-an">
+      <label>Margem mínima <input id="fMargemMin" type="number" step="1" min="-100" max="100" placeholder="ex.: 30" aria-label="Margem mínima em %"> %</label>
+      <label>Título contém <input id="fTitulo" type="text" placeholder="ex.: autolimpante" aria-label="Palavra no título"></label>
+      <label>Produto no kit <input id="fProduto" type="text" placeholder="ex.: BP-408" aria-label="Produto que o SKU contém"></label>
+      <button type="button" class="bt" id="btMarcarFiltro">Marcar todos do filtro</button>
+      <button type="button" class="bt" id="btLimparFiltros">Limpar filtros</button>
+      <span class="sub" id="infoFiltro"></span>
     </div>
     <div class="tabela-rolagem" id="lista"></div>
     <div class="acoes-camp"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
@@ -177,11 +190,13 @@ async function carregar(recarregar){
       $('grupos').closest('section').hidden = true;
       for(const id of ['lista', 'btMais', 'painelAcao']) $(id).hidden = true;
       $('segFiltro').closest('.filtros').hidden = true; $('btMais').closest('.acoes-camp').hidden = true;
+      document.querySelector('.filtros-an').hidden = true;   // a Magalu escolhe os produtos dentro de cada promoção
       $('segFiltro').closest('section').querySelector('h2').textContent = 'Criar promoção da loja';
       $('mgCriar').hidden = false; if(!$('mgCriar').firstChild) MagaluPromocoes.pintarCriar($('mgCriar'));
       $('participar').closest('section').after($('segFiltro').closest('section'));
     }
     pintarCartoes(); pintarParticipar(); pintarPromocoes(); pintarGrupos(); pintarLista();
+    carregarExtras();
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
 }
 
@@ -296,10 +311,46 @@ $('busca').oninput = () => { grupoSel = null; mostrar = 200; pintarLista(); };
 $('soAtivos').onchange = () => { mostrar = 200; pintarLista(); };
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
 
+// Margem no preço cheio e produtos do kit vêm da tela de anúncios do canal (mesma conta da coluna de lucro de lá)
+let extras = null;   // sku -> { margem, produtos }
+async function carregarExtras(){
+  if(extras || CANAL === 'magalu') return;
+  try{
+    const r = await api(`/api/${CANAL}/anuncios`);
+    const imp = (r.imposto_pct || 0) / 100;
+    extras = new Map((r.itens || []).map((i) => {
+      const p = i.cheio ?? i.preco;
+      let margem = null;
+      if(p > 0 && i.custo_unit != null){
+        const lucro = CANAL === 'amazon'
+          ? (i.tarifa_pct == null ? null : p - p * i.tarifa_pct - ((i.fixa_un || 0) + (i.frete_un || 0) + (i.armazem_un || 0) + i.custo_unit + (i.embalagem_unit || 0)) - p * imp)
+          : (i.taxa_pct == null ? null : p - p * i.taxa_pct - i.custo_unit - (r.embalagem_pedido || 0) - p * imp);
+        if(lucro != null) margem = lucro / p;
+      }
+      return [i.sku, { margem, produtos: i.produtos || [] }];
+    }));
+    pintarLista();
+  }catch{ extras = new Map(); }
+}
+const numerosSku = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+function passaFiltros(a){
+  const tit = $('fTitulo').value.trim().toLowerCase();
+  if(tit && !(a.titulo || '').toLowerCase().includes(tit)) return false;
+  const prods = numerosSku($('fProduto').value);
+  if(prods.length){ const ex = extras?.get(a.sku); const ns = ex?.produtos?.length ? ex.produtos.map(Number) : numerosSku(a.sku); if(!prods.every((p) => ns.includes(p))) return false; }
+  const mTxt = $('fMargemMin').value.trim();
+  if(mTxt !== ''){ const m = extras?.get(a.sku)?.margem; if(m == null || m < Number(mTxt.replace(',', '.')) / 100) return false; }
+  return true;
+}
+for(const id of ['fMargemMin', 'fTitulo', 'fProduto']) $(id).addEventListener('input', () => { mostrar = 200; pintarLista(); });
+$('btLimparFiltros').onclick = () => { for(const id of ['fMargemMin', 'fTitulo', 'fProduto']) $(id).value = ''; mostrar = 200; pintarLista(); };
+let filtradosAgora = [];
+$('btMarcarFiltro').onclick = () => { for(const a of filtradosAgora) if(!a.complexo) escolhidos.add(a.sku); pintarLista(); pintarAcao(); };
 function pintarLista(){
   if(!dados) return;
   const q = $('busca').value.trim().toLowerCase();
   const itens = dados.anuncios.filter((a) => {
+    if(!passaFiltros(a)) return false;
     if($('soAtivos').checked && !a.ativa) return false;
     if(filtro === 'sem' ? a.desconto : filtro !== 'todos' && a.situacao !== filtro) return false;
     if(grupoSel && (!a.desconto || `${a.desconto.inicio || ''}|${a.desconto.fim || ''}` !== grupoSel)) return false;
@@ -309,6 +360,8 @@ function pintarLista(){
   // primeiro os que mais venderam (no desconto e no geral)
   const vendeu = (a) => (a.resultado?.durante.unidades || 0) * 1e6 + (a.vendas_30 ?? a.vendas_90 ?? 0);
   itens.sort((x, y) => vendeu(y) - vendeu(x));
+  filtradosAgora = itens;
+  $('infoFiltro').textContent = `${numero(itens.length)} anúncio(s) no filtro` + ($('fMargemMin').value.trim() && !extras ? ' (lendo as margens…)' : '');
   const box = $('lista'); box.innerHTML = '';
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhum anúncio com esse filtro.')); $('btMais').hidden = true; return; }
   const t = el('table'); const cab = el('tr');

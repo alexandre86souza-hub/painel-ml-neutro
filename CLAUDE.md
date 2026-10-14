@@ -185,7 +185,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   (`GET …/desconto/itens`, `itensDoDesconto`: preço que SUBIU depois do desconto = infração, fora do ar, sem estoque, pela cópia
   `shopee_anuncios`) com "Tirar da campanha" (`POST …/desconto/remover` = delete_discount_item) e "Clonar" (abre o Criar preenchido).
   "Últimas campanhas criadas" (15 descontos mais novos): vendas no período e desconto dado = unidades × (preço original do desconto
-  − preço pago), por variação (`vendasDoDesconto`), e a faixa de %. Criar: anúncios marcados em massa ("Marcar todos da busca").
+  − preço pago), por variação (`vendasDoDesconto`), e a faixa de %. Criar: anúncios marcados em massa ("Marcar todos da busca"), com filtros margem mínima, título, produto do kit (`produtos` = números do kit, segue a composição) e "deixar de fora" quem teve o preço original SUBINDO há N dias (`shopee_anuncios.subiu_em`, visto na cópia ou na mudança pela tela) ou foi recusado num desconto há 30 dias (`recusa`/`recusa_em`, gravados no criar).
   Criar (escrita só pela tela, com confirmação; nada no MCP): `POST /api/shopee/campanhas/desconto`
   (add_discount + add_discount_item; sem nenhum item aceito apaga a campanha vazia), `/relampago`
   (horários de `GET …/horarios` = get_time_slot_id, 1 por dia 00h–24h; até 50 itens com estoque da

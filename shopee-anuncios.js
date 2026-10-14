@@ -123,7 +123,9 @@ function criar({ D, daLoja }) {
           promocao: a.preco != null && a.preco_original != null && a.preco < a.preco_original - 0.009,
           atacado_ou_campanha: !!a.promocao,
           vendas_total: a.vendas_total, visitas: a.visitas, vendas_30: (a.sku && v30.get(a.sku)) || 0,
-          custo_unit: cs.custo, taxa_pct: (a.sku && taxas.get(a.sku)) ?? media, taxa_do_produto: !!(a.sku && taxas.has(a.sku)),
+          custo_unit: cs.custo, produtos: cs.componentes.map((c) => c.numero).filter((x) => x != null),   // números do kit (segue a composição do painel)
+          taxa_pct: (a.sku && taxas.get(a.sku)) ?? media, taxa_do_produto: !!(a.sku && taxas.has(a.sku)),
+          subiu_em: a.subiu_em || null, recusa: a.recusa || null, recusa_em: a.recusa_em || null,
           embalagem_unit: empresa.embalagem_padrao || 0, link: `https://shopee.com.br/product/${shopId}/${a.item_id}` };
       }).sort((a, b) => (b.vendas_30 - a.vendas_30) || ((b.vendas_total || 0) - (a.vendas_total || 0)));
       return { loja: shopId, itens, imposto_pct: C.impostoTotal(empresa), lendo: lendo.has(shopId), lido_em: D.configLer(`shopee_anuncios_lido_em:${shopId}`) };

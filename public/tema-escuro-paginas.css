@@ -134,6 +134,8 @@ html[data-tema="escuro"][data-pagina="campanhas-canais"] .pos{color:hsl(145,81%,
 html[data-tema="escuro"][data-pagina="campanhas-canais"] .neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="campanhas-canais"] .links-canal a{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="campanhas-canais"] .recusas{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .filtros-an label{color:var(--muted,var(--muted))}
+html[data-tema="escuro"][data-pagina="campanhas-canais"] .filtros-an input{border:1px solid var(--line)}
 /* comandas.html */
 html[data-tema="escuro"][data-pagina="comandas"] .abas button{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="comandas"] .abas .qtd{background:hsla(218,31%,60%,.14);color:hsl(215,25%,72%)}
@@ -477,6 +479,8 @@ html[data-tema="escuro"][data-pagina="promocoes"] .pa-filtros .pa-num{color:var(
 html[data-tema="escuro"][data-pagina="promocoes"] .nova-campanha{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="promocoes"] .nova-campanha input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="promocoes"] .excluir-campanha{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .filtros-esc label{color:var(--muted,var(--muted))}
+html[data-tema="escuro"][data-pagina="promocoes"] .filtros-esc input{border:1px solid var(--line)}
 /* publicar-canais.html */
 html[data-tema="escuro"][data-pagina="publicar-canais"] .grade input,
 html[data-tema="escuro"][data-pagina="publicar-canais"] .grade select,
@@ -549,6 +553,8 @@ html[data-tema="escuro"][data-pagina="shopee-campanhas"] .recusas{color:hsl(4,76
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] tr.com-alerta td{background:hsla(4,90%,60%,.14)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .alerta-txt{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="shopee-campanhas"] .sel-pequeno{border:1px solid var(--line);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .filtros-an label{color:var(--muted,var(--muted))}
+html[data-tema="escuro"][data-pagina="shopee-campanhas"] .filtros-an input{border:1px solid var(--line)}
 /* shopee-devolucoes.html */
 html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="shopee-devolucoes"] .chip.verde{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}

@@ -46,6 +46,10 @@
   td.botoes{white-space:nowrap}
   td.botoes .bt+.bt{margin-left:4px}
   .sel-pequeno{font:inherit;font-size:13px;padding:5px 8px;border:1px solid #d5d7db;border-radius:8px;background:#fff}
+  .filtros-an{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0;font-size:13px}
+  .filtros-an label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
+  .filtros-an input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px;width:130px}
+  .filtros-an input#fMargemMin{width:70px}
 </style>
 </head>
 <body>
@@ -91,6 +95,15 @@
           <input id="buscaAn" placeholder="Buscar anúncio por nome ou SKU…" autocomplete="off" aria-label="Buscar anúncio">
           <label class="sub" style="display:flex;align-items:center;gap:6px">Desconto para todos
             <input id="pctTodos" type="number" min="1" max="90" step="0.5" value="5" style="width:80px;font:inherit;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px">%</label>
+        </div>
+        <!-- filtros que se somam à busca (e valem para "Marcar todos da busca" / "Marcar os primeiros") -->
+        <div class="filtros-an">
+          <label>Margem mínima <input id="fMargemMin" type="number" step="1" min="-100" max="100" placeholder="ex.: 30" aria-label="Margem mínima em %"> %</label>
+          <label>Título contém <input id="fTitulo" type="text" placeholder="ex.: autolimpante" aria-label="Palavra no título"></label>
+          <label>Produto no kit <input id="fProduto" type="text" placeholder="ex.: BP-408" aria-label="Produto que o SKU contém"></label>
+          <label title="O painel guarda quando o preço original subiu (cópia a cada 6 h ou mudança pela tela) e o motivo de cada recusa da Shopee num desconto"><input id="fForaRisco" type="checkbox" checked style="width:auto"> Deixar de fora: preço subiu nos últimos
+            <input id="fDiasSubiu" type="number" min="1" max="60" value="7" style="width:56px"> dias ou recusado pela Shopee nos últimos 30 dias</label>
+          <button type="button" class="bt pequeno" id="btLimparFiltros">Limpar filtros</button>
         </div>
         <div class="barra-achados">
           <button type="button" class="bt pequeno" id="btMarcarBusca">Marcar todos da busca</button>
@@ -450,8 +463,32 @@ async function carregarAnuncios(){
 // Vários de uma vez: marque na lista (ou "Marcar todos da busca") e clique "Adicionar marcados".
 const marcados = new Set();
 const LIMITE = { relampago: 50, cupom: 100, desconto: 1000 };
-const daBusca = () => { const q = $('buscaAn').value.trim().toLowerCase();
-  return anuncios.filter((a) => !q || (a.titulo || '').toLowerCase().includes(q) || (a.nome_shopee || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q)); };
+// risco de recusa: preço original subiu há pouco (a Shopee não deixa pôr em desconto por um prazo) ou já recusado num desconto
+function alertaDe(a){
+  const dias = Math.max(1, Number($('fDiasSubiu').value) || 7);
+  const dt = (t) => new Date(t).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  if(a.subiu_em && Date.now() - Date.parse(a.subiu_em) < dias * 864e5) return `preço subiu em ${dt(a.subiu_em)}: a Shopee pode recusar`;
+  if(a.recusa_em && Date.now() - Date.parse(a.recusa_em) < 30 * 864e5) return `recusado pela Shopee em ${dt(a.recusa_em)}: ${a.recusa}`;
+  return null;
+}
+// produtos do SKU: os números (AMG-407.408 -> 407 e 408; BP-408 -> 408)
+const numerosSku = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+const daBusca = () => {
+  const q = $('buscaAn').value.trim().toLowerCase();
+  const tit = $('fTitulo').value.trim().toLowerCase();
+  const mMin = $('fMargemMin').value.trim() === '' ? null : Number($('fMargemMin').value.replace(',', '.')) / 100;
+  const prods = numerosSku($('fProduto').value);
+  return anuncios.filter((a) => {
+    if(q && !((a.titulo || '').toLowerCase().includes(q) || (a.nome_shopee || '').toLowerCase().includes(q) || (a.sku || '').toLowerCase().includes(q))) return false;
+    if(tit && !((a.titulo || '').toLowerCase().includes(tit) || (a.nome_shopee || '').toLowerCase().includes(tit))) return false;
+    if(prods.length){ const ns = a.produtos?.length ? a.produtos.map(Number) : numerosSku(a.sku); if(!prods.every((p) => ns.includes(p))) return false; }
+    if($('fForaRisco').checked && alertaDe(a)) return false;
+    if(mMin != null && Number.isFinite(mMin)){ const e = estimar(a, a.preco_original ?? a.preco); if(!e || e.margem < mMin) return false; }   // margem no preço de hoje
+    return true;
+  });
+};
+for(const id of ['fMargemMin', 'fTitulo', 'fProduto', 'fDiasSubiu', 'fForaRisco']) $(id).addEventListener('input', () => { if(anuncios) pintarAchados(); });
+$('btLimparFiltros').onclick = () => { for(const id of ['fMargemMin', 'fTitulo', 'fProduto']) $(id).value = ''; if(anuncios) pintarAchados(); };
 function contarMarcados(){
   const n = marcados.size;
   $('btAddMarcados').disabled = !n; $('btAddMarcados').textContent = n ? `Adicionar marcados (${numero(n)})` : 'Adicionar marcados';
@@ -489,6 +526,7 @@ function pintarAchados(){
     ln.appendChild(ck);
     const tx = el('div', 'tx'); tx.append(el('b', null, (a.nome_shopee || a.titulo) + (a.variacao ? ` — ${a.variacao}` : '')),
       el('span', null, `${a.sku || 'sem SKU'} · ${real(a.preco_original)} · estoque ${numero(a.estoque)} · ${numero(a.vendas_30)} vendido(s) em 30 dias`));
+    const al = alertaDe(a); if(al) tx.appendChild(el('span', 'alerta-txt', al));
     const ja = escolhidos.has(chave(a));
     const bt = el('button', 'bt pequeno' + (ja ? '' : ' primario'), ja ? 'Escolhido' : '+ Escolher'); bt.type = 'button'; bt.disabled = ja;
     bt.onclick = () => { escolher(a); bt.disabled = true; bt.textContent = 'Escolhido'; bt.className = 'bt pequeno'; ck.checked = false; ck.disabled = true; contarMarcados(); };
@@ -500,7 +538,7 @@ function pintarAchados(){
 function escolher(a, pintar = true){
   const p = Number($('pctTodos').value) || 0;
   marcados.delete(chave(a));
-  escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p / 100) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0 });
+  escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p / 100) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0, recusa: alertaDe(a) });
   if(pintar) pintarEscolhidos();
 }
 function pintarEscolhidos(){
@@ -508,6 +546,11 @@ function pintarEscolhidos(){
   $('qtdEsc').textContent = numero(escolhidos.size);
   const relampago = tipo === 'relampago', cupom = tipo === 'cupom';
   if(!escolhidos.size){ box.appendChild(el('p', 'vazio', 'Nenhum anúncio escolhido ainda.')); atualizarResumo(); return; }
+  // escolhidos com risco de recusa (preço subiu há pouco, recusado antes) ou recusados agora: tira todos de uma vez
+  const comAlerta = [...escolhidos.values()].filter((e) => e.recusa).length;
+  if(comAlerta){ const b = el('button', 'bt pequeno', `Tirar os ${numero(comAlerta)} sinalizado(s) da lista`); b.type = 'button';
+    b.onclick = () => { for(const [k, e] of [...escolhidos]) if(e.recusa) escolhidos.delete(k); pintarEscolhidos(); if(anuncios) pintarAchados(); };
+    box.appendChild(b); }
   const tab = el('table'); const cab = el('tr');
   const hs = cupom ? ['Anúncio', 'Preço', ''] : ['Anúncio', 'Preço', 'Desconto %', 'Preço na promoção', 'Lucro estimado', ...(relampago ? ['Unid. na oferta'] : []), 'Limite por comprador', ''];
   for(const h of hs) cab.appendChild(el('th', null, h));
