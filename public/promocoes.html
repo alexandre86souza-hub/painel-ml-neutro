@@ -549,12 +549,16 @@ let idsProduto = null, prodPedido = '';
 async function lerProduto(){
   const v = $('fProduto').value.trim(); prodPedido = v;
   if(!v){ idsProduto = null; aplicarFiltros(); return; }
-  if(!/d/.test(v)) return;
-  try{ const r = await api('/api/promocoes/com-produto?produto=' + encodeURIComponent(v)); if(prodPedido === v){ idsProduto = new Set(r.ids); aplicarFiltros(); } }
-  catch(e){ aviso(e.message, 'erro'); }
+  if(!/d/.test(v)){ $('fInfo').textContent = 'digite o SKU (DQ-407) ou o número (407)'; return; }
+  // 1ª vez lê o SKU de todos os anúncios da conta (20 a 40 s); depois fica guardado por 5 min
+  $('fInfo').textContent = `procurando os anúncios com ${v}… (a 1ª busca leva até 40 s)`;
+  try{ const r = await api('/api/promocoes/com-produto?produto=' + encodeURIComponent(v)); if(prodPedido === v){ idsProduto = new Set(r.ids); aplicarFiltros();
+    if(!r.ids.length) $('fInfo').textContent = `nenhum anúncio da conta tem ${v} no SKU`; } }
+  catch(e){ if(prodPedido === v) $('fInfo').textContent = 'não deu para buscar o produto: ' + e.message; }
 }
 let tmProd = null;
-$('fProduto').oninput = () => { clearTimeout(tmProd); tmProd = setTimeout(lerProduto, 400); };
+$('fProduto').oninput = () => { clearTimeout(tmProd); tmProd = setTimeout(lerProduto, 600); };
+$('fProduto').onkeydown = (ev) => { if(ev.key === 'Enter'){ ev.preventDefault(); clearTimeout(tmProd); lerProduto(); } };
 $('fTitulo').oninput = $('fMargemMin').oninput = () => aplicarFiltros();
 function aplicarFiltros(){
   const tit = $('fTitulo').value.trim().toLowerCase();
