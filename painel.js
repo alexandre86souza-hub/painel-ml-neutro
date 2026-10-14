@@ -360,13 +360,28 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
         link: `https://www.mercadolivre.com.br/vendas/${recurso}/detalhe` });
     }
 
-    // anúncios pausados (sem estoque, pelo ML) e em revisão
+    // anúncios pausados (sem estoque, pelo ML) e em revisão. A cada minuto só os 50 mexidos por último; a lista
+    // TODA dos pausados é relida a cada 30 min. Antes "conhecidos" era só a última página de 50: um anúncio pausado
+    // havia meses saía dela, voltava quando o ML mexia nele (last_updated) e avisava de novo como pausa nova.
     const conhecidos = new Set(JSON.parse(D.configLer(`avisos_pausados:${id}`) || '[]'));
-    const buscar = async (st) => (await ml(`/users/${id}/items/search?status=${st}&orders=last_updated_desc&limit=50`)
-      .catch(() => null))?.results || [];
+    const buscar = async (st, offset = 0, limit = 50) => (await ml(`/users/${id}/items/search?status=${st}&orders=last_updated_desc&limit=${limit}&offset=${offset}`)
+      .catch(() => null))?.results || null;
     const [pausados, revisao] = await Promise.all([buscar('paused'), buscar('under_review')]);
-    const agora = [...pausados, ...revisao];
-    const novosP = agora.filter((x) => !conhecidos.has(x));
+    const agora = [...(pausados || []), ...(revisao || [])];
+    let todos = null; // lista completa (null = não releu agora)
+    const relidoEm = Number(D.configLer(`avisos_pausados_todos:${id}`) || 0);
+    if (pausados && revisao && Date.now() - relidoEm > 30 * 60e3) {
+      todos = new Set(revisao);
+      for (let off = 0; off < 1000; off += 100) {
+        const r = await buscar('paused', off, 100);
+        if (!r) { todos = null; break; }
+        r.forEach((x) => todos.add(x));
+        if (r.length < 100) break;
+      }
+      if (todos) D.configGravar(`avisos_pausados_todos:${id}`, String(Date.now()));
+    }
+    // 1ª lista completa (logo depois desta mudança): ela vira a base, sem avisar os pausados antigos
+    const novosP = relidoEm || !todos ? agora.filter((x) => !conhecidos.has(x)) : [];
     if (novosP.length && !primeira) {
       const det = await infoItens(novosP, 'id,title,status,sub_status');
       for (const x of novosP) {
@@ -380,7 +395,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
           link: `/anuncios.html?q=${encodeURIComponent(x)}` });
       }
     }
-    D.configGravar(`avisos_pausados:${id}`, JSON.stringify([...new Set([...agora])].slice(0, 500)));
+    // com a lista completa, quem saiu dela foi reativado (pausar de novo avisa); sem ela, só acrescenta
+    D.configGravar(`avisos_pausados:${id}`, JSON.stringify([...new Set([...agora, ...(todos || conhecidos)])].slice(0, 3000)));
   }
 
   const dia = (url, padrao, ok) => { const d = Number(url.searchParams.get('dias')) || padrao; return ok.includes(d) ? d : padrao; };
