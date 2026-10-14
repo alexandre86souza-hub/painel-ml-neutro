@@ -645,10 +645,18 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const novo = Math.round(v * norm);
       const corpo = { ...atual, price: novo, list_price: Math.max(n(atual.list_price), novo) };
       delete corpo.sku; delete corpo.updated_at; delete corpo.created_at;
-      await mg(caminho, {}, { metodo: 'PUT', corpo });
-      const conf = (await mg(caminho)).results?.[0];
-      const lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
-      if (lido == null || Math.abs(lido - Math.round(v * 100) / 100) > 0.01) throw erro(`a Magalu aceitou, mas o preço lido de volta é ${lido ?? '—'} (esperado ${v.toFixed(2)}). Confira no portal.`, 502);
+      // Medido em 14/10/2026: PUT dá 404 "Resource Not Found". A doc (portfolios-v-1-patch-prices) é PATCH, resposta 202
+      // (assíncrono): confere lendo de novo algumas vezes; ainda no preço antigo = "aceito, aplicando" (não é erro).
+      await mg(caminho, {}, { metodo: 'PATCH', corpo });
+      const alvo = Math.round(v * 100) / 100;
+      let conf = null, lido = null;
+      for (let k = 0; k < 4; k++) {
+        await new Promise((ok) => setTimeout(ok, 2500));
+        conf = (await mg(caminho).catch(() => null))?.results?.[0] || null;
+        lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
+        if (lido != null && Math.abs(lido - alvo) <= 0.01) break;
+      }
+      if (lido == null || Math.abs(lido - alvo) > 0.01) return { sku, preco: null, conferido: false, pendente: true, lido };
       D.magaluPrecoGravar(sku, lido, n(conf.list_price) / (n(conf.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
       return { sku, preco: lido, conferido: true };
     },
