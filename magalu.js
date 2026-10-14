@@ -344,7 +344,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         await Promise.all(lote.map(async (sku) => {
           let preco = null, lista = null, estoque = null;
           try {
-            const p = (await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`)).results?.[0];
+            const l = (await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`)).results || [];
+            const p = l.find((x) => x.channel?.id === CANAL_MAGALU.id) || l[0];   // um preço por canal: o da Magalu
             if (p) { preco = n(p.price) / (n(p.normalizer) || 100); lista = n(p.list_price) / (n(p.normalizer) || 100); }
           } catch { /* sem preço */ }
           try {
@@ -639,24 +640,28 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const v = Number(String(body?.preco ?? '').replace(',', '.'));
       if (!Number.isFinite(v) || v <= 0 || v > 1e6) throw erro('Preço inválido.');
       const caminho = `/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`;
-      const atual = (await mg(caminho)).results?.[0];
+      // um preço por canal: o do canal Magalu (o dos pedidos), senão o primeiro
+      const doCanal = (l) => (l || []).find((x) => x.channel?.id === CANAL_MAGALU.id) || (l || [])[0] || null;
+      const atual = doCanal((await mg(caminho)).results);
       if (!atual) throw erro('A Magalu não devolveu o preço atual deste SKU.', 404);
-      const norm = n(atual.normalizer) || 100;
-      const novo = Math.round(v * norm);
-      const corpo = { ...atual, price: novo, list_price: Math.max(n(atual.list_price), novo) };
-      delete corpo.sku; delete corpo.updated_at; delete corpo.created_at;
-      // Medido em 14/10/2026: PUT dá 404 "Resource Not Found". A doc (portfolios-v-1-patch-prices) é PATCH, resposta 202
-      // (assíncrono): confere lendo de novo algumas vezes; ainda no preço antigo = "aceito, aplicando" (não é erro).
-      await mg(caminho, {}, { metodo: 'PATCH', corpo });
+      const novo = Math.round(v * 100);
+      // Medido em 14/10/2026: PUT dá 404 "Resource Not Found". A doc (portfolios-v-1-patch-prices, OpenAPI do portal) é PATCH com
+      // PricePatchRequest additionalProperties:false = SÓ price, list_price, currency, normalizer (sempre 100), channel {id}, metadata.
+      // Mandar o objeto lido inteiro dava 202 e a Magalu descartava depois (preço não mudava). Resposta 202 com trace_id (assíncrono).
+      const corpo = { currency: atual.currency || 'BRL', normalizer: 100, price: novo,
+        list_price: Math.max(Math.round(n(atual.list_price) / (n(atual.normalizer) || 100) * 100), novo) };
+      if (atual.channel?.id) corpo.channel = { id: String(atual.channel.id) };
+      const resp = await mg(caminho, {}, { metodo: 'PATCH', corpo });
       const alvo = Math.round(v * 100) / 100;
       let conf = null, lido = null;
-      for (let k = 0; k < 4; k++) {
-        await new Promise((ok) => setTimeout(ok, 2500));
-        conf = (await mg(caminho).catch(() => null))?.results?.[0] || null;
+      for (let k = 0; k < 5; k++) {
+        await new Promise((ok) => setTimeout(ok, 3000));
+        const l = (await mg(caminho).catch(() => null))?.results;
+        conf = (atual.channel?.id && (l || []).find((x) => x.channel?.id === atual.channel.id)) || doCanal(l);
         lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
         if (lido != null && Math.abs(lido - alvo) <= 0.01) break;
       }
-      if (lido == null || Math.abs(lido - alvo) > 0.01) return { sku, preco: null, conferido: false, pendente: true, lido };
+      if (lido == null || Math.abs(lido - alvo) > 0.01) return { sku, preco: null, conferido: false, pendente: true, lido, trace_id: resp?.trace_id || null };
       D.magaluPrecoGravar(sku, lido, n(conf.list_price) / (n(conf.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
       return { sku, preco: lido, conferido: true };
     },

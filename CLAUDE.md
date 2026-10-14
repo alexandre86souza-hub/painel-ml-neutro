@@ -327,7 +327,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   e vazio: sem idade das unidades. Por produto = custo médio do dia ÷ unidades no Full (estimativa); parado = sem venda em 30 dias.
 - Botões comuns das telas de anúncios de todos os canais: `public/composicao.js` ("Produtos": composição sem mudar o SKU,
   `GET /api/produtos/composicao?sku=`) e `public/margem-massa.js` ("Preço pela margem" nos anúncios do filtro). Shopee update_price,
-  Amazon `/api/amazon/anuncios/preco`, Magalu `POST /api/magalu/anuncios/preco` (PATCH do mesmo formato lido — PUT dá 404, medido 14/10 —, resposta 202, CONFERE lendo de novo até ~10 s, senão "aplicando";
+  Amazon `/api/amazon/anuncios/preco`, Magalu `POST /api/magalu/anuncios/preco` (PATCH SÓ com price/list_price/currency/normalizer 100/channel — o objeto lido inteiro dava 202 e era descartado; PUT dá 404 — resposta 202, CONFERE lendo de novo até ~15 s, senão a tela diz que não mudou;
   a tela para no 1º que não confirmar — ainda sem medição real), Leroy `leroy-anuncios.html` + `POST /api/leroy/anuncios/preco`
   (um PRI01 com o desconto que estiver valendo). Devoluções da Amazon, Leroy e Magalu (`devolucoes-canais.html?conta=`, `GET /api/{amazon|leroy|magalu}/devolucoes`;
   Leroy = linhas com reembolso, custo = comissão não devolvida + frete da entrega; Magalu = pedidos com REFUND no financeiro, custo =
