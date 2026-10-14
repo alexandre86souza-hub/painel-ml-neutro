@@ -66,7 +66,7 @@
 </div>
 <script src="/comum.js?v=8"></script>
 <script src="/composicao.js?v=1"></script>
-<script src="/margem-massa.js?v=1"></script>
+<script src="/margem-massa.js?v=2"></script>
 <script>
 // Ofertas da Leroy (GET /api/leroy/anuncios). Preço muda pelo PRI01 (uma importação por minuto, todas as ofertas
 // escolhidas de uma vez); o desconto que estiver valendo continua. Nada desta tela vai para o MCP.
@@ -112,7 +112,7 @@ function pintar(){
   $('subLista').textContent = `${numero(itens.length)} de ${numero(dados.itens.length)} oferta(s). Lucro e margem estimados com o que a Leroy tira em média de cada produto (vendas dos últimos 90 dias; sem venda, a média da loja) e os impostos de ${String(dados.imposto_pct).replace('.', ',')}%.`;
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
   const t = el('table'); const cab = el('tr');
-  for(const h of ['Produto', 'Estoque', 'Vendas 30d', 'Preço', 'Custo', 'Lucro · margem no preço atual']) cab.appendChild(el('th', null, h));
+  for(const h of ['Produto', 'Estoque', 'Vendas 30d', 'Preço', 'Custo', 'Lucro · margem no preço atual', 'Novo preço']) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
   for(const i of itens.slice(0, 500)){
@@ -128,7 +128,17 @@ function pintar(){
     if(i.em_desconto) precoTd.appendChild(el('span', 'pequeno', `de ${real(i.cheio)}`));
     tr.append(prod, el('td', 'est', i.estoque == null ? '—' : numero(i.estoque)), el('td', null, numero(i.vendas_30)), precoTd,
       el('td', null, i.custo_unit == null ? 'sem custo' : real(i.custo_unit)),
-      el('td', e == null ? null : e.lucro < 0 ? 'neg' : 'pos', txtMargem(e) + (i.taxa_do_produto ? '' : (i.taxa_pct != null ? ' (taxa média da loja)' : ''))));
+      el('td', e == null ? null : e.lucro < 0 ? 'neg' : 'pos', txtMargem(e) + (i.taxa_do_produto ? '' : (i.taxa_pct != null ? ' (taxa média da loja)' : ''))),
+      // um anúncio: preço cheio (o desconto que estiver valendo continua), um PRI01 só com ele
+      MargemMassa.celula({ nome: `${i.titulo} (${i.sku})`, canal: 'Leroy Merlin', preco: i.cheio, aviso,
+        bloqueio: i.complexo ? 'preço por canal: muda no portal' : null,
+        precoPara: (m) => precoPelaMargem(i, m), estimar: (p) => estimar(i, p),
+        extra: i.em_desconto ? `Em promoção: muda o preço cheio; o comprador continua vendo ${real(i.preco)} até o desconto acabar.` : 'A Leroy aplica em alguns minutos (uma mudança de preços por minuto).',
+        salvar: async (v) => {
+          const r = await api('/api/leroy/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ itens: [{ sku: i.sku, preco: v }] }) });
+          return `Preço de ${i.sku} enviado à Leroy (${real(v)})` + ((r.descontos_caidos || []).includes(i.sku) ? '; o desconto caiu, pois ficaria maior que o preço' : '')
+            + '. Ela aplica em alguns minutos; clique em "Atualizar da Leroy" depois para conferir.';
+        } }));
     tb.appendChild(tr);
   }
   t.appendChild(tb); box.appendChild(t);

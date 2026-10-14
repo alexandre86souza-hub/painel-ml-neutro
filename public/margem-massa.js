@@ -87,5 +87,58 @@
     await Promise.all(Array.from({ length: paralelo }, trab));
     return out;
   }
-  window.MargemMassa = { abrir, umPorUm };
+  // Célula "Novo preço" de UM anúncio (Leroy e Magalu; Shopee e Amazon têm a sua igual): preço de venda OU margem
+  // desejada (%), prévia do lucro, confirmação e salvar(v) do canal (devolve o texto do aviso).
+  // MargemMassa.celula({ nome, canal, preco, precoPara(m), estimar(p) -> {lucro, margem}, salvar(v), aviso(t, tipo), extra })
+  function celula({ nome, canal, preco, precoPara, estimar, salvar, aviso, extra, bloqueio }) {
+    if (!document.getElementById('mmEstiloCel')) {
+      const s = $m('style'); s.id = 'mmEstiloCel';
+      s.textContent = `.mm-cel{display:flex;gap:6px;align-items:center}.mm-cel input{width:92px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid #d5dbe5;border-radius:8px;background:var(--card,#fff);color:inherit;text-align:right}
+.mm-cel input.margem{width:62px}.mm-cel button{white-space:nowrap;font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 10px;cursor:pointer;border:1px solid #d5dbe5;background:var(--card,#fff);color:inherit}
+.mm-cel button:disabled{opacity:.5;cursor:default}.mm-prev{display:block;font-size:12px;color:var(--muted,#5f6b7f);margin-top:3px}.mm-prev.neg{color:#b42318}`;
+      document.head.appendChild(s);
+    }
+    const td = $m('td');
+    if (bloqueio) { td.appendChild($m('span', 'mm-prev', bloqueio)); return td; }
+    const ler = (t) => Number(String(t).replace(/\s|R\$/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    const cx = $m('div', 'mm-cel');
+    const inp = $m('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.placeholder = preco != null ? String(preco).replace('.', ',') : '0,00';
+    inp.setAttribute('aria-label', 'Novo preço de ' + nome);
+    const inpM = $m('input', 'margem'); inpM.type = 'text'; inpM.inputMode = 'decimal'; inpM.placeholder = 'ou %';
+    inpM.title = 'Margem de lucro desejada (%): o painel calcula o preço'; inpM.setAttribute('aria-label', 'Margem desejada de ' + nome);
+    if (precoPara(0.1) == null) { inpM.disabled = true; inpM.title = 'Sem custo do produto ou sem taxa: não dá para calcular pela margem'; }
+    const bt = $m('button', null, 'Salvar'); bt.type = 'button'; bt.disabled = true;
+    const prev = $m('span', 'mm-prev');
+    const txt = (e) => (e ? `${brl(e.lucro)} · ${pc(e.margem)}` : '');
+    inp.oninput = () => {
+      const v = ler(inp.value); const ok = inp.value.trim() && Number.isFinite(v) && v > 0;
+      bt.disabled = !ok; prev.className = 'mm-prev';
+      if (!ok) { prev.textContent = ''; return; }
+      const e = estimar(v);
+      prev.textContent = e ? `fica ${txt(e)}` : 'sem custo ou taxa para estimar';
+      if (e && e.lucro < 0) prev.className = 'mm-prev neg';
+    };
+    inpM.oninput = () => {
+      const m = ler(inpM.value.replace('%', ''));
+      if (!inpM.value.trim() || !Number.isFinite(m)) return;
+      const p = precoPara(m / 100);
+      if (p == null) { inp.value = ''; inp.oninput(); prev.textContent = 'margem alta demais para os custos deste produto'; prev.className = 'mm-prev neg'; return; }
+      inp.value = p.toFixed(2).replace('.', ','); inp.oninput();
+    };
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !bt.disabled) bt.click(); });
+    bt.onclick = async () => {
+      const v = ler(inp.value); const e = estimar(v);
+      if (!confirm(`Mudar o preço na ${canal}?\n\n${nome}\n\nDe ${brl(preco)} para ${brl(v)}` + (e ? `\nLucro estimado: ${txt(e)}` : '') + (extra ? `\n\n${extra}` : ''))) return;
+      bt.disabled = true; bt.textContent = 'Enviando…';
+      try { const t = await salvar(v); inp.value = ''; inpM.value = ''; prev.textContent = ''; aviso?.(t, 'ok'); }
+      catch (err) { aviso?.(`Não mudou o preço de ${nome}: ${err.message}`); bt.disabled = false; }
+      bt.textContent = 'Salvar';
+    };
+    cx.append(inp, inpM, bt); td.append(cx, prev);
+    return td;
+  }
+  // algum campo de preço digitado na tela (não repintar por cima)
+  const editando = () => [...document.querySelectorAll('.mm-cel input')].some((x) => x.value.trim());
+
+  window.MargemMassa = { abrir, umPorUm, celula, editando };
 })();

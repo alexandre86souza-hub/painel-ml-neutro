@@ -78,7 +78,7 @@
 </div>
 <script src="/comum.js?v=8"></script>
 <script src="/composicao.js?v=1"></script>
-<script src="/margem-massa.js?v=1"></script>
+<script src="/margem-massa.js?v=2"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 function cartao(rot, valor, nota){ const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); return c; }
@@ -94,9 +94,12 @@ function lucroDe(a){
 
 async function carregar(recarregar){
   try{
-    dados = await api('/api/magalu/anuncios' + (recarregar ? '?recarregar=1' : ''));
-    pintar();
+    const novos = await api('/api/magalu/anuncios' + (recarregar ? '?recarregar=1' : ''));
     clearTimeout(espera);
+    // preço sendo digitado: não repinta por cima (tenta de novo depois)
+    if(!recarregar && dados && MargemMassa.editando()){ espera = setTimeout(() => carregar(false), 6000); return; }
+    dados = novos;
+    pintar();
     if(dados.lendo) espera = setTimeout(() => carregar(false), 6000);
   }catch(e){ aviso(e.message); $('cartoes').innerHTML = ''; }
 }
@@ -164,7 +167,7 @@ function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   if(!itens.length){ box.appendChild(el('p', 'vazio', dados.itens.length ? 'Nenhum anúncio com esse filtro.' : 'Lendo os anúncios da Magalu…')); $('btMais').hidden = true; return; }
   const t = el('table'); const cab = el('tr');
-  for(const h of ['Anúncio', 'SKU do painel', 'Custo', 'Preço', 'Estoque', 'Situação', 'Vendas 30d', 'Taxa', 'Lucro/un.']) cab.appendChild(el('th', null, h));
+  for(const h of ['Anúncio', 'SKU do painel', 'Custo', 'Preço', 'Estoque', 'Situação', 'Vendas 30d', 'Taxa', 'Lucro/un.', 'Novo preço']) cab.appendChild(el('th', null, h));
   t.appendChild(cab);
   for(const a of itens.slice(0, mostrar)){
     const tr = el('tr');
@@ -196,7 +199,18 @@ function pintarLista(){
     if(lu != null && a.preco) luTd.appendChild(el('span', 'pequeno', pct(lu / a.preco) + ' do preço'));
     const tx = el('td', null, a.taxa_pct == null ? '—' : pct(a.taxa_pct)); if(a.taxa_pct != null && !a.taxa_do_produto) tx.title = 'Média da loja (este SKU não vendeu em 90 dias)';
     tr.append(celulaProduto(a.foto, a.titulo || a.sku, 'SKU Magalu ' + a.sku, a.link), vinc, custo, preco, el('td', null, a.estoque == null ? '…' : numero(a.estoque)), sit,
-      el('td', null, numero(a.vendas_30)), tx, luTd);
+      el('td', null, numero(a.vendas_30)), tx, luTd,
+      // um anúncio: PUT do preço e a Magalu é lida de novo para conferir
+      MargemMassa.celula({ nome: `${a.titulo || a.sku} (${a.sku})`, canal: 'Magalu', preco: a.preco, aviso,
+        bloqueio: a.preco == null ? (a.preco_lido ? 'sem preço lido' : 'lendo o preço…') : null,
+        precoPara: (m) => precoPelaMargem(a, m),
+        estimar: (p) => { const lu = lucroDe({ ...a, preco: p }); return lu == null ? null : { lucro: lu, margem: p ? lu / p : null }; },
+        extra: a.preco_lista && a.preco_lista > a.preco + 0.009 ? 'Em promoção: confira na Magalu se a promoção continua depois da mudança.' : null,
+        salvar: async (v) => {
+          const r = await api('/api/magalu/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku: a.sku, preco: v }) });
+          a.preco = r.preco; setTimeout(pintarLista, 50);
+          return `Preço de ${a.sku} mudado para ${real(r.preco)} na Magalu (conferido).`;
+        } }));
     t.appendChild(tr);
   }
   box.appendChild(t);

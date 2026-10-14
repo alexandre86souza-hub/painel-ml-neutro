@@ -36,6 +36,8 @@
   .campos{display:flex;gap:10px}
   .campos label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
   .campos input{width:104px;padding:7px 9px}
+  .campos input.campo-margem{width:72px}
+  .campos .dica-margem{display:block;font-size:11px;color:var(--muted);margin-top:2px;max-width:110px}
   .acoes{display:flex;gap:10px;align-items:center;flex-wrap:nowrap}
   .statusTexto{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
   .statusTexto.active{color:var(--ok)} .statusTexto.paused{color:#9a6400}
@@ -839,7 +841,30 @@ function cartao(it){
     preco.input.title = estoque.input.title = t;
     preco.wrap.style.opacity = estoque.wrap.style.opacity = '.55';
   }
-  campos.append(preco.wrap, estoque.wrap);
+  // ou a margem desejada: o painel calcula o preço (tarifa real do ML na faixa, frete, custo, embalagem e imposto)
+  // e põe no campo Preço; o vendedor confere e clica Salvar
+  const margem = { wrap: document.createElement('div'), input: document.createElement('input') };
+  { const l = document.createElement('label'); l.textContent = 'ou margem %';
+    margem.input.type = 'text'; margem.input.inputMode = 'decimal'; margem.input.className = 'campo-margem'; margem.input.placeholder = 'ex.: 20';
+    l.htmlFor = margem.input.id = 'm' + Math.random().toString(36).slice(2);
+    margem.input.title = 'Margem de lucro desejada (% do preço): o painel calcula o preço e põe no campo Preço';
+    const dica = document.createElement('span'); dica.className = 'dica-margem';
+    margem.wrap.append(l, margem.input, dica);
+    margem.input.disabled = !precoEditavel;
+    const calcular = async () => {
+      const m = Number(margem.input.value.replace('%', '').replace(',', '.'));
+      if(!margem.input.value.trim() || !Number.isFinite(m)) { dica.textContent = ''; return; }
+      dica.textContent = 'calculando…';
+      try{
+        const r = await api(`/api/items/${it.id}/preco-margem?margem=${encodeURIComponent(m)}`);
+        Mascara.definir(preco.input, r.preco_sugerido); li.classList.add('sujo');
+        dica.textContent = `lucro ${dinheiro(r.novo.lucro)}`; dica.title = r.aviso || '';
+      }catch(e){ dica.textContent = e.message; }
+    };
+    margem.input.addEventListener('change', calcular);
+    margem.input.addEventListener('keydown', (ev) => { if(ev.key === 'Enter'){ ev.preventDefault(); calcular(); } });
+  }
+  campos.append(preco.wrap, margem.wrap, estoque.wrap);
 
   const acoes = document.createElement('div');
   acoes.className = 'acoes';
