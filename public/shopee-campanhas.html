@@ -608,6 +608,10 @@ $('btCancelar').onclick = () => { $('formCamp').hidden = true; tipo = null; for(
 const iso = (id) => new Date($(id).value).toISOString();
 $('formCamp').onsubmit = async (ev) => {
   ev.preventDefault(); aviso(''); $('recusas').textContent = '';
+  // marcados e ainda não adicionados (14/10/2026: 900 marcados, lista vazia, "Escolha pelo menos um anúncio"): entram agora
+  const usaItens = tipo !== 'cupom' || $('cTipo')?.value === 'produtos';
+  if(usaItens && marcados.size){ $('btAddMarcados').onclick(); }
+  if(usaItens && !escolhidos.size){ aviso('Nenhum anúncio escolhido: marque os anúncios na lista e clique em "Adicionar marcados" (ou "+ Escolher").'); return; }
   const itens = [...escolhidos.values()].map((x) => ({ item_id: x.a.item_id, model_id: x.a.model_id || 0, preco: x.preco, estoque: x.estoque, limite: x.limite }));
   let caminho, corpo, texto;
   try{
@@ -651,7 +655,7 @@ $('formCamp').onsubmit = async (ev) => {
       if(!r.recusados?.length){ escolhidos.clear(); marcados.clear(); pintarEscolhidos(); if(anuncios) pintarAchados(); }
       carregar(true);
     }
-  }catch(e){ aviso('A Shopee recusou: ' + e.message); }
+  }catch(e){ aviso('Não criou a campanha: ' + e.message); }
   finally{ $('btCriar').disabled = false; }
 };
 
