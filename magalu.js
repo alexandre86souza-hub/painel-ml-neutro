@@ -651,6 +651,18 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     // Muda o preço de um SKU na Magalu (escrita: só pela tela, com confirmação; nada no MCP). Ainda sem medição real:
     // lê o preço atual, manda o MESMO formato de volta (centavos com o normalizer lido) só com o preço novo e CONFERE
     // lendo de novo — não bateu, devolve erro (a tela para no primeiro que não confirmar).
+    // Diagnóstico (só leitura): o que a Magalu devolve AGORA para o preço de um SKU, todos os canais, e o que está na cópia
+    // local. Medido em 14/10/2026: o site mudou o preço e a tela seguia no antigo — para ver qual lado está atrasado.
+    'GET /api/magalu/anuncios/preco': async (url) => {
+      const sku = String(url.searchParams.get('sku') || '').trim();
+      if (!sku || sku.length > 80) throw erro('Informe o SKU (?sku=).');
+      const r = await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`);
+      const local = D.magaluAnuncios().find((a) => a.sku === sku) || null;
+      return { sku, canal_magalu: CANAL_MAGALU.id, lido_agora_em: new Date().toISOString(),
+        magalu: (r.results || []).map((x) => ({ canal: x.channel?.id ?? null, preco: n(x.price) / (n(x.normalizer) || 100),
+          preco_lista: n(x.list_price) / (n(x.normalizer) || 100), atualizado_em: x.updated_at ?? null, campos: Object.keys(x) })),
+        painel: local && { preco: local.preco, preco_lista: local.preco_lista, lido_em: local.lido_preco } };
+    },
     'POST /api/magalu/anuncios/preco': async (_u, body) => {
       const sku = String(body?.sku ?? '').trim();
       if (!sku || sku.length > 80) throw erro('Informe o SKU.');
