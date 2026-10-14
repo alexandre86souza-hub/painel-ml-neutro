@@ -265,9 +265,12 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       if ([502, 503, 504].includes(r.status) && tentativa < 2) { await new Promise((ok) => setTimeout(ok, 2000 * (tentativa + 1))); continue; }
       break;
     }
-    const j = await r.json().catch(() => null);
+    const txt = await r.text().catch(() => '');
+    let j = null; try { j = txt ? JSON.parse(txt) : null; } catch {}
     if (r.status === 401 || r.status === 403) throw erro(`A Magalu recusou o acesso (${r.status}${j?.message ? ': ' + j.message : ''}). Confira se a loja autorizou todas as permissões.`, 401);
-    if (!r.ok) throw erro(`Magalu: ${j?.message || j?.detail?.[0]?.msg || j?.error || `HTTP ${r.status}`}`, r.status >= 500 ? 502 : r.status);
+    // sem mensagem conhecida (ex.: 409 no PATCH de preço, 14/10/2026), mostra a resposta da Magalu como veio (sem dado de comprador)
+    if (!r.ok) throw erro(`Magalu: ${j?.message || j?.detail?.[0]?.msg || j?.error || `HTTP ${r.status}`}`
+      + (j?.message || j?.detail?.[0]?.msg || j?.error ? '' : txt ? ` — ${JSON.stringify(semPessoais(j ?? txt)).slice(0, 400)}` : ''), r.status >= 500 ? 502 : r.status);
     return pessoais ? j : semPessoais(j ?? {});
   }
 
@@ -651,8 +654,22 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const corpo = { currency: atual.currency || 'BRL', normalizer: 100, price: novo,
         list_price: Math.max(Math.round(n(atual.list_price) / (n(atual.normalizer) || 100) * 100), novo) };
       if (atual.channel?.id) corpo.channel = { id: String(atual.channel.id) };
-      const resp = await mg(caminho, {}, { metodo: 'PATCH', corpo });
       const alvo = Math.round(v * 100) / 100;
+      // Medido em 14/10/2026: o PATCH certo aplicou em alguns minutos; o pedido seguinte para o mesmo SKU deu 409 (o mesmo
+      // preço ou um ainda em processamento). 409 = lê de novo: já está no preço pedido, deu certo; senão, ainda aplicando.
+      let resp = null;
+      try { resp = await mg(caminho, {}, { metodo: 'PATCH', corpo }); }
+      catch (e) {
+        if (e.status !== 409) throw e;
+        const l = (await mg(caminho).catch(() => null))?.results;
+        const c = (atual.channel?.id && (l || []).find((x) => x.channel?.id === atual.channel.id)) || doCanal(l);
+        const p = c ? n(c.price) / (n(c.normalizer) || 100) : null;
+        if (p != null && Math.abs(p - alvo) <= 0.01) {
+          D.magaluPrecoGravar(sku, p, n(c.list_price) / (n(c.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
+          return { sku, preco: p, conferido: true };
+        }
+        throw erro(`a Magalu ainda está aplicando uma mudança de preço anterior deste anúncio (preço lido agora: ${p != null ? p.toFixed(2).replace('.', ',') : '—'}). Espere alguns minutos e clique em "Atualizar da Magalu". ${e.message}`, 409);
+      }
       let conf = null, lido = null;
       for (let k = 0; k < 5; k++) {
         await new Promise((ok) => setTimeout(ok, 3000));

@@ -139,8 +139,8 @@ $('btMargemMassa').onclick = () => {
       for(const [k, x] of lista.entries()){
         try{
           const r = await api('/api/magalu/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku: x.item.a.sku, preco: x.preco }) });
-          if(r.pendente) throw new Error('a Magalu recebeu, mas o preço ainda não mudou' + (r.lido != null ? ' (continua ' + real(r.lido) + ')' : '') + '. Confira no portal em alguns minutos.');
-          x.item.a.preco = r.preco; out.push({ chave: x.item.chave, ok: true, texto: 'preço mudado (conferido)' });
+          if(r.pendente) out.push({ chave: x.item.chave, ok: true, texto: 'enviado; a Magalu aplica em alguns minutos (confira no site)' });
+          else { x.item.a.preco = r.preco; out.push({ chave: x.item.chave, ok: true, texto: 'preço mudado (conferido)' }); }
         }catch(e){
           out.push({ chave: x.item.chave, ok: false, erro: e.message });
           if(k === 0){ for(const y of lista.slice(1)) out.push({ chave: y.item.chave, ok: false, erro: 'não tentado: o primeiro não confirmou' }); break; }
@@ -209,7 +209,8 @@ function pintarLista(){
         extra: a.preco_lista && a.preco_lista > a.preco + 0.009 ? 'Em promoção: confira na Magalu se a promoção continua depois da mudança.' : null,
         salvar: async (v) => {
           const r = await api('/api/magalu/anuncios/preco', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku: a.sku, preco: v }) });
-          if(r.pendente) throw new Error(`a Magalu recebeu o pedido, mas depois de 15 s o preço continua ${r.lido != null ? real(r.lido) : "o antigo"}. Confira no portal da Magalu em alguns minutos${r.trace_id ? " (protocolo " + r.trace_id + ")" : ""}.`);
+          // medido 14/10/2026: a Magalu aplica em alguns MINUTOS e a leitura de preço da API demora mais que o site para mudar
+          if(r.pendente) return `Preço de ${real(v)} enviado à Magalu para ${a.sku}${r.trace_id ? " (protocolo " + r.trace_id + ")" : ""}. Ela leva alguns minutos para aplicar: confira no site da Magalu e não envie de novo antes disso (a leitura do painel ainda mostra ${r.lido != null ? real(r.lido) : "o preço antigo"}).`;
           a.preco = r.preco; setTimeout(pintarLista, 50);
           return `Preço de ${a.sku} mudado para ${real(r.preco)} na Magalu (conferido).`;
         } }));
