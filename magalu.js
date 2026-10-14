@@ -323,6 +323,11 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   // Anúncios: lista de SKUs (100 por página) e, um SKU por chamada, preço e estoque — em segundo
   // plano, 3 por vez, publicados primeiro; relidos a cada 6 h. A tela pede de novo enquanto `lendo`.
   let lendoAnuncios = null, progresso = null;
+  // Medido em 14/10/2026: o PATCH muda o preço do SITE em minutos, mas a consulta /portfolios/prices continua com o registro
+  // anterior (updated_at da véspera, gravado por outro integrador). O painel guarda o preço que ENVIOU (estado
+  // magalu_precos_enviados: sku -> {preco, em}) e mostra ele até a Magalu trazer um registro mais novo que o envio.
+  const enviados = () => { try { return JSON.parse(D.configLer('magalu_precos_enviados') || '{}'); } catch { return {}; } };
+  const enviadoGravar = (sku, v) => { const m = enviados(); if (v) m[sku] = v; else delete m[sku]; D.configGravar('magalu_precos_enviados', JSON.stringify(m)); };
   // preço (do canal Magalu) e estoque de UM SKU, gravados na cópia local
   async function lerPrecoSku(sku) {
     let preco = null, lista = null, estoque = null;
@@ -330,6 +335,9 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const l = (await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`)).results || [];
       const p = l.find((x) => x.channel?.id === CANAL_MAGALU.id) || l[0];   // um preço por canal: o da Magalu
       if (p) { preco = n(p.price) / (n(p.normalizer) || 100); lista = n(p.list_price) / (n(p.normalizer) || 100); }
+      // registro da Magalu mais novo que o envio do painel (ou já no preço enviado): vale o da Magalu
+      const env = enviados()[sku];
+      if (p && env && ((p.updated_at && Date.parse(p.updated_at) > Date.parse(env.em)) || Math.abs(preco - env.preco) <= 0.01)) enviadoGravar(sku, null);
     } catch { /* sem preço */ }
     try {
       const e = (await mg(`/seller/v1/portfolios/stocks/${encodeURIComponent(sku)}`)).results || [];
@@ -396,12 +404,15 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     }
     const media = fatT > 0 ? tarT / fatT : null;
     const trocasMg = D.skuTrocas('magalu');
+    const env = enviados();
     const itens = D.magaluAnuncios().map((a) => {
       const skuPainel = vinc.get(a.sku) || null;
       const trocado = C.skuNaData(trocasMg, skuPainel || a.sku);
       const cs = C.custoDoSku(trocado, mapa);
       const x = porSku.get(a.sku);
-      return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: a.preco, preco_lista: a.preco_lista,
+      const ev = env[a.sku];
+      return { sku: a.sku, sku_painel: skuPainel, titulo: a.titulo, status: a.status, ativo: !!a.ativo, preco: ev ? ev.preco : a.preco, preco_lista: a.preco_lista,
+        preco_enviado_em: ev ? ev.em : null, preco_magalu: ev ? a.preco : null,
         estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
         faltando: cs.faltando, vendas_30: x?.v30 || 0, taxa_pct: x && x.fat > 0 ? x.tar / x.fat : media, taxa_do_produto: !!(x && x.fat > 0),
         foto: x?.foto || null, link: a.url };
@@ -690,6 +701,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         const l = (await mg(caminho).catch(() => null))?.results;
         const c = (atual.channel?.id && (l || []).find((x) => x.channel?.id === atual.channel.id)) || doCanal(l);
         const p = c ? n(c.price) / (n(c.normalizer) || 100) : null;
+        const ev = enviados()[sku];
+        if (ev && Math.abs(ev.preco - alvo) <= 0.01) return { sku, preco: null, conferido: false, pendente: true, lido: p, trace_id: null };
         if (p != null && Math.abs(p - alvo) <= 0.01) {
           D.magaluPrecoGravar(sku, p, n(c.list_price) / (n(c.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
           return { sku, preco: p, conferido: true };
@@ -704,7 +717,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
         if (lido != null && Math.abs(lido - alvo) <= 0.01) break;
       }
-      if (lido == null || Math.abs(lido - alvo) > 0.01) { conferirDepois(sku, alvo); return { sku, preco: null, conferido: false, pendente: true, lido, trace_id: resp?.trace_id || null }; }
+      if (lido == null || Math.abs(lido - alvo) > 0.01) { enviadoGravar(sku, { preco: alvo, em: new Date().toISOString() }); conferirDepois(sku, alvo); return { sku, preco: null, conferido: false, pendente: true, lido, trace_id: resp?.trace_id || null }; }
       D.magaluPrecoGravar(sku, lido, n(conf.list_price) / (n(conf.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
       return { sku, preco: lido, conferido: true };
     },
