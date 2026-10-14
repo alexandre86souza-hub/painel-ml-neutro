@@ -323,6 +323,30 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   // Anúncios: lista de SKUs (100 por página) e, um SKU por chamada, preço e estoque — em segundo
   // plano, 3 por vez, publicados primeiro; relidos a cada 6 h. A tela pede de novo enquanto `lendo`.
   let lendoAnuncios = null, progresso = null;
+  // preço (do canal Magalu) e estoque de UM SKU, gravados na cópia local
+  async function lerPrecoSku(sku) {
+    let preco = null, lista = null, estoque = null;
+    try {
+      const l = (await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`)).results || [];
+      const p = l.find((x) => x.channel?.id === CANAL_MAGALU.id) || l[0];   // um preço por canal: o da Magalu
+      if (p) { preco = n(p.price) / (n(p.normalizer) || 100); lista = n(p.list_price) / (n(p.normalizer) || 100); }
+    } catch { /* sem preço */ }
+    try {
+      const e = (await mg(`/seller/v1/portfolios/stocks/${encodeURIComponent(sku)}`)).results || [];
+      estoque = e.filter((x) => !x.type || x.type === 'AVAILABLE').reduce((a, x) => a + n(x.quantity), 0);
+    } catch { /* sem estoque */ }
+    D.magaluPrecoGravar(sku, preco, lista, estoque);
+    return preco;
+  }
+  // preço enviado e ainda não aplicado: relê aquele SKU depois de 3, 8, 15 e 30 min (medido 14/10/2026: o site mudou em
+  // minutos e a leitura da API ainda mais tarde); para quando o preço lido for o enviado
+  function conferirDepois(sku, alvo) {
+    const tempos = [3, 8, 15, 30];
+    const passo = (k) => { if (k >= tempos.length) return;
+      setTimeout(async () => { const p = await lerPrecoSku(sku).catch(() => null); if (p == null || Math.abs(p - alvo) > 0.01) passo(k + 1); },
+        (tempos[k] - (k ? tempos[k - 1] : 0)) * 60e3).unref?.(); };
+    passo(0);
+  }
   function lerAnuncios(forcar = false) {
     if (lendoAnuncios) return lendoAnuncios;
     const lidoEm = D.configLer('magalu_anuncios_lido_em');
@@ -342,21 +366,11 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         if (total) D.magaluAnunciosLimparAntes(visto);
         D.configGravar('magalu_anuncios_lido_em', visto);
       }
-      for (let lote = D.magaluSemPreco(30), voltas = 0; lote.length && voltas < 200; lote = D.magaluSemPreco(30), voltas++) {
-        progresso = { faltam: D.magaluSemPreco(100000).length };
-        await Promise.all(lote.map(async (sku) => {
-          let preco = null, lista = null, estoque = null;
-          try {
-            const l = (await mg(`/seller/v1/portfolios/prices/${encodeURIComponent(sku)}`)).results || [];
-            const p = l.find((x) => x.channel?.id === CANAL_MAGALU.id) || l[0];   // um preço por canal: o da Magalu
-            if (p) { preco = n(p.price) / (n(p.normalizer) || 100); lista = n(p.list_price) / (n(p.normalizer) || 100); }
-          } catch { /* sem preço */ }
-          try {
-            const e = (await mg(`/seller/v1/portfolios/stocks/${encodeURIComponent(sku)}`)).results || [];
-            estoque = e.filter((x) => !x.type || x.type === 'AVAILABLE').reduce((a, x) => a + n(x.quantity), 0);
-          } catch { /* sem estoque */ }
-          D.magaluPrecoGravar(sku, preco, lista, estoque);
-        }));
+      // "Atualizar da Magalu" (forcar) relê também os preços já lidos antes do clique (antes só os de mais de 6 h)
+      const corte = forcar ? new Date().toISOString() : null;
+      for (let lote = D.magaluSemPreco(30, corte), voltas = 0; lote.length && voltas < 200; lote = D.magaluSemPreco(30, corte), voltas++) {
+        progresso = { faltam: D.magaluSemPreco(100000, corte).length };
+        await Promise.all(lote.map(lerPrecoSku));
       }
       progresso = null;
     })().finally(() => { lendoAnuncios = null; });
@@ -678,7 +692,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         lido = conf ? n(conf.price) / (n(conf.normalizer) || 100) : null;
         if (lido != null && Math.abs(lido - alvo) <= 0.01) break;
       }
-      if (lido == null || Math.abs(lido - alvo) > 0.01) return { sku, preco: null, conferido: false, pendente: true, lido, trace_id: resp?.trace_id || null };
+      if (lido == null || Math.abs(lido - alvo) > 0.01) { conferirDepois(sku, alvo); return { sku, preco: null, conferido: false, pendente: true, lido, trace_id: resp?.trace_id || null }; }
       D.magaluPrecoGravar(sku, lido, n(conf.list_price) / (n(conf.normalizer) || 100), D.magaluAnuncios().find((a) => a.sku === sku)?.estoque ?? null);
       return { sku, preco: lido, conferido: true };
     },

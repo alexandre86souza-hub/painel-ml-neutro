@@ -1838,8 +1838,9 @@ const magaluAnunciosLimparAntes = (visto) => db.prepare('DELETE FROM magalu_anun
 const magaluPrecoGravar = (sku, preco, lista, estoque) => db.prepare('UPDATE magalu_anuncios SET preco=?, preco_lista=?, estoque=?, lido_preco=? WHERE sku=?')
   .run(preco, lista, estoque, new Date().toISOString(), sku);
 // sem preço lido ou lido há mais de 6 h; publicados primeiro
-const magaluSemPreco = (limite) => db.prepare(`SELECT sku FROM magalu_anuncios WHERE lido_preco IS NULL OR lido_preco < ?
-  ORDER BY (status = 'PUBLISHED') DESC, lido_preco IS NOT NULL, sku LIMIT ?`).all(new Date(Date.now() - 6 * 3600e3).toISOString(), limite).map((r) => r.sku);
+// antesDe: o "Atualizar da Magalu" relê também os preços lidos antes do clique
+const magaluSemPreco = (limite, antesDe = null) => db.prepare(`SELECT sku FROM magalu_anuncios WHERE lido_preco IS NULL OR lido_preco < ?
+  ORDER BY (status = 'PUBLISHED') DESC, lido_preco IS NOT NULL, sku LIMIT ?`).all(antesDe || new Date(Date.now() - 6 * 3600e3).toISOString(), limite).map((r) => r.sku);
 const magaluAnuncios = () => db.prepare('SELECT * FROM magalu_anuncios ORDER BY titulo').all();
 const skuVinculos = (canal) => new Map(db.prepare('SELECT sku, sku_painel FROM sku_vinculos WHERE canal=?').all(canal).map((r) => [r.sku, r.sku_painel]));
 // Troca de produto no SKU (trocas-sku.js). Amazon, Leroy e Magalu não deixam renomear o SKU do anúncio: a troca
