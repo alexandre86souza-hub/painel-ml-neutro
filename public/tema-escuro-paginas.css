@@ -481,6 +481,8 @@ html[data-tema="escuro"][data-pagina="promocoes"] .nova-campanha input{border:1p
 html[data-tema="escuro"][data-pagina="promocoes"] .excluir-campanha{color:hsl(0,74%,72%)}
 html[data-tema="escuro"][data-pagina="promocoes"] .filtros-esc label{color:var(--muted,var(--muted))}
 html[data-tema="escuro"][data-pagina="promocoes"] .filtros-esc input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="promocoes"] .res-item.ok{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="promocoes"] .res-item.falha{color:hsl(4,76%,72%)}
 /* publicar-canais.html */
 html[data-tema="escuro"][data-pagina="publicar-canais"] .grade input,
 html[data-tema="escuro"][data-pagina="publicar-canais"] .grade select,

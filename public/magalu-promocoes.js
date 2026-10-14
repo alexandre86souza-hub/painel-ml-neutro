@@ -112,11 +112,11 @@
   }
 
   // Produtos de uma promoção: preço promocional e limite editáveis, lucro no preço, remover e incluir anúncios
-  async function produtos(p){
+  async function produtos(p, rolar = true){
     const box = $('mgProdutos'); box.innerHTML = '';
     box.appendChild(el('h3', null, 'Produtos — ' + (p.nome || p.id)));
     box.appendChild(el('p', 'carregando', 'Perguntando à Magalu…'));
-    box.scrollIntoView({ behavior: 'smooth' });
+    if(rolar) box.scrollIntoView({ behavior: 'smooth' });   // reaberto depois de salvar: fica onde está
     let r;
     try{ r = await api('/api/magalu/campanhas/skus?id=' + encodeURIComponent(p.id)); }
     catch(e){ box.lastChild.remove(); box.appendChild(el('p', 'recusas', e.message)); return; }
@@ -164,7 +164,7 @@
         const erros = x.resultado.filter((y) => !y.ok);
         aviso(`${numero(x.alterados)} produto(s) enviados.` + (x.aplicado === true ? ' Confirmados na promoção.' : typeof x.aplicado === 'string' ? ' A confirmação falhou: ' + x.aplicado : x.participa ? '' : ' Entram quando você clicar Participar.'), erros.length ? '' : 'ok');
         res.textContent = erros.map((y) => `${y.sku}: ${y.erro}`).join('\n');
-        if(!erros.length) produtos(p);
+        if(!erros.length){ const y = scrollY; await produtos(p, false); scrollTo(0, y); }
       }catch(e){ aviso('A Magalu recusou: ' + e.message); }
     }
     async function remover(){
@@ -175,7 +175,7 @@
         const erros = x.resultado.filter((y) => !y.ok);
         aviso(`${numero(x.removidos)} produto(s) tirados da promoção.` + (typeof x.aplicado === 'string' ? ' A confirmação falhou: ' + x.aplicado : ''), erros.length ? '' : 'ok');
         res.textContent = erros.map((y) => `${y.sku}: ${y.erro}`).join('\n');
-        if(!erros.length) produtos(p);
+        if(!erros.length){ const y = scrollY; await produtos(p, false); scrollTo(0, y); }
       }catch(e){ aviso('A Magalu recusou: ' + e.message); }
     }
     // incluir anúncios (promoção em que você escolhe os produtos)

@@ -77,10 +77,11 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/aviso-flutuante.js?v=1"></script>
 <script src="/composicao.js?v=1"></script>
 <script src="/margem-massa.js?v=2"></script>
 <script>
-function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) avisoNaTela(m); }
 function cartao(rot, valor, nota){ const c = el('div', 'cartao'); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); return c; }
 const SIT = { PUBLISHED: ['publicado', 'verde'], UNPUBLISHED: ['despublicado', 'cinza'], BLOCKED: ['bloqueado', 'amarelo'], NEW: ['novo', 'cinza'] };
 let dados = null, filtro = 'publicados', mostrar = 200, espera = null;

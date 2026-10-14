@@ -156,6 +156,9 @@
   .filtros-esc label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
   .filtros-esc input{font:inherit;font-size:13px;padding:5px 8px;border:1px solid #d5d7db;border-radius:8px;width:120px}
   .filtros-esc input#fMargemMin{width:64px}
+  .res-item{margin:6px 0 0;font-size:13px;font-weight:600}
+  .res-item.ok{color:#0b6b33}
+  .res-item.falha{color:#b42318}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -321,10 +324,17 @@ async function api(caminho, opts){
 }
 const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) });
 
-function aviso(texto, tipo = 'erro'){
+function aviso(texto, tipo = 'erro', rolar = true){
   const m = $('msg');
   m.className = tipo; m.textContent = texto;
-  m.scrollIntoView({ block:'nearest', behavior:'smooth' });
+  avisoNaTela(m);   // fora da vista: aparece flutuando no canto (a tela não pula para o topo)
+}
+// resultado de entrar/sair mostrado no próprio anúncio (a tela não pula para o topo: dá para seguir aderindo um por um)
+function marcarNoItem(li, texto, ok){
+  if(!li) return;
+  let m = li.querySelector(':scope > .res-item');
+  if(!m){ m = el('p', 'res-item'); li.appendChild(m); }
+  m.className = 'res-item ' + (ok ? 'ok' : 'falha'); m.textContent = texto;
 }
 const limparAviso = () => { $('msg').className = ''; $('msg').textContent = ''; };
 
@@ -840,10 +850,11 @@ function formAdesao(li, p, itemId, botao){
     ok.disabled = true; limparAviso();
     try{
       await post(`/api/promocoes/anuncio/${itemId}/aderir`, corpo);
-      aviso(`Pronto: ${itemId} entrou em "${p.nome}". O Mercado Livre pode levar alguns minutos para mostrar o novo preço.`, 'ok');
+      aviso(`Pronto: ${itemId} entrou em "${p.nome}". O Mercado Livre pode levar alguns minutos para mostrar o novo preço.`, 'ok', false);
       f.remove(); botao.remove();
-      depoisDeMudar(itemId);
-    }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); ok.disabled = false; }
+      marcarNoItem(li, `✓ entrou em "${p.nome}"${precoTxt}. O ML pode levar alguns minutos para mostrar o preço novo.`, true);
+      depoisDeMudar(itemId, li);
+    }catch(e){ aviso('O Mercado Livre recusou: ' + e.message, 'erro', false); marcarNoItem(li, 'O Mercado Livre recusou: ' + e.message, false); ok.disabled = false; }
   };
   li.appendChild(f);
   (campos.preco || ok).focus();
@@ -854,17 +865,21 @@ async function sair(p, itemId, botao, li){
   botao.disabled = true; limparAviso();
   try{
     await post(`/api/promocoes/anuncio/${itemId}/sair`, { promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id });
-    aviso(`Pronto: ${itemId} saiu de "${p.nome}".`, 'ok');
+    aviso(`Pronto: ${itemId} saiu de "${p.nome}".`, 'ok', false);
     botao.remove();
     li.style.opacity = '.55';
-    depoisDeMudar(itemId);
-  }catch(e){ aviso('O Mercado Livre recusou: ' + e.message); botao.disabled = false; }
+    marcarNoItem(li, `✓ saiu de "${p.nome}"`, true);
+    depoisDeMudar(itemId, li);
+  }catch(e){ aviso('O Mercado Livre recusou: ' + e.message, 'erro', false); marcarNoItem(li, 'O Mercado Livre recusou: ' + e.message, false); botao.disabled = false; }
 }
 
 // Depois de entrar ou sair, atualiza as contagens e o anúncio aberto na busca.
-function depoisDeMudar(itemId){
-  carregarPromos();
-  if(anuncioAberto === itemId) verAnuncio(itemId);
+// A tela fica no mesmo lugar: o anúncio mexido continua na mesma altura (ou, se a lista foi refeita, a mesma rolagem).
+async function depoisDeMudar(itemId, li){
+  const y = window.scrollY, topo = li?.getBoundingClientRect().top;
+  const manter = () => { if(li?.isConnected && topo != null) window.scrollBy(0, li.getBoundingClientRect().top - topo); else window.scrollTo(0, y); };
+  await Promise.all([carregarPromos().catch(() => null), anuncioAberto === itemId ? verAnuncio(itemId).catch(() => null) : null]);
+  manter();
 }
 
 // ---------- por anúncio ----------
@@ -1020,6 +1035,7 @@ carregarResultado();
 carregarPromos();
 carregarPorAnuncio();
 </script>
+<script src="/aviso-flutuante.js?v=1"></script>
 <script src="/aviso.js?v=2" defer></script>
 <script src="/sino.js?v=4" defer></script>
 </body>

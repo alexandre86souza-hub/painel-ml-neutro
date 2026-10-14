@@ -603,7 +603,7 @@ const ROTULO = { active:'ativo', paused:'pausado', closed:'encerrado',
   under_review:'em revisão', inactive:'inativo', payment_required:'aguardando pagamento' };
 const https = (u) => (u || '').replace(/^http:\/\//i, 'https://');
 const brl = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
-function aviso(t, tipo){ msg.className = tipo; msg.textContent = t; window.scrollTo({top:0,behavior:'smooth'}); }
+function aviso(t, tipo){ msg.className = tipo; msg.textContent = t; avisoNaTela(msg); }   // sem pular para o topo
 
 async function api(path, opts){
   const r = await fetch(path, opts);
@@ -2929,6 +2929,7 @@ try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('fBusca').
 
 carregarContas(); carregar(); carregarQualidade();
 </script>
+<script src="/aviso-flutuante.js?v=1"></script>
 <script src="/aviso.js?v=2" defer></script>
 <script src="/sino.js?v=4" defer></script>
 </body>
