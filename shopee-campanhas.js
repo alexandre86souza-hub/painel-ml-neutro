@@ -248,6 +248,10 @@ function criar({ D, daLoja, vendas }) {
         const recente = Date.now() / 1000 - 60 * 86400;
         const escolhidos = descontos.sort((a, b) => b.start_time - a.start_time).slice(0, 60);
         const lista = new Array(escolhidos.length);
+        // anúncios que já estão num desconto em andamento ou agendado (fim no futuro): item_id -> nome do desconto.
+        // A Shopee aceita até 1.000 por desconto e um anúncio num desconto por vez: a tela de criar deixa esses de fora.
+        const emCampanha = {};
+        const agoraS = Date.now() / 1000;
         let prox = 0;
         const trabalhar = async () => {
           for (let k = prox++; k < escolhidos.length; k = prox++) {
@@ -264,6 +268,7 @@ function criar({ D, daLoja, vendas }) {
               } catch {}
             }
             const ids = itens ? [...new Set(itens.map((i) => Number(i.item_id)))] : null;
+            if (ids && d.end_time > agoraS) for (const i of ids) emCampanha[i] = d.discount_name || `desconto ${d.discount_id}`;
             lista[k] = { tipo: 'Desconto', id: String(d.discount_id), nome: d.discount_name || null, status: d.status || null,
               inicio: iso(d.start_time), fim: iso(d.end_time), itens: ids ? ids.length : null,
               exemplos: (itens || []).slice(0, 3).map((i) => ({ nome: i.item_name || null, preco_original: i.item_original_price ?? i.model_list?.[0]?.model_original_price ?? null,
@@ -293,7 +298,7 @@ function criar({ D, daLoja, vendas }) {
         const agora = new Date().toISOString();
         for (const c of lista) c.situacao = c.inicio > agora ? 'agendada' : c.fim && c.fim < agora ? 'encerrada' : 'em andamento';
         lista.sort((a, b) => (a.situacao === 'em andamento' ? -1 : 0) - (b.situacao === 'em andamento' ? -1 : 0) || String(b.inicio).localeCompare(String(a.inicio)));
-        return { loja: shopId, campanhas: lista, em_andamento: lista.filter((c) => c.situacao === 'em andamento').length,
+        return { loja: shopId, campanhas: lista, em_andamento: lista.filter((c) => c.situacao === 'em andamento').length, em_campanha: emCampanha,
           nota: 'Campanhas da própria Shopee (como 10.10 e 11.11) não aparecem na API: a inscrição nelas é no Seller Centre.' };
       });
     },
