@@ -89,6 +89,7 @@
     #impressao .comanda{box-shadow:none;margin:0 auto;page-break-after:always;break-after:page}
     #impressao .comanda:last-child{page-break-after:auto;break-after:auto}
   }
+  .sel-loja{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;max-width:280px}
 </style>
 </head>
 <body>
@@ -125,6 +126,7 @@
         <button type="button" data-p="todos" aria-pressed="true">Qualquer prazo</button>
         <button type="button" data-p="hoje" aria-pressed="false">Até hoje</button>
       </div>
+      <select id="selLoja" class="sel-loja" aria-label="Loja"><option value="">Todas as lojas</option></select>
       <input type="search" id="busca" placeholder="Buscar pedido, cliente ou SKU" aria-label="Buscar comanda">
       <button type="button" class="bt imprimir" id="btSel" disabled>Imprimir selecionadas</button>
       <button type="button" class="bt" id="btTodas">Imprimir todas as não impressas</button>
@@ -206,10 +208,22 @@ async function carregar(recarregar){
   }catch(e){ aviso(e.message); $('lista').innerHTML = ''; }
 }
 
+// Filtro por loja (ex.: só o Flex da AMG · Mercado Livre): a loja + o canal, como na coluna Loja. Fica guardado no navegador.
+const lojaDe = (c) => `${c.loja} · ${CANAL[c.canal] || c.canal}`;
+let lojaSel = ''; try{ lojaSel = localStorage.getItem('comandas.loja') || ''; }catch{}
+$('selLoja').onchange = () => { lojaSel = $('selLoja').value; try{ localStorage.setItem('comandas.loja', lojaSel); }catch{} pintar(); };
+function pintarLojas(){
+  const sel = $('selLoja'); const lojas = [...new Set(dados.comandas.map(lojaDe))].sort();
+  if(lojaSel && !lojas.includes(lojaSel)) lojas.push(lojaSel);   // escolhida e sem comanda agora: continua na lista
+  sel.innerHTML = ''; const o0 = el('option', null, 'Todas as lojas'); o0.value = ''; sel.appendChild(o0);
+  for(const l of lojas){ const o = el('option', null, l); o.value = l; sel.appendChild(o); }
+  sel.value = lojaSel;
+}
 function pintar(){
+  pintarLojas();
   const abas = $('abas'); abas.innerHTML = '';
   for(const k of [...dados.categorias, 'Todas']){
-    const lst = dados.comandas.filter((c) => k === 'Todas' || c.categoria === k);
+    const lst = dados.comandas.filter((c) => (k === 'Todas' || c.categoria === k) && (!lojaSel || lojaDe(c) === lojaSel));
     const falta = lst.filter((c) => !c.impressa_em).length;
     const b = el('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(cat === k));
     b.append(document.createTextNode(k), el('span', 'qtd' + (falta ? ' alerta' : ''), falta ? `${falta} na fila` : String(lst.length)));
@@ -225,6 +239,7 @@ function filtradas(){
   const q = $('busca').value.trim().toLowerCase();
   return dados.comandas.filter((c) => {
     if(cat !== 'Todas' && c.categoria !== cat) return false;
+    if(lojaSel && lojaDe(c) !== lojaSel) return false;
     if(sit === 'aguarda' && c.impressa_em) return false;
     if(sit === 'impressa' && !c.impressa_em) return false;
     if(prazo === 'hoje' && !['atrasado', 'hoje'].includes(c.situacao_prazo)) return false;

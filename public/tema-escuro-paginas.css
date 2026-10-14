@@ -159,6 +159,7 @@ html[data-tema="escuro"][data-pagina="comandas"] .hist-filtros input{border:1px 
 html[data-tema="escuro"][data-pagina="comandas"] .campos input,
 html[data-tema="escuro"][data-pagina="comandas"] .campos select,
 html[data-tema="escuro"][data-pagina="comandas"] .itens input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="comandas"] .sel-loja{border:1px solid var(--line)}
 /* configuracao.html */
 html[data-tema="escuro"][data-pagina="configuracao"]{--link:hsl(216,77%,72%);--ok-bg:hsla(137,39%,60%,.14);--ok-line:hsla(138,44%,60%,.35);--warn-bg:hsla(39,90%,60%,.14);--err-bg:hsla(5,79%,60%,.14);--err-line:hsla(5,69%,60%,.35)}
 html[data-tema="escuro"][data-pagina="configuracao"] input{border:1px solid var(--line);background:rgba(14,24,44,.72)}
