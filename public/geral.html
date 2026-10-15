@@ -28,6 +28,11 @@
   .contas{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
   @media (min-width:1500px){ .contas{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))} }
   .contas:has(> :only-child){grid-template-columns:minmax(280px,520px)}   /* loja com um canal só: não estica a tela toda */
+  /* loja com 3+ canais: os 2 que mais faturaram numa linha (largos, como numa loja de 2 canais) e os outros numa linha que
+     ocupa a largura toda (--n colunas iguais, sem buraco no fim) */
+  .contas.linha{grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+  .contas + .contas{margin-top:14px}
+  @media (max-width:1100px){ .contas.linha{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))} }
   .conta{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px 14px;overflow:hidden;
     box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);transition:transform .15s,box-shadow .15s}
   .conta::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--cor,#2563eb)}
@@ -348,9 +353,16 @@ function pintarContas(r, cor){
     pil(`Faturamento ${curto()}`, real(soma('faturamento'))); pil('Lucro', real(soma('lucro')), 'lucro');
     pil('Participação', pct(total > 0 ? soma('faturamento') / total : 0, 0));
     topo.append(logo, el('h2', null, loja), res);
-    const grade = el('div', 'contas');
-    for(const c of contas) grade.appendChild(cartaoConta(c, cor, total));
-    sec.append(topo, grade); box.appendChild(sec);
+    sec.appendChild(topo);
+    // até 2 canais: uma linha só; com 3 ou mais, os 2 maiores em cima e o resto embaixo, preenchendo a largura
+    const linhas = contas.length > 2 ? [contas.slice(0, 2), contas.slice(2)] : [contas];
+    for(const ls of linhas){
+      const grade = el('div', 'contas' + (contas.length > 2 ? ' linha' : ''));
+      if(contas.length > 2) grade.style.setProperty('--n', String(ls.length));
+      for(const c of ls) grade.appendChild(cartaoConta(c, cor, total));
+      sec.appendChild(grade);
+    }
+    box.appendChild(sec);
   }
 }
 
