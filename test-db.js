@@ -108,6 +108,24 @@ assert.deepStrictEqual(D.urlPublicaRegistrar('https://b.trycloudflare.com', 'clo
 assert.strictEqual(D.urlPublicaUltima().url, 'https://b.trycloudflare.com');
 assert.deepStrictEqual(D.urlsPublicasHistorico().map((u) => u.url), ['https://b.trycloudflare.com', 'https://a.trycloudflare.com']);
 
+// histórico do custo: a venda antiga fica com o custo da época; vazio preenchido e correção retroativa valem para tudo
+{
+  const C = require('./custos.js');
+  const mapa = () => new Map(D.catalogoListar().map((p) => [p.numero, p]));
+  D.catalogoGravar([{ numero: 9901, sku: 'DQ-9901', custo: null }]);
+  D.catalogoGravar([{ numero: 9901, sku: 'DQ-9901', custo: 10 }]);   // estava sem custo: vale para o passado
+  assert.strictEqual(mapa().get(9901).hist, undefined);
+  assert.strictEqual(C.custoDoSku('DQ-9901', mapa(), '2020-01-01T00:00:00Z').custo, 10);
+  D.catalogoGravar([{ numero: 9901, sku: 'DQ-9901', custo: 12 }]);   // aumento: só daqui para frente
+  const antes = '2020-01-01T00:00:00Z', depois = new Date(Date.now() + 864e5).toISOString();
+  assert.strictEqual(C.custoDoSku('DQ-9901', mapa(), antes).custo, 10, 'venda antiga: custo da época');
+  assert.strictEqual(C.custoDoSku('DQ-9901', mapa(), depois).custo, 12, 'venda nova: custo novo');
+  assert.strictEqual(C.custoDoSku('DQ-9901', mapa()).custo, 12, 'sem data: o de hoje');
+  D.catalogoGravar([{ numero: 9901, sku: 'DQ-9901', custo: 11 }], { retroativo: true });   // erro de digitação corrigido
+  assert.strictEqual(mapa().get(9901).hist, undefined);
+  assert.strictEqual(C.custoDoSku('DQ-9901', mapa(), antes).custo, 11, 'retroativo vale para tudo');
+}
+
 D.db.close();
 for (const f of [process.env.ML_DB_FILE, process.env.ML_DB_FILE + '-wal', process.env.ML_DB_FILE + '-shm']) {
   try { require('node:fs').unlinkSync(f); } catch {}

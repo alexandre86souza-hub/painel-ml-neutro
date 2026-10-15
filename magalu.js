@@ -116,7 +116,9 @@ function financeiroDo(ts) {
     if (t.tipo === 'CREDIT') x.magalu += t.valor; else x.vendedor += t.valor;
     promos.set(nome, x);
   }
-  return { recebido, freteCusto, promocoes: [...promos.values()].map((p) => ({ ...p, magalu: r2(p.magalu), vendedor: r2(p.vendedor) })) };
+  // devolvido ao cliente (REFUND: débitos − créditos): reembolso total = o produto volta (linhasDe)
+  const reembolso = r2(-v.filter((t) => t.cat === 'REFUND').reduce((a, t) => a + sinal(t), 0));
+  return { recebido, freteCusto, reembolso, promocoes: [...promos.values()].map((p) => ({ ...p, magalu: r2(p.magalu), vendedor: r2(p.vendedor) })) };
 }
 
 // Devoluções da Magalu pela análise financeira: pedido com lançamento REFUND (reembolso ao cliente). Devolvido = REFUND
@@ -157,6 +159,9 @@ function linhasDe(pedidos, ctx) {
     const ts = ctx.financeiro?.get(p.code);
     const fin = ts ? financeiroDo(ts) : null;
     const fatPedido = p.itens.reduce((a, i) => a + n(i.faturamento), 0);
+    // reembolso total ao cliente (REFUND do financeiro): o produto volta e a nota é cancelada (sem imposto), como na
+    // Shopee e na Leroy; o que a Magalu reteve já está no recebido (vira tarifa). Parcial: produto e imposto continuam.
+    const devolvido = valida && !!fin && fatPedido > 0 && n(fin.reembolso) >= fatPedido - 0.01;
     let tarifaPedido, fretePedido;
     if (fin) { tarifaPedido = fatPedido - fin.freteCusto - fin.recebido; fretePedido = fin.freteCusto; }
     else { tarifaPedido = n(p.comissao); fretePedido = 0; }
@@ -167,10 +172,10 @@ function linhasDe(pedidos, ctx) {
       const frete = valida ? fretePedido * parte : 0;
       // SKU digitado pelo vendedor (anúncio com outro código) e a troca de produto feita no painel (a partir da data)
       const skuPainel = C.skuNaData(ctx.trocas, (i.sku && ctx.vinculos?.get(i.sku)) || i.sku, p.data);
-      const cs = skuPainel ? C.custoDoSku(skuPainel, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
-      const produto = !valida ? 0 : cs.custo == null ? null : cs.custo * q;
+      const cs = skuPainel ? C.custoDoSku(skuPainel, ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
+      const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;
-      const imposto = valida ? (ctx.imposto_pct || 0) / 100 * fat : 0;
+      const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * fat : 0;
       const falta = produto == null ? ['custo'] : [];
       const lucro = !valida ? 0 : falta.length ? null : fat - tarifa - frete - produto - embalagem - imposto;
       const x = (v) => (v == null ? null : r2(v));
@@ -181,7 +186,7 @@ function linhasDe(pedidos, ctx) {
         custo_unit: cs.custo, embalagem_pedido: ctx.embalagem_pedido || 0,
         faturamento: x(fat), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem), imposto: x(imposto),
         lucro: x(lucro), margem: lucro != null && fat > 0 && valida ? lucro / fat : null, falta: valida ? falta : [], estimado: valida && !fin,
-        recebido: valida && fin ? x(fin.recebido * parte) : null, entregue: p.entregue,
+        recebido: valida && fin ? x(fin.recebido * parte) : null, entregue: p.entregue, devolvido,
         promocoes: fin ? fin.promocoes.map((pr) => ({ id: pr.id, nome: pr.nome, tipo: pr.tipo, valor: r2((pr.vendedor + pr.magalu) * parte), magalu: r2(pr.magalu * parte) })) : [],
         link: `https://sellercenter.magalu.com/pedidos/${encodeURIComponent(p.code)}` });
     }

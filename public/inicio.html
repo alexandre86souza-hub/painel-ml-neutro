@@ -117,7 +117,7 @@
     <div class="r-topo"><h2 id="tResumo">Últimos 30 dias</h2><span class="sub" id="rNota">carregando o resumo…</span></div>
     <div class="r-grade" id="resumo30">
       <a class="r-card" href="/vendas.html"><span class="r-rot">Faturamento</span><b id="rFat">—</b><small id="rFatN">&nbsp;</small></a>
-      <a class="r-card destaque" href="/vendas.html"><span class="r-rot">Lucro</span><b id="rLucro">—</b><small id="rLucroN">&nbsp;</small></a>
+      <a class="r-card destaque" href="/vendas.html"><span class="r-rot">Margem de contribuição</span><b id="rLucro">—</b><small id="rLucroN">&nbsp;</small></a>
       <a class="r-card" href="/devolucoes.html"><span class="r-rot">Devoluções</span><b id="rDev">—</b><small id="rDevN">&nbsp;</small></a>
       <a class="r-card" href="/ads.html"><span class="r-rot">ADS</span><b id="rAds">—</b><small id="rAdsN">&nbsp;</small></a>
       <a class="r-card" href="/full.html"><span class="r-rot">Vendas no Full</span><b id="rFull">—</b><small id="rFullN">&nbsp;</small></a>
@@ -412,7 +412,11 @@ async function carregarResumo(){
       $('rFat').textContent = real(r.mes.faturamento);
       $('rFatN').textContent = `${numero(r.mes.pedidos)} pedidos · ${numero(r.mes.unidades)} un.`;
       $('rLucro').textContent = real(r.mes.lucro);
-      $('rLucroN').textContent = `margem ${pctx(r.mes.margem)}` + (r.mes.cobertura != null && r.mes.cobertura < 0.99 ? ` (sobre ${pctx(r.mes.cobertura)} das vendas)` : '');
+      // antes do Ads e das devoluções (cartões ao lado); a linha de baixo já desconta os dois
+      $('rLucroN').textContent = `${pctx(r.mes.margem)} das vendas` + (r.mes.cobertura != null && r.mes.cobertura < 0.99 ? ` (sobre ${pctx(r.mes.cobertura)} delas)` : '')
+        + (r.depois ? ` · depois do ADS e das devoluções: ${real(r.depois.valor)} (${pctx(r.depois.margem)})` : '');
+      $('rLucroN').title = 'Faturamento menos tarifas, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS, as devoluções e os custos fixos da empresa.'
+        + (r.depois ? `\nDepois do ADS (− ${real(r.depois.ads)}) e das devoluções (${r.depois.devolucoes < 0 ? '− ' : '+ '}${real(Math.abs(r.depois.devolucoes))}): ${real(r.depois.valor)}.` : '');
     }else{ $('rFatN').textContent = r.mes?.erro || ''; }
     if(ok(r.devolucoes)){
       const d = r.devolucoes;

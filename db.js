@@ -405,17 +405,50 @@ db.exec(`
     atualizado_em TEXT NOT NULL
   );
 `);
-function catalogoGravar(linhas) {
+// Histórico do custo (auditoria de 15/10/2026): mudar o custo de um produto valia para TODAS as vendas, inclusive as antigas.
+// Cada troca de custo (de um valor para outro) guarda o novo com a data; a 1ª troca guarda também o custo antigo "desde
+// sempre". A venda usa o custo que valia na data dela (custos.js#custoDoSku). Custo que estava vazio e foi preenchido vale
+// para o passado (as vendas estavam sem custo). retroativo = corrigir erro de digitação: o custo novo vale para tudo.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS produtos_custo_hist (
+    numero INTEGER NOT NULL,
+    custo  REAL NOT NULL,
+    desde  TEXT NOT NULL,
+    PRIMARY KEY (numero, desde)
+  );
+`);
+const DESDE_SEMPRE = '0000-01-01T00:00:00.000Z';
+function catalogoGravar(linhas, { retroativo = false } = {}) {
   const st = db.prepare(`INSERT OR REPLACE INTO produtos_custo (numero, sku, nome, custo, situacao, fornecedor, atualizado_em)
                          VALUES (?,?,?,?,?,?,?)`);
+  const atualDe = db.prepare('SELECT custo FROM produtos_custo WHERE numero=?');
+  const temHist = db.prepare('SELECT 1 FROM produtos_custo_hist WHERE numero=? LIMIT 1');
+  const hist = db.prepare('INSERT OR REPLACE INTO produtos_custo_hist (numero, custo, desde) VALUES (?,?,?)');
+  const apagaHist = db.prepare('DELETE FROM produtos_custo_hist WHERE numero=?');
   const em = agora();
   db.exec('BEGIN');
   try {
-    for (const l of linhas) st.run(l.numero, l.sku ?? null, l.nome ?? null, l.custo ?? null, l.situacao ?? null, l.fornecedor ?? null, em);
+    for (const l of linhas) {
+      const antes = atualDe.get(l.numero)?.custo ?? null;
+      const novo = l.custo ?? null;
+      if (retroativo) apagaHist.run(l.numero);
+      else if (antes != null && novo != null && Math.abs(antes - novo) > 0.0001) {
+        if (!temHist.get(l.numero)) hist.run(l.numero, antes, DESDE_SEMPRE);
+        hist.run(l.numero, novo, em);
+      }
+      st.run(l.numero, l.sku ?? null, l.nome ?? null, novo, l.situacao ?? null, l.fornecedor ?? null, em);
+    }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
-const catalogoListar = () => db.prepare('SELECT * FROM produtos_custo ORDER BY numero').all();
+// Produtos com o histórico do custo (só quem teve troca): hist = [{ custo, desde }], o mais novo primeiro.
+const catalogoListar = () => {
+  const hs = new Map();
+  for (const h of db.prepare('SELECT numero, custo, desde FROM produtos_custo_hist ORDER BY numero, desde DESC').all()) {
+    (hs.get(h.numero) || hs.set(h.numero, []).get(h.numero)).push({ custo: h.custo, desde: h.desde });
+  }
+  return db.prepare('SELECT * FROM produtos_custo ORDER BY numero').all().map((p) => (hs.has(p.numero) ? { ...p, hist: hs.get(p.numero) } : p));
+};
 const catalogoResumo = () => db.prepare(`SELECT COUNT(*) AS produtos, SUM(custo IS NULL) AS sem_custo,
                                                 MAX(atualizado_em) AS atualizado_em FROM produtos_custo`).get();
 

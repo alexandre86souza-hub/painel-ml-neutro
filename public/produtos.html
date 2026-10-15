@@ -79,6 +79,7 @@
   .comp input{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #d5dbe5;border-radius:8px;width:120px;text-transform:uppercase;background:#fff}
   .ok-comp{font-size:12px;color:#0b6b33;margin-top:4px}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
+  label.retro-custo{display:block;font-size:11px;font-weight:400;color:var(--muted);margin-top:4px;white-space:nowrap;text-align:left}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -156,7 +157,8 @@
   <section class="bloco">
     <h2>Tabela de produtos</h2>
     <p class="sub">Edite o custo (preço de compra), o nome, a situação ou o fornecedor direto na linha e clique em <b>Salvar</b>.
-      O custo de todos os anúncios que usam o produto no SKU é recalculado na hora.</p>
+      O custo de todos os anúncios que usam o produto no SKU é recalculado na hora. O lucro das vendas já feitas continua com o custo
+      da época (para corrigir um custo digitado errado, marque "corrigir também as vendas antigas").</p>
     <div class="filtros">
       <input id="busca" type="search" placeholder="Buscar por SKU, nome ou fornecedor" aria-label="Buscar produto">
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
@@ -311,11 +313,20 @@ function linha(p){
   }else tdUso.appendChild(el('span', 'chip cinza', 'nenhum'));
   const tdAc = el('td', 'num');
   const salvo = el('span', 'salvo');
+  // Custo novo vale para as vendas daqui para frente (as antigas guardam o custo da época). Erro de digitação:
+  // marcar "corrigir também as vendas antigas".
+  const retro = el('label', 'retro-custo'); const cbRetro = el('input'); cbRetro.type = 'checkbox';
+  retro.append(cbRetro, ' corrigir também as vendas antigas'); retro.hidden = true;
+  retro.title = 'Desmarcado: o custo novo vale só para as vendas a partir de agora. Marcado: vale para todas (use para corrigir um custo digitado errado).';
+  tdC.appendChild(retro);
+  custo.addEventListener('input', () => { retro.hidden = !(p.custo != null && custo.value !== '' && Number(custo.value) !== Number(p.custo)); });
   const bt = el('button', 'bt', 'Salvar'); bt.type = 'button';
   bt.onclick = async () => {
     bt.disabled = true;
     try{
-      const r = await enviar('PUT', `/api/produtos/${p.numero}`, { nome: nome.value, custo: custo.value, situacao: sit.value, fornecedor: forn.value });
+      const r = await enviar('PUT', `/api/produtos/${p.numero}`, { nome: nome.value, custo: custo.value, situacao: sit.value, fornecedor: forn.value,
+        retroativo: !retro.hidden && cbRetro.checked });
+      retro.hidden = true; cbRetro.checked = false;
       Object.assign(p, r.produto);
       tr.classList.remove('sujo');
       salvo.textContent = r.anuncios_recalculados ? `salvo · ${r.anuncios_recalculados} anúncio(s) recalculados` : 'salvo';

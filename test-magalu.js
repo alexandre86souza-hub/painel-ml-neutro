@@ -76,4 +76,19 @@ assert.ok(!/\/api\/magalu/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/m
   const dv = M.devolucoesDe([{ code: 'X1', data: '2026-09-20T00:00:00Z', itens: [{ sku: 'AMG-1', quantidade: 1 }] }, { code: 'X2', itens: [] }], new Map([['X1', ts], ['X2', [{ tipo: 'CREDIT', cat: 'SALE', valor: 50 }]]]));
   assert.deepStrictEqual(dv.map((d) => [d.pedido, d.devolvido, d.custo, d.parcial, d.data]), [['X1', 100, 24, false, '2026-10-01T00:00:00Z']]);
 }
+// venda reembolsada (REFUND total): o produto volta e a nota é cancelada, como na Shopee e na Leroy. Calculado à mão:
+// dinheiro = 100 − 16 comissão − 20 frete − 100 reembolso + 16 comissão estornada = −20; − embalagem 2 = −22.
+{
+  const t = (tipo, cat, valor) => ({ tipo, cat, sub: null, valor, status: 'settled', desc: '' });
+  const venda = [t('CREDIT', 'SALE', 100), t('DEBIT', 'COMMISSION', 16), t('DEBIT', 'SHIPPING_COST', 20)];
+  const cat1 = new Map([[1, { numero: 1, sku: 'DQ-001', custo: 30 }]]);
+  const linha = (ts) => M.linhasDe([{ code: 'M1', data: '2026-09-10T12:00:00Z', status: 'finished', itens: [{ sku: 'DQ-001', quantidade: 1, faturamento: 100 }] }],
+    { mapa: cat1, imposto_pct: 10, embalagem_pedido: 2, trocas: new Map(), vinculos: new Map(), financeiro: new Map([['M1', ts]]) })[0];
+  const normal = linha(venda);
+  assert.deepStrictEqual([normal.lucro, normal.devolvido, normal.produto, normal.imposto], [22, false, 30, 10], 'venda normal: 64 − 30 − 2 − 10');
+  const dev = linha([...venda, t('DEBIT', 'REFUND', 100), t('CREDIT', 'COMMISSION', 16)]);
+  assert.deepStrictEqual([dev.lucro, dev.devolvido, dev.produto, dev.imposto], [-22, true, 0, 0], 'reembolso total: produto volta, sem imposto');
+  const parcial = linha([...venda, t('DEBIT', 'REFUND', 40)]);
+  assert.deepStrictEqual([parcial.devolvido, parcial.produto, parcial.imposto, parcial.lucro], [false, 30, 10, -18], 'parcial: produto e imposto continuam (24 − 30 − 2 − 10)');
+}
 console.log('Magalu: credenciais, autorização da loja, sem dados de comprador, recebido pelo financeiro e fora do MCP: ok');

@@ -626,7 +626,7 @@ function criar({ D, janela }) {
     const fotos = D.amazonFotos();
     const trocas = D.skuTrocas('amazon');   // troca de produto feita no painel (vale a partir da data)
     const linhas = comEtiquetas(D.amazonLancPeriodo(j.de, j.ate)).map((l) => {
-      const cs = l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa, l.data) : { custo: null, componentes: [], faltando: [] };
       const conta_ = contaDoLancamento(l, { custo_unit: cs.custo, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct });
       if (l.tipo === 'venda' && cs.custo == null) {
         const s = semCusto.get(l.sku || '—') || { sku: l.sku, faltando: cs.faltando, vendas: 0 };
@@ -641,7 +641,7 @@ function criar({ D, janela }) {
     const hojeDe = janelaVendas(1, janela).de;
     // mês passado não inclui hoje: as vendas de hoje lidas à parte
     const linhasHoje = j.ate <= hojeDe ? comEtiquetas(D.amazonLancPeriodo(hojeDe, new Date(Date.now() + 60e3).toISOString())).map((l) =>
-      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
+      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa, l.data).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
       : linhas.filter((l) => l.data >= hojeDe);
     const porDia = new Map();
     for (const l of linhas) {
@@ -718,7 +718,7 @@ function criar({ D, janela }) {
     const precoSku = D.amazonUltimoPrecoPorSku();
     const trocas = D.skuTrocas('amazon');
     const linhas = D.amazonVendasPeriodo(de, ate).map((v) => {
-      const cs = v.sku ? C.custoDoSku(C.skuNaData(trocas, v.sku, v.data), mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = v.sku ? C.custoDoSku(C.skuNaData(trocas, v.sku, v.data), mapa, v.data) : { custo: null, componentes: [], faltando: [] };
       const emb = empresa.embalagem_padrao || 0;
       const conta_ = linhaDoPedido(v, { taxas, custo_unit: cs.custo, embalagem_unit: emb, imposto_pct: impostoPct,
         preco_unit_sku: precoSku.get(`${v.sku}|${v.canal}`) ?? precoSku.get(v.sku) ?? null });

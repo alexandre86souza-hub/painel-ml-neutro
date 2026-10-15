@@ -66,14 +66,21 @@ function componentes(sku, { cru = false } = {}) {
   return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);
 }
 
+// Custo do produto numa data: com histórico (db.js#catalogoGravar), o que valia na data da venda; sem data, o de hoje.
+const custoNaData = (p, data) => {
+  if (!p) return null;
+  if (data && p.hist?.length) { const h = p.hist.find((x) => x.desde <= data); if (h) return h.custo; }
+  return p.custo ?? null;
+};
+
 // Custo de um SKU pela tabela. `porNumero` = Map(numero -> produto). Componente fora da
-// tabela ou sem custo deixa o total null e aparece em `faltando`.
-function custoDoSku(sku, porNumero) {
+// tabela ou sem custo deixa o total null e aparece em `faltando`. `data` (ISO da venda): o custo que valia nela.
+function custoDoSku(sku, porNumero, data = null) {
   const nums = componentes(sku);
   if (!nums.length) return { custo: null, componentes: [], faltando: [], motivo: sku ? 'sku_sem_numero' : 'sem_sku' };
   const comps = nums.map((n) => {
     const p = porNumero.get(n);
-    return { numero: n, sku: p?.sku || null, nome: p?.nome || null, custo: p?.custo ?? null };
+    return { numero: n, sku: p?.sku || null, nome: p?.nome || null, custo: custoNaData(p, data) };
   });
   const faltando = comps.filter((c) => c.custo == null).map((c) => c.sku || String(c.numero).padStart(3, '0'));
   const custo = faltando.length ? null : Math.round(comps.reduce((s, c) => s + c.custo, 0) * 100) / 100;
@@ -600,7 +607,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         embalagem: 0, imposto: 0, lucro: 0, com_lucro_fat: 0, cancelados: 0 };
       for (const l of linhas) {
         const valida = ['paid', 'partially_refunded'].includes(l.status);
-        const cSku = custoDoSku(l.sku || (composicoes.has(l.item_id) ? l.item_id : null), mapa);
+        const cSku = custoDoSku(l.sku || (composicoes.has(l.item_id) ? l.item_id : null), mapa, l.data);   // custo da época da venda
         const cItem = custos[l.item_id];
         const custoUnit = cItem?.origem === 'manual' ? cItem.custo : (cSku.custo ?? cItem?.custo ?? null);
         const emb = (cItem?.outros ?? empresa.embalagem_padrao ?? 0) + (cItem?.extra || 0);   // embalagem + outro custo do anúncio
@@ -803,7 +810,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const atual = D.catalogoListar().find((p) => p.numero === numero);
       if (!atual) throw erro('Produto não encontrado na tabela.', 404);
       const p = produtoDoCorpo({ ...atual, ...(body || {}) }, numero);
-      D.catalogoGravar([p]);
+      // custo novo vale a partir de agora (as vendas antigas guardam o da época); retroativo = corrigir erro de digitação
+      D.catalogoGravar([p], { retroativo: body?.retroativo === true });
       const anuncios = await aplicarCatalogo(conta).catch(() => []);
       const afetados = anuncios.filter((a) => a.skus.some((s) => s.componentes.some((c) => c.numero === numero)));
       return { produto: p, anuncios_recalculados: afetados.length };

@@ -137,7 +137,7 @@
 
   <section class="bloco">
     <h2>Para onde vai o dinheiro, por conta</h2>
-    <p class="sub">Do faturamento ao lucro no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos.</p>
+    <p class="sub">Do faturamento à margem de contribuição no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS, as devoluções do ML e os custos fixos (estão no Dashboard de cada conta).</p>
     <div class="tabela-rolagem" id="contasTabela"></div>
   </section>
 
@@ -320,7 +320,7 @@ function cartaoConta(c, cor, total){
   bloco(`Faturamento ${curto()}`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.`);
   const notaLucro = el('small'); notaLucro.append('margem ', el('span', 'chip-m' + (p.margem < 0 ? ' neg' : ''), pct(p.margem)));
   if(c.sem_custo) notaLucro.appendChild(el('span', 'sem-custo', `${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo`));
-  bloco('Lucro', real(p.lucro), notaLucro, 'lucro' + (p.lucro < 0 ? ' neg' : ''));
+  bloco('Margem de contribuição', real(p.lucro), notaLucro, 'lucro' + (p.lucro < 0 ? ' neg' : ''));
   bloco('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), p.cancelados ? `${numero(p.cancelados)} cancelado(s)` : 'nenhum cancelado');
   k.appendChild(dl);
   const parte = total > 0 ? p.faturamento / total : 0;
@@ -526,7 +526,7 @@ function pintar(r, temAmazon){
     box.append(
       cartao('Faturamento de hoje', real(t.hoje.faturamento), `${numero(t.hoje.pedidos)} pedido(s) · ${numero(t.hoje.unidades)} un.`),
       cartao(`Faturamento ${longo()}`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
-      cartao(`Lucro ${longo()}`, real(p.lucro), `margem ${pct(p.margem)}` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
+      cartao(`Margem de contribuição ${longo()}`, real(p.lucro), `${pct(p.margem)} das vendas · antes do ADS e das devoluções` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
       cartao('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), `média de ${real(p.faturamento / dias)} por dia`),
       cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
     );

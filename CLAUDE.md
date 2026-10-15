@@ -45,6 +45,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
 - Custos (`custos.js`): SKU do anúncio `KIT-407.408` = produtos 407 + 408 da tabela
   `produtos_custo` (importada colando a planilha na tela Empresa). `custos.origem` 'sku' é
   recalculado; 'manual' nunca é sobrescrito. Imposto da empresa = soma dos impostos cadastrados.
+  Histórico do custo (`produtos_custo_hist`): trocar o custo de um produto vale a partir de agora; a venda usa o custo da
+  DATA dela (`custoDoSku(sku, mapa, data)` em todos os canais). Custo vazio preenchido vale para o passado; "corrigir também
+  as vendas antigas" (tela Produtos, `retroativo`) apaga o histórico do produto. O custo do anúncio (preço pela margem) é o de hoje.
 - Acompanhamento (`painel.js`): Performance, ABC, Full, qualidade dos anúncios e avisos.
   Venda do Full = `vendas.origem` (node_id do estoque) diferente de `BRP…`; estoque no Full =
   `/user-products/{id}/stock` (meli_facility). Reposição (tela Full, no navegador, também FBA): enviar = ⌈venda/dia × (dias de

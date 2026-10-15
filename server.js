@@ -2324,6 +2324,16 @@ routes['GET /api/dashboard/resumo'] = async () => {
     full: fullR?.erro ? { erro: fullR.erro } : { ...fullR.vendas_30, anuncios: fullR.total_anuncios,
       com_estoque: fullR.com_estoque, unidades: fullR.unidades_full, acabando: fullR.acabando },
     imposto_pct: mes?.imposto_pct ?? null,
+    // "Lucro" das vendas = margem de contribuição ANTES do Ads e das devoluções (que ficam em cartões à parte; a venda
+    // devolvida no ML vira cancelada e sai das vendas). Aqui a margem depois dos dois, nos mesmos 30 dias.
+    depois: (() => {
+      if (mes?.erro || mes?.resumo?.lucro == null) return null;
+      const ads30 = ads?.habilitado && !ads.erro ? ads.total?.investimento || 0 : 0;
+      const dev30 = devol && !devol.erro && devol.resumo?.resultado != null ? devol.resumo.resultado : 0;
+      const valor = Math.round((mes.resumo.lucro - ads30 + dev30) * 100) / 100;
+      const base = mes.resumo.margem > 0 ? mes.resumo.lucro / mes.resumo.margem : mes.resumo.faturamento;   // faturamento com custo
+      return { valor, ads: ads30, devolucoes: dev30, margem: base > 0 ? valor / base : null };
+    })(),
   };
 };
 

@@ -112,7 +112,7 @@ function linhasDe(rows, ctx) {
       const parte = fatPedido > 0 ? fat / fatPedido : 0;
       const tarifa = tarifaPedido == null ? null : tarifaPedido * parte;
       const frete = !valida ? 0 : fretePedido == null ? null : fretePedido * parte;
-      const cs = i.sku ? C.custoDoSku(i.sku, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = i.sku ? C.custoDoSku(i.sku, ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
       // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto)

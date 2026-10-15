@@ -124,7 +124,7 @@ function linhasDe(pedidos, ctx) {
       const devolvido = valida && fat > 0 && n(l.reembolso) >= fat - 0.01;
       const tarifa = valida ? n(l.comissao) - n(l.comissao_devolvida) + n(l.reembolso) + n(l.reembolso_frete) : 0;
       const frete = !valida ? 0 : custoEntrega == null ? null : custoEntrega * parte - n(l.frete_cliente);
-      const cs = l.sku ? C.custoDoSku(C.skuNaData(ctx.trocas, l.sku, p.data), ctx.mapa) : { custo: null, componentes: [], faltando: [] };
+      const cs = l.sku ? C.custoDoSku(C.skuNaData(ctx.trocas, l.sku, p.data), ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
       // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto)
