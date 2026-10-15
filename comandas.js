@@ -107,8 +107,11 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       } catch { /* sem foto: a comanda sai sem */ }
     }
   }
+  // envio do ML que não deu para ler: antes sumia da fila em silêncio (15/10/2026: vendas sem comanda); agora vira aviso na tela
+  let falhasEnvioMl = [];
   async function pendentesMl() {
     const out = [];
+    falhasEnvioMl = [];
     for (const conta of D.contasListar()) {
       const pedidos = [];
       for (let off = 0; off < 1000; off += 50) {
@@ -125,7 +128,8 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           variacao: (i.item?.variation_attributes || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null, item_id: i.item?.id || null });
         porEnvio.set(id, x);
       }
-      const envios = await lotes([...porEnvio.keys()], 5, async (id) => ({ id, s: await envioMl(id, conta.ml_user_id).catch(() => null) }));
+      const envios = await lotes([...porEnvio.keys()], 5, async (id) => ({ id, s: await envioMl(id, conta.ml_user_id)
+        .catch((e) => { falhasEnvioMl.push(`${conta.nickname}: envio ${id} (${String(e.message).slice(0, 80)})`); return null; }) }));
       await fotosDoMl([...porEnvio.values()].flatMap((x) => x.itens.map((i) => i.item_id)), conta.ml_user_id);
       for (const x of porEnvio.values()) for (const i of x.itens) { i.foto = fotosMl.get(i.item_id) || null; delete i.item_id; }
       for (const { id, s } of envios) {
@@ -259,6 +263,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     const [a, b, c, d, e] = await Promise.all([passo('Mercado Livre', pendentesMl, erros), passo('Shopee', pendentesShopee, erros),
       passo('Magalu', pendentesMagalu, erros), passo('Leroy', pendentesLeroy, erros), passo('Amazon', pendentesAmazon, erros)]);
     const lista = [...a, ...b, ...c, ...d, ...e];
+    if (falhasEnvioMl.length) erros.push(`Mercado Livre: ${falhasEnvioMl.length} envio(s) não lido(s), sem comanda até ler: ${falhasEnvioMl.slice(0, 3).join(' · ')}`);
     // troca de produto no SKU (trocas-sku.js): o envio pendente já mostra o SKU novo, em todos os canais
     const trocas = Object.fromEntries(['ml', 'shopee', 'amazon', 'leroy', 'magalu'].map((k) => [k, D.skuTrocas(k)]));
     const vincMg = D.skuVinculos('magalu');   // Magalu: o "SKU do painel" digitado no lugar do código da Magalu
@@ -292,6 +297,28 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   }
   const rotas = {
     'GET /api/comandas': async (url) => fila(url.searchParams.get('recarregar') === '1'),
+    // Diagnóstico (só leitura, só administrador): vendas pagas do ML nas últimas 48 h com a situação do envio de cada uma,
+    // para ver por que uma venda não virou comanda (a fila só pega shipping.status=ready_to_ship). Sem nome de cliente.
+    'GET /api/comandas/diagnostico': async () => {
+      const desde = new Date(Date.now() - 48 * 3600e3).toISOString();
+      const contas = [];
+      for (const conta of D.contasListar()) {
+        const r = await ml(`/orders/search?seller=${conta.ml_user_id}&order.status=paid&order.date_created.from=${encodeURIComponent(desde)}&sort=date_desc&limit=50`, {}, conta.ml_user_id)
+          .catch((e) => ({ erro: e.message }));
+        if (r.erro) { contas.push({ conta: conta.nickname, erro: r.erro }); continue; }
+        const vendas = [];
+        for (const p of r.results || []) {
+          const id = p.shipping?.id;
+          let env = null;
+          if (id) { try { const x = await ml(`/shipments/${id}`, {}, conta.ml_user_id); env = { status: x.status, substatus: x.substatus || null, tipo: x.logistic_type || null }; }
+            catch (e) { env = { erro: String(e.message).slice(0, 120) }; } }
+          vendas.push({ pedido: String(p.pack_id || p.id), criado: p.date_created, envio: id || null, ...(env || {}),
+            na_fila: !!(cache?.chaves || []).includes(`ml:${id}`), itens: (p.order_items || []).map((i) => i.item?.seller_sku || i.item?.id).join(', ') });
+        }
+        contas.push({ conta: conta.nickname, total: r.paging?.total ?? vendas.length, vendas });
+      }
+      return { lido_em: new Date().toISOString(), fila_lida_em: cache ? new Date(cache.em).toISOString() : null, erros_da_fila: cache?.erros || [], contas };
+    },
     // Histórico: comandas impressas num dia (Brasília) ou pelo número da venda — inclusive as que já saíram.
     'GET /api/comandas/historico': async (url) => {
       const q = url.searchParams;
