@@ -885,6 +885,23 @@ async function freteDoItem(conta, item, j, amostra) {
   return Number.isFinite(custo) ? { por_unidade: custo, fonte: 'estimativa', amostra: 0 } : null;
 }
 
+// Lucro de cada anúncio no período VENDA POR VENDA (custos.js#lucroPorAnuncio sobre as vendas da tela Vendas), para a
+// tela Anúncios (faixa do período, filtro e ordem por margem) e o "Lucro real" dos Detalhes — o mesmo número da ABC.
+// A tela pede várias páginas seguidas: guarda 2 min (a mesma promessa para pedidos ao mesmo tempo).
+const cacheLucroVendas = new Map();
+function lucroDasVendas(conta, dias) {
+  const j = janela(dias);
+  const chave = `${conta.ml_user_id}|${j.de}|${j.ate}`;
+  const c = cacheLucroVendas.get(chave);
+  if (c && Date.now() - c.em < 2 * 60e3) return c.p;
+  if (cacheLucroVendas.size > 20) cacheLucroVendas.clear();
+  const p = custosMod.vendasDaConta(conta, { dias, de: j.de, ate: j.ate }, { titulos: false })
+    .then((v) => require('./custos.js').lucroPorAnuncio(v.vendas));
+  cacheLucroVendas.set(chave, { em: Date.now(), p });
+  p.catch(() => cacheLucroVendas.delete(chave));
+  return p;
+}
+
 // Todos os anúncios da conta que passam no filtro, para ordenar pelo período.
 // O /items/search para em offset 1000; acima disso a ordenação considera os 1000 mais recentes.
 const idsCache = new Map();
@@ -1118,14 +1135,8 @@ const routes = {
       else if (filtro === 'semcusto') { const cs = D.custosDe(todos.ids); soFiltro = new Set(todos.ids.filter((id) => cs[id]?.custo == null)); }
       else {
         const max = Number(String(url.searchParams.get('margem_max') ?? '10').replace(',', '.')) / 100;
-        const comVenda = todos.ids.filter((id) => rf[id]?.unidades > 0);
-        const cs = D.custosDe(comVenda), imp = D.impostoLer(conta.ml_user_id);
-        soFiltro = new Set(comVenda.filter((id) => {
-          const f = D.fretePorUnidade(id, jf);
-          const m = A.economia({ faturamento: rf[id].faturamento, unidades: rf[id].unidades, tarifas: rf[id].tarifas,
-            freteUnidade: f?.unidades ? f.custo / f.unidades : null, custo: cs[id]?.custo ?? null, outros: cs[id]?.outros_total ?? null, impostoPct: imp }).margem;
-          return m != null && m < max;
-        }));
+        const lucros = await lucroDasVendas(conta, dias);   // venda a venda, como a ABC
+        soFiltro = new Set(todos.ids.filter((id) => rf[id]?.unidades > 0 && lucros[id]?.margem != null && lucros[id].margem < max));
       }
     }
     const juntar = (...cs) => cs.filter(Boolean).reduce((a, c) => (a ? new Set([...a].filter((x) => c.has(x))) : c), null);
@@ -1167,15 +1178,8 @@ const routes = {
       // mesma conta da faixa de lucro do cartão. Sem venda, sem custo ou sem frete medido: fim da lista.
       const margens = {};
       if (ordem === 'margem_desc' || ordem === 'margem_asc') {
-        const comVenda = lista.ids.filter((id) => r[id]?.unidades > 0);
-        const custosP = D.custosDe(comVenda);
-        const impostoP = D.impostoLer(conta.ml_user_id);
-        for (const id of comVenda) {
-          const f = D.fretePorUnidade(id, j);
-          margens[id] = A.economia({ faturamento: r[id].faturamento, unidades: r[id].unidades, tarifas: r[id].tarifas,
-            freteUnidade: f?.unidades ? f.custo / f.unidades : null, custo: custosP[id]?.custo ?? null,
-            outros: custosP[id]?.outros_total ?? null, impostoPct: impostoP }).margem;
-        }
+        const lucros = await lucroDasVendas(conta, dias);   // venda a venda, como a ABC
+        for (const id of lista.ids) if (r[id]?.unidades > 0) margens[id] = lucros[id]?.margem ?? null;
       }
       const mg = (id) => margens[id] ?? null;
       const abc = A.curvaABC(Object.fromEntries(Object.entries(r).map(([id, x]) => [id, x.faturamento])));
@@ -1293,12 +1297,14 @@ const routes = {
       : {};
     const fretes = Object.fromEntries(await emLotes(precisaFrete, 4, async (id) =>
       [id, itensML[id] ? await freteDoItem(conta, itensML[id], j, 5) : null]));
+    // Lucro de quem vendeu: venda a venda (o mesmo da ABC e da tela Vendas); a conta por anúncio só para quem não vendeu.
+    const lucros = await lucroDasVendas(conta, dias);
 
     const itens = {};
     for (const id of ids) {
       const x = r[id] || { unidades: 0, pedidos: 0, faturamento: 0, tarifas: 0, envios: 0, antes: 0, depois: 0 };
       const c = custos[id] || {};
-      const eco = A.economia({ faturamento: x.faturamento, unidades: x.unidades,
+      const eco = lucros[id] || A.economia({ faturamento: x.faturamento, unidades: x.unidades,
         tarifas: x.tarifas, freteUnidade: fretes[id]?.por_unidade ?? null, custo: c.custo ?? null,
         outros: c.outros_total ?? null, impostoPct: imposto });
       itens[id] = {
@@ -1922,11 +1928,12 @@ const rotasParam = [
       porDia[d] = (porDia[d] || 0) + l.quantidade;
     }
 
-    const [custo, tendencias, frete] = await Promise.all([
+    const [custo, tendencias, frete, lucros] = await Promise.all([
       ml(`/sites/${item.site_id}/listing_prices?price=${item.price}`
         + `&listing_type_id=${item.listing_type_id}&category_id=${item.category_id}`).catch(nada),
       ml(`/trends/${item.site_id}/${item.category_id}`).catch(nada),
       freteDoItem(conta, item, j, 20).catch(nada),
+      lucroDasVendas(conta, dias).catch(nada),
     ]);
 
     const notas = (avaliacoes?.reviews || []).map((r) => r.rate).filter(Number.isFinite);
@@ -1969,6 +1976,10 @@ const rotasParam = [
       // vendedor digita o custo — os mesmos números, sem voltar ao servidor.
       lucro: {
         custo: D.custoObter(id), imposto_pct: D.impostoLer(conta.ml_user_id), frete,
+        // sem embalagem própria vale a padrão da empresa (como nas vendas)
+        embalagem_padrao: require('./custos.js').lerEmpresa(D.configLer(`empresa:${conta.ml_user_id}`)).embalagem_padrao,
+        // o período venda a venda (SKU e custo de cada pedido): o "Lucro real" dos Detalhes, igual à ABC
+        real: lucros?.[id] || null,
         tarifa_unit: custo?.sale_fee_amount ?? null,
         tarifa_pct: custo?.sale_fee_details?.percentage_fee ?? null,
         tarifa_fixa: custo?.sale_fee_details?.fixed_fee ?? 0,

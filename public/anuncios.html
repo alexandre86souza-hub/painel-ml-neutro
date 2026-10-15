@@ -2406,15 +2406,22 @@ function secaoLucro(a, kLucro, kMargem){
   }
   const menos = (n) => n == null ? '—' : '− ' + dinheiro(n);
 
+  // Valores salvos: com eles o período mostra o lucro VENDA A VENDA do servidor (SKU e custo de cada pedido, o mesmo da
+  // ABC); digitou outro custo, embalagem ou imposto, o período vira simulação com os valores digitados.
+  const salvos = () => [valor(iCusto), valor(iOutros), valor(iImposto)].join('|');
+  const inicial = salvos();
   function recalcular(){
-    const custo = valor(iCusto), emb = valor(iOutros), imp = valor(iImposto);
-    const outros = emb == null && !L.custo?.extra ? emb : (emb || 0) + (L.custo?.extra || 0);   // embalagem + outro custo
+    const custo = valor(iCusto), emb = valor(iOutros) ?? L.embalagem_padrao ?? null, imp = valor(iImposto);
+    const outros = emb == null && !L.custo?.extra ? emb : (emb || 0) + (L.custo?.extra || 0);   // embalagem (ou a padrão) + outro custo
     const freteU = fr?.por_unidade ?? null;
     const u = Analise.margemUnitaria({ preco: a.item.preco, tarifa: L.tarifa_unit ?? 0, tarifaPct: L.tarifa_pct,
       tarifaFixa: L.tarifa_fixa, frete: freteU, custo, outros, impostoPct: imp });
     const faltaTexto = (f) => (f?.includes('custo') ? 'informe o custo' : 'sem dado de frete');
-    const e = Analise.economia({ faturamento: V.faturamento, unidades: V.unidades, tarifas: V.tarifas,
-      freteUnidade: freteU, custo, outros, impostoPct: imp });
+    const R = L.real && salvos() === inicial ? L.real : null;
+    const e = R ? { lucro: R.lucro, margem: R.margem, falta: R.falta,
+      custos: { tarifas: R.tarifa, frete: R.frete, produto: R.produto, outros: R.embalagem, imposto: R.imposto } }
+      : Analise.economia({ faturamento: V.faturamento, unidades: V.unidades, tarifas: V.tarifas,
+        freteUnidade: freteU, custo, outros, impostoPct: imp });
 
     contas.textContent = '';
     contas.append(
@@ -2429,12 +2436,12 @@ function secaoLucro(a, kLucro, kMargem){
       faltaTexto(u?.falta)),
       tabela(`No período: ${D} dias, ${num(V.unidades)} un.`, [
         ['Faturamento', dinheiro(V.faturamento), 'preço pago em cada pedido'],
-        ['Tarifas cobradas', menos(V.tarifas), 'soma das tarifas dos pedidos'],
-        ['Frete', menos(e.custos.frete), origemFrete],
-        ['Custo dos produtos', menos(e.custos.produto)],
+        ['Tarifas cobradas', menos(R ? e.custos.tarifas : V.tarifas), 'soma das tarifas dos pedidos'],
+        ['Frete', menos(e.custos.frete), R ? 'o de cada envio (Flex: entrega − bônus)' : origemFrete],
+        ['Custo dos produtos', menos(e.custos.produto), R ? 'o produto do SKU de cada pedido' : 'simulação: custo digitado × unidades'],
         ['Outros custos', menos(e.custos.outros)],
         ['Impostos', menos(e.custos.imposto)],
-      ], e.lucro, e.lucro != null ? `Lucro real · margem ${pct(e.margem)}` : 'Lucro real',
+      ], e.lucro, (R ? 'Lucro real' : 'Lucro simulado') + (e.lucro != null ? ` · margem ${pct(e.margem)}` : ''),
       faltaTexto(e.falta)),
     );
     if(u?.preco_minimo != null){

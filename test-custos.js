@@ -143,4 +143,21 @@ assert.throws(() => C.validarEmpresa({ entrega_flex: '-1' }), /Flex inválido/);
   assert.strictEqual(C.skuNaData(new Map(), 'KIT-1.2'), 'KIT-1.2');
 }
 
+// lucro do anúncio VENDA A VENDA (tela Anúncios, ABC): cada venda com o custo do produto que ela levou. Calculado à mão:
+// produto trocado no período (795 -> 854). Venda 1 = 69,90 − 8 − 9 − 51,86 − 1,50 − 6,99 = −7,45; venda 2 (custo 25) = 19,41.
+// O "custo atual × unidades" (25 × 2) dava 38,82 e a embalagem padrão ficava de fora.
+{
+  const venda = (custo, extra = {}) => ({ item_id: 'MLB1', valida: true, quantidade: 1,
+    ...C.contaDaLinha({ quantidade: 1, preco_unit: 69.9, tarifa_unit: 8, frete_envio: 9, total_envio: 69.9 }, { custo_unit: custo, embalagem_unit: 1.5, imposto_pct: 10 }), ...extra });
+  const r = C.lucroPorAnuncio([venda(51.86), venda(25), venda(25, { valida: false, lucro: 0 })]).MLB1;
+  assert.strictEqual(r.lucro, 11.96, 'soma das vendas, cancelada fora');
+  assert.strictEqual(r.unidades, 2);
+  assert.strictEqual(r.faturamento, 139.8);
+  assert.strictEqual(r.embalagem, 3, 'embalagem de cada venda entra');
+  assert.strictEqual(Math.round(r.margem * 10000), 856, 'margem = lucro ÷ faturamento');
+  const semCusto = C.lucroPorAnuncio([venda(25), venda(null)]).MLB1;
+  assert.deepStrictEqual([semCusto.lucro, semCusto.margem, semCusto.falta], [null, null, ['custo']], 'uma venda sem custo: anúncio sem lucro, com o motivo');
+  assert.deepStrictEqual(C.lucroPorAnuncio([]), {});
+}
+
 console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma das contas: ok');

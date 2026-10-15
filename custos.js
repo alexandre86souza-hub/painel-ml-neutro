@@ -234,6 +234,33 @@ function contaDaLinha(l, ctx) {
     imposto: r2(imposto), lucro: r2(lucro), margem: lucro != null && fat > 0 ? lucro / fat : null, falta };
 }
 
+// Lucro de cada anúncio no período somando VENDA POR VENDA (as linhas de vendasDaConta): SKU e custo de cada pedido,
+// frete do envio rateado, embalagem (a do anúncio ou a padrão) e Flex. Uma venda sem lucro (sem custo ou frete) deixa o
+// anúncio sem lucro, com o motivo em `falta`. É o número da tela Vendas, da ABC e da tela Anúncios. O "custo atual ×
+// unidades" errava quando o produto do SKU mudou no período (795 -> 854) e deixava a embalagem padrão de fora
+// (auditoria de 15/10/2026: +16% nos 60 anúncios que mais venderam). Função pura: testada.
+function lucroPorAnuncio(vendas) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const m = new Map();
+  for (const l of vendas || []) {
+    if (!l.valida) continue;
+    const a = m.get(l.item_id) || { unidades: 0, faturamento: 0, tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0, lucro: 0, falta: new Set() };
+    a.unidades += l.quantidade || 0;
+    for (const k of ['faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto']) a[k] += l[k] || 0;
+    if (l.lucro == null) for (const f of l.falta?.length ? l.falta : ['custo']) a.falta.add(f);
+    else a.lucro += l.lucro;
+    m.set(l.item_id, a);
+  }
+  const out = {};
+  for (const [id, a] of m) {
+    const sem = a.falta.size > 0;
+    out[id] = { unidades: a.unidades, faturamento: r2(a.faturamento), tarifa: r2(a.tarifa), frete: r2(a.frete), produto: r2(a.produto),
+      embalagem: r2(a.embalagem), imposto: r2(a.imposto), lucro: sem ? null : r2(a.lucro),
+      margem: sem || !(a.faturamento > 0) ? null : a.lucro / a.faturamento, falta: [...a.falta] };
+  }
+  return out;
+}
+
 function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela, baixarPedidos, idsDaConta, D }) {
   usarComposicoes(D.skuVinculos('composicao'));
   const empresaDe = (conta) => lerEmpresa(D.configLer(`empresa:${conta.ml_user_id}`));
@@ -843,4 +870,4 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
 }
 
 module.exports = { criar, freteFlex, lerCatalogo, componentes, usarComposicoes, composicaoDe, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
-  impostoTotal, contaDaLinha, dinheiro };
+  impostoTotal, contaDaLinha, dinheiro, lucroPorAnuncio };

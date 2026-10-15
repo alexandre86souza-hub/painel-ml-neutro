@@ -15,6 +15,7 @@
 //   - Mensagens: /messages/unread?role=seller&tag=post_sale -> results por pedido/pacote.
 
 const A = require('./public/analise.js');
+const { lucroPorAnuncio } = require('./custos.js');
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 const r2 = (v) => Math.round((v || 0) * 100) / 100;
@@ -175,16 +176,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
     const total = somaPor(res, 'faturamento');
     // Lucro VENDA POR VENDA (o mesmo da tela Vendas): SKU de cada pedido, troca de produto a partir da data, frete e
     // imposto reais. O custo atual do anúncio × unidades errava quando o SKU mudou ou o anúncio antigo tem código velho.
-    const porVenda = new Map();
-    if (vendasDaConta) {
-      const v = await vendasDaConta(conta, { dias, de: j.de, ate: j.ate }, { titulos: false });
-      for (const l of v.vendas || []) {
-        if (!l.valida) continue;
-        const a = porVenda.get(l.item_id) || { lucro: 0, fat: 0, falta: new Set(), sem: false };
-        if (l.lucro == null) { a.sem = true; for (const f of l.falta || []) a.falta.add(f); } else { a.lucro += l.lucro; a.fat += l.faturamento || 0; }
-        porVenda.set(l.item_id, a);
-      }
-    }
+    const porVenda = vendasDaConta
+      ? lucroPorAnuncio((await vendasDaConta(conta, { dias, de: j.de, ate: j.ate }, { titulos: false })).vendas) : {};
     let acum = 0;
     const linhas = res.filter((x) => curva[x.item_id]).sort((a, b) => curva[a.item_id].ranking - curva[b.item_id].ranking)
       .map((x) => {
@@ -194,12 +187,11 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
         const c = custos[x.item_id];
         const e = A.economia({ faturamento: x.faturamento, unidades: x.unidades, tarifas: x.tarifas,
           freteUnidade: frete, custo: c?.custo ?? null, outros: c?.outros_total ?? null, impostoPct: imposto });
-        const pv = porVenda.get(x.item_id);
-        const lucro = pv ? (pv.sem ? null : r2(pv.lucro)) : e.lucro != null ? r2(e.lucro) : null;
+        const pv = porVenda[x.item_id];
+        const lucro = pv ? pv.lucro : e.lucro != null ? r2(e.lucro) : null;
         return { id: x.item_id, classe: curva[x.item_id].classe, ranking: curva[x.item_id].ranking,
           faturamento: r2(x.faturamento), participacao: curva[x.item_id].participacao, acumulado: total ? acum / total : 0,
-          unidades: x.unidades, pedidos: x.pedidos, lucro, margem: pv ? (pv.sem || !pv.fat ? null : pv.lucro / pv.fat) : e.margem,
-          falta: pv ? [...pv.falta] : e.falta };
+          unidades: x.unidades, pedidos: x.pedidos, lucro, margem: pv ? pv.margem : e.margem, falta: pv ? pv.falta : e.falta };
       });
     const info = await infoItens(linhas.map((l) => l.id));
     for (const l of linhas) Object.assign(l, { titulo: info[l.id]?.title || null, foto: info[l.id]?.thumbnail || null,
