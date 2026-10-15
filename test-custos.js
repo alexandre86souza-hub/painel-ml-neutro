@@ -20,6 +20,8 @@ C.usarComposicoes(new Map([['DB-005.4', 'KIT-005.408'], ['MLB720389757', 'KIT-00
 assert.deepStrictEqual(C.componentes('DB-005.4'), [5, 408], 'DB-005.4 = DQ-005 + BP-408 sem mudar o SKU');
 assert.deepStrictEqual(C.componentes('DB-005.4', { cru: true }), [5, 4], 'cru: o que está escrito no SKU');
 assert.deepStrictEqual(C.skusDoAnuncio({ id: 'MLB720389757', attributes: [] }).base, 'MLB720389757', 'anúncio sem SKU com composição usa o id');
+assert.strictEqual(C.skusDoAnuncio({ id: 'MLB1', seller_custom_field: 'DQ-488.2', attributes: [{ id: 'SELLER_SKU', value_name: 'AMG-488.479' }] }).base, 'AMG-488.479', 'SELLER_SKU (o do pedido) antes do código velho');
+assert.strictEqual(C.skusDoAnuncio({ id: 'MLB2', seller_custom_field: 'AMG-479', attributes: [] }).base, 'AMG-479', 'sem SELLER_SKU vale o seller_custom_field');
 assert.deepStrictEqual(C.componentes('MLB720389757'), [5]);
 assert.strictEqual(C.custoDoSku('DB-005.4', new Map([[5, { sku: 'DQ-005', custo: 35.48 }], [408, { sku: 'BP-408', custo: 10 }]])).custo, 45.48);
 C.usarComposicoes(new Map());

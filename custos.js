@@ -108,8 +108,10 @@ function skuNaData(trocas, sku, data = new Date().toISOString()) {
 function skusDoAnuncio(it) {
   const doAttr = (attrs) => (attrs || []).find((a) => a.id === 'SELLER_SKU')?.value_name || null;
   // anúncio do ML sem SKU com produtos escolhidos no painel: o id faz o papel do SKU (componentes acha pela composição)
-  const base = it.seller_custom_field || doAttr(it.attributes) || (it.id && composicoes.has(it.id) ? it.id : null);
-  const vars = (it.variations || []).map((v) => ({ id: v.id, sku: v.seller_custom_field || doAttr(v.attributes) || null,
+  // Atributo SELLER_SKU primeiro: é o que o pedido traz (seller_sku). Anúncio antigo guarda no seller_custom_field um
+  // código velho (medido 15/10: DQ-488.2 no campo, AMG-488.479 nos pedidos; o ".2" virava o produto 2 no custo).
+  const base = doAttr(it.attributes) || it.seller_custom_field || (it.id && composicoes.has(it.id) ? it.id : null);
+  const vars = (it.variations || []).map((v) => ({ id: v.id, sku: doAttr(v.attributes) || v.seller_custom_field || null,
     nome: (v.attribute_combinations || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null }));
   return { base, variacoes: vars };
 }
@@ -837,7 +839,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     } },
   ];
 
-  return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa, anuncios: anunciosComSku, semCustoMl, descreverComposicao, trocarComposicao };
+  return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa, anuncios: anunciosComSku, semCustoMl, descreverComposicao, trocarComposicao, vendasDaConta };
 }
 
 module.exports = { criar, freteFlex, lerCatalogo, componentes, usarComposicoes, composicaoDe, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,

@@ -2043,7 +2043,7 @@ let devolucoesMod = null;   // devoluções do ML: a baixa do estoque devolve o 
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
-    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D });
+    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D, vendasDaConta: (...a) => custosMod.vendasDaConta(...a) });
   Object.assign(routes, m.rotas);
   rotasParam.push(...m.rotasParam);
   if (m.composicao) custosMod = m;

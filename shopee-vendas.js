@@ -115,7 +115,8 @@ function linhasDe(rows, ctx) {
       const cs = i.sku ? C.custoDoSku(i.sku, ctx.mapa) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
-      const imposto = valida ? (ctx.imposto_pct || 0) / 100 * fat : 0;
+      // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto)
+      const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * fat : 0;
       const falta = [];
       if (produto == null) falta.push('custo');
       if (tarifa == null) falta.push('tarifa');
