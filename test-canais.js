@@ -173,4 +173,20 @@ assert.strictEqual(require('./shopee-ads.js').adsDe([]).total.roas, null, 'sem g
   assert.strictEqual(K.periodoDoPedido(new URL('http://x/?dias=7'), [7, 30], (d) => ({ de: 'x', dias: d }), 30, ag).dias, 7);
 }
 
+// Promoção "Leve 2" (bundle_deal): o detalhe traz model_discounted_price 0; o preço vem do repasse (pedido real 260722CJ4UD64Q:
+// discounted_price 429,28 nas 2 unidades = o subtotal do Seller Center; repasse 316,69). Antes: faturamento 0 e −150,04 de lucro.
+{
+  const precos = SV.precosDoRepasse([{ item_id: 19698894536, model_id: 0, quantity_purchased: 2, discounted_price: 429.28 }, { item_id: 1, model_id: 2, quantity_purchased: 0, discounted_price: 5 }]);
+  assert.deepStrictEqual(precos, { '19698894536|0': 214.64 });
+  assert.deepStrictEqual(SV.repasseDe({ order_income: { escrow_amount: 316.69, items: [{ item_id: 7, model_id: 3, quantity_purchased: 1, discounted_price: 50 }] } }, 'COMPLETED').precos, { '7|3': 50 });
+  const custo = new Map([[1, { numero: 1, sku: 'DQ-001', custo: 75.02 }]]);
+  const linha = (preco, precosRepasse) => SV.linhasDe([{ order_sn: 'B1', data: '2026-07-22T12:00:00Z', status: 'COMPLETED', escrow_final: 1, recebido: 316.69,
+    frete_shopee: 0, devolucao: 0, servico: 60.59, cupom_vendedor: 0, transportadora: 'Shopee Xpress', precos_repasse: precosRepasse,
+    linha: 0, sku: 'DQ-001', item_id: 19698894536, model_id: 0, quantidade: 2, preco_unit: preco }], { mapa: custo, imposto_pct: 10, embalagem_pedido: 2, proporcao: 0.3, frete_medio: {} })[0];
+  const r = linha(0, JSON.stringify(precos));
+  // à mão: faturamento 2 × 214,64 = 429,28; lucro = repasse 316,69 − produto 150,04 − embalagem 2 − imposto 42,928 = 121,72
+  assert.deepStrictEqual([r.faturamento, r.preco_unit, r.produto, r.lucro, r.devolvido], [429.28, 214.64, 150.04, 121.72, false]);
+  assert.strictEqual(linha(214.64, null).lucro, 121.72, 'preço do detalhe, quando vem, continua valendo');
+}
+
 console.log('Canais e Shopee: pedidos, repasse, lucro exato, rateio, estimativa, resumo, performance e ABC: ok');

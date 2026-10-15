@@ -43,7 +43,30 @@ function repasseDe(e, status) {
     // final_shipping_fee + buyer_paid_shipping_fee). "Entrega Direta": a Shopee paga o frete ao
     // vendedor, que paga a empresa de entrega; Shopee Xpress: a soma dá ~0.
     frete_shopee: n(oi.final_shipping_fee) + n(oi.buyer_paid_shipping_fee),
+    // só quando o repasse traz itens com preço (o banco grava {} nos outros: não relê de novo)
+    ...(() => { const p = precosDoRepasse(oi.items); return Object.keys(p).length ? { precos: p } : {}; })(),
   };
+}
+
+// Preço unitário pago de cada item pelo repasse: discounted_price é o TOTAL da linha (medido: 2 un. = 429,28, o subtotal do
+// Seller Center) ÷ quantity_purchased. Chave "item|model". Função pura: testada.
+function precosDoRepasse(itens) {
+  const soma = {};
+  for (const i of itens || []) {
+    const q = n(i.quantity_purchased), v = n(i.discounted_price);
+    if (!(q > 0) || !(v > 0)) continue;
+    const k = `${i.item_id}|${i.model_id || 0}`;
+    const s = soma[k] || (soma[k] = { v: 0, q: 0 });
+    s.v += v; s.q += q;
+  }
+  return Object.fromEntries(Object.entries(soma).map(([k, s]) => [k, r2(s.v / s.q)]));
+}
+// Preço da linha: o do detalhe do pedido; zerado (promoção "Leve 2"), o do repasse.
+function precoDe(p, i) {
+  if (n(i.preco_unit) > 0) return n(i.preco_unit);
+  let m = p.precos_repasse;
+  if (typeof m === 'string') { try { m = JSON.parse(m); } catch { m = null; } }
+  return n(m?.[`${i.item_id}|${i.model_id || 0}`]);
 }
 
 // Taxa fixa por unidade vendida (dentro da taxa de serviço). Medido em 562 pedidos de mai–set/2026:
@@ -95,7 +118,7 @@ function linhasDe(rows, ctx) {
   for (const [sn, itens] of porPedido) {
     const p = itens[0];
     const valida = !INVALIDAS.has(p.status);
-    const fatPedido = itens.reduce((s, i) => s + n(i.preco_unit) * n(i.quantidade), 0);
+    const fatPedido = itens.reduce((s, i) => s + precoDe(p, i) * n(i.quantidade), 0);
     const temRepasse = p.recebido != null;
     const propria = entregaPropria(p.transportadora);
     const custoEntrega = propria ? (ctx.entrega_propria ?? null) : 0;
@@ -108,7 +131,7 @@ function linhasDe(rows, ctx) {
     const taxaFixa = temRepasse && valida ? taxaFixaDe(p.servico, fatPedido, p.data) : null;
     for (const i of itens) {
       const q = n(i.quantidade);
-      const fat = n(i.preco_unit) * q;
+      const fat = precoDe(p, i) * q;
       const parte = fatPedido > 0 ? fat / fatPedido : 0;
       const tarifa = tarifaPedido == null ? null : tarifaPedido * parte;
       const frete = !valida ? 0 : fretePedido == null ? null : fretePedido * parte;
@@ -125,7 +148,7 @@ function linhasDe(rows, ctx) {
       const x = (v) => (v == null ? null : r2(v));
       out.push({ pedido: sn, data: p.data, status: p.status, valida, sku: i.sku, item_id: i.sku || String(i.item_id || sn),
         titulo: cs.componentes.map((c) => c.nome).filter(Boolean).join(' + ') || i.nome || i.sku, foto: i.imagem || null,
-        quantidade: q, preco_unit: x(i.preco_unit), full: false, canal: 'shopee', shopee_item: i.item_id ?? null,
+        quantidade: q, preco_unit: x(precoDe(p, i)), full: false, canal: 'shopee', shopee_item: i.item_id ?? null,
         componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), custo: c.custo })), faltando: cs.faltando,
         custo_unit: cs.custo, embalagem_pedido: ctx.embalagem_pedido || 0,
         faturamento: x(fat), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem), imposto: x(imposto),
@@ -149,7 +172,7 @@ function proporcaoDe(rows) {
     const p = itens[0];
     if (!p.escrow_final || p.recebido == null || vistos.has(sn) || INVALIDAS.has(p.status)) continue;
     vistos.add(sn);
-    const f = itens.reduce((s, i) => s + n(i.preco_unit) * n(i.quantidade), 0);
+    const f = itens.reduce((s, i) => s + precoDe(p, i) * n(i.quantidade), 0);
     if (f <= 0 || n(p.devolucao) > 0 || reembolsado(p)) continue;
     fat += f; tirado += f - n(p.recebido) + n(p.frete_shopee);   // só a tarifa: o frete repassado não conta
   }
@@ -286,4 +309,4 @@ function criar({ D, daLoja, janela }) {
   return { rotas, rotasParam: [], sincronizar, linhas: async (shopId, de, ate) => (await linhas(shopId, de, ate)).linhas };
 }
 
-module.exports = { criar, taxaFixaDe, detalheDe, repasseDe, linhasDe, proporcaoDe, freteMedioDe, entregaPropria };
+module.exports = { criar, precosDoRepasse, precoDe, taxaFixaDe, detalheDe, repasseDe, linhasDe, proporcaoDe, freteMedioDe, entregaPropria };

@@ -1034,6 +1034,9 @@ function shopeePedidosGravar(shopId, lista) {
 const shopeeSemTransportadora = !db.prepare('PRAGMA table_info(shopee_pedidos)').all().some((c) => c.name === 'transportadora');
 colunaNova('shopee_pedidos', 'transportadora TEXT');
 colunaNova('shopee_pedidos', 'frete_shopee REAL');
+// Preço pago de cada item pelo REPASSE ({"item|model": preço unitário}): na promoção "Leve 2" (bundle_deal) o detalhe do
+// pedido traz model_discounted_price = 0 (medido em 15/10/2026, 5 pedidos da Primor em julho); o repasse traz o certo.
+colunaNova('shopee_pedidos', 'precos_repasse TEXT');
 colunaNova('shopee_pedidos', 'taxa_item REAL');   // sem uso: a taxa fixa sai da taxa de serviço (shopee-vendas.js#taxaFixaDe)
 if (shopeeSemTransportadora) db.exec('UPDATE shopee_pedidos SET detalhe_lido=0');
 const shopeeSemDetalhe = (shopId, limite) =>
@@ -1052,10 +1055,13 @@ function shopeeDetalheGravar(p, itens) {
 // Repasse a ler: pedido pago e não cancelado, sem repasse ou com repasse ainda provisório (12 h).
 const shopeeSemEscrow = (shopId, limite) => db.prepare(`SELECT order_sn FROM shopee_pedidos WHERE shop_id=? AND detalhe_lido=1
   AND status NOT IN ('CANCELLED','IN_CANCEL','UNPAID')
-  AND ((escrow_final=0 AND (escrow_em IS NULL OR escrow_em < ?)) OR (escrow_em IS NOT NULL AND frete_shopee IS NULL)) ORDER BY data DESC LIMIT ?`).all(shopId, new Date(Date.now() - 12 * 3600e3).toISOString(), limite).map((r) => r.order_sn);
+  AND ((escrow_final=0 AND (escrow_em IS NULL OR escrow_em < ?)) OR (escrow_em IS NOT NULL AND frete_shopee IS NULL)
+    OR (precos_repasse IS NULL AND EXISTS (SELECT 1 FROM shopee_itens i WHERE i.order_sn = shopee_pedidos.order_sn AND (i.preco_unit IS NULL OR i.preco_unit <= 0))))
+  ORDER BY data DESC LIMIT ?`).all(shopId, new Date(Date.now() - 12 * 3600e3).toISOString(), limite).map((r) => r.order_sn);
 const shopeeEscrowGravar = (orderSn, e) => db.prepare(`UPDATE shopee_pedidos SET escrow_em=?, escrow_final=?, recebido=?, comissao=?, servico=?,
-  transacao=?, frete_vendedor=?, cupom_vendedor=?, devolucao=?, frete_shopee=? WHERE order_sn=?`)
-  .run(agora(), e.final ? 1 : 0, e.recebido, e.comissao, e.servico, e.transacao, e.frete_vendedor, e.cupom_vendedor, e.devolucao, e.frete_shopee ?? 0, orderSn);
+  transacao=?, frete_vendedor=?, cupom_vendedor=?, devolucao=?, frete_shopee=?, precos_repasse=? WHERE order_sn=?`)
+  .run(agora(), e.final ? 1 : 0, e.recebido, e.comissao, e.servico, e.transacao, e.frete_vendedor, e.cupom_vendedor, e.devolucao, e.frete_shopee ?? 0,
+    JSON.stringify(e.precos || {}), orderSn);
 // Anúncios da Shopee (cópia local por loja, relida a cada 6 h): um registro por anúncio sem
 // variação (model_id 0) ou por variação. Preço atual (com promoção) e original (o que o
 // vendedor define), estoque, vendas do anúncio e visitas.
@@ -1118,7 +1124,7 @@ const shopeeRecusaLimpar = (itemId) => db.prepare('UPDATE shopee_anuncios SET re
 // Linhas de venda de uma loja na janela (pedido sem detalhe ainda não tem data: fica de fora).
 const shopeeVendasPeriodo = (shopId, de, ate) => db.prepare(`
   SELECT p.order_sn, p.data, p.status, p.escrow_em, p.escrow_final, p.recebido, p.comissao, p.servico, p.transacao,
-         p.frete_vendedor, p.cupom_vendedor, p.devolucao, p.transportadora, p.frete_shopee, p.taxa_item, i.linha, i.sku, i.item_id, i.nome, i.quantidade, i.preco_unit, i.imagem
+         p.frete_vendedor, p.cupom_vendedor, p.devolucao, p.transportadora, p.frete_shopee, p.taxa_item, p.precos_repasse, i.linha, i.sku, i.item_id, i.model_id, i.nome, i.quantidade, i.preco_unit, i.imagem
   FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
   WHERE p.shop_id=? AND p.data >= ? AND p.data < ? ORDER BY p.data DESC, i.linha`).all(shopId, de, ate);
 const shopeePendentes = (shopId) => db.prepare(`SELECT

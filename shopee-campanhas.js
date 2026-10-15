@@ -220,11 +220,11 @@ function criar({ D, daLoja, vendas }) {
     const ids = [...new Set(itens.map((i) => Number(i.item_id)))];
     const s = { pedidos: 0, unidades: 0, faturamento: 0, desconto: 0 };
     if (ids.length) {
-      const rs = D.db.prepare(`SELECT p.order_sn, i.item_id, i.model_id, i.quantidade, i.preco_unit FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
+      const rs = D.db.prepare(`SELECT p.order_sn, p.precos_repasse, i.item_id, i.model_id, i.quantidade, i.preco_unit FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
         WHERE p.shop_id=? AND p.data >= ? AND p.data < ? AND p.status NOT IN ('CANCELLED','IN_CANCEL','UNPAID') AND i.item_id IN (${ids.map(() => '?').join(',')})`).all(shopId, de, ate, ...ids);
       const peds = new Set();
       for (const r of rs) {
-        const q = Number(r.quantidade) || 0, pu = Number(r.preco_unit) || 0;
+        const q = Number(r.quantidade) || 0, pu = require('./shopee-vendas.js').precoDe(r, r);   // "Leve 2": preço do repasse
         const o = orig.get(`${r.item_id}:${r.model_id || 0}`) ?? orig.get(`${r.item_id}:*`);
         peds.add(r.order_sn); s.unidades += q; s.faturamento += q * pu;
         if (o > pu) s.desconto += q * (o - pu);

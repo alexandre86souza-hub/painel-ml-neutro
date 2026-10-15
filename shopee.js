@@ -189,7 +189,10 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const lista = await passo(() => daLoja(shopId, '/api/v2/order/get_order_list', {
         time_range_field: 'create_time', time_from: agoraS() - dias * 86400, time_to: agoraS(), page_size: 50 }));
       const pedidos = lista.response?.order_list || [];
-      const sn = pedidos.at(-1)?.order_sn || null;
+      // ?pedido=SN: um pedido escolhido (ex.: venda que a cópia leu com preço 0), no lugar do último do período
+      const pedido = String(url.searchParams.get('pedido') || '').trim();
+      if (pedido && !/^[0-9A-Z]{10,20}$/.test(pedido)) throw erro('Número de pedido da Shopee inválido.');
+      const sn = pedido || pedidos.at(-1)?.order_sn || null;
       const detalhe = sn ? await passo(() => daLoja(shopId, '/api/v2/order/get_order_detail', { order_sn_list: sn,
         response_optional_fields: ['item_list', 'total_amount', 'pay_time', 'actual_shipping_fee', 'estimated_shipping_fee',
           'actual_shipping_fee_confirmed', 'shipping_carrier', 'payment_method', 'fulfillment_flag', 'cancel_reason'] })) : null;
