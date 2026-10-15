@@ -83,6 +83,11 @@ function freteMedioDe(rows) {
 // própria (Entrega Direta) − frete repassado pela Shopee. Lucro = recebido − entrega − custos
 // (exato). Sem repasse ainda: a proporção média da loja e o frete médio da transportadora
 // (marcado como estimado). Função pura: testada.
+// Pedido reembolsado: a Shopee devolveu o dinheiro ao comprador. Nem sempre o repasse traz seller_return_refund
+// (medido 15/10: 261003N7QD1WU9, devolução aceita e reembolsada, repasse final de −0,49 com devolução 0); repasse
+// FINAL ≤ 0 num pedido concluído também é reembolso. O produto volta (custo fora) e o pedido não entra na média de tarifa.
+const reembolsado = (p) => p.recebido != null && n(p.recebido) <= 0 && (n(p.devolucao) > 0 || !!p.escrow_final);
+
 function linhasDe(rows, ctx) {
   const porPedido = new Map();
   for (const r of rows) { const a = porPedido.get(r.order_sn) || []; a.push(r); porPedido.set(r.order_sn, a); }
@@ -94,7 +99,7 @@ function linhasDe(rows, ctx) {
     const temRepasse = p.recebido != null;
     const propria = entregaPropria(p.transportadora);
     const custoEntrega = propria ? (ctx.entrega_propria ?? null) : 0;
-    const devolvido = temRepasse && n(p.recebido) <= 0 && n(p.devolucao) > 0;
+    const devolvido = temRepasse && reembolsado(p);
     let tarifaPedido = null, freteShopee = null, estimado = false;
     if (temRepasse) { freteShopee = p.frete_shopee != null ? n(p.frete_shopee) : 0; tarifaPedido = fatPedido - n(p.recebido) + freteShopee; }
     else if (ctx.proporcao != null) { tarifaPedido = fatPedido * ctx.proporcao; freteShopee = n(ctx.frete_medio?.[p.transportadora || '']); estimado = true; }
@@ -144,7 +149,7 @@ function proporcaoDe(rows) {
     if (!p.escrow_final || p.recebido == null || vistos.has(sn) || INVALIDAS.has(p.status)) continue;
     vistos.add(sn);
     const f = itens.reduce((s, i) => s + n(i.preco_unit) * n(i.quantidade), 0);
-    if (f <= 0 || n(p.devolucao) > 0) continue;
+    if (f <= 0 || n(p.devolucao) > 0 || reembolsado(p)) continue;
     fat += f; tirado += f - n(p.recebido) + n(p.frete_shopee);   // só a tarifa: o frete repassado não conta
   }
   return fat > 0 ? tirado / fat : null;

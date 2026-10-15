@@ -31,6 +31,9 @@ assert.strictEqual(l1.lucro, 70 - 30 - 1 - 10, 'embalagem: uma por pedido, não 
 const dois = SV.linhasDe([{ ...base, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 75 }, { ...base, linha: 1, sku: 'BR-408', quantidade: 1, preco_unit: 25 }], ctx);
 assert.deepStrictEqual(dois.map((l) => l.tarifa + l.frete), [22.5, 7.5]);
 // sem repasse ainda: proporção média, estimada
+// reembolso sem seller_return_refund no repasse (repasse final −0,49): devolvido, produto volta
+{ const [r] = SV.linhasDe([{ ...base, recebido: -0.49, devolucao: 0, escrow_final: 1, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 100 }], ctx);
+  assert.deepStrictEqual([r.devolvido, r.produto], [true, 0]); }
 const [sem] = SV.linhasDe([{ ...base, recebido: null, escrow_final: 0, linha: 0, sku: 'DQ-407', quantidade: 1, preco_unit: 100 }], ctx);
 assert.deepStrictEqual({ tarifa: sem.tarifa, est: sem.estimado }, { tarifa: 25, est: true });
 // cancelado: fora da conta
