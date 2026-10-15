@@ -872,6 +872,16 @@ const skusDosPedidos = (orderIds) => {
   return out;
 };
 
+// Situação da venda de cada pedido (tela Devoluções: venda parcialmente reembolsada continua nas vendas).
+const statusDosPedidos = (orderIds) => {
+  const out = {};
+  for (let i = 0; i < orderIds.length; i += 400) {
+    const lote = orderIds.slice(i, i + 400);
+    for (const r of db.prepare(`SELECT order_id, status FROM vendas WHERE order_id IN (${lote.map(() => '?').join(',')})`).all(...lote)) out[r.order_id] = r.status;
+  }
+  return out;
+};
+
 // ---------- Mercado Ads: mudanças nas campanhas ----------
 // O ML não tem histórico de alterações da campanha (só o last_updated). O painel guarda a
 // última configuração vista de cada campanha e, quando ela muda, grava o que mudou — o
@@ -2155,7 +2165,7 @@ module.exports = {
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
-  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias, reembolsosDosPedidos,
+  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias, reembolsosDosPedidos, statusDosPedidos,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,

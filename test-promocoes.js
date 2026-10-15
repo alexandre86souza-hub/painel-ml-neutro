@@ -180,6 +180,15 @@ assert.deepStrictEqual([k0.defeito, k0.peca_defeito, k0.produtos_defeito], [fals
 assert.strictEqual(custoDa({ status_devolucao: 'delivered', custo_produto: 60.5, defeito: true, componentes: kit }).peca_defeito, 60.5);
 // posição que não existe no kit é ignorada
 assert.strictEqual(custoDa({ status_devolucao: 'delivered', defeito: true, componentes: kit, defeito_produtos: [7] }).peca_defeito, 0);
+// venda PARCIALMENTE reembolsada (2 un., 1 reembolsada; medido 15/10/2026): a venda continua nas vendas com produto, frete de
+// ida e tarifas; a devolução só soma o frete de volta (antes o produto de 109,66 contava duas vezes)
+{
+  const d = { status_devolucao: null, quantidade: 2, custo_produto: 109.66, reembolso_vendedor: 99.98, frete_ida: 28.9, tarifas: 23, tarifa_devolucao: 12 };
+  const fora = custoDa({ ...d, venda_contada: true });
+  assert.deepStrictEqual([fora.total, fora.nao_voltou, fora.frete_ida_perdido, fora.tarifas_perdidas, fora.fretes, fora.na_venda], [0, 0, 0, 0, 12, true]);
+  const cancelada = custoDa(d);   // venda cancelada (sai das vendas): a devolução conta tudo, como antes
+  assert.deepStrictEqual([cancelada.nao_voltou, cancelada.frete_ida_perdido, cancelada.tarifas_perdidas, !!cancelada.na_venda], [109.66, 28.9, 23, false]);
+}
 
 // ---------- crédito do ML ligado à reclamação ----------
 const recl = [

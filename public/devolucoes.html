@@ -419,7 +419,7 @@ function pintarLista(){
     const qd = x.custo.qtds_defeito || {};
     const comDefeito = (x.custo.produtos_defeito || []).map((i) => x.componentes[i]?.sku && (x.quantidade > 1 ? `${qd[i] ?? x.quantidade}× ` : '') + x.componentes[i].sku).filter(Boolean);
     par('Peça com defeito', x.custo.total ? '− ' + real(x.custo.total) : real(0), x.custo.total ? 'neg' : null,
-      x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
+      x.custo.na_venda ? 'reembolso parcial: produto, frete de ida e tarifas já estão na venda (tela Pedidos)' : x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
         : x.custo.defeito ? (x.quantidade > 1 ? `${qd['*'] ?? x.quantidade} de ${x.quantidade} un. · ` : '') + 'não volta à venda' : null);
     par('Crédito do ML', x.credito_ml ? '+ ' + real(x.credito_ml.valor) : '—', x.credito_ml ? 'pos' : null,
       x.credito_ml ? (x.credito_ml.manual ? 'informado por você' + (x.credito_ml.automatico != null ? ` (no lugar de ${real(x.credito_ml.automatico)})` : '')

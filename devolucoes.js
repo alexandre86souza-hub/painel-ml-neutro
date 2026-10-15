@@ -98,12 +98,16 @@ function comDefeito(d) {
 // entra SÓ o custo da peça com defeito (não volta à venda); produto que voltou em bom estado
 // volta ao estoque e não soma. Fretes e tarifas perdidos ficam numa linha própria (é dinheiro
 // que saiu, mas não é "peça perdida"). Produto que nem voltou conta como perdido.
+// Venda PARCIALMENTE reembolsada (d.venda_contada): a venda continua na tela Vendas, que já desconta o reembolso e conta o
+// produto, o frete de ida e as tarifas (custos.js#contaDaLinha). Aqui só entra o que é novo: o frete de volta. Sem isso o
+// produto contava duas vezes no "depois do ADS e das devoluções" (auditoria de 15/10/2026, pedido de 2 un. com 1 reembolsada).
 function custoDa(d) {
   const voltou = ['delivered', 'shipped', 'closed'].includes(d.status_devolucao);
   const devolvido = num(d.reembolso_vendedor) + num(d.reembolso_ml);
   const freteVolta = num(d.tarifa_devolucao);
-  const freteIdaPerdido = devolvido > 0 ? Math.max(0, num(d.frete_ida) - num(d.frete_ida_estornado)) : 0;
-  const tarifasPerdidas = devolvido > 0 ? Math.max(0, num(d.tarifas) - num(d.tarifas_estornadas)) : 0;
+  const naVenda = !!d.venda_contada;
+  const freteIdaPerdido = devolvido > 0 && !naVenda ? Math.max(0, num(d.frete_ida) - num(d.frete_ida_estornado)) : 0;
+  const tarifasPerdidas = devolvido > 0 && !naVenda ? Math.max(0, num(d.tarifas) - num(d.tarifas_estornadas)) : 0;
   // Kit: o vendedor marca QUAIS produtos do anúncio estão com defeito (posições em
   // d.componentes); só eles somam, vezes a quantidade devolvida. Sem essa marcação (anúncio
   // de um produto só, marcação antiga ou sugestão do ML), vale o custo do anúncio inteiro.
@@ -120,12 +124,12 @@ function custoDa(d) {
   const q = d.quantidade || 1;
   const qtdDe = (i) => { const o = d.defeito_qtds || {}; const v = o[i] ?? o['*'];
     return v == null ? q : Math.max(0, Math.min(q, Math.round(Number(v)) || 0)); };
-  const pecaDefeito = !defeito ? 0
+  const pecaDefeito = !defeito || naVenda ? 0
     : porProduto ? marcados.reduce((s, i) => s + num(comps[i].custo) * qtdDe(i), 0)
       : num(d.custo_produto) * qtdDe('*') / q;
   // Não voltou e o dinheiro foi devolvido: perde o produto inteiro — a não ser que o vendedor
   // tenha marcado as peças com defeito (aí vale o que ele marcou, sem somar duas vezes).
-  const naoVoltou = devolvido > 0 && !voltou && !defeito ? (d.custo_produto != null ? num(d.custo_produto) : devolvido) : 0;
+  const naoVoltou = devolvido > 0 && !voltou && !defeito && !naVenda ? (d.custo_produto != null ? num(d.custo_produto) : devolvido) : 0;
   const fretes = freteVolta + freteIdaPerdido + tarifasPerdidas;
   const total = pecaDefeito + naoVoltou;
   const credito = num(d.credito_ml);
@@ -133,7 +137,7 @@ function custoDa(d) {
     tarifas_perdidas: cent(tarifasPerdidas), fretes: cent(fretes),
     defeito, produtos_defeito: defeito && porProduto ? marcados : null,
     qtds_defeito: !defeito ? null : porProduto ? Object.fromEntries(marcados.map((i) => [i, qtdDe(i)])) : { '*': qtdDe('*') },
-    peca_defeito: cent(pecaDefeito), nao_voltou: cent(naoVoltou),
+    peca_defeito: cent(pecaDefeito), nao_voltou: cent(naoVoltou), ...(naVenda ? { na_venda: true } : {}),
     perda_produto: cent(pecaDefeito + naoVoltou), total: cent(total),
     credito_ml: cent(credito), resultado: cent(credito - total - fretes) };
 }
@@ -444,6 +448,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
         clientes[id] = { apelido: c.apelido || null, nome: c.nome || null };
       });
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
+      const statusVenda = D.statusDosPedidos(pedidosDev);
       const itens = linhas.map((l) => {
         const auto = ligacao.porClaim[l.claim_id] || null;
         const manual = manuais[l.claim_id] || null;
@@ -451,7 +456,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
           automatico: auto ? auto.valor : null } : auto;
         const marcado = defeitos[l.claim_id];
         const kit = componentesDa(l, skusVenda, info[l.item_id], mapa);
-        const custo = custoDa({ ...l, credito_ml: cred?.valor || 0, defeito: marcado,
+        const custo = custoDa({ ...l, credito_ml: cred?.valor || 0, defeito: marcado, venda_contada: statusVenda[l.order_id] === 'partially_refunded',
           componentes: kit.componentes, defeito_produtos: marcado == null ? null : defeitosProdutos[l.claim_id],
           defeito_qtds: marcado == null ? null : defeitosQtds[l.claim_id] });
         let acoes = [];
