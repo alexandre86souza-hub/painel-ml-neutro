@@ -231,14 +231,17 @@ function contaDaLinha(l, ctx) {
     : (l.total_envio > 0 ? l.frete_envio * (fat / l.total_envio) : l.frete_envio);
   const produto = ctx.custo_unit == null ? null : ctx.custo_unit * l.quantidade;
   const embalagem = (ctx.embalagem_unit || 0) * l.quantidade;
-  const imposto = (ctx.imposto_pct || 0) / 100 * fat;
+  // venda parcialmente reembolsada (partially_refunded): o devolvido ao comprador sai da receita e do imposto
+  const reembolso = Math.min(fat, Math.max(0, l.reembolso || 0));
+  const imposto = (ctx.imposto_pct || 0) / 100 * (fat - reembolso);
   const falta = [];
   if (produto == null) falta.push('custo');
   if (frete == null) falta.push('frete');
-  const lucro = falta.length ? null : fat - tarifa - frete - produto - embalagem - imposto;
+  const lucro = falta.length ? null : fat - reembolso - tarifa - frete - produto - embalagem - imposto;
   const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
   return { faturamento: r2(fat), tarifa: r2(tarifa), frete: r2(frete), produto: r2(produto), embalagem: r2(embalagem),
-    imposto: r2(imposto), lucro: r2(lucro), margem: lucro != null && fat > 0 ? lucro / fat : null, falta };
+    imposto: r2(imposto), lucro: r2(lucro), margem: lucro != null && fat > 0 ? lucro / fat : null, falta,
+    ...(reembolso > 0 ? { reembolso: r2(reembolso) } : {}) };
 }
 
 // Lucro de cada anúncio no período somando VENDA POR VENDA (as linhas de vendasDaConta): SKU e custo de cada pedido,
@@ -592,6 +595,18 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           flexInfo.set(e, freteFlex({ custoMl, bonus: bonus[e] ?? null, entrega: empresa.entrega_flex, medias }));
         }
         for (const l of linhas) { const f = flexInfo.get(l.envio_id); if (f) l.frete_envio = f.frete; }
+      }
+      // Venda parcialmente reembolsada: o que o Mercado Pago devolveu ao comprador (pagamentos copiados pelo Financeiro),
+      // rateado entre os itens do pedido pelo valor.
+      {
+        const parciais = [...new Set(linhas.filter((l) => l.status === 'partially_refunded').map((l) => l.order_id))];
+        const devolvido = parciais.length && D.reembolsosDosPedidos ? D.reembolsosDosPedidos(parciais) : {};
+        const totalPedido = {};
+        for (const l of linhas) if (devolvido[String(l.order_id)]) totalPedido[l.order_id] = (totalPedido[l.order_id] || 0) + l.quantidade * l.preco_unit;
+        for (const l of linhas) {
+          const d = devolvido[String(l.order_id)];
+          if (d && totalPedido[l.order_id] > 0) l.reembolso = d * (l.quantidade * l.preco_unit) / totalPedido[l.order_id];
+        }
       }
       const impostoPct = impostoTotal(empresa) || D.impostoLer(conta.ml_user_id) || 0;
       const info = {};

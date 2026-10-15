@@ -1177,6 +1177,10 @@ if (mpSemReferencia) db.prepare("DELETE FROM estado WHERE chave LIKE 'mp_lido_em
 const lista_ = (xs) => xs.map(() => '?').join(',');
 const flexDosEnvios = (envios) => (envios.length ? new Set(db.prepare(`SELECT envio_id FROM envio_logistica
   WHERE tipo='self_service' AND envio_id IN (${lista_(envios)})`).all(...envios).map((r) => r.envio_id)) : new Set());
+// Quanto o Mercado Pago devolveu ao comprador em cada pedido (venda partially_refunded do ML): soma do reembolsado.
+const reembolsosDosPedidos = (pedidos) => (pedidos.length ? Object.fromEntries(db.prepare(`SELECT order_id, SUM(reembolsado) AS v FROM mp_pagamentos
+  WHERE tipo='venda' AND reembolsado > 0 AND order_id IN (${lista_(pedidos)}) GROUP BY order_id`).all(...pedidos)
+  .map((r) => [String(r.order_id), r.v])) : {});
 const bonusFlexDosEnvios = (envios) => (envios.length ? Object.fromEntries(db.prepare(`SELECT envio_id, SUM(bruto) AS v FROM mp_pagamentos
   WHERE descricao='bonificaciones_flex' AND status='approved' AND envio_id IN (${lista_(envios)}) GROUP BY envio_id`).all(...envios)
   .map((r) => [r.envio_id, r.v])) : {});
@@ -2151,7 +2155,7 @@ module.exports = {
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
-  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias,
+  mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias, reembolsosDosPedidos,
   concMedidasGravar, concMedidas, concMarcar, concAtualizar, concDesmarcar, concDoItem, concItensMarcados, concResumo,
   qualidadeGravar, qualidadeDe,
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,

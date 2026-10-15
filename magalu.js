@@ -152,6 +152,21 @@ const INVALIDAS = new Set(['cancelled', 'canceled']);
 // frete pago − recebido (comissões, tarifa fixa, MDR, parte do vendedor nas promoções); frete = o
 // frete debitado (o que o cliente pagou de frete fica com a Magalu: medido, a SALE não o inclui). Sem ele: a comissão do pedido (estimado).
 // Rateio pelo faturamento dos itens. Embalagem: uma por pedido. Função pura: testada.
+// Frete médio da loja em % do faturamento (pedidos com financeiro, sem reembolso): estima o frete de quem ainda não tem
+// financeiro (antes ficava 0 e o lucro saía otimista). Função pura: testada.
+function fretePctDe(pedidos, financeiro) {
+  let fat = 0, frete = 0;
+  for (const p of pedidos) {
+    const ts = financeiro?.get(p.code);
+    if (!ts || INVALIDAS.has(String(p.status).toLowerCase())) continue;
+    const fin = financeiroDo(ts);
+    const f = p.itens.reduce((a, i) => a + n(i.faturamento), 0);
+    if (!(f > 0) || fin.reembolso > 0) continue;
+    fat += f; frete += fin.freteCusto;
+  }
+  return fat > 0 ? frete / fat : null;
+}
+
 function linhasDe(pedidos, ctx) {
   const out = [];
   for (const p of pedidos) {
@@ -164,7 +179,7 @@ function linhasDe(pedidos, ctx) {
     const devolvido = valida && !!fin && fatPedido > 0 && n(fin.reembolso) >= fatPedido - 0.01;
     let tarifaPedido, fretePedido;
     if (fin) { tarifaPedido = fatPedido - fin.freteCusto - fin.recebido; fretePedido = fin.freteCusto; }
-    else { tarifaPedido = n(p.comissao); fretePedido = 0; }
+    else { tarifaPedido = n(p.comissao); fretePedido = ctx.frete_pct != null ? fatPedido * ctx.frete_pct : 0; }   // sem financeiro: frete médio da loja (estimado)
     for (const i of p.itens) {
       const q = n(i.quantidade), fat = n(i.faturamento);
       const parte = fatPedido > 0 ? fat / fatPedido : 1 / p.itens.length;
@@ -319,7 +334,9 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     const impostoPct = C.impostoTotal(e);
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const peds = D.magaluPedidosPeriodo(de, ate);
-    const ls = linhasDe(peds, { mapa, imposto_pct: impostoPct, embalagem_pedido: e.embalagem_padrao || 0, financeiro: D.magaluFinanceiroDe(peds.map((p) => p.code)),
+    const base90 = D.magaluPedidosPeriodo(new Date(Date.now() - 90 * 864e5).toISOString(), '9999');
+    const fretePct = fretePctDe(base90, D.magaluFinanceiroDe(base90.map((p) => p.code)));
+    const ls = linhasDe(peds, { mapa, imposto_pct: impostoPct, embalagem_pedido: e.embalagem_padrao || 0, financeiro: D.magaluFinanceiroDe(peds.map((p) => p.code)), frete_pct: fretePct,
       vinculos: D.skuVinculos('magalu'), trocas: D.skuTrocas('magalu') });
     return { linhas: ls, impostoPct, erroLeitura };
   }
@@ -891,4 +908,4 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   return { rotas, rotasParam: [], callback, mg, config, sincronizar };
 }
 
-module.exports = { criar, devolucoesDe, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };
+module.exports = { criar, fretePctDe, devolucoesDe, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };

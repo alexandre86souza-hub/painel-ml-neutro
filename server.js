@@ -1291,10 +1291,11 @@ const routes = {
     // Amostra pequena (5 envios novos por anúncio) — a análise do anúncio mede mais, e o
     // que ela mede fica guardado e vale aqui também.
     const precisaFrete = ids.filter((id) => custos[id]?.custo != null && r[id]?.envios > 0);
-    const itensML = precisaFrete.length
-      ? Object.fromEntries((await ml(`/items?ids=${precisaFrete.join(',')}&attributes=id,status,shipping`))
-        .filter((x) => x.code === 200).map((x) => [x.body.id, x.body]))
-      : {};
+    // /items?ids= aceita no máximo 20 (com 21+ o ML responde 400): em lotes
+    const lotes = [];
+    for (let i = 0; i < precisaFrete.length; i += 20) lotes.push(precisaFrete.slice(i, i + 20));
+    const itensML = Object.fromEntries((await emLotes(lotes, 3, (lote) => ml(`/items?ids=${lote.join(',')}&attributes=id,status,shipping`)))
+      .flat().filter((x) => x.code === 200).map((x) => [x.body.id, x.body]));
     const fretes = Object.fromEntries(await emLotes(precisaFrete, 4, async (id) =>
       [id, itensML[id] ? await freteDoItem(conta, itensML[id], j, 5) : null]));
     // Lucro de quem vendeu: venda a venda (o mesmo da ABC e da tela Vendas); a conta por anúncio só para quem não vendeu.
@@ -1729,7 +1730,8 @@ function recalcular(s) {
     ...s,
     ctr: div(s.cliques, s.impressoes),
     cpc: div(s.investimento, s.cliques),
-    cvr: div(s.unidades, s.cliques),
+    cvr: div(s.unidades, s.cliques),   // UNIDADES por clique (a API do Ads não dá o número de pedidos)
+    // TACOS como o ML define: investimento ÷ (receita com Ads + receita orgânica dos anúncios), não o faturamento da conta
     roas: div(s.receita, s.investimento),
     acos: div(s.investimento, s.receita),
     tacos: div(s.investimento, s.receita + s.organica),

@@ -88,6 +88,15 @@ assert.ok(!/\/api\/magalu/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/m
   assert.deepStrictEqual([normal.lucro, normal.devolvido, normal.produto, normal.imposto], [22, false, 30, 10], 'venda normal: 64 − 30 − 2 − 10');
   const dev = linha([...venda, t('DEBIT', 'REFUND', 100), t('CREDIT', 'COMMISSION', 16)]);
   assert.deepStrictEqual([dev.lucro, dev.devolvido, dev.produto, dev.imposto], [-22, true, 0, 0], 'reembolso total: produto volta, sem imposto');
+  // sem financeiro ainda: frete médio da loja (20% do faturamento nos pedidos com financeiro), marcado como estimado
+  const peds = [{ code: 'M1', status: 'finished', itens: [{ sku: 'DQ-001', quantidade: 1, faturamento: 100 }] },
+    { code: 'M9', status: 'finished', itens: [{ sku: 'DQ-001', quantidade: 1, faturamento: 50 }] }];
+  const pctFrete = M.fretePctDe(peds, new Map([['M1', venda]]));
+  assert.strictEqual(pctFrete, 0.2);
+  assert.strictEqual(M.fretePctDe(peds, new Map([['M1', [...venda, t('DEBIT', 'REFUND', 100)]]])), null, 'pedido reembolsado fica fora da média');
+  const est = M.linhasDe([{ code: 'M9', data: '2026-09-10T12:00:00Z', status: 'new', comissao: 8, itens: [{ sku: 'DQ-001', quantidade: 1, faturamento: 50 }] }],
+    { mapa: cat1, imposto_pct: 10, embalagem_pedido: 2, trocas: new Map(), vinculos: new Map(), financeiro: new Map(), frete_pct: pctFrete })[0];
+  assert.deepStrictEqual([est.frete, est.estimado, est.lucro], [10, true, -5], 'estimado: 50 − 8 − 10 − 30 − 2 − 5');
   const parcial = linha([...venda, t('DEBIT', 'REFUND', 40)]);
   assert.deepStrictEqual([parcial.devolvido, parcial.produto, parcial.imposto, parcial.lucro], [false, 30, 10, -18], 'parcial: produto e imposto continuam (24 − 30 − 2 − 10)');
 }

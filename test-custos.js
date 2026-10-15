@@ -143,6 +143,13 @@ assert.throws(() => C.validarEmpresa({ entrega_flex: '-1' }), /Flex inválido/);
   assert.strictEqual(C.skuNaData(new Map(), 'KIT-1.2'), 'KIT-1.2');
 }
 
+// venda parcialmente reembolsada: o ML devolveu 30 ao comprador. À mão: 100 − 30 − 12 − 10 − 40 − imposto 10% de 70 (7) = 1
+{
+  const r = C.contaDaLinha({ quantidade: 1, preco_unit: 100, tarifa_unit: 12, frete_envio: 10, total_envio: 100, reembolso: 30 }, { custo_unit: 40, imposto_pct: 10 });
+  assert.deepStrictEqual([r.lucro, r.imposto, r.reembolso, r.faturamento], [1, 7, 30, 100]);
+  assert.strictEqual(C.contaDaLinha({ quantidade: 1, preco_unit: 100, tarifa_unit: 12, frete_envio: 10, total_envio: 100 }, { custo_unit: 40, imposto_pct: 10 }).reembolso, undefined);
+}
+
 // lucro do anúncio VENDA A VENDA (tela Anúncios, ABC): cada venda com o custo do produto que ela levou. Calculado à mão:
 // produto trocado no período (795 -> 854). Venda 1 = 69,90 − 8 − 9 − 51,86 − 1,50 − 6,99 = −7,45; venda 2 (custo 25) = 19,41.
 // O "custo atual × unidades" (25 × 2) dava 38,82 e a embalagem padrão ficava de fora.
