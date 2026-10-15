@@ -186,6 +186,9 @@ function cartao(rot, valor, nota, destaque){
   return c;
 }
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) avisoNaTela(m); }
+// Preço com desconto ARREDONDADO PARA CIMA no centavo: a Shopee mostra o % arredondado para cima (172,10 com 5% = 163,495;
+// 163,49 dá 5,003% e aparece "6%OFF"). Para cima, o desconto fica em até o % escolhido.
+const comDesconto = (orig, p) => Math.ceil(orig * (1 - p) * 100 - 1e-6) / 100;
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—');
 const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ loja: LOJA, ...corpo }) });
@@ -389,7 +392,7 @@ async function clonar(c, bt){
       const a = porChave.get(icChave(x));
       if(!a){ fora.push(x.nome || x.item_id); continue; }
       const p = x.pct ?? (moda != null ? moda / 100 : 0);
-      escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: x.limite || 0,
+      escolhidos.set(chave(a), { a, preco: comDesconto(a.preco_original, p), estoque: Math.min(a.estoque || 0, 10) || 1, limite: x.limite || 0,
         recusa: x.alertas.find((t) => t.startsWith('preço subiu')) || null });
     }
     pintarEscolhidos(); pintarAchados();
@@ -545,7 +548,7 @@ function pintarAchados(){
 function escolher(a, pintar = true){
   const p = Number($('pctTodos').value) || 0;
   marcados.delete(chave(a));
-  escolhidos.set(chave(a), { a, preco: Math.round(a.preco_original * (1 - p / 100) * 100) / 100, estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0, recusa: alertaDe(a) });
+  escolhidos.set(chave(a), { a, preco: comDesconto(a.preco_original, p / 100), estoque: Math.min(a.estoque || 0, 10) || 1, limite: 0, recusa: alertaDe(a) });
   if(pintar) pintarEscolhidos();
 }
 function pintarEscolhidos(){
@@ -579,7 +582,7 @@ function pintarEscolhidos(){
         const e = estimar(a, x.preco); lucro.className = 'dinheiro ' + (e && e.lucro < 0 ? 'neg' : 'pos');
         lucro.textContent = e ? `${real(e.lucro)} (${pct(e.margem)})` : 'sem custo';
       };
-      inPct.oninput = () => { x.preco = Math.round(a.preco_original * (1 - (Number(inPct.value) || 0) / 100) * 100) / 100; const s = inPct.value; pintar(); inPct.value = s; };
+      inPct.oninput = () => { x.preco = comDesconto(a.preco_original, (Number(inPct.value) || 0) / 100); const s = inPct.value; pintar(); inPct.value = s; };
       inPreco.oninput = () => { x.preco = Number(inPreco.value) || 0; const s = inPreco.value; pintar(); inPreco.value = s; };
       pintar();
       const c1 = el('td'); c1.appendChild(inPct); const c2 = el('td'); c2.appendChild(inPreco);
@@ -600,7 +603,7 @@ function atualizarResumo(){
 }
 $('pctTodos').onchange = () => {
   const p = Number($('pctTodos').value) || 0;
-  for(const x of escolhidos.values()) x.preco = Math.round(x.a.preco_original * (1 - p / 100) * 100) / 100;
+  for(const x of escolhidos.values()) x.preco = comDesconto(x.a.preco_original, p / 100);
   pintarEscolhidos();
 };
 $('buscaAn').oninput = () => { if(anuncios) pintarAchados(); };
