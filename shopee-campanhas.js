@@ -167,21 +167,24 @@ function metricasDe(linhas, filtro) {
   const ls = linhas.filter((l) => l.valida && filtro(l));
   const pedidos = new Set(ls.map((l) => l.pedido));
   const s = { pedidos: pedidos.size, unidades: 0, faturamento: 0, lucro: 0, com_lucro: 0, cupom: 0 };
+  const semLucro = new Set();
   const porAnuncio = new Map();
   for (const l of ls) {
     s.unidades += l.quantidade; s.faturamento += l.faturamento || 0; s.cupom += l.cupom || 0;
-    if (l.lucro != null) { s.lucro += l.lucro; s.com_lucro += l.faturamento || 0; }
+    if (l.lucro != null) { s.lucro += l.lucro; s.com_lucro += l.faturamento || 0; } else semLucro.add(l.pedido);
     const k = l.shopee_item || l.sku;
-    const a = porAnuncio.get(k) || { shopee_item: l.shopee_item ?? null, sku: l.sku, titulo: l.titulo, foto: l.foto, pedidos: new Set(), unidades: 0, faturamento: 0, lucro: 0, sem_lucro: false };
+    const a = porAnuncio.get(k) || { shopee_item: l.shopee_item ?? null, sku: l.sku, titulo: l.titulo, foto: l.foto, pedidos: new Set(), unidades: 0, faturamento: 0, lucro: 0, com_lucro: 0, sem_lucro: new Set(), falta: new Set() };
     a.pedidos.add(l.pedido); a.unidades += l.quantidade; a.faturamento += l.faturamento || 0;
-    if (l.lucro == null) a.sem_lucro = true; else a.lucro += l.lucro;
+    // pedido sem lucro (repasse, custo ou entrega faltando) fica de fora do lucro do anúncio, com o motivo; os outros contam
+    if (l.lucro == null) { a.sem_lucro.add(l.pedido); for (const f of l.falta || []) a.falta.add(f); } else { a.lucro += l.lucro; a.com_lucro += l.faturamento || 0; }
     porAnuncio.set(k, a);
   }
-  const anuncios = [...porAnuncio.values()].map((a) => ({ ...a, pedidos: a.pedidos.size, faturamento: r2(a.faturamento),
-    lucro: a.sem_lucro ? null : r2(a.lucro), margem: a.sem_lucro || !a.faturamento ? null : a.lucro / a.faturamento }))
+  const anuncios = [...porAnuncio.values()].map(({ com_lucro, ...a }) => ({ ...a, pedidos: a.pedidos.size, faturamento: r2(a.faturamento),
+    lucro: com_lucro ? r2(a.lucro) : null, margem: com_lucro ? a.lucro / com_lucro : null,
+    sem_lucro: a.sem_lucro.size, falta: [...a.falta] }))
     .sort((a, b) => b.faturamento - a.faturamento);
   return { resumo: { pedidos: s.pedidos, unidades: s.unidades, faturamento: r2(s.faturamento), lucro: r2(s.lucro),
-    margem: s.com_lucro ? s.lucro / s.com_lucro : null, cupom: r2(s.cupom) }, anuncios };
+    margem: s.com_lucro ? s.lucro / s.com_lucro : null, cupom: r2(s.cupom), sem_lucro: semLucro.size }, anuncios };
 }
 
 function criar({ D, daLoja, vendas }) {

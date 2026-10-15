@@ -93,7 +93,7 @@ const lm = [
   { valida: true, pedido: 'P3', shopee_item: 7, sku: 'S7', titulo: 'A', quantidade: 1, faturamento: 50, lucro: 10, data: '2026-09-04', cupom: 0 },
   { valida: false, pedido: 'P4', shopee_item: 7, sku: 'S7', quantidade: 9, faturamento: 999, lucro: 0, data: '2026-09-04' }];
 const mt = SCx.metricasDe(lm, () => true);
-assert.deepStrictEqual(mt.resumo, { pedidos: 3, unidades: 4, faturamento: 450, lucro: 30, margem: 0.2, cupom: 5 });
+assert.deepStrictEqual(mt.resumo, { pedidos: 3, unidades: 4, faturamento: 450, lucro: 30, margem: 0.2, cupom: 5, sem_lucro: 1 });
 assert.deepStrictEqual(mt.anuncios.map((a) => [a.sku, a.pedidos, a.faturamento, a.lucro]), [['S8', 1, 300, null], ['S7', 2, 150, 30]]);
 
 // ---------- Shopee: itens de um desconto e o que trava cada um ----------

@@ -285,20 +285,29 @@ async function verResultado(c){
       cartao('Faturamento', real(s.faturamento), variacao(s.faturamento, a?.faturamento), true),
       cartao('Pedidos', numero(s.pedidos), variacao(s.pedidos, a?.pedidos)),
       cartao('Unidades', numero(s.unidades), `antes: ${numero(a?.unidades)}`),
-      cartao('Lucro', real(s.lucro), s.margem != null ? `margem ${pct(s.margem)} · antes ${pct(a?.margem)}` : 'sem custo cadastrado'),
+      cartao('Lucro', real(s.lucro), (s.margem != null ? `margem ${pct(s.margem)} · antes ${pct(a?.margem)}` : 'sem custo cadastrado')
+        + (s.sem_lucro ? ` · ${numero(s.sem_lucro)} pedido(s) fora do lucro (ver abaixo)` : '')),
     );
     if(r.cliques != null) box.appendChild(cartao('Cliques', numero(r.cliques), r.itens_ativos != null ? `${numero(r.itens_ativos)} item(ns) ativo(s)` : ''));
     if(r.usados != null) box.appendChild(cartao('Cupons usados', numero(r.usados), `de ${numero(r.limite)} · código ${r.codigo || ''}` + (s.cupom ? ` · ${real(s.cupom)} de desconto` : '')));
     const tab = el('table'); const cab = el('tr');
     for(const h of ['#', 'Anúncio', 'Pedidos', 'Unid.', 'Faturamento', 'Lucro', 'Margem']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
+    // pedido sem lucro: o motivo embaixo (repasse da Shopee ainda não saiu, custo do SKU ou entrega própria da loja na tela Empresa)
+    const MOTIVO = { tarifa: 'repasse da Shopee ainda não saiu', custo: 'SKU sem custo', entrega: 'falta o custo da entrega própria (Empresa)' };
+    const lucroTd = (x) => {
+      const td = el('td', 'dinheiro ' + (x.lucro < 0 ? 'neg' : ''), real(x.lucro));
+      if(x.sem_lucro){ const n = el('div', null, `${numero(x.sem_lucro)} de ${numero(x.pedidos)} pedido(s) sem lucro: ${(x.falta || []).map((f) => MOTIVO[f] || f).join(', ') || 'falta dado'}`);
+        n.style.cssText = 'font-size:11px;opacity:.7;white-space:normal;max-width:220px;margin-left:auto'; td.appendChild(n); }
+      return td;
+    };
     r.anuncios.forEach((x, i) => {
       const tr = el('tr');
       const td = el('td'); const ln = el('div', 'linha'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(x.foto) im.src = x.foto;
       const tx = el('div', 'tx'); tx.append(el('b', null, x.titulo || x.sku || String(x.shopee_item)), el('span', null, x.sku || ''));
       ln.append(im, tx); td.appendChild(ln);
       tr.append(el('td', null, String(i + 1)), td, el('td', null, numero(x.pedidos)), el('td', null, numero(x.unidades)), el('td', 'dinheiro', real(x.faturamento)),
-        el('td', 'dinheiro ' + (x.lucro < 0 ? 'neg' : ''), real(x.lucro)), el('td', null, pct(x.margem)));
+        lucroTd(x), el('td', null, pct(x.margem)));
       tb.appendChild(tr);
     });
     if(!r.anuncios.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma venda dos anúncios desta campanha no período.'); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); }
