@@ -1754,6 +1754,9 @@ async function metricasDoItem(id, dias) {
 // O que o painel acompanha em cada campanha. `budget` é o orçamento diário que o vendedor
 // define; o `daily_budget` do ML oscila sozinho (medido em 30/09/2026: budget 10 com
 // daily_budget 20, e last_updated de madrugada a cada dois dias) e ficaria só barulho.
+// anúncios que o painel colocou, moveu, pausou ou tirou (ads-gestao.js): só no histórico, fora da comparação de configuração
+const ROTULOS_ANUNCIOS = { anuncios_entraram: 'Anúncios colocados', anuncios_movidos: 'Anúncios movidos para cá',
+  anuncios_pausados: 'Anúncios pausados', anuncios_sairam: 'Anúncios retirados' };
 const CAMPOS_CAMPANHA = { roas_alvo: 'ROAS objetivo', orcamento: 'Orçamento diário', status: 'Situação',
   estrategia: 'Estratégia', nome: 'Nome' };
 const fotoCampanha = (c) => ({ nome: c.name ?? null, status: c.status ?? null, estrategia: c.strategy ?? null,
@@ -2092,7 +2095,7 @@ routes['GET /api/ads/historico'] = async (url) => {
     ...numerosAds(c.metrics || c) })).sort((a, b) => b.investimento - a.investimento);
   if (campanhaId && !campanhas.some((c) => c.id === campanhaId)) throw erro400('Campanha não encontrada nesta conta.');
   const mudancas = D.adsMudancas(conta.ml_user_id, `${date_from}T00:00:00.000Z`, campanhaId)
-    .map((m) => ({ ...m, rotulo: m.campo === 'criada' ? 'Campanha criada' : (CAMPOS_CAMPANHA[m.campo] || m.campo) }));
+    .map((m) => ({ ...m, rotulo: m.campo === 'criada' ? 'Campanha criada' : (CAMPOS_CAMPANHA[m.campo] || ROTULOS_ANUNCIOS[m.campo] || m.campo) }));
   return { habilitado: true, dias, date_from, date_to, serie, total: somarAds(serie), campanhas,
     campanha: campanhaId ? campanhas.find((c) => c.id === campanhaId) : null,
     mudancas, mudancas_desde: D.adsHistoricoDesde(conta.ml_user_id),
@@ -2133,6 +2136,15 @@ routes['GET /api/ads/comparativo'] = async (url) => {
   cacheAdsComp.set(chave, { em: Date.now(), dados });
   return dados;
 };
+
+// Gestão das campanhas do Ads (ads-gestao.js): criar/editar campanha e colocar, mover, pausar e tirar anúncios. Escrita só
+// pela tela; depois dela o comparativo é refeito e a vigia das campanhas confere na próxima chamada.
+{
+  const m = require('./ads-gestao.js').criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D,
+    aposEscrever: () => { cacheAdsComp.clear(); ultimaVigiaAds = 0; } });
+  Object.assign(routes, m.rotas);
+  rotasParam.push(...m.rotasParam);
+}
 
 {
   const avisosRota = routes['GET /api/avisos'];

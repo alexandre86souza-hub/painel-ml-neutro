@@ -37,7 +37,9 @@ const MODULOS = [
     rotas: ['(GET|POST|PUT) /api/promocoes(/.*)?', `(GET|POST|PUT) /api/${CANAIS}/campanhas(/.*)?`, 'GET /api/shopee/anuncios',
       'GET /api/(amazon|leroy)/anuncios'] },   // margem e produtos do kit nos filtros de escolher anúncios (só leitura)
   { id: 'ads', nome: 'Publicidade (Ads)', descricao: 'Histórico de Ads do ML e Ads da Shopee',
-    paginas: ['/ads.html', '/shopee-ads.html'], rotas: ['GET /api/ads(/.*)?', 'GET /api/shopee/ads(/.*)?'] },
+    paginas: ['/ads.html', '/shopee-ads.html'], rotas: ['GET /api/ads(/.*)?', 'GET /api/shopee/ads(/.*)?',
+      // gestão das campanhas do ML (criar, editar, colocar/tirar anúncios): escrita só pela tela, com confirmação
+      'POST /api/ads/campanhas(/.*)?', 'PUT /api/ads/campanhas/\\d+'] },
   { id: 'financeiro', nome: 'Financeiro', descricao: 'Mercado Pago (extrato e conferência) e repasses da Leroy',
     paginas: ['/financeiro.html', '/leroy.html'],
     rotas: ['(GET|POST|PUT) /api/financeiro(/.*)?', 'GET /api/leroy/repasses'] },

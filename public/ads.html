@@ -21,6 +21,29 @@
   .grafico .col.mudou::after{content:'';position:absolute;top:-2px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#dc2626}
   button.link-campanha{font:inherit;background:none;border:0;padding:0;color:var(--brand);cursor:pointer;text-align:left;font-weight:600}
   button.link-campanha:hover{text-decoration:underline}
+  /* gestão das campanhas (public/ads-gestao.js) */
+  .topo-gestao{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .topo-gestao h2{margin:0;margin-right:auto}
+  button.link-discreto{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--muted);cursor:pointer;text-decoration:underline}
+  #gestaoMsg{display:none;padding:10px 12px;border-radius:10px;margin:10px 0;font-size:13px;background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;word-break:break-word}
+  td.acoes-gestao{white-space:nowrap;text-align:right}
+  td.acoes-gestao button{margin-left:6px}
+  dialog.gestao{width:min(920px,calc(100vw - 32px));max-height:calc(100vh - 40px);padding:20px}
+  dialog.gestao h3{margin:0 0 6px}
+  .grade-gestao{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:14px 0}
+  label.campo-gestao{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600}
+  label.campo-gestao input,label.campo-gestao select,.barra-gestao input[type=search]{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+  label.campo-gestao small{font-weight:400;color:var(--muted);font-size:12px}
+  .rodape-gestao{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .status-gestao{margin:0 auto 0 0;font-size:13px;color:var(--muted)}
+  .barra-gestao{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+  .barra-gestao input[type=search]{flex:1;min-width:200px}
+  label.check-gestao{font-size:13px;display:flex;gap:6px;align-items:center}
+  .lista-gestao{max-height:52vh;overflow:auto;margin-top:10px}
+  .prod-gestao{display:flex;gap:10px;align-items:center}
+  .prod-gestao img{width:40px;height:40px;object-fit:cover;border-radius:8px;flex:none}
+  .prod-gestao b{display:block}
+  .seg button.ativo{background:var(--brand);color:#fff}
 </style>
 </head>
 <body>
@@ -55,6 +78,19 @@
   </div>
 
   <div class="cartoes" id="cartoes"></div>
+
+  <section class="bloco">
+    <div class="topo-gestao">
+      <h2>Gerenciar campanhas</h2>
+      <button type="button" class="link-discreto" id="btDiagAds" title="Confere (só leitura) se os caminhos da API do Ads respondem nesta conta">conferir a API</button>
+      <button type="button" class="bt primario" id="btNovaCampanha">+ Criar campanha</button>
+    </div>
+    <p class="sub">Crie e edite campanhas e escolha os anúncios de cada uma. Tudo muda no Mercado Livre na hora, só depois da sua confirmação.</p>
+    <div id="gestaoMsg" role="status" aria-live="polite"></div>
+    <div class="tabela-rolagem" id="gestaoCampanhas"><p class="carregando">Carregando…</p></div>
+  </section>
+  <dialog id="dlgCampanha" class="gestao" aria-label="Campanha"></dialog>
+  <dialog id="dlgAnuncios" class="gestao" aria-label="Anúncios da campanha"></dialog>
 
   <section class="bloco">
     <h2>Comparativo: o ADS está crescendo ou diminuindo?</h2>
@@ -171,7 +207,8 @@ async function carregar(){
   $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Carregando…'));
   try{
     const r = await api(`/api/ads/historico?dias=${dias}` + (campanha ? `&campanha=${campanha}` : ''));
-    if(!r.habilitado){ $('cartoes').innerHTML = ''; erroTela(r.motivo || 'Conta sem Mercado Ads.'); return; }
+    if(!r.habilitado){ $('cartoes').innerHTML = ''; erroTela(r.motivo || 'Conta sem Mercado Ads.'); $('gestaoCampanhas').innerHTML = ''; return; }
+    window.AdsGestao?.montar(r.campanhas);
     const t = r.total;
     $('periodoTxt').textContent = `De ${data(r.date_from)} a ${data(r.date_to)}. ${r.nota}`;
     if(!campanhasCarregadas){   // a lista de campanhas do seletor (uma vez)
@@ -250,6 +287,12 @@ async function carregar(){
         numero(c.cliques), numero(c.unidades)]));
   }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
 }
+// depois de criar/editar campanha ou mexer nos anúncios (public/ads-gestao.js): relê tudo, inclusive a lista do seletor
+function recarregarAds(){
+  campanhasCarregadas = false;
+  const sel = $('selCampanha'); while(sel.options.length > 1) sel.remove(1); sel.value = campanha;
+  carregar(); carregarComparativo();
+}
 periodo('segDias', dias, (d) => { dias = d; carregar(); });
 $('selCampanha').onchange = () => {
   campanha = $('selCampanha').value;
@@ -259,6 +302,7 @@ $('selCampanha').onchange = () => {
 carregar();
 carregarComparativo();
 </script>
+<script src="/ads-gestao.js?v=1"></script>
 <script src="/sino.js?v=4" defer></script>
 </body>
 </html>

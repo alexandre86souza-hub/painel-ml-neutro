@@ -121,6 +121,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   com a última configuração vista (`ads_campanhas`) e grava em `ads_mudancas`. Acompanha
   `budget` (orçamento do vendedor), não `daily_budget` (oscila sozinho). Confere a cada 30 min
   junto com `/api/avisos`.
+- Gestão das campanhas do Ads do ML (`ads-gestao.js`, bloco "Gerenciar campanhas" em `public/ads.html` + `public/ads-gestao.js`):
+  criar (`POST /api/ads/campanhas`: nome, situação, orçamento diário, estratégia, ROAS objetivo 1x–35x) e editar campanha
+  (`PUT …/{id}`, só o que mudou), anúncios da campanha (`GET …/{id}/anuncios`, ads/search com filters[campaign_id], linhas
+  repetidas da paginação contadas uma vez) e colocar/mover/pausar (`POST …/{id}/anuncios` = PUT ad_groups em lote) ou tirar
+  (`POST …/{id}/remover` = DELETE ad_groups). O anúncio entra pelo GRUPO (`ad_group_id`: família/catálogo/item — mexer no
+  grupo mexe em todas as variações). Caminhos da doc oficial de 03/07/2026 (`/marketplace/advertising/…`); a leitura da conta
+  real responde em `/advertising/…`: a escrita tenta este e, com 404, o da doc. Cada escrita relê a campanha para confirmar e
+  grava em `ads_mudancas` (anúncios colocados/movidos/pausados/retirados). `GET /api/ads/gestao/diagnostico` (só leitura).
+  Escrita só pelo clique, com confirmação; nada no MCP.
 - Publicar na Shopee e na Amazon (`publicar-canais.js`, tela `publicar-canais.html`; o menu
   Publicar abre ela com a conta Shopee/Amazon): COPIA um anúncio do ML. Shopee: categoria por
   `category_recommend`, atributos por `get_attribute_tree`, marca da loja, fotos do ML (só
