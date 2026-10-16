@@ -286,6 +286,7 @@ function campoFreteLeroy(v){
   box.appendChild(el('span', 'pequeno', 'Melhor Envio (pedido)'));
   const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.inputMode = 'decimal';
   inp.placeholder = v.frete_estimado ? 'médio ' + real(v.custo_entrega) : 'R$'; inp.value = v.frete_pedido ?? '';
+  inp.dataset.freteLeroy = v.pedido;   // para voltar o foco a este campo depois de recarregar
   inp.title = `Cliente pagou ${real(v.frete_cliente)} de frete (a Leroy repassa). Digite quanto você pagou pela entrega do pedido ${v.pedido}.`;
   const salvar = async () => {
     const novo = inp.value.trim();
@@ -293,7 +294,7 @@ function campoFreteLeroy(v){
     inp.disabled = true;
     try{
       await api('/api/leroy/frete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pedido: v.pedido, valor: novo }) });
-      await carregar();
+      await carregar({ quieto: true });   // sem apagar a lista: a tela fica onde estava e o cursor no campo seguinte
     }catch(e){ inp.disabled = false; alert(e.message); }
   };
   inp.addEventListener('change', salvar);
@@ -361,7 +362,22 @@ function pintarLista(){
   $('btMais').textContent = `Mostrar mais (${numero(itens.length - mostrar)} restantes)`;
 }
 
-async function carregar(){
+// quieto: recarrega sem esvaziar a tela (depois de digitar o frete da Leroy) — guarda a rolagem e o campo com o cursor
+async function carregar({ quieto = false } = {}){
+  if(quieto){
+    try{
+      const r = await api(`/api/leroy/pedidos?dias=${dias}`);
+      // lidos na hora de repintar: o vendedor pode já estar digitando no campo seguinte
+      const y = scrollY, atual = document.activeElement, foco = atual?.dataset?.freteLeroy || null, digitado = foco ? atual.value : null;
+      dados = r; pintarResumo(r); pintarLista();
+      scrollTo(0, y);
+      if(foco){
+        const i = [...document.querySelectorAll('input[data-frete-leroy]')].find((x) => x.dataset.freteLeroy === foco);
+        if(i){ if(digitado != null) i.value = digitado; i.focus({ preventScroll: true }); }
+      }
+    }catch(e){ $('msg').textContent = e.message; $('msg').style.display = 'block'; }
+    return;
+  }
   $('msg').style.display = 'none';
   $('composicao').innerHTML = '';
   $('composicao').appendChild(el('p', 'carregando', NA_MAGALU ? 'Carregando os pedidos da Magalu… Na primeira vez o painel lê 5 meses de pedidos e do financeiro.'
