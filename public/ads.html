@@ -44,6 +44,9 @@
   .prod-gestao img{width:40px;height:40px;object-fit:cover;border-radius:8px;flex:none}
   .prod-gestao b{display:block}
   .seg button.ativo{background:var(--brand);color:#fff}
+  #adAtalhos button{margin-left:4px}
+  #blocoAntesDepois input[type=date],#blocoAntesDepois select{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:10px}
+  td.mais{color:#15803d} td.menos{color:#b91c1c}
 </style>
 </head>
 <body>
@@ -91,6 +94,19 @@
   </section>
   <dialog id="dlgCampanha" class="gestao" aria-label="Campanha"></dialog>
   <dialog id="dlgAnuncios" class="gestao" aria-label="Anúncios da campanha"></dialog>
+
+  <section class="bloco" id="blocoAntesDepois" hidden>
+    <h2>Antes e depois</h2>
+    <p class="sub">A venda TOTAL dos anúncios desta campanha (com e sem Ads) nos dias antes e depois de uma data — por exemplo, a de uma mudança. Mostra o que o ROAS do Ads sozinho não mostra: cliente que clica no anúncio e compra depois, pela busca normal.</p>
+    <div class="barra-gestao">
+      <label class="check-gestao" for="adData">Data</label><input type="date" id="adData">
+      <label class="check-gestao" for="adDias">Período</label>
+      <select id="adDias"><option value="7">7 dias</option><option value="14" selected>14 dias</option><option value="21">21 dias</option><option value="30">30 dias</option></select>
+      <button type="button" class="bt primario" id="adComparar">Comparar</button>
+      <span id="adAtalhos" class="check-gestao"></span>
+    </div>
+    <div id="adResultado"></div>
+  </section>
 
   <section class="bloco">
     <h2>Comparativo: o ADS está crescendo ou diminuindo?</h2>
@@ -209,6 +225,7 @@ async function carregar(){
     const r = await api(`/api/ads/historico?dias=${dias}` + (campanha ? `&campanha=${campanha}` : ''));
     if(!r.habilitado){ $('cartoes').innerHTML = ''; erroTela(r.motivo || 'Conta sem Mercado Ads.'); $('gestaoCampanhas').innerHTML = ''; return; }
     window.AdsGestao?.montar(r.campanhas);
+    window.AdsGestao?.antesDepois(r.campanha, r.mudancas);
     const t = r.total;
     $('periodoTxt').textContent = `De ${data(r.date_from)} a ${data(r.date_to)}. ${r.nota}`;
     if(!campanhasCarregadas){   // a lista de campanhas do seletor (uma vez)
@@ -302,7 +319,7 @@ $('selCampanha').onchange = () => {
 carregar();
 carregarComparativo();
 </script>
-<script src="/ads-gestao.js?v=1"></script>
+<script src="/ads-gestao.js?v=2"></script>
 <script src="/sino.js?v=4" defer></script>
 </body>
 </html>

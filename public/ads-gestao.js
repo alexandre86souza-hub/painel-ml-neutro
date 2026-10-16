@@ -229,7 +229,71 @@
 
   function mensagem(t) { const m = $('gestaoMsg'); m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 
-  window.AdsGestao = { montar };
+  // ---------- antes e depois de uma data, na campanha escolhida no filtro ----------
+  let campAD = null;
+  function antesDepois(campanha, mudancas) {
+    const bloco = $('blocoAntesDepois');
+    if (!campanha) { bloco.hidden = true; campAD = null; return; }
+    bloco.hidden = false;
+    if (campAD === campanha.id) return;   // mesma campanha: mantém o que o vendedor escolheu
+    campAD = campanha.id;
+    const dia = (iso) => new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10);
+    const datas = [...new Set((mudancas || []).filter((m) => Number(m.campanha_id) === Number(campanha.id)).map((m) => dia(m.em)))].sort().reverse();
+    const ontem = dia(new Date(Date.now() - 864e5).toISOString());
+    $('adData').max = ontem;
+    $('adData').value = datas[0] && datas[0] <= ontem ? datas[0] : (campanha.criada_em ? dia(campanha.criada_em) : ontem);
+    const at = $('adAtalhos'); at.innerHTML = '';
+    if (datas.length) {
+      at.append('Mudanças:');
+      for (const d of datas.slice(0, 6)) { const b = el('button', 'bt', data(d)); b.type = 'button'; b.title = 'Comparar antes e depois de ' + data(d); b.onclick = () => { $('adData').value = d; comparar(); }; at.appendChild(b); }
+    }
+    if (campanha.criada_em) { const b = el('button', 'bt', 'criação'); b.type = 'button'; b.title = 'Antes e depois de a campanha começar'; b.onclick = () => { $('adData').value = dia(campanha.criada_em); comparar(); }; at.append(' ', b); }
+    $('adResultado').innerHTML = '';
+    $('adResultado').appendChild(el('p', 'sub', 'Escolha a data e clique Comparar.'));
+  }
+  async function comparar() {
+    const box = $('adResultado'); box.innerHTML = '';
+    if (!campAD) return;
+    box.appendChild(el('p', 'carregando', 'Somando as vendas e o Ads dos dois períodos…'));
+    let r;
+    try { r = await api(`/api/ads/campanhas/${campAD}/antes-depois?data=${encodeURIComponent($('adData').value)}&dias=${$('adDias').value}`); }
+    catch (e) { box.innerHTML = ''; box.appendChild(el('p', 'vazio', e.message)); return; }
+    box.innerHTML = '';
+    const j = r.janelas, A = r.total.antes, D = r.total.depois;
+    const varDia = (a, d, campo) => { const pa = a[campo] / j.antes.dias, pd = d[campo] / j.depois.dias; return pa > 0 ? pd / pa - 1 : null; };
+    const celVar = (v) => { const td = el('td', v == null ? '' : v > 0.03 ? 'mais' : v < -0.03 ? 'menos' : '', v == null ? '—' : (v > 0 ? '+' : '') + pct(v, 0)); return td; };
+    box.appendChild(el('p', 'sub', `Antes: ${data(j.antes.de)} a ${data(j.antes.ate)} (${j.antes.dias} dias) · Depois: ${data(j.depois.de)} a ${data(j.depois.ate)} (${j.depois.dias} dias). `
+      + (j.depois.dias < j.antes.dias ? 'O depois tem menos dias (vai até ontem): compare pela coluna "por dia". ' : '')
+      + 'Os últimos 2 a 3 dias ainda recebem vendas atribuídas ao Ads.'));
+    const t = el('table', 'comp'); const cab = el('tr');
+    for (const h of ['', 'Antes', 'Depois', 'Variação por dia']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    const linha = (rot, a, d, fmt, campo) => { const tr = el('tr'); tr.append(el('td', 'esq', rot), el('td', null, fmt(a)), el('td', null, fmt(d)), campo ? celVar(varDia(A, D, campo)) : el('td', null, '')); tb.appendChild(tr); };
+    linha('Unidades vendidas (todas)', A.unidades, D.unidades, numero, 'unidades');
+    linha('Faturamento (todas as vendas)', A.faturamento, D.faturamento, real, 'faturamento');
+    linha('Lucro das vendas', A.lucro, D.lucro, real, 'lucro');
+    linha('Investido no Ads', A.ads_inv, D.ads_inv, real, 'ads_inv');
+    linha('Venda atribuída ao Ads', A.ads_rec, D.ads_rec, real, 'ads_rec');
+    linha('Lucro depois do Ads', A.lucro_depois_ads, D.lucro_depois_ads, real, 'lucro_depois_ads');
+    t.appendChild(tb);
+    const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); box.appendChild(rol);
+    const ganho = A.lucro_depois_ads != null && D.lucro_depois_ads != null ? D.lucro_depois_ads / j.depois.dias - A.lucro_depois_ads / j.antes.dias : null;
+    if (ganho != null) box.appendChild(el('p', 'sub', `Lucro depois do Ads por dia: ${real(A.lucro_depois_ads / j.antes.dias)} antes e ${real(D.lucro_depois_ads / j.depois.dias)} depois (${ganho >= 0 ? '+' : '−'}${real(Math.abs(ganho))} por dia). `
+      + 'Lembre que preço, estoque, promoções e a época do ano também mudam a venda: a comparação mostra o que aconteceu, não prova sozinha que foi o Ads.'));
+    if (r.grupos.length > 1) {
+      box.appendChild(el('h3', null, 'Por anúncio'));
+      const g = el('div', 'tabela-rolagem'); g.id = 'adGrupos'; box.appendChild(g);
+      tabela('adGrupos', ['Anúncio', 'Un. antes', 'Un. depois', 'Venda antes', 'Venda depois', 'Ads depois (gasto / venda)', 'Lucro depois do Ads: antes → depois'],
+        r.grupos.slice(0, 40).map((x) => [el('td', 'esq', (x.titulo || x.itens[0] || '').slice(0, 60) + (x.status === 'hold' ? ' (fora do ar)' : '')), numero(x.antes.unidades), numero(x.depois.unidades),
+          real(x.antes.faturamento), real(x.depois.faturamento), `${real(x.depois.ads_inv)} / ${real(x.depois.ads_rec)}`,
+          `${real(x.antes.lucro_depois_ads)} → ${real(x.depois.lucro_depois_ads)}`]));
+      if (r.grupos.length > 40) box.appendChild(el('p', 'sub', `Mostrando 40 de ${numero(r.grupos.length)} anúncios (os que mais venderam).`));
+    }
+  }
+  $('adComparar').onclick = comparar;
+
+  window.AdsGestao = { montar, antesDepois };
   $('btNovaCampanha').onclick = () => abrirCampanha(null);
   // o diagnóstico (só leitura) fica num link discreto: mostra se os caminhos da API respondem nesta conta
   $('btDiagAds').onclick = async () => {

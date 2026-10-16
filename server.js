@@ -2139,7 +2139,7 @@ routes['GET /api/ads/comparativo'] = async (url) => {
 // Gestão das campanhas do Ads (ads-gestao.js): criar/editar campanha e colocar, mover, pausar e tirar anúncios. Escrita só
 // pela tela; depois dela o comparativo é refeito e a vigia das campanhas confere na próxima chamada.
 {
-  const m = require('./ads-gestao.js').criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D,
+  const m = require('./ads-gestao.js').criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaConta: (...x) => custosMod.vendasDaConta(...x),
     aposEscrever: () => { cacheAdsComp.clear(); ultimaVigiaAds = 0; } });
   Object.assign(routes, m.rotas);
   rotasParam.push(...m.rotasParam);

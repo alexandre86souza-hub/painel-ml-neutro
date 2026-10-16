@@ -88,7 +88,65 @@ function agruparAnuncios(linhas) {
     roas: x.investimento > 0 ? x.receita / x.investimento : null }));
 }
 
-function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, aposEscrever = () => {} }) {
+// Antes e depois (tela Publicidade, campanha escolhida): N dias antes da data e N dias a partir dela (até ontem, o último dia
+// que o ML fechou). Devolve as janelas em dia de Brasília. Função pura: testada.
+function janelasAntesDepois(data, dias, hojeMs = Date.now()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || ''))) throw erro('Escolha a data (AAAA-MM-DD).');
+  if (![7, 14, 21, 30].includes(Number(dias))) throw erro('Período: 7, 14, 21 ou 30 dias.');
+  const d = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const base = Date.parse(data + 'T12:00:00Z');
+  const ontem = d(hojeMs - 3 * 3600e3 - 864e5);
+  if (data > ontem) throw erro('A data precisa ser até ontem (o Mercado Livre fecha o dia anterior às 10h).');
+  if (base - dias * 864e5 < hojeMs - 89 * 864e5) throw erro('O Mercado Ads guarda só 90 dias: escolha uma data mais recente ou um período menor.');
+  const antes = { de: d(base - dias * 864e5), ate: d(base - 864e5) };
+  const fimDepois = d(base + (dias - 1) * 864e5);
+  const depois = { de: data, ate: fimDepois < ontem ? fimDepois : ontem };
+  depois.dias = Math.round((Date.parse(depois.ate) - Date.parse(depois.de)) / 864e5) + 1;
+  antes.dias = Number(dias);
+  return { antes, depois };
+}
+// Junta, por grupo de anúncio, o Ads de cada janela (agruparAnuncios) e as vendas do produto (linhas de vendasDaConta,
+// com data, item_id, quantidade, faturamento, lucro). A venda total conta TODAS as vendas dos anúncios do grupo, com e sem
+// Ads. Função pura: testada.
+function somarAntesDepois(gruposAntes, gruposDepois, linhas, jan) {
+  const diaBR = (iso) => new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10);
+  const vazio = () => ({ unidades: 0, faturamento: 0, lucro: 0, sem_lucro: false, ads_inv: 0, ads_rec: 0, ads_un: 0 });
+  const grupos = new Map();
+  const pegar = (g) => {
+    const k = String(g.ad_group_id ?? g.itens?.[0]?.item_id);
+    if (!grupos.has(k)) grupos.set(k, { ad_group_id: g.ad_group_id, titulo: g.titulo, status: g.status, itens: new Set(), antes: vazio(), depois: vazio() });
+    const x = grupos.get(k);
+    for (const i of g.itens || []) x.itens.add(i.item_id);
+    return x;
+  };
+  for (const [lado, lista] of [['antes', gruposAntes], ['depois', gruposDepois]]) {
+    for (const g of lista || []) { const x = pegar(g); x[lado].ads_inv += g.investimento || 0; x[lado].ads_rec += g.receita || 0; x[lado].ads_un += g.unidades || 0; }
+  }
+  const doItem = new Map();
+  for (const x of grupos.values()) for (const i of x.itens) doItem.set(i, x);
+  for (const l of linhas || []) {
+    if (!l.valida) continue;
+    const x = doItem.get(l.item_id); if (!x) continue;
+    const dia = diaBR(l.data);
+    const lado = dia >= jan.antes.de && dia <= jan.antes.ate ? 'antes' : dia >= jan.depois.de && dia <= jan.depois.ate ? 'depois' : null;
+    if (!lado) continue;
+    const a = x[lado];
+    a.unidades += l.quantidade || 0; a.faturamento += l.faturamento || 0;
+    if (l.lucro == null) a.sem_lucro = true; else a.lucro += l.lucro;
+  }
+  const fim = (a, dias) => ({ unidades: a.unidades, faturamento: r2(a.faturamento), lucro: a.sem_lucro ? null : r2(a.lucro),
+    ads_inv: r2(a.ads_inv), ads_rec: r2(a.ads_rec), ads_un: a.ads_un, lucro_depois_ads: a.sem_lucro ? null : r2(a.lucro - a.ads_inv),
+    por_dia: { unidades: a.unidades / dias, faturamento: r2(a.faturamento / dias) } });
+  const lista = [...grupos.values()].map((x) => ({ ad_group_id: x.ad_group_id, titulo: x.titulo, status: x.status, itens: [...x.itens],
+    antes: fim(x.antes, jan.antes.dias), depois: fim(x.depois, jan.depois.dias) }))
+    .filter((x) => x.antes.unidades || x.depois.unidades || x.antes.ads_inv || x.depois.ads_inv)
+    .sort((a, b) => (b.depois.faturamento + b.antes.faturamento) - (a.depois.faturamento + a.antes.faturamento));
+  const total = (lado, dias) => { const t = vazio(); for (const x of grupos.values()) { const a = x[lado];
+    for (const k of ['unidades', 'faturamento', 'lucro', 'ads_inv', 'ads_rec', 'ads_un']) t[k] += a[k]; t.sem_lucro ||= a.sem_lucro; } return fim(t, dias); };
+  return { total: { antes: total('antes', jan.antes.dias), depois: total('depois', jan.depois.dias) }, grupos: lista };
+}
+
+function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaConta, aposEscrever = () => {} }) {
   const V2 = { 'api-version': '2' };
   const ler = (caminho) => ml(caminho, { headers: V2 });
   // escrita: /advertising/… e, se o ML disser que o caminho não existe, /marketplace/advertising/…
@@ -107,8 +165,9 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, aposEscre
   const idCampanha = (v) => { const n = Number(v); if (!Number.isSafeInteger(n) || n <= 0) throw erro('Campanha inválida.'); return n; };
 
   // ads/search paginado (50 por página; teto alto: a conta tem ~2.000 linhas).
+  // dias: número (os últimos N dias até ontem) ou { date_from, date_to } (AAAA-MM-DD)
   async function anunciosAds(adv, filtros = {}, dias = 30, teto = 60) {
-    const { date_from, date_to } = janelaAds(dias);
+    const { date_from, date_to } = typeof dias === 'object' ? dias : janelaAds(dias);
     const tudo = [];
     for (let p = 0; p < teto; p++) {
       const qs = new URLSearchParams({ ...filtros, date_from, date_to, metrics: METRICAS, limit: '50', offset: String(p * 50) });
@@ -203,6 +262,23 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, aposEscre
   };
 
   const rotasParam = [
+    // Antes e depois de uma data (a de uma mudança): venda total dos anúncios da campanha (com e sem Ads), lucro, e o Ads.
+    { m: 'GET', re: /^\/api\/ads\/campanhas\/(\d+)\/antes-depois$/, fn: async ([id], _b, url) => {
+      const adv = await exigeAnunciante();
+      const conta = contaOuErro();
+      const campanha = idCampanha(id);
+      const jan = janelasAntesDepois(url?.searchParams.get('data'), Number(url?.searchParams.get('dias') || 14));
+      const filtro = { 'filters[campaign_id]': String(campanha) };
+      const so = (ls) => ls.filter((a) => Number(a.campaign_id) === campanha);
+      const [la, ld] = await Promise.all([
+        anunciosAds(adv, filtro, { date_from: jan.antes.de, date_to: jan.antes.ate }),
+        anunciosAds(adv, filtro, { date_from: jan.depois.de, date_to: jan.depois.ate })]);
+      const de = new Date(`${jan.antes.de}T03:00:00.000Z`).toISOString();
+      const ate = new Date(Date.parse(`${jan.depois.ate}T03:00:00.000Z`) + 864e5).toISOString();
+      const v = await vendasDaConta(conta, { dias: Math.ceil((Date.parse(ate) - Date.parse(de)) / 864e5), de, ate }, { titulos: false });
+      return { campanha_id: campanha, janelas: jan, ...somarAntesDepois(agruparAnuncios(so(la)), agruparAnuncios(so(ld)), v.vendas, jan) };
+    } },
+
     // Os anúncios de uma campanha, com os números dos últimos `dias`.
     { m: 'GET', re: /^\/api\/ads\/campanhas\/(\d+)\/anuncios$/, fn: async ([id], _b, url) => {
       const adv = await exigeAnunciante();
@@ -263,4 +339,4 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, aposEscre
   return { rotas, rotasParam };
 }
 
-module.exports = { criar, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios };
+module.exports = { criar, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios, janelasAntesDepois, somarAntesDepois };

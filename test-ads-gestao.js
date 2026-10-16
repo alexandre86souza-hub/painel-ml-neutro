@@ -41,4 +41,25 @@ assert.throws(() => G.gruposDoCorpo(Array.from({ length: 501 }, (_, i) => i + 1)
   assert.equal(g.find((x) => x.ad_group_id === 200).roas, null, 'sem gasto: ROAS vazio, não infinito');
 }
 
+
+// antes e depois: janelas em dia de Brasília (depois vai só até ontem) e a soma por grupo, com e sem Ads
+{
+  const hoje = Date.parse('2026-10-16T13:00:00Z');
+  const j = G.janelasAntesDepois('2026-10-07', 14, hoje);
+  assert.deepEqual(j, { antes: { de: '2026-09-23', ate: '2026-10-06', dias: 14 }, depois: { de: '2026-10-07', ate: '2026-10-15', dias: 9 } });
+  assert.throws(() => G.janelasAntesDepois('2026-10-16', 14, hoje), /até ontem/);
+  assert.throws(() => G.janelasAntesDepois('2026-07-20', 14, hoje), /90 dias/);
+  assert.throws(() => G.janelasAntesDepois('2026-10-07', 10, hoje), /7, 14, 21 ou 30/);
+  const ga = [{ ad_group_id: 1, titulo: 'Ducha', status: 'active', itens: [{ item_id: 'MLB1' }], investimento: 0, receita: 0, unidades: 0 }];
+  const gd = [{ ad_group_id: 1, titulo: 'Ducha', status: 'active', itens: [{ item_id: 'MLB1' }, { item_id: 'MLB2' }], investimento: 135, receita: 526, unidades: 2 }];
+  const venda = (dia, fat, lucro, item = 'MLB1') => ({ valida: true, item_id: item, data: dia + 'T15:00:00Z', quantidade: 1, faturamento: fat, lucro });
+  const linhas = [venda('2026-10-01', 250, 87), venda('2026-10-08', 250, 87), venda('2026-10-09', 250, 87, 'MLB2'), venda('2026-10-10', 250, null, 'MLB9'),
+    { ...venda('2026-10-11', 250, 87), valida: false }];
+  const r = G.somarAntesDepois(ga, gd, linhas, j);
+  assert.deepEqual([r.total.antes.unidades, r.total.depois.unidades, r.total.depois.faturamento, r.total.depois.lucro, r.total.depois.lucro_depois_ads], [1, 2, 500, 174, 39],
+    'venda do outro item do grupo entra; item fora da campanha e cancelada não');
+  assert.equal(r.total.depois.ads_inv, 135);
+  assert.equal(r.grupos[0].itens.length, 2);
+}
+
 console.log('Ads (gestão): criar/editar campanha, ROAS 1x–35x, grupos de anúncio e agrupamento sem duplicar: ok');
