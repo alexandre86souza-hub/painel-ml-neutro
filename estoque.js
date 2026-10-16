@@ -458,7 +458,14 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       if (inicio()) await baixar({ sincronizar: false }).catch(() => null);   // saldo em dia antes do ajuste
       const saldos = D.estoqueSaldos();
       const cat = catalogo();
-      const agora = new Date().toISOString();
+      // Primeira contagem: a hora em que a prateleira foi contada (até 3 dias atrás). As vendas compradas desde então
+      // saem do saldo contado na baixa; sem ela, vale agora. Nas seguintes, não: o saldo de agora já tem as vendas.
+      let agora = new Date().toISOString();
+      if (b?.contada_em && !inicio()) {
+        const t = Date.parse(b.contada_em);
+        if (!Number.isFinite(t) || t > Date.now() + 60e3 || t < Date.now() - 3 * 864e5) throw erro('Hora da contagem inválida: entre agora e 3 dias atrás.');
+        agora = new Date(Math.min(t, Date.now())).toISOString();
+      }
       const ajustes = lista.map((c) => ({ numero: c.numero, qtd: c.contado - (saldos.get(c.numero) || 0) })).filter((a) => a.qtd);
       D.estoqueMovGravar(ajustes.map((a) => ({ data: agora, tipo: 'ajuste', numero: a.numero, qtd: a.qtd, valor_unit: cat.porNumero.get(a.numero)?.custo ?? null,
         origem: 'Contagem de estoque', ref: 'contagem', quem: quem() })));
@@ -468,6 +475,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
         D.configGravar('estoque_inicio', agora);
         D.configGravar('estoque_devol_antes', JSON.stringify(D.db.prepare("SELECT claim_id FROM devolucoes WHERE status_devolucao IN ('delivered', 'closed')").all().map((x) => x.claim_id)));
       }
+      if (primeira && agora < new Date(Date.now() - 60e3).toISOString()) await baixar({ sincronizar: false }).catch(() => null);   // vendas desde a contagem
       return { produtos: lista.length, ajustados: ajustes.length, baixa_ligada_em: primeira ? agora : null };
     },
     'PUT /api/estoque/produto': async (_u, b) => {

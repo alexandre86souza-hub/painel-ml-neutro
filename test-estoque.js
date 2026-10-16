@@ -193,9 +193,12 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.strictEqual(c.produtos.find((x) => x.numero === 407).planilha, 134, '200 − 60 − 6');
     await api('PUT', '/api/estoque/contagem', { numero: 407, contado: 130 });
     await api('PUT', '/api/estoque/contagem', { numero: 408, contado: 9 });
-    r = await api('POST', '/api/estoque/contagem/finalizar', {});
+    r = await api('POST', '/api/estoque/contagem/finalizar', { contada_em: new Date(Date.now() + 3600e3).toISOString() });
+    assert.strictEqual(r.status, 400, 'hora da contagem no futuro: recusa');
+    const contadaEm = new Date(Date.now() - 2000).toISOString();
+    r = await api('POST', '/api/estoque/contagem/finalizar', { contada_em: contadaEm });
     assert.strictEqual(r.j.produtos, 2);
-    assert.ok(r.j.baixa_ligada_em);
+    assert.strictEqual(r.j.baixa_ligada_em, contadaEm, 'a baixa começa na hora em que a prateleira foi contada');
     assert.strictEqual(D.contagemListar().length, 0);
 
     // venda do ML depois da contagem: KIT-407.408 x2 -> 407: 128, 408: 7. Full não baixa. Cancelada volta.
