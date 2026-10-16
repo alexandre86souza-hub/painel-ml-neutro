@@ -200,6 +200,15 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.strictEqual(r.j.produtos, 2);
     assert.strictEqual(r.j.baixa_ligada_em, contadaEm, 'a baixa começa na hora em que a prateleira foi contada');
     assert.strictEqual(D.contagemListar().length, 0);
+    // corrigir a hora da contagem: só mais cedo, e o ajuste da contagem vai junto
+    r = await api('PUT', '/api/estoque/inicio', { contada_em: new Date(Date.now() + 60e3).toISOString() });
+    assert.strictEqual(r.status, 400, 'mais tarde que a atual: recusa');
+    const maisCedo = new Date(Date.parse(contadaEm) - 3 * 3600e3).toISOString();
+    r = await api('PUT', '/api/estoque/inicio', { contada_em: maisCedo });
+    assert.strictEqual(r.j.inicio, maisCedo);
+    assert.strictEqual(D.configLer('estoque_inicio'), maisCedo);
+    assert.ok(D.db.prepare("SELECT COUNT(*) n FROM estoque_mov WHERE ref='contagem' AND data=?").get(maisCedo).n > 0, 'saldo inicial na hora certa');
+    assert.strictEqual((await api('GET', '/api/estoque/contagem')).j.inicio_corrigivel, true);
 
     // venda do ML depois da contagem: KIT-407.408 x2 -> 407: 128, 408: 7. Full não baixa. Cancelada volta.
     D.contaSalvar({ access_token: 'a', refresh_token: 'b', expires_in: 21600 }, { id: 111, nickname: 'LOJA_A', site_id: 'MLB' });

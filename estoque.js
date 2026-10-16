@@ -189,6 +189,10 @@ function diferencas(linhas, jaLancado, porSku) {
 // ---------- módulo ----------
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
+  // A hora da 1ª contagem pode ser corrigida para MAIS CEDO nas 24 h depois de finalizar (contagem feita às 12h e
+  // finalizada às 15h): as vendas compradas desde a hora certa saem do contado. Sem a marca (finalizada antes dela), vale o início.
+  const finalizadaEm = () => D.configLer('estoque_inicio_finalizada') || inicio();
+  const inicioCorrigivel = () => !!inicio() && Date.now() - Date.parse(finalizadaEm()) <= 864e5;
   function catalogo() {
     const extra = new Map(D.estoqueProdutos().map((p) => [p.numero, p]));
     const lista = D.catalogoListar().map((p) => ({ numero: p.numero, sku: p.sku, nome: p.nome, custo: p.custo,
@@ -438,7 +442,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const saldos = D.estoqueSaldos();
       const planilha = new Map(D.db.prepare('SELECT numero, SUM(qtd) s FROM estoque_mov WHERE historico=1 GROUP BY numero').all().map((r) => [r.numero, r.s]));
       const rasc = new Map(D.contagemListar().map((c) => [c.numero, c]));
-      return { inicio: inicio(), produtos: cat.lista.map((p) => ({ numero: p.numero, sku: p.sku, nome: p.nome, situacao: p.situacao,
+      return { inicio: inicio(), inicio_corrigivel: inicioCorrigivel(), produtos: cat.lista.map((p) => ({ numero: p.numero, sku: p.sku, nome: p.nome, situacao: p.situacao,
         fornecedor: p.fornecedor, saldo: saldos.get(p.numero) || 0, planilha: planilha.get(p.numero) ?? null,
         contado: rasc.get(p.numero)?.contado ?? null, contado_por: rasc.get(p.numero)?.quem || null })) };
     },
@@ -473,10 +477,25 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const primeira = !inicio();
       if (primeira) {
         D.configGravar('estoque_inicio', agora);
+        D.configGravar('estoque_inicio_finalizada', new Date().toISOString());
         D.configGravar('estoque_devol_antes', JSON.stringify(D.db.prepare("SELECT claim_id FROM devolucoes WHERE status_devolucao IN ('delivered', 'closed')").all().map((x) => x.claim_id)));
       }
       if (primeira && agora < new Date(Date.now() - 60e3).toISOString()) await baixar({ sincronizar: false }).catch(() => null);   // vendas desde a contagem
       return { produtos: lista.length, ajustados: ajustes.length, baixa_ligada_em: primeira ? agora : null };
+    },
+    'PUT /api/estoque/inicio': async (_u, b) => {
+      const atual = inicio();
+      if (!atual) throw erro('A primeira contagem ainda não foi finalizada.');
+      if (!inicioCorrigivel()) throw erro('A hora da contagem só pode ser corrigida nas 24 horas depois de finalizar.');
+      const t = Date.parse(b?.contada_em);
+      if (!Number.isFinite(t) || t >= Date.parse(atual) || t < Date.parse(finalizadaEm()) - 3 * 864e5) throw erro('Hora inválida: mais cedo que a atual e até 3 dias antes da contagem.');
+      const nova = new Date(t).toISOString();
+      if (!D.configLer('estoque_inicio_finalizada')) D.configGravar('estoque_inicio_finalizada', atual);
+      // o saldo inicial (ajustes da contagem) passa a valer na hora certa, antes das vendas que agora entram
+      D.db.prepare("UPDATE estoque_mov SET data=? WHERE ref='contagem' AND tipo='ajuste' AND data=?").run(nova, atual);
+      D.configGravar('estoque_inicio', nova);
+      const r = await baixar({ sincronizar: false }).catch(() => ({ lancados: 0 }));
+      return { inicio: nova, lancados: r.lancados || 0 };
     },
     'PUT /api/estoque/produto': async (_u, b) => {
       const n = Number(b?.numero);

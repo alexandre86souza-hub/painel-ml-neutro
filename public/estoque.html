@@ -432,6 +432,20 @@ async function carregarContagem(){
     ? 'Conte e digite a quantidade que está na prateleira. Ao finalizar, o painel lança o ajuste (contado − saldo do painel). O que foi digitado fica salvo até finalizar, mesmo fechando a tela.'
     : 'PRIMEIRA CONTAGEM: digite o que está na prateleira de cada produto. O que for digitado fica salvo (dá para dividir entre pessoas e dias). Ao clicar em "Finalizar contagem", esse vira o saldo inicial e a baixa automática das vendas começa NESSA hora. A coluna "Planilha" mostra o saldo da sua planilha só para comparar.';
   info.appendChild(c);
+  if(cont.inicio_corrigivel){
+    const d = el('div', 'aviso-caixa'); const ini = new Date(cont.inicio);
+    d.append(`A baixa automática começou em ${ini.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. A contagem foi feita antes? Corrigir a hora (só mais cedo; dá até 24 h depois de finalizar): `);
+    const inp = el('input'); inp.type = 'datetime-local'; inp.setAttribute('aria-label', 'Hora certa da contagem');
+    const bt = el('button', 'bt', 'Corrigir a hora'); bt.type = 'button';
+    bt.onclick = async () => {
+      if(!inp.value){ aviso('Escolha a hora em que a prateleira foi contada.'); return; }
+      const h = new Date(inp.value);
+      if(!confirm(`Corrigir a hora da contagem para ${h.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}? As vendas compradas desde então saem do estoque contado.`)) return;
+      try{ const r = await post('/api/estoque/inicio', { contada_em: h.toISOString() }, 'PUT'); aviso(`Hora corrigida. ${r.lancados} lançamento(s) de venda feitos desde a hora certa.`, 'ok'); visao = null; carregarContagem(); }
+      catch(e){ aviso(e.message); }
+    };
+    d.append(inp, ' ', bt); info.appendChild(d);
+  }
   $('cHoraRot').classList.toggle('escondido', !!cont.inicio);   // só na primeira: a hora em que a prateleira foi contada
   pintarContagem();
 }
