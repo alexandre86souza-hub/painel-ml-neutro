@@ -11,6 +11,10 @@
     : v.tipo === 'variavel' ? 'variável' : v.tipo === 'reais' ? real(v.valor) : `${numero(v.valor)}%`;
   const dh = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   const escolhidas = new Set();
+  // nome da promoção: as da Magalu às vezes vêm sem nome (só a descrição); o código fica de último recurso
+  const tituloDe = (p) => p.nome || p.descricao || (TIPO[p.tipo] ? TIPO[p.tipo] + ' da Magalu' : p.id);
+  // Desconto à Vista / Cliente Ouro: o % é o da promoção (o produto entra sem preço)
+  const pctFixo = (p) => ['percentage_discount', 'fidelity_discount'].includes(p.tipo) && p.desconto && !p.desconto.variavel && p.desconto.tipo === 'pct';
 
   const lista = (dados) => dados.promocoes_loja || [];
 
@@ -52,10 +56,10 @@
       const td0 = el('td');
       if(podeEntrar(p)){ const ck = el('input'); ck.type = 'checkbox'; ck.checked = escolhidas.has(p.id); ck.setAttribute('aria-label', 'Escolher ' + (p.nome || p.id));
         ck.onchange = () => { ck.checked ? escolhidas.add(p.id) : escolhidas.delete(p.id); barra(); }; td0.appendChild(ck); }
-      const nome = el('td'); nome.appendChild(el('b', null, p.nome || p.id));
+      const nome = el('td'); nome.appendChild(el('b', null, tituloDe(p)));   // as da Magalu às vezes vêm sem nome
       nome.appendChild(el('div', 'skus', [TIPO[p.tipo] || p.tipo_nome, p.origem === 'self_service' ? 'criada por você' : 'da Magalu', p.cupom ? 'cupom ' + p.cupom : null,
         p.escopo === 'full_catalog' ? 'todo o catálogo' : p.escopo === 'admin_choice' ? 'produtos pré-selecionados' : 'você escolhe os produtos'].filter(Boolean).join(' · ')));
-      if(p.descricao && p.descricao !== p.nome) nome.appendChild(el('div', 'skus', p.descricao));
+      if(p.descricao && p.descricao !== tituloDe(p)) nome.appendChild(el('div', 'skus', p.descricao));
       const quem = el('td', null, [p.voce && 'você ' + valorTxt(p.voce), p.magalu && (p.magalu.valor || p.magalu.variavel || p.magalu.tipo === 'variavel') && 'Magalu ' + valorTxt(p.magalu)].filter(Boolean).join(' + ') || '—');
       const per = el('td', null, `${dh(p.inicio)} a ${dh(p.fim)}`); if(p.prazo) per.appendChild(el('div', 'skus', 'entrar até ' + dh(p.prazo)));
       const sit = el('td'); sit.appendChild(p.aderiu_em ? el('span', 'chip verde', 'participando') : chip(p.situacao));
@@ -84,11 +88,11 @@
 
   async function aderir(ids, lst){
     const nomes = ids.map((id) => lst.find((p) => p.id === id)).filter(Boolean);
-    if(!confirm(`Entrar em ${ids.length} promoção(ões) da Magalu?\n\n${nomes.map((p) => `• ${p.nome}${p.voce ? ' — você investe ' + valorTxt(p.voce) : ''}`).join('\n')}\n\nAo entrar, você aceita a comissão e a coparticipação no desconto de cada campanha.`)) return;
+    if(!confirm(`Entrar em ${ids.length} promoção(ões) da Magalu?\n\n${nomes.map((p) => `• ${tituloDe(p)}${p.voce ? ' — você investe ' + valorTxt(p.voce) : ''}`).join('\n')}\n\nAo entrar, você aceita a comissão e a coparticipação no desconto de cada campanha.`)) return;
     try{
       const r = await post('/api/magalu/campanhas/aderir', { ids });
       const erros = r.resultado.filter((x) => !x.ok);
-      aviso(`Você entrou em ${numero(r.aderidas)} promoção(ões).` + (erros.length ? ' Não entrou em: ' + erros.map((x) => `${nomes.find((p) => p.id === x.id)?.nome || x.id} (${x.erro})`).join('; ') : ''), erros.length ? '' : 'ok');
+      aviso(`Você entrou em ${numero(r.aderidas)} promoção(ões).` + (erros.length ? ' Não entrou em: ' + erros.map((x) => `${(nomes.find((p) => p.id === x.id) ? tituloDe(nomes.find((p) => p.id === x.id)) : x.id)} (${x.erro})`).join('; ') : ''), erros.length ? '' : 'ok');
       escolhidas.clear(); carregar(true);
     }catch(e){ aviso('A Magalu recusou: ' + e.message); }
   }
@@ -105,16 +109,16 @@
     return { motivo: m[0] };
   }
   async function sair(p){
-    if(!confirm(`Sair da promoção "${p.nome}"?\n\nTodos os produtos perdem o desconto NA HORA e voltam ao preço normal.`)) return;
+    if(!confirm(`Sair da promoção "${tituloDe(p)}"?\n\nTodos os produtos perdem o desconto NA HORA e voltam ao preço normal.`)) return;
     const m = pedirMotivo(); if(m === null) return;
-    try{ await post('/api/magalu/campanhas/sair', { id: p.id, ...m }); aviso(`Você saiu da promoção "${p.nome}".`, 'ok'); carregar(true); }
+    try{ await post('/api/magalu/campanhas/sair', { id: p.id, ...m }); aviso(`Você saiu da promoção "${tituloDe(p)}".`, 'ok'); carregar(true); }
     catch(e){ aviso('A Magalu recusou: ' + e.message); }
   }
 
   // Produtos de uma promoção: preço promocional e limite editáveis, lucro no preço, remover e incluir anúncios
   async function produtos(p, rolar = true){
     const box = $('mgProdutos'); box.innerHTML = '';
-    box.appendChild(el('h3', null, 'Produtos — ' + (p.nome || p.id)));
+    box.appendChild(el('h3', null, 'Produtos — ' + tituloDe(p)));
     box.appendChild(el('p', 'carregando', 'Perguntando à Magalu…'));
     if(rolar) box.scrollIntoView({ behavior: 'smooth' });   // reaberto depois de salvar: fica onde está
     let r;
@@ -124,7 +128,7 @@
     const lucroDe = (x, preco) => (x.custo_unit != null && x.taxa_pct != null && preco > 0 ? preco * (1 - x.taxa_pct - r.imposto_pct / 100) - x.custo_unit - (r.embalagem_pedido || 0) : null);
     const lucroTd = (td, x, preco) => { const l = lucroDe(x, preco); td.textContent = l == null ? (x.custo_unit == null ? 'sem custo' : '—') : `${real(l)} (${pct(l / preco)})`; td.className = 'dinheiro ' + (l == null ? '' : l < 0 ? 'neg' : 'pos'); };
     box.appendChild(el('p', 'sub', `${numero(r.itens.length)} produto(s) na promoção. Lucro = preço − taxa média do SKU na Magalu (comissão, tarifa e frete) − imposto − custo − embalagem. ` +
-      (p.aderiu_em ? 'Você já participa: mudanças valem depois de confirmadas (o painel confirma sozinho ao salvar).' : 'Você ainda não participa: as mudanças entram quando você clicar Participar.')));
+      (p.aderiu_em ? 'Você já participa: mudanças valem depois de confirmadas (o painel confirma sozinho ao salvar).' : 'Você ainda não participa: inclua os anúncios aqui e DEPOIS clique Participar (a Magalu só aceita a participação com produtos incluídos).')));
     const mud = new Map(), rem = new Set();
     if(r.itens.length){
       const t = el('table'); const cab = el('tr');
@@ -157,7 +161,7 @@
     }
     async function enviar(itens){
       const baixo = itens.filter((i) => { const x = r.itens.find((y) => y.sku === i.sku) || r.anuncios.find((y) => y.sku === i.sku); const l = x && i.preco ? lucroDe(x, i.preco) : null; return l != null && l < 0; });
-      if(!confirm(`Enviar ${itens.length} produto(s) para a promoção "${p.nome}" na Magalu?` + (baixo.length ? `\n\nATENÇÃO: ${baixo.length} ficam com PREJUÍZO no preço promocional (${baixo.map((x) => x.sku).join(', ')}).` : ''))) return;
+      if(!confirm(`Enviar ${itens.length} produto(s) para a promoção "${tituloDe(p)}" na Magalu?` + (baixo.length ? `\n\nATENÇÃO: ${baixo.length} ficam com PREJUÍZO no preço promocional (${baixo.map((x) => x.sku).join(', ')}).` : ''))) return;
       res.textContent = '';
       try{
         const x = await post('/api/magalu/campanhas/skus', { id: p.id, itens });
@@ -168,7 +172,7 @@
       }catch(e){ aviso('A Magalu recusou: ' + e.message); }
     }
     async function remover(){
-      if(!confirm(`Tirar ${rem.size} produto(s) da promoção "${p.nome}"? Eles voltam ao preço normal.`)) return;
+      if(!confirm(`Tirar ${rem.size} produto(s) da promoção "${tituloDe(p)}"? Eles voltam ao preço normal.`)) return;
       const m = pedirMotivo(); if(m === null) return;
       try{
         const x = await post('/api/magalu/campanhas/skus/remover', { id: p.id, skus: [...rem], ...m });
@@ -186,6 +190,7 @@
       const busca = el('input'); busca.type = 'search'; busca.placeholder = 'Buscar por produto ou SKU'; busca.setAttribute('aria-label', 'Buscar anúncio');
       const lp = el('label', 'sub'); lp.style.cssText = 'display:flex;gap:6px;align-items:center';
       const ipct = el('input'); ipct.type = 'number'; ipct.min = '1'; ipct.max = '90'; ipct.step = '0.5'; ipct.value = p.desconto && !p.desconto.variavel && p.desconto.tipo === 'pct' ? p.desconto.valor : 10; ipct.style.width = '70px';
+      if(pctFixo(p)){ ipct.readOnly = true; ipct.title = 'Desconto definido pela promoção'; }
       lp.append('Desconto (%)', ipct);
       // filtros para escolher (somam com a busca): margem mínima no preço de hoje, palavra no título, produto do kit
       const fIn = (ph, w) => { const i = el('input'); i.placeholder = ph; i.style.cssText = `width:${w}px;font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px`; return i; };

@@ -516,6 +516,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     return { reason: code === 'other' ? { code, description } : { code } };
   };
   const centavos = (v) => Math.round(Number(v) * 100);
+  const PCT_FIXO = new Set(['percentage_discount', 'fidelity_discount']);
   // lucro de uma unidade no preço: preço − taxa média do SKU (comissão, tarifa e frete) − imposto − custo − embalagem
   const lucroNoPreco = (a, ctx, preco) => (a && a.custo_unit != null && a.taxa_pct != null && preco > 0
     ? r2(preco * (1 - a.taxa_pct - ctx.imposto_pct / 100) - a.custo_unit - (ctx.embalagem_pedido || 0)) : null);
@@ -560,7 +561,10 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const id = idPromo(url.searchParams.get('id'));
       const skus = [];
       for (let off = 0; off < 5000; off += 50) {
-        const r = await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus`, { _limit: 50, _offset: off });
+        // promoção ainda sem produto: a Magalu responde 404 "Não existe sku para esta promoção" (medido 16/10/2026) = lista vazia
+        let r;
+        try { r = await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus`, { _limit: 50, _offset: off }); }
+        catch (e) { if (e.status === 404) break; throw e; }
         const l = r.results || [];
         skus.push(...l);
         if (l.length < 50) break;
@@ -589,8 +593,13 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       if (!ids.length || ids.length > 50) throw erro('Escolha de 1 a 50 promoções.');
       const resultado = await emLotes(ids, async (id) => {
         const p = await promocao(id);
-        await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/subscriptions`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } });
-        return { id, nome: p.nome };
+        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/subscriptions`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } }); }
+        catch (e) {
+          // promoção em que a loja escolhe os produtos: a Magalu só aceita entrar com produtos já incluídos (16/10/2026)
+          if (/sem skus adicionados/i.test(e.message)) throw erro('Inclua os anúncios primeiro (botão Produtos → Incluir anúncios) e depois clique Participar.');
+          throw e;
+        }
+        return { id, nome: p.nome || p.descricao };
       });
       return { resultado, aderidas: resultado.filter((x) => x.ok).length };
     },
@@ -614,7 +623,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const canal = { id: p.canal_id || CANAL_MAGALU.id };
       const resultado = await emLotes(itens, async (x) => {
         const corpo = { channel: canal };
-        if (x.preco != null) corpo.price = { promotional: { value: centavos(x.preco), normalizer: 100, currency: 'BRL' } };
+        // Desconto à Vista / Cliente Ouro: o % é da promoção; o produto entra só com o canal (preço só no Preço Promocional)
+        if (x.preco != null && !PCT_FIXO.has(p.tipo)) corpo.price = { promotional: { value: centavos(x.preco), normalizer: 100, currency: 'BRL' } };
         if (x.limite != null) corpo.inventory = { limit: x.limite };
         const r = await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/skus/${encodeURIComponent(x.sku)}`, {}, { metodo: 'PUT', corpo });
         return { sku: x.sku, situacao: r?.status || null, desconto_pct: r?.price?.discount_percentage ?? null };
