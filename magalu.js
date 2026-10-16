@@ -254,15 +254,26 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     if (!r.ok || !j?.access_token) throw erro(`ID Magalu: ${j?.error_description || j?.error || j?.message || `HTTP ${r.status}`}`, r.status === 400 || r.status === 401 ? 401 : 502);
     return j;
   }
+  // O refresh token da Magalu vale UMA renovação (cada uma devolve outro). Duas renovações ao mesmo tempo com o mesmo
+  // refresh (Comandas a cada minuto + cópia dos pedidos + anúncios, logo depois de reiniciar o painel) derrubavam a conexão:
+  // "authorization grant is invalid…" (16/10/2026, depois de 10 reinícios por publicação). Agora: uma renovação por vez
+  // (as outras esperam a mesma) e o acesso fica guardado no banco, cifrado, para o reinício reaproveitar o que ainda vale.
   let acesso = null;   // { token, expira }
+  try { const a = JSON.parse(D.configLer('magalu_acesso') || 'null'); if (a?.token && a.expira > Date.now()) acesso = a; } catch {}
+  let renovando = null;
   async function tokenAcesso(forcar = false) {
     if (!forcar && acesso && acesso.expira - Date.now() > 60e3) return acesso.token;
-    const c = config();
-    if (!c.client_id || !c.client_secret || !c.refresh) throw erro('Conecte a loja da Magalu primeiro.', 409);
-    const t = await token({ grant_type: 'refresh_token', client_id: c.client_id, client_secret: c.client_secret, refresh_token: c.refresh }, false);
-    if (t.refresh_token) D.configGravar('magalu_refresh_token', t.refresh_token);
-    acesso = { token: t.access_token, expira: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
-    return acesso.token;
+    if (renovando) return renovando;
+    renovando = (async () => {
+      const c = config();
+      if (!c.client_id || !c.client_secret || !c.refresh) throw erro('Conecte a loja da Magalu primeiro.', 409);
+      const t = await token({ grant_type: 'refresh_token', client_id: c.client_id, client_secret: c.client_secret, refresh_token: c.refresh }, false);
+      if (t.refresh_token) D.configGravar('magalu_refresh_token', t.refresh_token);
+      acesso = { token: t.access_token, expira: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+      D.configGravar('magalu_acesso', JSON.stringify(acesso));
+      return acesso.token;
+    })().finally(() => { renovando = null; });
+    return renovando;
   }
 
   // Chamada à API do vendedor (GET; metodo/corpo só nas promoções, pelo clique da tela). 401 = renova o
@@ -835,7 +846,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const atual = config();
       if (!novo.client_secret && !atual.client_secret) throw erro('Informe o Client Secret.');
       if (atual.client_id && atual.client_id !== novo.client_id) {   // outro aplicativo: a autorização antiga não vale
-        for (const k of ['magalu_refresh_token', 'magalu_conectada_em', 'magalu_loja_nome']) D.configGravar(k, null);
+        for (const k of ['magalu_refresh_token', 'magalu_acesso', 'magalu_conectada_em', 'magalu_loja_nome']) D.configGravar(k, null);
         acesso = null;
       }
       D.configGravar('magalu_client_id', novo.client_id);
@@ -851,7 +862,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       return { url: urlAutorizacao({ clientId: c.client_id, redirect, state: novoEstadoOAuth({ magalu: true, redirect }) }) };
     },
     'POST /api/magalu/remover': async () => {
-      for (const k of ['magalu_refresh_token', 'magalu_conectada_em', 'magalu_loja_nome', 'magalu_lido_em']) D.configGravar(k, null);
+      for (const k of ['magalu_refresh_token', 'magalu_acesso', 'magalu_conectada_em', 'magalu_loja_nome', 'magalu_lido_em']) D.configGravar(k, null);
       D.magaluApagarTudo();
       acesso = null;
       return { removida: true };
@@ -899,6 +910,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       D.configGravar('magalu_refresh_token', t.refresh_token);
       D.configGravar('magalu_conectada_em', new Date().toISOString());
       acesso = { token: t.access_token, expira: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+      D.configGravar('magalu_acesso', JSON.stringify(acesso));
       const faltam = ESCOPOS.filter((s) => !String(t.scope || '').split(/\s+/).includes(s));
       D.configGravar('magalu_escopos_faltando', faltam.length && t.scope ? faltam.join(' ') : null);
       return redirecionar(res, '/magalu.html?conectado=1');
