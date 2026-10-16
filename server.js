@@ -2045,11 +2045,8 @@ const rotasParam = [
     await ml(`/items/${exigeItemId(id)}/listing_type`, { method: 'POST', body: JSON.stringify({ id: tipo }) });
     return { id, listing_type_id: tipo };
   } },
-
-  // Ads: repasse restrito a /advertising/*. Não invento caminho de campanha —
-  // a ML muda esses endpoints, e a conta aqui não tem anunciante para eu validar.
-  { m: 'GET', re: /^\/api\/ads\/(advertising\/.+)$/, fn: async ([resto]) =>
-    ml('/' + resto, { headers: { 'api-version': '2' } }) },
+  // (16/10/2026: saiu o GET /api/ads/advertising/* — repasse livre à API do ML, sem uso em tela nem no MCP;
+  // o CLAUDE.md proíbe rota HTTP de repasse. Leitura do Ads: as rotas próprias e o diagnóstico de ads-gestao.js.)
 ];
 
 // Promoções, devoluções e custos/vendas moram em arquivos próprios; as rotas entram aqui e
