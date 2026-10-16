@@ -86,10 +86,22 @@
     barra();
   }
 
+  // anúncios marcados em "Incluir anúncios" e ainda não enviados, por promoção: o Participar inclui antes (a Magalu só
+  // aceita a participação com produtos — medido 16/10/2026: marcar e clicar Participar dava "sem skus adicionados")
+  const marcados = new Map();   // id da promoção -> () => [{ sku, preco }]
   async function aderir(ids, lst){
     const nomes = ids.map((id) => lst.find((p) => p.id === id)).filter(Boolean);
-    if(!confirm(`Entrar em ${ids.length} promoção(ões) da Magalu?\n\n${nomes.map((p) => `• ${tituloDe(p)}${p.voce ? ' — você investe ' + valorTxt(p.voce) : ''}`).join('\n')}\n\nAo entrar, você aceita a comissão e a coparticipação no desconto de cada campanha.`)) return;
+    const incluir = ids.map((id) => [id, marcados.get(id)?.() || []]).filter(([, l]) => l.length);
+    const txtIncluir = incluir.length ? '\n\nAntes, inclui ' + incluir.map(([id, l]) => `${numero(l.length)} anúncio(s) marcado(s) em "${tituloDe(lst.find((p) => p.id === id) || { id })}"`).join(' e ') + '.' : '';
+    if(!confirm(`Entrar em ${ids.length} promoção(ões) da Magalu?\n\n${nomes.map((p) => `• ${tituloDe(p)}${p.voce ? ' — você investe ' + valorTxt(p.voce) : ''}`).join('\n')}${txtIncluir}\n\nAo entrar, você aceita a comissão e a coparticipação no desconto de cada campanha.`)) return;
     try{
+      for(const [id, itens] of incluir){
+        const x = await post('/api/magalu/campanhas/skus', { id, itens });
+        const erros = x.resultado.filter((y) => !y.ok);
+        if(!x.alterados){ aviso('A Magalu não aceitou os anúncios: ' + erros.map((y) => `${y.sku}: ${y.erro}`).join('; ')); return; }
+        if(erros.length) aviso(`${numero(erros.length)} anúncio(s) recusado(s): ` + erros.map((y) => `${y.sku}: ${y.erro}`).join('; '));
+        marcados.delete(id);
+      }
       const r = await post('/api/magalu/campanhas/aderir', { ids });
       const erros = r.resultado.filter((x) => !x.ok);
       aviso(`Você entrou em ${numero(r.aderidas)} promoção(ões).` + (erros.length ? ' Não entrou em: ' + erros.map((x) => `${(nomes.find((p) => p.id === x.id) ? tituloDe(nomes.find((p) => p.id === x.id)) : x.id)} (${x.erro})`).join('; ') : ''), erros.length ? '' : 'ok');
@@ -212,6 +224,7 @@
           return true;
         });
       };
+      const acTopo = el('div', 'acoes-camp'); d.appendChild(acTopo);   // os botões também em cima: a lista é longa
       const tb = el('div', 'tabela-rolagem'); d.appendChild(tb);
       const ac = el('div', 'acoes-camp'); d.appendChild(ac);
       const esc = new Set();
@@ -232,11 +245,19 @@
         }
         tb.innerHTML = ''; tb.appendChild(t);
       };
-      const bt = () => { ac.innerHTML = ''; if(!esc.size) return;
+      const itensMarcados = () => [...esc].map((s) => r.anuncios.find((a) => a.sku === s)).filter((a) => a && a.preco)
+        .map((a) => ({ sku: a.sku, preco: Math.round(a.preco * (1 - Number(ipct.value) / 100) * 100) / 100 }));
+      marcados.set(p.id, itensMarcados);
+      const bt = () => { for(const alvo of [acTopo, ac]){ alvo.innerHTML = ''; if(!esc.size) continue;
         const b = el('button', 'bt primario', `Incluir ${numero(esc.size)} anúncio(s) com ${ipct.value}% de desconto`); b.type = 'button';
-        b.onclick = () => enviar([...esc].map((s) => r.anuncios.find((a) => a.sku === s)).filter((a) => a && a.preco)
-          .map((a) => ({ sku: a.sku, preco: Math.round(a.preco * (1 - Number(ipct.value) / 100) * 100) / 100 })));
-        ac.appendChild(b); };
+        b.onclick = () => enviar(itensMarcados());
+        alvo.appendChild(b);
+        if(!p.aderiu_em){   // ainda não participa: inclui e já entra na promoção
+          const b2 = el('button', 'bt primario', `Incluir ${numero(esc.size)} e participar`); b2.type = 'button';
+          b2.onclick = () => aderir([p.id], [p]);
+          alvo.append(' ', b2);
+        }
+        alvo.append(' ', el('span', 'sub', `${numero(esc.size)} marcado(s) — ainda não enviados à Magalu`)); } };
       busca.oninput = pintar; ipct.oninput = () => { pintar(); bt(); };
       fM.oninput = fT.oninput = fP.oninput = pintar;
       bMarcar.onclick = () => { for(const a of filtrados()) esc.add(a.sku); pintar(); bt(); };
