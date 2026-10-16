@@ -11,6 +11,11 @@
     : v.tipo === 'variavel' ? 'variável' : v.tipo === 'reais' ? real(v.valor) : `${numero(v.valor)}%`;
   const dh = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   const escolhidas = new Set();
+  // erros da Magalu agrupados pelo motivo: 22 anúncios com o mesmo motivo viram uma linha ("22 anúncios: …")
+  const resumoErros = (erros) => { const m = new Map(); for(const y of erros){ const k = String(y.erro || ''); if(!m.has(k)) m.set(k, []); m.get(k).push(y.sku); }
+    return [...m].map(([e, skus]) => `${skus.length > 1 ? skus.length + ' anúncios' : skus[0]}: ${e}` + (/aguardando publica/i.test(e) ? ' Espere a situação da promoção sair de "processando" e inclua de novo.' : '')).join('\n'); };
+  // promoção que a Magalu ainda está publicando (logo depois de entrar): ela recusa incluir ou mudar produtos (medido 16/10/2026)
+  const emPublicacao = (p) => !!p.aderiu_em && ['processing', 'pending', 'awaiting_approval'].includes(p.situacao);
   // nome da promoção: as da Magalu às vezes vêm sem nome (só a descrição); o código fica de último recurso
   const tituloDe = (p) => p.nome || p.descricao || (TIPO[p.tipo] ? TIPO[p.tipo] + ' da Magalu' : p.id);
   // Desconto à Vista / Cliente Ouro: o % é o da promoção (o produto entra sem preço)
@@ -144,11 +149,14 @@
     const mud = new Map(), rem = new Set();
     if(r.itens.length){
       const t = el('table'); const cab = el('tr');
-      for(const h of ['', 'Produto', 'Preço normal', 'Preço promocional', 'Desconto', 'Quem paga', 'Lucro na promoção', 'Limite de un.', 'Situação']) cab.appendChild(el('th', null, h));
+      const ckR = el('input'); ckR.type = 'checkbox'; ckR.setAttribute('aria-label', 'Marcar todos para tirar da promoção');
+      ckR.onchange = () => { for(const c of t.querySelectorAll('input[data-tirar]')){ c.checked = ckR.checked; c.checked ? rem.add(c.dataset.tirar) : rem.delete(c.dataset.tirar); } botoes(); };
+      const thR = el('th'); thR.appendChild(ckR); cab.appendChild(thR);
+      for(const h of ['Produto', 'Preço normal', 'Preço promocional', 'Desconto', 'Quem paga', 'Lucro na promoção', 'Limite de un.', 'Situação']) cab.appendChild(el('th', null, h));
       t.appendChild(cab);
       for(const x of r.itens){
         const tr = el('tr');
-        const td0 = el('td'); const ck = el('input'); ck.type = 'checkbox'; ck.setAttribute('aria-label', 'Remover ' + x.sku); ck.onchange = () => { ck.checked ? rem.add(x.sku) : rem.delete(x.sku); botoes(); }; td0.appendChild(ck);
+        const td0 = el('td'); const ck = el('input'); ck.type = 'checkbox'; ck.dataset.tirar = x.sku; ck.setAttribute('aria-label', 'Remover ' + x.sku); ck.onchange = () => { ck.checked ? rem.add(x.sku) : rem.delete(x.sku); botoes(); }; td0.appendChild(ck);
         const ip = el('input'); ip.type = 'number'; ip.step = '0.01'; ip.min = '0.01'; ip.value = x.preco_promo != null ? x.preco_promo.toFixed(2) : ''; ip.setAttribute('aria-label', 'Preço promocional de ' + x.sku);
         const il = el('input'); il.type = 'number'; il.min = '1'; il.step = '1'; il.value = x.limite ?? ''; il.setAttribute('aria-label', 'Limite de unidades de ' + x.sku); il.style.width = '70px';
         const off = el('td'); const lu = el('td');
@@ -179,7 +187,7 @@
         const x = await post('/api/magalu/campanhas/skus', { id: p.id, itens });
         const erros = x.resultado.filter((y) => !y.ok);
         aviso(`${numero(x.alterados)} produto(s) enviados.` + (x.aplicado === true ? ' Confirmados na promoção.' : typeof x.aplicado === 'string' ? ' A confirmação falhou: ' + x.aplicado : x.participa ? '' : ' Entram quando você clicar Participar.'), erros.length ? '' : 'ok');
-        res.textContent = erros.map((y) => `${y.sku}: ${y.erro}`).join('\n');
+        res.textContent = resumoErros(erros);
         if(!erros.length){ const y = scrollY; await produtos(p, false); scrollTo(0, y); }
       }catch(e){ aviso('A Magalu recusou: ' + e.message); }
     }
@@ -190,12 +198,14 @@
         const x = await post('/api/magalu/campanhas/skus/remover', { id: p.id, skus: [...rem], ...m });
         const erros = x.resultado.filter((y) => !y.ok);
         aviso(`${numero(x.removidos)} produto(s) tirados da promoção.` + (typeof x.aplicado === 'string' ? ' A confirmação falhou: ' + x.aplicado : ''), erros.length ? '' : 'ok');
-        res.textContent = erros.map((y) => `${y.sku}: ${y.erro}`).join('\n');
+        res.textContent = resumoErros(erros);
         if(!erros.length){ const y = scrollY; await produtos(p, false); scrollTo(0, y); }
       }catch(e){ aviso('A Magalu recusou: ' + e.message); }
     }
     // incluir anúncios (promoção em que você escolhe os produtos)
-    if(p.escopo !== 'full_catalog' && r.anuncios.length){
+    if(p.escopo !== 'full_catalog' && r.anuncios.length && emPublicacao(p)){
+      box.appendChild(el('p', 'recusas', 'A Magalu ainda está publicando a sua entrada nesta promoção (situação "processando"): enquanto isso ela não aceita incluir nem mudar produtos. Volte quando a situação mudar para ativa. Nas próximas, inclua todos os anúncios antes de participar ("Incluir e participar").'));
+    }else if(p.escopo !== 'full_catalog' && r.anuncios.length){
       const d = el('details'); d.style.marginTop = '14px';
       d.appendChild(el('summary', null, `Incluir anúncios na promoção (${numero(r.anuncios.length)} ativos fora dela)`));
       const f = el('div', 'filtros');
@@ -210,8 +220,9 @@
       fM.type = 'number'; fM.setAttribute('aria-label', 'Margem mínima em %'); fT.setAttribute('aria-label', 'Palavra no título'); fP.setAttribute('aria-label', 'Produto do kit');
       const rot = (t, i, depois) => { const l = el('label', 'sub'); l.style.cssText = 'display:flex;gap:6px;align-items:center'; l.append(t, i); if(depois) l.append(depois); return l; };
       const bMarcar = el('button', 'bt pequeno', 'Marcar todos do filtro'); bMarcar.type = 'button';
+      const bDesm = el('button', 'bt pequeno', 'Desmarcar todos'); bDesm.type = 'button';
       const info = el('span', 'sub');
-      f.append(busca, lp, rot('Margem mínima', fM, '%'), rot('Título contém', fT), rot('Produto no kit', fP), bMarcar, info); d.appendChild(f);
+      f.append(busca, lp, rot('Margem mínima', fM, '%'), rot('Título contém', fT), rot('Produto no kit', fP), bMarcar, bDesm, info); d.appendChild(f);
       const nums = (t) => (String(t || '').match(/d+/g) || []).map(Number);
       const filtrados = () => {
         const q = busca.value.trim().toLowerCase(), tit = fT.value.trim().toLowerCase(), prods = nums(fP.value);
@@ -228,15 +239,22 @@
       const tb = el('div', 'tabela-rolagem'); d.appendChild(tb);
       const ac = el('div', 'acoes-camp'); d.appendChild(ac);
       const esc = new Set();
+      let pintarCab = () => {};
       const pintar = () => {
         const todosF = filtrados(); const l = todosF.slice(0, 300);
         info.textContent = `${numero(todosF.length)} anúncio(s) no filtro` + (todosF.length > l.length ? ` (mostrando ${numero(l.length)})` : '');
         const t = el('table'); const cab = el('tr');
-        for(const h of ['', 'Anúncio', 'Preço', 'Preço promocional', 'Lucro na promoção', 'Vendas 30 d']) cab.appendChild(el('th', null, h));
+        // caixa do cabeçalho: marca ou desmarca TODOS do filtro (não só os 300 mostrados)
+        const ckT = el('input'); ckT.type = 'checkbox'; ckT.setAttribute('aria-label', 'Marcar todos do filtro');
+        ckT.checked = todosF.length > 0 && todosF.every((a) => esc.has(a.sku));
+        ckT.indeterminate = !ckT.checked && todosF.some((a) => esc.has(a.sku));
+        ckT.onchange = () => { for(const a of todosF) ckT.checked ? esc.add(a.sku) : esc.delete(a.sku); pintar(); bt(); };
+        const th0 = el('th'); th0.appendChild(ckT); cab.appendChild(th0);
+        for(const h of ['Anúncio', 'Preço', 'Preço promocional', 'Lucro na promoção', 'Vendas 30 d']) cab.appendChild(el('th', null, h));
         t.appendChild(cab);
         for(const a of l){
           const tr = el('tr'); const td0 = el('td'); const ck = el('input'); ck.type = 'checkbox'; ck.checked = esc.has(a.sku); ck.setAttribute('aria-label', 'Incluir ' + a.sku);
-          ck.onchange = () => { ck.checked ? esc.add(a.sku) : esc.delete(a.sku); bt(); }; td0.appendChild(ck);
+          ck.onchange = () => { ck.checked ? esc.add(a.sku) : esc.delete(a.sku); bt(); pintarCab(); }; td0.appendChild(ck);
           const pp = a.preco ? Math.round(a.preco * (1 - Number(ipct.value) / 100) * 100) / 100 : null;
           const lu = el('td'); lucroTd(lu, a, pp);
           tr.append(td0, celulaProduto(null, a.titulo, a.sku + (a.sku_painel ? ' · ' + a.sku_painel : '') + (a.estoque != null ? ` · estoque ${numero(a.estoque)}` : '')),
@@ -244,6 +262,7 @@
           t.appendChild(tr);
         }
         tb.innerHTML = ''; tb.appendChild(t);
+        pintarCab = () => { ckT.checked = todosF.length > 0 && todosF.every((a) => esc.has(a.sku)); ckT.indeterminate = !ckT.checked && todosF.some((a) => esc.has(a.sku)); };
       };
       const itensMarcados = () => [...esc].map((s) => r.anuncios.find((a) => a.sku === s)).filter((a) => a && a.preco)
         .map((a) => ({ sku: a.sku, preco: Math.round(a.preco * (1 - Number(ipct.value) / 100) * 100) / 100 }));
@@ -261,6 +280,7 @@
       busca.oninput = pintar; ipct.oninput = () => { pintar(); bt(); };
       fM.oninput = fT.oninput = fP.oninput = pintar;
       bMarcar.onclick = () => { for(const a of filtrados()) esc.add(a.sku); pintar(); bt(); };
+      bDesm.onclick = () => { esc.clear(); pintar(); bt(); };
       d.ontoggle = () => { if(d.open && !tb.firstChild) pintar(); };
       box.appendChild(d);
     }
