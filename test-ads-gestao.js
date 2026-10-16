@@ -60,6 +60,18 @@ assert.throws(() => G.gruposDoCorpo(Array.from({ length: 501 }, (_, i) => i + 1)
     'venda do outro item do grupo entra; item fora da campanha e cancelada não');
   assert.equal(r.total.depois.ads_inv, 135);
   assert.equal(r.grupos[0].itens.length, 2);
+  assert.equal(r.sem_grandes, null, 'sem pedido grande, sem total ajustado');
+}
+// pedido grande: 7 braços de teto num pedido só (caso real de 23/09) — marcado e tirado do total ajustado
+{
+  const j = G.janelasAntesDepois('2026-10-01', 14, Date.parse('2026-10-16T13:00:00Z'));
+  const g = [{ ad_group_id: 9, titulo: 'Braço de teto', status: 'active', itens: [{ item_id: 'MLB705658750' }], investimento: 2, receita: 0, unidades: 0 }];
+  const l = (pedido, dia, q, fat, lucro) => ({ valida: true, pedido, item_id: 'MLB705658750', data: dia + 'T15:00:00Z', quantidade: q, faturamento: fat, lucro });
+  const r = G.somarAntesDepois(g, g, [l(1, '2026-09-23', 7, 385.98, 125), l(2, '2026-09-25', 1, 58, 15), l(3, '2026-10-05', 1, 58, 15)], j);
+  assert.deepEqual(r.grupos[0].antes.pedido_grande, { pedido: 1, unidades: 7, faturamento: 385.98 });
+  assert.equal(r.grupos[0].depois.pedido_grande, null);
+  assert.deepEqual([r.sem_grandes.antes.unidades, r.sem_grandes.antes.lucro, r.total.antes.unidades], [1, 15, 8]);
+  assert.equal(r.pedidos_grandes.length, 1);
 }
 
 console.log('Ads (gestão): criar/editar campanha, ROAS 1x–35x, grupos de anúncio e agrupamento sem duplicar: ok');

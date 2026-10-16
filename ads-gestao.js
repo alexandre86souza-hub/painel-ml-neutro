@@ -110,7 +110,7 @@ function janelasAntesDepois(data, dias, hojeMs = Date.now()) {
 // Ads. Função pura: testada.
 function somarAntesDepois(gruposAntes, gruposDepois, linhas, jan) {
   const diaBR = (iso) => new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10);
-  const vazio = () => ({ unidades: 0, faturamento: 0, lucro: 0, sem_lucro: false, ads_inv: 0, ads_rec: 0, ads_un: 0 });
+  const vazio = () => ({ unidades: 0, faturamento: 0, lucro: 0, sem_lucro: false, ads_inv: 0, ads_rec: 0, ads_un: 0, pedidos: new Map() });
   const grupos = new Map();
   const pegar = (g) => {
     const k = String(g.ad_group_id ?? g.itens?.[0]?.item_id);
@@ -133,17 +133,31 @@ function somarAntesDepois(gruposAntes, gruposDepois, linhas, jan) {
     const a = x[lado];
     a.unidades += l.quantidade || 0; a.faturamento += l.faturamento || 0;
     if (l.lucro == null) a.sem_lucro = true; else a.lucro += l.lucro;
+    const p = a.pedidos.get(l.pedido) || { pedido: l.pedido, unidades: 0, faturamento: 0, lucro: 0 };
+    p.unidades += l.quantidade || 0; p.faturamento += l.faturamento || 0; p.lucro += l.lucro || 0;
+    a.pedidos.set(l.pedido, p);
   }
-  const fim = (a, dias) => ({ unidades: a.unidades, faturamento: r2(a.faturamento), lucro: a.sem_lucro ? null : r2(a.lucro),
+  // Pedido grande: UM pedido com 3+ unidades e mais da metade das unidades do período (medido 16/10/2026: 7 braços de teto
+  // num pedido só fizeram o Portfólio 01 parecer cair 35 -> 29 un). Ele distorce a comparação; o total sem ele vem junto.
+  const grandeDe = (a) => { let m = null; for (const p of a.pedidos.values()) if (!m || p.unidades > m.unidades) m = p;
+    return m && m.unidades >= 3 && m.unidades > a.unidades / 2 ? m : null; };
+  const fim = (a, dias, grande = grandeDe(a)) => ({ unidades: a.unidades, faturamento: r2(a.faturamento), lucro: a.sem_lucro ? null : r2(a.lucro),
+    pedido_grande: grande ? { pedido: grande.pedido, unidades: grande.unidades, faturamento: r2(grande.faturamento) } : null,
     ads_inv: r2(a.ads_inv), ads_rec: r2(a.ads_rec), ads_un: a.ads_un, lucro_depois_ads: a.sem_lucro ? null : r2(a.lucro - a.ads_inv),
     por_dia: { unidades: a.unidades / dias, faturamento: r2(a.faturamento / dias) } });
   const lista = [...grupos.values()].map((x) => ({ ad_group_id: x.ad_group_id, titulo: x.titulo, status: x.status, itens: [...x.itens],
     antes: fim(x.antes, jan.antes.dias), depois: fim(x.depois, jan.depois.dias) }))
     .filter((x) => x.antes.unidades || x.depois.unidades || x.antes.ads_inv || x.depois.ads_inv)
     .sort((a, b) => (b.depois.faturamento + b.antes.faturamento) - (a.depois.faturamento + a.antes.faturamento));
-  const total = (lado, dias) => { const t = vazio(); for (const x of grupos.values()) { const a = x[lado];
-    for (const k of ['unidades', 'faturamento', 'lucro', 'ads_inv', 'ads_rec', 'ads_un']) t[k] += a[k]; t.sem_lucro ||= a.sem_lucro; } return fim(t, dias); };
-  return { total: { antes: total('antes', jan.antes.dias), depois: total('depois', jan.depois.dias) }, grupos: lista };
+  // total da campanha; sem_grandes = o mesmo tirando os pedidos grandes de cada anúncio
+  const total = (lado, dias, tirar) => { const t = vazio(); for (const x of grupos.values()) { const a = x[lado], g = tirar ? grandeDe(a) : null;
+    for (const k of ['unidades', 'faturamento', 'lucro', 'ads_inv', 'ads_rec', 'ads_un']) t[k] += a[k];
+    if (g) { t.unidades -= g.unidades; t.faturamento -= g.faturamento; t.lucro -= g.lucro; }
+    t.sem_lucro ||= a.sem_lucro; } return fim(t, dias, null); };
+  const grandes = lista.flatMap((x) => ['antes', 'depois'].filter((l) => x[l].pedido_grande).map((l) => ({ lado: l, titulo: x.titulo, ...x[l].pedido_grande })));
+  return { total: { antes: total('antes', jan.antes.dias), depois: total('depois', jan.depois.dias) },
+    sem_grandes: grandes.length ? { antes: total('antes', jan.antes.dias, true), depois: total('depois', jan.depois.dias, true) } : null,
+    pedidos_grandes: grandes, grupos: lista };
 }
 
 function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaConta, aposEscrever = () => {} }) {

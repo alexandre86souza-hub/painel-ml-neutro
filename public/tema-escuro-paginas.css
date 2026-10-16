@@ -10,6 +10,7 @@ html[data-tema="escuro"][data-pagina="ads"] .filtro-campanha select{background:r
 html[data-tema="escuro"][data-pagina="ads"] #gestaoMsg{background:hsla(214,90%,60%,.14);color:hsl(224,64%,72%);border:1px solid hsla(213,90%,60%,.35)}
 html[data-tema="escuro"][data-pagina="ads"] td.mais{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="ads"] td.menos{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="ads"] p.aviso-grande{background:hsla(48,90%,60%,.14);border:1px solid hsla(48,90%,60%,.35);color:hsl(23,83%,72%)}
 /* amazon-ads.html */
 html[data-tema="escuro"][data-pagina="amazon-ads"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="amazon-ads"] .form input,

@@ -281,11 +281,19 @@
     const ganho = A.lucro_depois_ads != null && D.lucro_depois_ads != null ? D.lucro_depois_ads / j.depois.dias - A.lucro_depois_ads / j.antes.dias : null;
     if (ganho != null) box.appendChild(el('p', 'sub', `Lucro depois do Ads por dia: ${real(A.lucro_depois_ads / j.antes.dias)} antes e ${real(D.lucro_depois_ads / j.depois.dias)} depois (${ganho >= 0 ? '+' : '−'}${real(Math.abs(ganho))} por dia). `
       + 'Lembre que preço, estoque, promoções e a época do ano também mudam a venda: a comparação mostra o que aconteceu, não prova sozinha que foi o Ads.'));
+    // pedido grande (um pedido com 3+ un. e mais da metade das unidades do anúncio no período): distorce a comparação
+    if (r.pedidos_grandes?.length) {
+      const lista = r.pedidos_grandes.slice(0, 5).map((p) => `${numero(p.unidades)} un. num pedido só em "${(p.titulo || '').slice(0, 40)}" (${p.lado}, ${real(p.faturamento)})`).join('; ');
+      const SA = r.sem_grandes.antes, SD = r.sem_grandes.depois;
+      box.appendChild(el('p', 'aviso-grande', `Atenção, pedido grande: ${lista}${r.pedidos_grandes.length > 5 ? '…' : ''}. Um pedido assim distorce a comparação. `
+        + `Sem esses pedidos: unidades ${numero(SA.unidades)} → ${numero(SD.unidades)}; lucro depois do Ads ${real(SA.lucro_depois_ads)} → ${real(SD.lucro_depois_ads)}.`));
+    }
+    const celUn = (x) => { const td = el('td', null, numero(x.unidades)); if (x.pedido_grande) { td.appendChild(el('span', 'chip amarelo', ` 1 pedido de ${x.pedido_grande.unidades}`)); td.title = 'Um pedido só tem mais da metade dessas unidades'; } return td; };
     if (r.grupos.length > 1) {
       box.appendChild(el('h3', null, 'Por anúncio'));
       const g = el('div', 'tabela-rolagem'); g.id = 'adGrupos'; box.appendChild(g);
       tabela('adGrupos', ['Anúncio', 'Un. antes', 'Un. depois', 'Venda antes', 'Venda depois', 'Ads depois (gasto / venda)', 'Lucro depois do Ads: antes → depois'],
-        r.grupos.slice(0, 40).map((x) => [el('td', 'esq', (x.titulo || x.itens[0] || '').slice(0, 60) + (x.status === 'hold' ? ' (fora do ar)' : '')), numero(x.antes.unidades), numero(x.depois.unidades),
+        r.grupos.slice(0, 40).map((x) => [el('td', 'esq', (x.titulo || x.itens[0] || '').slice(0, 60) + (x.status === 'hold' ? ' (fora do ar)' : '')), celUn(x.antes), celUn(x.depois),
           real(x.antes.faturamento), real(x.depois.faturamento), `${real(x.depois.ads_inv)} / ${real(x.depois.ads_rec)}`,
           `${real(x.antes.lucro_depois_ads)} → ${real(x.depois.lucro_depois_ads)}`]));
       if (r.grupos.length > 40) box.appendChild(el('p', 'sub', `Mostrando 40 de ${numero(r.grupos.length)} anúncios (os que mais venderam).`));
