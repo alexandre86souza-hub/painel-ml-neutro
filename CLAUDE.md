@@ -164,6 +164,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
 - Várias contas: a tela "Todas as contas" (`public/geral.html`) usa `GET /api/contas/resumo?dias=`
   (`custos.js#resumoDasContas`): roda as vendas de cada conta conectada (hoje e o período), soma
   e junta os produtos por SKU. O Dashboard (`/`) continua sendo só da conta selecionada.
+  Devoluções do ML de cada conta: `GET /api/contas/devolucoes?dias=` (a rota da tela Devoluções em `CTX.comConta`, só
+  totais, fora do MCP) -> a margem "depois das devoluções do ML" no cartão (mês do calendário: sem, a tela só tem dias).
   A tabela de produtos (`produtos_custo`) é uma só para todas as contas.
   Período: `?dias=` ou `?mes=atual|anterior` (mês do calendário em Brasília, `canais.js#janelaDoMes`) em
   `/api/contas/resumo` e `/api/{amazon,shopee,leroy,magalu}/vendas`; no mês passado o "hoje" é lido à parte.

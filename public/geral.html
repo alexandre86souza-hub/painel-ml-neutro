@@ -142,7 +142,7 @@
 
   <section class="bloco">
     <h2>Para onde vai o dinheiro, por conta</h2>
-    <p class="sub">Do faturamento à margem de contribuição no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS, as devoluções do ML e os custos fixos (estão no Dashboard de cada conta).</p>
+    <p class="sub">Do faturamento à margem de contribuição no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS e os custos fixos (estão no Dashboard de cada conta); as devoluções do ML aparecem no cartão da margem.</p>
     <div class="tabela-rolagem" id="contasTabela"></div>
   </section>
 
@@ -166,7 +166,8 @@
 <script>
 // período: 7…90 dias ou o mês do calendário ("atual" / "anterior"); no mês, dias = dias corridos da janela (média por dia)
 let per = '30', dias = 30, rotuloMes = '', geracao = 0;
-let atencao = null;   // /api/contas/atencao: estoque e fila de comandas
+let atencao = null;
+let devolML = null;   // /api/contas/devolucoes: resultado das devoluções do ML de cada conta (períodos de dias)   // /api/contas/atencao: estoque e fila de comandas
 const lerAtencao = api('/api/contas/atencao').then((a) => { atencao = a; if(ultimo) pintarDestaques(ultimo); }).catch(() => { atencao = {}; });
 let ultimo = null;
 const ehMes = () => per === 'atual' || per === 'anterior';
@@ -484,6 +485,9 @@ async function carregar(){
   const leroy = api('/api/leroy/config').catch(() => ({}));
   const magalu = api('/api/magalu/config').catch(() => ({}));
   const lojas = api('/api/shopee/config').then((c) => c.lojas || []).catch(() => []);
+  // devoluções do ML (a venda devolvida sai das vendas; o custo dela vem daqui). Mês do calendário: a tela Devoluções só tem dias.
+  devolML = null;
+  if(!ehMes()) api(`/api/contas/devolucoes?dias=${per}`).then((d) => { if(minha === geracao){ devolML = d; notaDevolucoes(); } }).catch(() => {});
   try{
     const r = await api(`/api/contas/resumo?${qsPer()}`);
     if(ehMes()){ dias = r.dias; rotuloMes = r.rotulo || ''; }
@@ -524,6 +528,18 @@ async function carregar(){
   }catch(e){ if(minha === geracao){ erroTela(e.message); $('cartoes').innerHTML = ''; } }
 }
 
+// Margem de contribuição depois das devoluções do ML (créditos do ML − custo das devoluções, como no Dashboard).
+function notaDevolucoes(){
+  const c = $('cMargem'); if(!c || !devolML || !ultimo) return;
+  c.querySelector('.devol')?.remove();
+  const p = ultimo.total.periodo, d = devolML.resultado || 0;
+  const valor = p.lucro + d, base = p.margem > 0 ? p.lucro / p.margem : p.faturamento;
+  const erros = devolML.contas.filter((x) => x.erro).length;
+  const n = el('p', 'nota devol', `depois das devoluções do ML (${d < 0 ? '− ' : '+ '}${real(Math.abs(d))}, ${numero(devolML.total)} em ${devolML.dias} dias): ${real(valor)}`
+    + (base > 0 ? ` (${pct(valor / base)})` : '') + (erros ? ` · ${erros} conta(s) sem leitura` : ''));
+  n.title = 'Créditos do ML menos o custo das devoluções e reclamações (tela Devoluções de cada conta). Shopee, Amazon, Leroy e Magalu já descontam o reembolso na própria venda.';
+  c.appendChild(n);
+}
 function pintar(r, temAmazon){
   {
     const vistos = {};
@@ -538,12 +554,13 @@ function pintar(r, temAmazon){
     box.append(
       cartao('Faturamento de hoje', real(t.hoje.faturamento), `${numero(t.hoje.pedidos)} pedido(s) · ${numero(t.hoje.unidades)} un.`),
       cartao(`Faturamento ${longo()}`, real(p.faturamento), `${numero(p.pedidos)} pedido(s) · ${numero(p.unidades)} un.`),
-      cartao(`Margem de contribuição ${longo()}`, real(p.lucro), `${pct(p.margem)} das vendas · antes do ADS e das devoluções` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
+      cartao(`Margem de contribuição ${longo()}`, real(p.lucro), `${pct(p.margem)} das vendas · antes do ADS e das devoluções do ML` + (p.cobertura != null && p.cobertura < 0.995 ? ` · ${pct(p.cobertura, 0)} das vendas têm custo` : ''), true),
       cartao('Ticket médio', real(p.pedidos ? p.faturamento / p.pedidos : null), `média de ${real(p.faturamento / dias)} por dia`),
       cartao('Tarifas e frete', real(p.tarifa + p.frete), p.faturamento ? `${pct((p.tarifa + p.frete) / p.faturamento)} do faturamento` : ''),
     );
+    box.children[2].id = 'cMargem';
     faisca(box.children[1], r);
-    ultimo = r; pintarDestaques(r);
+    ultimo = r; pintarDestaques(r); notaDevolucoes();
     pintarContas(r, cor); pintarTabela(r, cor); pintarGrafico(r, cor); pintarProdutos(r, cor);
     if(!temAmazon) box.appendChild(el('p', 'carregando', 'Somando Amazon e Shopee…'));
   }

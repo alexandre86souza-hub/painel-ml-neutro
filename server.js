@@ -2227,6 +2227,22 @@ routes['GET /api/contas/atencao'] = async () => {
     limite(comandasMod.resumoFila(), 9000)]);
   return { estoque, comandas };
 };
+// Devoluções do ML de cada conta (o mesmo cálculo da tela Devoluções, uma conta de cada vez), para a margem de
+// "Todas as contas" depois das devoluções: a venda devolvida no ML vira cancelada e sai das vendas, e o custo dela só
+// existe aqui. Nos outros canais o reembolso já está na venda. Só os totais (sem cliente). Fora do MCP.
+routes['GET /api/contas/devolucoes'] = async (url) => {
+  const dias = Number(url.searchParams.get('dias')) || 30;
+  const contas = [];
+  for (const c of D.contasListar()) {
+    try {
+      const r = await CTX.comConta(c.ml_user_id, () => routes['GET /api/devolucoes'](new URL(`/api/devolucoes?dias=${dias}`, 'http://painel')));
+      contas.push({ ml_user_id: c.ml_user_id, dias: r.dias, total: r.resumo.total, resultado: r.resumo.resultado });
+    } catch (e) { contas.push({ ml_user_id: c.ml_user_id, erro: e.message }); }
+  }
+  const boas = contas.filter((c) => !c.erro);
+  return { dias: boas[0]?.dias ?? dias, contas, total: boas.reduce((s, c) => s + c.total, 0),
+    resultado: Math.round(boas.reduce((s, c) => s + (c.resultado || 0), 0) * 100) / 100 };
+};
 // Trocar um produto no SKU dos anúncios da Shopee (no anúncio) e da Amazon, Leroy e Magalu (no painel).
 {
   const t = require('./trocas-sku.js').criar({ D, shopee: shopeeMod, amazon: amazonMod, leroy: leroyMod, magalu: magaluMod,

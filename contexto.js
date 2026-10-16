@@ -9,5 +9,7 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 const als = new AsyncLocalStorage();
 const rodar = (fn) => als.run({}, fn);
 const atual = () => als.getStore() || null;
+// Roda fn olhando OUTRA conta do ML (só neste trecho; a escolha da sessão não muda): "Todas as contas".
+const comConta = (id, fn) => als.run({ ...(atual() || {}), conta: String(id) }, fn);
 
-module.exports = { rodar, atual };
+module.exports = { rodar, atual, comConta };
