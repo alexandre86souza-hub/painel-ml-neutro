@@ -301,6 +301,31 @@
   }
   $('adComparar').onclick = comparar;
 
+  // ---------- leilão (só leitura) ----------
+  $('btLeilao').onclick = async () => {
+    const box = $('leilaoCampanhas'); box.innerHTML = '';
+    box.appendChild(el('p', 'carregando', 'Perguntando ao Mercado Livre o leilão de cada campanha ativa…'));
+    let r;
+    try { r = await api('/api/ads/campanhas/leilao'); } catch (e) { box.innerHTML = ''; box.appendChild(el('p', 'vazio', e.message)); return; }
+    box.innerHTML = '';
+    const p = (v) => (v == null ? '—' : pct(v, 0));
+    const t = el('table'); const cab = el('tr');
+    for (const h of ['Campanha', 'ROAS objetivo', 'Aparece', 'Perde por verba', 'Perde por posição', 'ACOS / referência', 'Leitura']) cab.appendChild(el('th', null, h));
+    const th = el('thead'); th.appendChild(cab); t.appendChild(th);
+    const tb = el('tbody');
+    for (const c of r.campanhas) {
+      const tr = el('tr');
+      if (c.erro) { tr.append(el('td', 'esq', c.nome), el('td', 'esq', 'não consegui ler: ' + c.erro)); tr.lastChild.colSpan = 6; tb.appendChild(tr); continue; }
+      const forte = (v) => { const td = el('td', null, p(v)); if (v != null && v >= 0.15) td.style.fontWeight = '700'; return td; };
+      tr.append(el('td', 'esq', c.nome), el('td', null, vezes(c.roas_alvo)), el('td', null, p(c.aparece)), forte(c.perde_verba), forte(c.perde_posicao),
+        el('td', null, (c.acos == null ? '—' : c.acos.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%') + ' / ' + (c.acos_referencia == null ? '—' : c.acos_referencia.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%')),
+        el('td', 'esq', c.leitura));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); box.appendChild(t);
+    box.appendChild(el('p', 'sub', `De ${data(r.date_from)} a ${data(r.date_to)}. Perder por verba e por posição pedem ações opostas: mais orçamento não resolve perda por posição, e baixar o ROAS não resolve perda por verba.`));
+  };
+
   window.AdsGestao = { montar, antesDepois };
   $('btNovaCampanha').onclick = () => abrirCampanha(null);
   // o diagnóstico (só leitura) fica num link discreto: mostra se os caminhos da API respondem nesta conta

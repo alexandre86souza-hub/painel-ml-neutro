@@ -74,4 +74,14 @@ assert.throws(() => G.gruposDoCorpo(Array.from({ length: 501 }, (_, i) => i + 1)
   assert.equal(r.pedidos_grandes.length, 1);
 }
 
+// leilão: lê a exposição e diz por que perde (verba x posição); ROAS de referência = 100 ÷ ACOS de referência
+{
+  const v = G.leilaoDe({ cost: 100, total_amount: 2000, impression_share: 0.55, lost_impression_share_by_budget: 0.35, lost_impression_share_by_ad_rank: 0.10, acos_benchmark: 8 });
+  assert.deepEqual([v.aparece, v.perde_verba, v.acos, v.roas_referencia], [0.55, 0.35, 5, 12.5]);
+  assert.match(v.leitura, /VERBA/);
+  assert.match(G.leilaoDe({ impression_share: 0.4, lost_impression_share_by_budget: 0.05, lost_impression_share_by_ad_rank: 0.55 }).leitura, /POSIÇÃO/);
+  assert.match(G.leilaoDe({ impression_share: 0.92, lost_impression_share_by_budget: 0.03, lost_impression_share_by_ad_rank: 0.05 }).leitura, /quase todas/);
+  assert.equal(G.leilaoDe({}).aparece, null);
+}
+
 console.log('Ads (gestão): criar/editar campanha, ROAS 1x–35x, grupos de anúncio e agrupamento sem duplicar: ok');

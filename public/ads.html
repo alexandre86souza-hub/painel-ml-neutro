@@ -93,6 +93,12 @@
     <div id="gestaoMsg" role="status" aria-live="polite"></div>
     <div class="tabela-rolagem" id="gestaoCampanhas"><p class="carregando">Carregando…</p></div>
   </section>
+  <section class="bloco">
+    <div class="topo-gestao"><h2>Leilão: em quantas buscas as campanhas aparecem</h2>
+      <button type="button" class="bt" id="btLeilao">Ler o leilão (30 dias)</button></div>
+    <p class="sub">"Aparece" = das vezes em que o anúncio podia aparecer, em quantas apareceu. O resto é perdido por <b>verba</b> (o orçamento acaba: mais orçamento traria mais exposição) ou por <b>posição</b> (o lance que o ROAS objetivo permite é baixo, ou o anúncio é menos competitivo: baixar o ROAS ou melhorar o anúncio). O ACOS de referência é o praticado por quem vai bem na mesma disputa.</p>
+    <div class="tabela-rolagem" id="leilaoCampanhas"></div>
+  </section>
   <dialog id="dlgCampanha" class="gestao" aria-label="Campanha"></dialog>
   <dialog id="dlgAnuncios" class="gestao" aria-label="Anúncios da campanha"></dialog>
 
@@ -320,7 +326,7 @@ $('selCampanha').onchange = () => {
 carregar();
 carregarComparativo();
 </script>
-<script src="/ads-gestao.js?v=3"></script>
+<script src="/ads-gestao.js?v=4"></script>
 <script src="/sino.js?v=4" defer></script>
 </body>
 </html>

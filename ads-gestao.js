@@ -160,6 +160,24 @@ function somarAntesDepois(gruposAntes, gruposDepois, linhas, jan) {
     pedidos_grandes: grandes, grupos: lista };
 }
 
+// Leilão de uma campanha (detalhe da campanha com as métricas de exposição, só lá existem — referência medida em 25/07/2026):
+// aparece = impression_share; perde por verba / por posição (somam 1 com o aparece); acos_benchmark = ACOS de quem vai bem
+// na mesma disputa. Leitura em palavras para o vendedor (não é ação: o Ads da AMG é da agência). Função pura: testada.
+function leilaoDe(m = {}) {
+  const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const aparece = num(m.impression_share), verba = num(m.lost_impression_share_by_budget), posicao = num(m.lost_impression_share_by_ad_rank);
+  const inv = num(m.cost) || 0, rec = num(m.total_amount) || 0;
+  const acos = rec > 0 ? inv / rec * 100 : null;
+  const bench = num(m.acos_benchmark);
+  let leitura = null;
+  if (aparece == null) leitura = 'sem dado de leilão no período';
+  else if (verba != null && verba >= 0.15 && verba >= (posicao || 0)) leitura = 'perde exposição por VERBA: o orçamento acaba antes do dia';
+  else if (posicao != null && posicao >= 0.15) leitura = 'perde exposição por POSIÇÃO: lance baixo para o ROAS pedido ou anúncio menos competitivo';
+  else leitura = 'aparece em quase todas as buscas que pode';
+  return { aparece, perde_verba: verba, perde_posicao: posicao, topo: num(m.top_impression_share), acos: acos == null ? null : r2(acos),
+    acos_referencia: bench, roas_referencia: bench > 0 ? r2(100 / bench) : null, investimento: r2(inv), receita: r2(rec), leitura };
+}
+
 function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaConta, aposEscrever = () => {} }) {
   const V2 = { 'api-version': '2' };
   const ler = (caminho) => ml(caminho, { headers: V2 });
@@ -208,7 +226,7 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
   }
 
   // Todos os anúncios do anunciante (para escolher quais colocar): guardado 10 min por conta.
-  let cacheTodos = null;
+  let cacheTodos = null, cacheLeilao = null;
   async function todosAnuncios(adv, recarregar) {
     const conta = contaOuErro().ml_user_id;
     if (!recarregar && cacheTodos?.conta === conta && Date.now() - cacheTodos.em < 10 * 60e3) return cacheTodos.dados;
@@ -230,6 +248,28 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
 
   const rotas = {
     // Diagnóstico (só leitura, sem valores de dinheiro): os caminhos e filtros respondem nesta conta?
+    // Leilão das campanhas (30 dias): uma chamada por campanha ativa, guardada 30 min por conta.
+    'GET /api/ads/campanhas/leilao': async (url) => {
+      const adv = await exigeAnunciante();
+      const conta = contaOuErro().ml_user_id;
+      if (cacheLeilao?.conta === conta && Date.now() - cacheLeilao.em < 30 * 60e3 && url?.searchParams.get('recarregar') !== '1') return cacheLeilao.dados;
+      const { date_from, date_to } = janelaAds(30);
+      const metrics = 'cost,total_amount,impression_share,top_impression_share,lost_impression_share_by_budget,lost_impression_share_by_ad_rank,acos_benchmark';
+      const camps = (await campanhas(adv)).filter((c) => c.status === 'active');
+      const lista = [];
+      for (let i = 0; i < camps.length; i += 4) {
+        lista.push(...await Promise.all(camps.slice(i, i + 4).map(async (c) => {
+          try {
+            const r = await ler(`/advertising/${site()}/product_ads/campaigns/${c.id}?${new URLSearchParams({ date_from, date_to, metrics })}`);
+            return { id: c.id, nome: c.name, roas_alvo: c.roas_target ?? null, orcamento: c.budget ?? null, ...leilaoDe(r.metrics || r) };
+          } catch (e) { return { id: c.id, nome: c.name, erro: e.message }; }
+        })));
+      }
+      const dados = { date_from, date_to, campanhas: lista.sort((a, b) => (b.investimento || 0) - (a.investimento || 0)) };
+      cacheLeilao = { conta, em: Date.now(), dados };
+      return dados;
+    },
+
     'GET /api/ads/gestao/diagnostico': async () => {
       const adv = await exigeAnunciante();
       const camps = await campanhas(adv);
@@ -353,4 +393,4 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
   return { rotas, rotasParam };
 }
 
-module.exports = { criar, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios, janelasAntesDepois, somarAntesDepois };
+module.exports = { criar, leilaoDe, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios, janelasAntesDepois, somarAntesDepois };
