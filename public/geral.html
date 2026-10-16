@@ -142,7 +142,7 @@
 
   <section class="bloco">
     <h2>Para onde vai o dinheiro, por conta</h2>
-    <p class="sub">Do faturamento à margem de contribuição no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS e os custos fixos (estão no Dashboard de cada conta); as devoluções do ML aparecem no cartão da margem.</p>
+    <p class="sub">Do faturamento à margem de contribuição no período: tarifas do Mercado Livre e da Amazon, frete, custo dos produtos, embalagem e impostos. Ainda sem o ADS e os custos fixos (estão no Dashboard de cada conta); as devoluções do ML aparecem no cartão da margem. Na Amazon o faturamento inclui o frete pago pelo cliente (a Amazon não separa o desconto de frete); o lucro não muda.</p>
     <div class="tabela-rolagem" id="contasTabela"></div>
   </section>
 
@@ -323,7 +323,9 @@ function cartaoConta(c, cor, total){
   const p = c.periodo, dl = el('dl');
   const bloco = (rot, valor, nota, cls) => { const d = el('div'); const dd = el('dd', cls || null, valor); if(nota) dd.appendChild(nota instanceof Node ? nota : el('small', null, nota)); d.append(el('dt', null, rot), dd); dl.appendChild(d); };
   bloco('Hoje', real(c.hoje.faturamento), `${numero(c.hoje.pedidos)} pedido(s)`);
-  bloco(`Faturamento ${curto()}`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.`);
+  // Amazon: o financeiro mistura o desconto de frete com o do produto, então o frete pago pelo cliente fica no faturamento
+  // (e sai no frete: o lucro não muda). Nos outros canais ele não entra.
+  bloco(`Faturamento ${curto()}`, real(p.faturamento), `${numero(p.pedidos)} pedidos · ${numero(p.unidades)} un.` + (c.amazon ? ' · inclui o frete pago pelo cliente' : ''));
   const notaLucro = el('small'); notaLucro.append('margem ', el('span', 'chip-m' + (p.margem < 0 ? ' neg' : ''), pct(p.margem)));
   if(c.sem_custo) notaLucro.appendChild(el('span', 'sem-custo', `${numero(c.sem_custo)} ${c.externa ? 'SKU(s)' : 'anúncio(s)'} sem custo`));
   bloco('Margem de contribuição', real(p.lucro), notaLucro, 'lucro' + (p.lucro < 0 ? ' neg' : ''));
