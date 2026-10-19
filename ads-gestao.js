@@ -248,11 +248,28 @@ function leilaoDe(m = {}) {
 function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaConta, aposEscrever = () => {} }) {
   const V2 = { 'api-version': '2' };
   const ler = (caminho) => ml(caminho, { headers: V2 });
-  // escrita: /advertising/… e, se o ML disser que o caminho não existe, /marketplace/advertising/…
-  async function escrever(caminho, metodo, corpo) {
+  // escrita: /advertising/… e, se o ML recusar o CAMINHO (404, ou 401/403 sem motivo — medido em 19/10/2026: editar campanha na
+  // Primor deu 401 vazio em /advertising/MLB/product_ads/campaigns/{id}), as outras formas da documentação: /marketplace/advertising/…
+  // e, em `extras`, o caminho com /advertisers/{adv}/. Erro final: o status e o código do ML de cada tentativa (antes saía só "Falhou").
+  async function escrever(caminho, metodo, corpo, extras = []) {
     const opts = { method: metodo, headers: V2, body: JSON.stringify(corpo) };
-    try { return await ml('/advertising' + caminho, opts); }
-    catch (e) { if (e.status !== 404) throw e; return ml('/marketplace/advertising' + caminho, opts); }
+    const tentativas = [...new Set(['/advertising' + caminho, '/marketplace/advertising' + caminho, ...extras.flatMap((c) => ['/advertising' + c, '/marketplace/advertising' + c])])];
+    const falhas = [];
+    for (const t of tentativas) {
+      try { return await ml(t, opts); }
+      catch (e) {
+        const codigo = e.body?.error || e.body?.code || e.body?.status_code || null;
+        falhas.push({ caminho: t, status: e.status || null, codigo, msg: e.message || '' });
+        const doCaminho = e.status === 404 || ((e.status === 401 || e.status === 403) && !String(e.message || '').trim());
+        if (!doCaminho) break;
+      }
+    }
+    const ult = falhas[falhas.length - 1];
+    const sem = falhas.every((f) => f.status === 401 || f.status === 403 || f.status === 404) && falhas.some((f) => f.status === 401 || f.status === 403);
+    const txt = ult.msg.trim() ? ult.msg
+      : sem ? `o Mercado Livre não autorizou a mudança (HTTP ${falhas.map((f) => f.status).join('/')}). O aplicativo do painel pode estar só com LEITURA em Publicidade: no DevCenter do Mercado Livre, no seu aplicativo, deixe "Publicidade" com leitura e escrita e reconecte a conta (Configurações).`
+        : `HTTP ${ult.status}${ult.codigo ? ' · ' + ult.codigo : ''}`;
+    throw Object.assign(new Error(txt), { status: ult.status === 401 ? 409 : ult.status || 502, tentativas: falhas.map(({ caminho: c, status, codigo }) => ({ caminho: c, status, codigo })) });
   }
   async function exigeAnunciante() {
     contaOuErro();
@@ -439,9 +456,10 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
 
     // Editar campanha: nome, situação, orçamento, estratégia e ROAS objetivo (só o que mudou).
     { m: 'PUT', re: /^\/api\/ads\/campanhas\/(\d+)$/, fn: async ([id], body) => {
-      await exigeAnunciante();
+      const adv = await exigeAnunciante();
       const corpo = campanhaDoCorpo(body, { nova: false });
-      const c = await escrever(`/${site()}/product_ads/campaigns/${idCampanha(id)}`, 'PUT', corpo);
+      const c = await escrever(`/${site()}/product_ads/campaigns/${idCampanha(id)}`, 'PUT', corpo,
+        [`/${site()}/advertisers/${adv.advertiser_id}/product_ads/campaigns/${idCampanha(id)}`]);
       depois();
       return { campanha: { id: Number(id), nome: c?.name ?? null, status: c?.status ?? null, orcamento: c?.budget ?? null,
         roas_alvo: c?.roas_target ?? null, estrategia: c?.strategy ?? null }, enviado: corpo };
