@@ -631,7 +631,8 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       });
       let aplicado = null;
       if (p.aderiu_em && resultado.some((x) => x.ok)) {
-        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST' }); aplicado = true; } catch (e) { aplicado = e.message; }
+        // o apply exige o canal (sem ele: 400 "Canal informado não encontrado", medido 19/10/2026)
+        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } }); aplicado = true; } catch (e) { aplicado = e.message; }
       }
       return { resultado, alterados: resultado.filter((x) => x.ok).length, aplicado, participa: !!p.aderiu_em };
     },
@@ -647,12 +648,15 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       });
       let aplicado = null;
       if (p.aderiu_em && resultado.some((x) => x.ok)) {
-        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST' }); aplicado = true; } catch (e) { aplicado = e.message; }
+        // o apply exige o canal (sem ele: 400 "Canal informado não encontrado", medido 19/10/2026)
+        try { await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } }); aplicado = true; } catch (e) { aplicado = e.message; }
       }
       return { resultado, removidos: resultado.filter((x) => x.ok).length, aplicado };
     },
     'POST /api/magalu/campanhas/aplicar': async (_u, body) => {
-      await mg(`/seller/v1/promotions/${encodeURIComponent(idPromo(body?.id))}/apply`, {}, { metodo: 'POST' });
+      const id = idPromo(body?.id);
+      const p = await promocao(id);
+      await mg(`/seller/v1/promotions/${encodeURIComponent(id)}/apply`, {}, { metodo: 'POST', corpo: { channel: { id: p.canal_id || CANAL_MAGALU.id } } });
       return { ok: true };
     },
     // Promoção da própria loja: preço promocional (absolute_discount, produtos escolhidos depois), desconto à vista
