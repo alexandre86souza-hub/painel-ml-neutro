@@ -94,6 +94,17 @@
   // anúncios marcados em "Incluir anúncios" e ainda não enviados, por promoção: o Participar inclui antes (a Magalu só
   // aceita a participação com produtos — medido 16/10/2026: marcar e clicar Participar dava "sem skus adicionados")
   const marcados = new Map();   // id da promoção -> () => [{ sku, preco }]
+  // a rota aceita até 500 produtos por envio: vai em lotes de 450 e junta o resultado (a confirmação roda em cada lote)
+  async function incluirEmLotes(id, itens){
+    const tudo = { resultado: [], alterados: 0, aplicado: null, participa: false };
+    for(let i = 0; i < itens.length; i += 450){
+      const x = await post('/api/magalu/campanhas/skus', { id, itens: itens.slice(i, i + 450) });
+      tudo.resultado.push(...x.resultado); tudo.alterados += x.alterados || 0; tudo.participa = x.participa;
+      if(typeof x.aplicado === 'string') tudo.aplicado = x.aplicado; else if(tudo.aplicado == null) tudo.aplicado = x.aplicado;   // um erro de confirmação aparece
+      if(itens.length > 450) aviso(`Enviando à Magalu… ${numero(Math.min(i + 450, itens.length))} de ${numero(itens.length)}`);
+    }
+    return tudo;
+  }
   async function aderir(ids, lst){
     const nomes = ids.map((id) => lst.find((p) => p.id === id)).filter(Boolean);
     const incluir = ids.map((id) => [id, marcados.get(id)?.() || []]).filter(([, l]) => l.length);
@@ -101,7 +112,7 @@
     if(!confirm(`Entrar em ${ids.length} promoção(ões) da Magalu?\n\n${nomes.map((p) => `• ${tituloDe(p)}${p.voce ? ' — você investe ' + valorTxt(p.voce) : ''}`).join('\n')}${txtIncluir}\n\nAo entrar, você aceita a comissão e a coparticipação no desconto de cada campanha.`)) return;
     try{
       for(const [id, itens] of incluir){
-        const x = await post('/api/magalu/campanhas/skus', { id, itens });
+        const x = await incluirEmLotes(id, itens);
         const erros = x.resultado.filter((y) => !y.ok);
         if(!x.alterados){ aviso('A Magalu não aceitou os anúncios: ' + erros.map((y) => `${y.sku}: ${y.erro}`).join('; ')); return; }
         if(erros.length) aviso(`${numero(erros.length)} anúncio(s) recusado(s): ` + erros.map((y) => `${y.sku}: ${y.erro}`).join('; '));
@@ -184,7 +195,7 @@
       if(!confirm(`Enviar ${itens.length} produto(s) para a promoção "${tituloDe(p)}" na Magalu?` + (baixo.length ? `\n\nATENÇÃO: ${baixo.length} ficam com PREJUÍZO no preço promocional (${baixo.map((x) => x.sku).join(', ')}).` : ''))) return;
       res.textContent = '';
       try{
-        const x = await post('/api/magalu/campanhas/skus', { id: p.id, itens });
+        const x = await incluirEmLotes(p.id, itens);
         const erros = x.resultado.filter((y) => !y.ok);
         aviso(`${numero(x.alterados)} produto(s) enviados.` + (x.aplicado === true ? ' Confirmados na promoção.' : typeof x.aplicado === 'string' ? ' A confirmação falhou: ' + x.aplicado : x.participa ? '' : ' Entram quando você clicar Participar.'), erros.length ? '' : 'ok');
         res.textContent = resumoErros(erros);
