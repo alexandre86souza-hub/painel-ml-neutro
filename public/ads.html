@@ -42,6 +42,16 @@
   .lista-gestao{max-height:52vh;overflow:auto;margin-top:10px}
   .prod-gestao{display:flex;gap:10px;align-items:center}
   .prod-gestao img{width:40px;height:40px;object-fit:cover;border-radius:8px;flex:none}
+  .av-barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .av-barra input[type=search]{flex:1;min-width:200px;max-width:360px}
+  .av-barra .sub{margin:0 0 0 auto}
+  table.av td{vertical-align:top}
+  table.av .prod-gestao{align-items:flex-start;min-width:260px}
+  table.av .prod-gestao img{width:56px;height:56px}
+  table.av .av-tit{font-weight:600;display:block;max-width:340px}
+  table.av .chip{margin-top:3px}
+  table.av th.ord{cursor:pointer;white-space:nowrap}
+  table.av th.ord.on::after{content:' ▼'}
   .prod-gestao b{display:block}
   .seg button.ativo{background:var(--brand);color:#fff}
   #adAtalhos button{margin-left:4px}
@@ -119,6 +129,16 @@
     <h2>Comparativo: o ADS está crescendo ou diminuindo?</h2>
     <p class="sub" id="compSub">Os últimos 7, 15, 30, 60 e 90 dias, cada um com a média por dia e a comparação com o período de mesmo tamanho logo antes.</p>
     <div class="tabela-rolagem" id="comparativo"><p class="carregando">Carregando…</p></div>
+  </section>
+
+  <section class="bloco">
+    <h2>Anúncios que venderam pelo ADS</h2>
+    <p class="sub" id="avSub">Só as vendas que o Mercado Livre atribui ao ADS (cliques nos anúncios patrocinados), no período escolhido em cima, comparadas com o período de mesmo tamanho logo antes.</p>
+    <div class="av-barra">
+      <input type="search" id="avBusca" placeholder="Título ou MLB" aria-label="Buscar anúncio">
+      <span class="sub" id="avConta"></span>
+    </div>
+    <div class="tabela-rolagem" id="avLista"><p class="carregando">Carregando…</p></div>
   </section>
 
   <section class="bloco">
@@ -311,20 +331,76 @@ async function carregar(){
         numero(c.cliques), numero(c.unidades)]));
   }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
 }
+// Anúncios que venderam pelo ADS (GET /api/ads/anuncios-vendas): período e campanha do topo; busca e ordem na tela.
+let av = null, avOrdem = 'vendas', avGeracao = 0;
+async function carregarVendasAds(){
+  const minha = ++avGeracao;
+  const box = $('avLista'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo os anúncios do ADS… (a primeira vez leva até 1 minuto)'));
+  $('avConta').textContent = '';
+  try{
+    const r = await api(`/api/ads/anuncios-vendas?dias=${dias}` + (campanha ? `&campanha=${campanha}` : ''));
+    if(minha !== avGeracao) return;
+    av = r; pintarVendasAds();
+  }catch(e){ if(minha === avGeracao){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui ler os anúncios do ADS: ' + e.message)); } }
+}
+function pintarVendasAds(){
+  const box = $('avLista'); box.innerHTML = '';
+  if(!av) return;
+  const t = av.total;
+  $('avSub').textContent = `De ${data(av.date_from)} a ${data(av.date_to)}` + (campanha ? ' · só a campanha escolhida' : '')
+    + (av.anterior ? ` · comparado com ${data(av.anterior.date_from)} a ${data(av.anterior.date_to)}` : ' · sem período anterior (o ML guarda só 90 dias)')
+    + `. ${numero(t.anuncios)} anúncio(s) venderam ${real(t.vendas)} pelo ADS (${numero(t.unidades)} un.)`
+    + (t.variacao != null ? `, ${t.variacao >= 0 ? '+' : '−'}${pct(Math.abs(t.variacao), 0)} contra o período anterior (${real(t.vendas_antes)})` : '') + `. ${av.nota}`;
+  const q = $('avBusca').value.trim().toLowerCase();
+  const lista = av.anuncios.filter((a) => !q || String(a.item_id).toLowerCase().includes(q) || String(a.titulo || '').toLowerCase().includes(q));
+  const chave = { vendas: (a) => a.vendas, unidades: (a) => a.unidades, participacao: (a) => a.participacao, cliques: (a) => a.cliques, investimento: (a) => a.investimento, roas: (a) => a.roas ?? -1 }[avOrdem];
+  lista.sort((a, b) => chave(b) - chave(a));
+  $('avConta').textContent = `${numero(lista.length)} anúncio(s)`;
+  if(!lista.length){ box.appendChild(el('p', 'vazio', q ? 'Nenhum anúncio com essa busca.' : 'Nenhum anúncio vendeu pelo ADS no período.')); return; }
+  const tb = el('table', 'av'); const cab = el('tr');
+  for(const [rot, k, dica] of [['Anúncio'], ['Vendas pelo ADS', 'vendas', 'direta + indireta'], ['Unidades', 'unidades'], ['% de participação', 'participacao', 'parte das vendas do ADS do período'],
+    ['Cliques', 'cliques'], ['Investimento', 'investimento'], ['ROAS', 'roas'], ['']]){
+    const th = el('th', k ? 'ord' + (k === avOrdem ? ' on' : '') : null, rot);
+    if(dica) th.title = dica;
+    if(k) th.onclick = () => { avOrdem = k; pintarVendasAds(); };
+    cab.appendChild(th);
+  }
+  const th = el('thead'); th.appendChild(cab); tb.appendChild(th);
+  const corpo = el('tbody');
+  for(const a of lista){
+    const tr = el('tr');
+    const c1 = el('td', 'esq'); const p = el('div', 'prod-gestao');
+    if(a.foto){ const img = el('img'); img.src = a.foto; img.alt = ''; img.loading = 'lazy'; p.appendChild(img); }
+    const tx = el('div');
+    tx.appendChild(el('span', 'pequeno', a.item_id + (a.catalogo ? ' · catálogo' : '')));
+    const tit = el('a', 'av-tit', a.titulo || a.item_id); tit.href = a.link || '#'; tit.target = '_blank'; tit.rel = 'noopener'; tx.appendChild(tit);
+    tx.appendChild(el('span', 'pequeno', [a.preco != null ? real(a.preco) : null, a.campanhas.join(', ')].filter(Boolean).join(' · ')));
+    p.appendChild(tx); c1.appendChild(p);
+    const cV = el('td'); cV.append(el('b', null, real(a.vendas)), el('span', 'pequeno', `direta ${real(a.direta)}`));
+    if(av.anterior) cV.appendChild(a.variacao == null ? el('span', 'chip azul', a.antes?.vendas ? '' : 'novo no período') : seta(a.variacao));
+    const cU = el('td'); cU.append(el('b', null, numero(a.unidades)), el('span', 'pequeno', av.anterior ? `antes ${numero(a.antes?.unidades || 0)}` : ''));
+    const ir = el('td'); const lk = el('a', null, 'Ver no painel'); lk.href = '/anuncios.html?q=' + encodeURIComponent(a.item_id); ir.appendChild(lk);
+    tr.append(c1, cV, cU, el('td', null, pct(a.participacao, 1)), el('td', null, numero(a.cliques)), el('td', null, real(a.investimento)), el('td', null, razao(a.roas)), ir);
+    corpo.appendChild(tr);
+  }
+  tb.appendChild(corpo); box.appendChild(tb);
+}
+$('avBusca').oninput = () => av && pintarVendasAds();
 // depois de criar/editar campanha ou mexer nos anúncios (public/ads-gestao.js): relê tudo, inclusive a lista do seletor
 function recarregarAds(){
   campanhasCarregadas = false;
   const sel = $('selCampanha'); while(sel.options.length > 1) sel.remove(1); sel.value = campanha;
-  carregar(); carregarComparativo();
+  carregar(); carregarComparativo(); carregarVendasAds();
 }
-periodo('segDias', dias, (d) => { dias = d; carregar(); });
+periodo('segDias', dias, (d) => { dias = d; carregar(); carregarVendasAds(); });
 $('selCampanha').onchange = () => {
   campanha = $('selCampanha').value;
   $('comparativo').innerHTML = ''; $('comparativo').appendChild(el('p', 'carregando', 'Carregando…'));
-  carregar(); carregarComparativo();
+  carregar(); carregarComparativo(); carregarVendasAds();
 };
 carregar();
 carregarComparativo();
+carregarVendasAds();
 </script>
 <script src="/ads-gestao.js?v=4"></script>
 <script src="/sino.js?v=4" defer></script>

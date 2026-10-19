@@ -84,4 +84,17 @@ assert.throws(() => G.gruposDoCorpo(Array.from({ length: 501 }, (_, i) => i + 1)
   assert.equal(G.leilaoDe({}).aparece, null);
 }
 
+// anúncios que venderam pelo Ads: linha repetida conta uma vez; só quem vendeu; participação e variação contra o período anterior
+{
+  const l = (item, camp, total, un, cost) => ({ item_id: item, ad_group_id: 1, campaign_id: camp, title: 'Ducha ' + item,
+    metrics: { total_amount: total, direct_amount: total / 2, units_quantity: un, clicks: 10, prints: 100, cost } });
+  const r = G.vendasPorAnuncio([l('MLB1', 7, 300, 3, 30), l('MLB1', 7, 300, 3, 30), l('MLB2', 7, 100, 1, 50), l('MLB3', 8, 0, 0, 20)], [l('MLB1', 7, 150, 2, 20)], { 7: 'Portfólio 01' });
+  assert.deepEqual(r.anuncios.map((a) => a.item_id), ['MLB1', 'MLB2'], 'sem venda fica de fora; maior venda primeiro');
+  assert.deepEqual([r.anuncios[0].vendas, r.anuncios[0].unidades, r.anuncios[0].participacao, r.anuncios[0].variacao], [300, 3, 0.75, 1], 'repetida conta uma vez');
+  assert.deepEqual(r.anuncios[0].campanhas, ['Portfólio 01']);
+  assert.equal(r.anuncios[1].variacao, null, 'sem venda antes: sem variação');
+  assert.deepEqual([r.total.anuncios, r.total.vendas, r.total.unidades, r.total.vendas_antes], [2, 400, 4, 150]);
+  assert.deepEqual(G.janelaAnterior({ date_from: '2026-10-12', date_to: '2026-10-18' }), { date_from: '2026-10-05', date_to: '2026-10-11' });
+}
+
 console.log('Ads (gestão): criar/editar campanha, ROAS 1x–35x, grupos de anúncio e agrupamento sem duplicar: ok');

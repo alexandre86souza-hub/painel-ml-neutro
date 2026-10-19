@@ -133,6 +133,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   real responde em `/advertising/…`: a escrita tenta este e, com 404, o da doc. Cada escrita relê a campanha para confirmar e
   grava em `ads_mudancas` (anúncios colocados/movidos/pausados/retirados). `GET /api/ads/gestao/diagnostico` (só leitura).
   Escrita só pelo clique, com confirmação; nada no MCP.
+  "Anúncios que venderam pelo ADS" (Histórico ADS, `GET /api/ads/anuncios-vendas?dias=&campanha=`, `vendasPorAnuncio`): venda ATRIBUÍDA ao Ads
+  (total_amount = direta + indireta) e unidades por anúncio no período, contra o período anterior (`janelaAnterior`; 90 dias não tem), cache 10 min.
 - Publicar na Shopee e na Amazon (`publicar-canais.js`, tela `publicar-canais.html`; o menu
   Publicar abre ela com a conta Shopee/Amazon): COPIA um anúncio do ML. Shopee: categoria por
   `category_recommend`, atributos por `get_attribute_tree`, marca da loja, fotos do ML (só
