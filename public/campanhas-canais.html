@@ -157,7 +157,7 @@ if(CANAL === 'leroy') $('segFiltro').closest('.filtros').before($('painelAcao'))
 $('criarSub').textContent = CANAL === 'magalu'
   ? ''
   : CANAL === 'leroy'
-  ? 'Preço promocional com início e fim em cada oferta. A Leroy aceita uma mudança de preços por minuto e leva alguns minutos para aplicar. Se o Bling também manda preço para a Leroy, ele pode sobrescrever o desconto.'
+  ? 'Preço promocional com início e fim em cada oferta. A Leroy aceita uma mudança de preços por minuto e leva alguns minutos para aplicar.'
   : 'Preço promocional (preço de oferta) com início e fim em cada anúncio. A Amazon leva alguns minutos para aplicar. Cupons, ofertas relâmpago e descontos Prime só no Seller Central.';
 
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');

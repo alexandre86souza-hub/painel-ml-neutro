@@ -197,7 +197,7 @@ function pintarLista(){
     else { if(a.preco_lista && a.preco_lista > a.preco + 0.009) preco.appendChild(el('span', 'riscado', real(a.preco_lista))); preco.appendChild(document.createTextNode(real(a.preco))); }
     // preço enviado pelo painel: o site da Magalu muda em minutos, mas a consulta de preço dela segue no registro antigo
     if(a.preco_enviado_em){ const nt = el('span', 'pequeno', 'enviado pelo painel ' + new Date(a.preco_enviado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }));
-      nt.title = 'A consulta de preço da Magalu ainda devolve ' + real(a.preco_magalu) + ' (registro anterior). Se outro sistema (ex.: Bling) gravar o preço na Magalu, o dele passa a valer.'; preco.appendChild(nt); }
+      nt.title = 'A consulta de preço da Magalu ainda devolve ' + real(a.preco_magalu) + ' (registro anterior). Se outro sistema gravar o preço na Magalu, o dele passa a valer.'; preco.appendChild(nt); }
     const sit = el('td'); sit.appendChild(el('span', 'chip ' + (SIT[a.status]?.[1] || ''), SIT[a.status]?.[0] || a.status || '—'));
     const lu = lucroDe(a);
     const luTd = el('td', 'dinheiro ' + (lu == null ? '' : lu < 0 ? 'neg' : 'pos'), lu == null ? '—' : real(lu));
