@@ -506,7 +506,8 @@ function criar({ D, janela }) {
     // Situação da importação de preços (PRI02) e, com erro, o relatório (PRI03).
     'GET /api/leroy/campanhas/importacao': async (url) => {
       const id = String(url.searchParams.get('id') || D.configLer('leroy_pri01_ultima') || '').trim();
-      if (!/^\d{1,15}$/.test(id)) throw erro('Importação não informada.');
+      // a Leroy devolve o import_id como UUID (medido 19/10/2026: 0505b2ce-…); outras Mirakl, como número
+      if (!/^[A-Za-z0-9-]{1,64}$/.test(id)) throw erro('Importação não informada.');
       const c = exigir();
       const r = await mk(c, '/api/offers/pricing/imports', { import_id: id });
       const imp = (r.data || r.imports || [])[0];
@@ -515,7 +516,7 @@ function criar({ D, janela }) {
       if (imp.has_error_report) {
         try {
           const qs = c.shop_id ? `?shop_id=${encodeURIComponent(c.shop_id)}` : '';
-          const e = await fetch(`${c.host}/api/offers/pricing/imports/${id}/error_report${qs}`, { headers: { Authorization: c.api_key }, signal: AbortSignal.timeout(30000) });
+          const e = await fetch(`${c.host}/api/offers/pricing/imports/${encodeURIComponent(id)}/error_report${qs}`, { headers: { Authorization: c.api_key }, signal: AbortSignal.timeout(30000) });
           erros = (await e.text()).split(/\r?\n/).filter(Boolean).slice(0, 21).join('\n');
         } catch { /* sem relatório */ }
       }
