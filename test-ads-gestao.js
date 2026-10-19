@@ -95,6 +95,15 @@ assert.throws(() => G.gruposDoCorpo(Array.from({ length: 501 }, (_, i) => i + 1)
   assert.equal(r.anuncios[1].variacao, null, 'sem venda antes: sem variação');
   assert.deepEqual([r.total.anuncios, r.total.vendas, r.total.unidades, r.total.vendas_antes], [2, 400, 4, 150]);
   assert.deepEqual(G.janelaAnterior({ date_from: '2026-10-12', date_to: '2026-10-18' }), { date_from: '2026-10-05', date_to: '2026-10-11' });
+  assert.deepEqual([r.anuncios[0].direta, r.anuncios[0].indireta, r.anuncios[0].un_direta], [150, 150, null], 'sem métrica de unidades por tipo: null');
+  const u = G.vendasPorAnuncio([{ ...l('MLB9', 7, 100, 2, 10), metrics: { total_amount: 100, direct_amount: 60, units_quantity: 2, direct_units_quantity: 1, indirect_units_quantity: 1 } }]);
+  assert.deepEqual([u.anuncios[0].indireta, u.anuncios[0].un_direta, u.anuncios[0].un_indireta], [40, 1, 1]);
+  const hoje = Date.parse('2026-10-19T15:00:00Z');
+  assert.deepEqual(G.janelaEscolhida({ dias: 7 }, hoje), { date_from: '2026-10-12', date_to: '2026-10-18', dias: 7, personalizado: false });
+  assert.deepEqual(G.janelaEscolhida({ de: '2026-10-01', ate: '2026-10-10' }, hoje), { date_from: '2026-10-01', date_to: '2026-10-10', dias: 10, personalizado: true });
+  assert.throws(() => G.janelaEscolhida({ de: '2026-10-10', ate: '2026-10-19' }, hoje), /até ontem/);
+  assert.throws(() => G.janelaEscolhida({ de: '2026-07-01', ate: '2026-07-10' }, hoje), /90 dias/);
+  assert.throws(() => G.janelaEscolhida({ de: '2026-10-10', ate: '2026-10-01' }, hoje), /depois da final/);
 }
 
 console.log('Ads (gestão): criar/editar campanha, ROAS 1x–35x, grupos de anúncio e agrupamento sem duplicar: ok');

@@ -135,6 +135,16 @@
     <h2>Anúncios que venderam pelo ADS</h2>
     <p class="sub" id="avSub">Só as vendas que o Mercado Livre atribui ao ADS (cliques nos anúncios patrocinados), no período escolhido em cima, comparadas com o período de mesmo tamanho logo antes.</p>
     <div class="av-barra">
+      <div class="seg" role="group" aria-label="Período do bloco" id="avDias">
+        <button type="button" data-dias="7">7 dias</button><button type="button" data-dias="15">15 dias</button>
+        <button type="button" data-dias="30">30 dias</button><button type="button" data-dias="60">60 dias</button>
+        <button type="button" data-dias="90">90 dias</button><button type="button" data-dias="0">Escolher datas</button>
+      </div>
+      <span id="avDatas" hidden><label>de <input type="date" id="avDe"></label> <label>até <input type="date" id="avAte"></label>
+        <button type="button" class="bt" id="avAplicar">Aplicar</button></span>
+      <label>Vendas <select id="avTipo" aria-label="Tipo de venda"><option value="todas">diretas + indiretas</option><option value="direta">só diretas</option><option value="indireta">só indiretas</option></select></label>
+    </div>
+    <div class="av-barra">
       <input type="search" id="avBusca" placeholder="Título ou MLB" aria-label="Buscar anúncio">
       <span class="sub" id="avConta"></span>
     </div>
@@ -332,13 +342,17 @@ async function carregar(){
   }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
 }
 // Anúncios que venderam pelo ADS (GET /api/ads/anuncios-vendas): período e campanha do topo; busca e ordem na tela.
-let av = null, avOrdem = 'vendas', avGeracao = 0;
+let av = null, avOrdem = 'vendas', avGeracao = 0, avDias = 30, avDe = '', avAte = '';
+// tipo de venda: o valor e as unidades que contam (diretas = comprou o anúncio clicado; indiretas = outro anúncio seu depois do clique)
+const avValor = (a, tipo = $('avTipo').value) => (tipo === 'direta' ? a.direta : tipo === 'indireta' ? a.indireta : a.vendas);
+const avUn = (a, tipo = $('avTipo').value) => (tipo === 'direta' ? a.un_direta : tipo === 'indireta' ? a.un_indireta : a.unidades);
 async function carregarVendasAds(){
   const minha = ++avGeracao;
   const box = $('avLista'); box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo os anúncios do ADS… (a primeira vez leva até 1 minuto)'));
   $('avConta').textContent = '';
   try{
-    const r = await api(`/api/ads/anuncios-vendas?dias=${dias}` + (campanha ? `&campanha=${campanha}` : ''));
+    const per = avDias ? `dias=${avDias}` : `de=${avDe}&ate=${avAte}`;
+    const r = await api(`/api/ads/anuncios-vendas?${per}` + (campanha ? `&campanha=${campanha}` : ''));
     if(minha !== avGeracao) return;
     av = r; pintarVendasAds();
   }catch(e){ if(minha === avGeracao){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui ler os anúncios do ADS: ' + e.message)); } }
@@ -346,19 +360,25 @@ async function carregarVendasAds(){
 function pintarVendasAds(){
   const box = $('avLista'); box.innerHTML = '';
   if(!av) return;
-  const t = av.total;
+  const tipo = $('avTipo').value, nomeTipo = { todas: 'pelo ADS', direta: 'em vendas DIRETAS do ADS', indireta: 'em vendas INDIRETAS do ADS' }[tipo];
+  const base = av.anuncios.filter((a) => avValor(a) > 0 || (avUn(a) || 0) > 0);
+  const soma = (f) => base.reduce((s, a) => s + (f(a) || 0), 0);
+  const tVend = soma((a) => avValor(a)), tUn = soma((a) => avUn(a)), tAntes = av.anterior ? av.anuncios.reduce((s, a) => s + (a.antes ? avValor(a.antes) || 0 : 0), 0) : null;
+  const t = { anuncios: base.length, vendas: tVend, unidades: tUn, vendas_antes: tAntes, variacao: tAntes > 0 ? tVend / tAntes - 1 : null };
+  const semUnTipo = tipo !== 'todas' && av.anuncios.some((a) => a.un_direta == null);
   $('avSub').textContent = `De ${data(av.date_from)} a ${data(av.date_to)}` + (campanha ? ' · só a campanha escolhida' : '')
     + (av.anterior ? ` · comparado com ${data(av.anterior.date_from)} a ${data(av.anterior.date_to)}` : ' · sem período anterior (o ML guarda só 90 dias)')
-    + `. ${numero(t.anuncios)} anúncio(s) venderam ${real(t.vendas)} pelo ADS (${numero(t.unidades)} un.)`
+    + `. ${numero(t.anuncios)} anúncio(s) venderam ${real(t.vendas)} ${nomeTipo}` + (semUnTipo ? '' : ` (${numero(t.unidades)} un.)`)
     + (t.variacao != null ? `, ${t.variacao >= 0 ? '+' : '−'}${pct(Math.abs(t.variacao), 0)} contra o período anterior (${real(t.vendas_antes)})` : '') + `. ${av.nota}`;
   const q = $('avBusca').value.trim().toLowerCase();
-  const lista = av.anuncios.filter((a) => !q || String(a.item_id).toLowerCase().includes(q) || String(a.titulo || '').toLowerCase().includes(q));
-  const chave = { vendas: (a) => a.vendas, unidades: (a) => a.unidades, participacao: (a) => a.participacao, cliques: (a) => a.cliques, investimento: (a) => a.investimento, roas: (a) => a.roas ?? -1 }[avOrdem];
+  const lista = base.filter((a) => !q || String(a.item_id).toLowerCase().includes(q) || String(a.titulo || '').toLowerCase().includes(q));
+  const part = (a) => (tVend > 0 ? avValor(a) / tVend : 0);
+  const chave = { vendas: (a) => avValor(a), unidades: (a) => avUn(a) || 0, participacao: part, cliques: (a) => a.cliques, investimento: (a) => a.investimento, roas: (a) => a.roas ?? -1 }[avOrdem];
   lista.sort((a, b) => chave(b) - chave(a));
   $('avConta').textContent = `${numero(lista.length)} anúncio(s)`;
   if(!lista.length){ box.appendChild(el('p', 'vazio', q ? 'Nenhum anúncio com essa busca.' : 'Nenhum anúncio vendeu pelo ADS no período.')); return; }
   const tb = el('table', 'av'); const cab = el('tr');
-  for(const [rot, k, dica] of [['Anúncio'], ['Vendas pelo ADS', 'vendas', 'direta + indireta'], ['Unidades', 'unidades'], ['% de participação', 'participacao', 'parte das vendas do ADS do período'],
+  for(const [rot, k, dica] of [['Anúncio'], [{ todas: 'Vendas pelo ADS', direta: 'Vendas diretas', indireta: 'Vendas indiretas' }[tipo], 'vendas', 'direta = comprou o anúncio clicado; indireta = comprou outro anúncio seu depois do clique'], ['Unidades', 'unidades'], ['% de participação', 'participacao', 'parte das vendas do ADS do período'],
     ['Cliques', 'cliques'], ['Investimento', 'investimento'], ['ROAS', 'roas'], ['']]){
     const th = el('th', k ? 'ord' + (k === avOrdem ? ' on' : '') : null, rot);
     if(dica) th.title = dica;
@@ -376,23 +396,39 @@ function pintarVendasAds(){
     const tit = el('a', 'av-tit', a.titulo || a.item_id); tit.href = a.link || '#'; tit.target = '_blank'; tit.rel = 'noopener'; tx.appendChild(tit);
     tx.appendChild(el('span', 'pequeno', [a.preco != null ? real(a.preco) : null, a.campanhas.join(', ')].filter(Boolean).join(' · ')));
     p.appendChild(tx); c1.appendChild(p);
-    const cV = el('td'); cV.append(el('b', null, real(a.vendas)), el('span', 'pequeno', `direta ${real(a.direta)}`));
-    if(av.anterior) cV.appendChild(a.variacao == null ? el('span', 'chip azul', a.antes?.vendas ? '' : 'novo no período') : seta(a.variacao));
-    const cU = el('td'); cU.append(el('b', null, numero(a.unidades)), el('span', 'pequeno', av.anterior ? `antes ${numero(a.antes?.unidades || 0)}` : ''));
+    const vAntes = a.antes ? avValor(a.antes) : null, uAntes = a.antes ? avUn(a.antes) : null;
+    const cV = el('td'); cV.append(el('b', null, real(avValor(a))), el('span', 'pequeno', tipo === 'todas' ? `direta ${real(a.direta)} · indireta ${real(a.indireta)}` : `de ${real(a.vendas)} no total`));
+    if(av.anterior) cV.appendChild(vAntes > 0 ? seta(avValor(a) / vAntes - 1) : el('span', 'chip azul', 'novo no período'));
+    const cU = el('td'); cU.append(el('b', null, avUn(a) == null ? '—' : numero(avUn(a))), el('span', 'pequeno', avUn(a) == null ? `${numero(a.unidades)} no total` : av.anterior && uAntes != null ? `antes ${numero(uAntes)}` : ''));
     const ir = el('td'); const lk = el('a', null, 'Ver no painel'); lk.href = '/anuncios.html?q=' + encodeURIComponent(a.item_id); ir.appendChild(lk);
-    tr.append(c1, cV, cU, el('td', null, pct(a.participacao, 1)), el('td', null, numero(a.cliques)), el('td', null, real(a.investimento)), el('td', null, razao(a.roas)), ir);
+    tr.append(c1, cV, cU, el('td', null, pct(part(a), 1)), el('td', null, numero(a.cliques)), el('td', null, real(a.investimento)), el('td', null, razao(a.roas)), ir);
     corpo.appendChild(tr);
   }
   tb.appendChild(corpo); box.appendChild(tb);
 }
 $('avBusca').oninput = () => av && pintarVendasAds();
+$('avTipo').onchange = () => av && pintarVendasAds();
+{
+  const ontem = new Date(Date.now() - 3 * 3600e3 - 864e5).toISOString().slice(0, 10), min = new Date(Date.now() - 3 * 3600e3 - 90 * 864e5).toISOString().slice(0, 10);
+  for(const i of [$('avDe'), $('avAte')]){ i.max = ontem; i.min = min; }
+  $('avAte').value = ontem; $('avDe').value = new Date(Date.parse(ontem) - 6 * 864e5).toISOString().slice(0, 10);
+}
+periodo('avDias', avDias, (d) => {
+  $('avDatas').hidden = d !== 0;
+  if(d === 0) return;   // escolher datas: só busca no Aplicar
+  avDias = d; carregarVendasAds();
+});
+$('avAplicar').onclick = () => {
+  if(!$('avDe').value || !$('avAte').value){ $('avLista').innerHTML = ''; $('avLista').appendChild(el('p', 'vazio', 'Escolha as duas datas.')); return; }
+  avDias = 0; avDe = $('avDe').value; avAte = $('avAte').value; carregarVendasAds();
+};
 // depois de criar/editar campanha ou mexer nos anúncios (public/ads-gestao.js): relê tudo, inclusive a lista do seletor
 function recarregarAds(){
   campanhasCarregadas = false;
   const sel = $('selCampanha'); while(sel.options.length > 1) sel.remove(1); sel.value = campanha;
   carregar(); carregarComparativo(); carregarVendasAds();
 }
-periodo('segDias', dias, (d) => { dias = d; carregar(); carregarVendasAds(); });
+periodo('segDias', dias, (d) => { dias = d; carregar(); if(avDias){ avDias = d; $('avDias').querySelector(`[data-dias="${d}"]`)?.click(); } });
 $('selCampanha').onchange = () => {
   campanha = $('selCampanha').value;
   $('comparativo').innerHTML = ''; $('comparativo').appendChild(el('p', 'carregando', 'Carregando…'));

@@ -101,10 +101,13 @@ function vendasPorAnuncio(atual, antes = [], nomes = {}) {
       const met = a.metrics || {};
       const x = m.get(a.item_id) || { item_id: a.item_id, titulo: a.title || a.family_name || null, foto: a.thumbnail || null, preco: a.price ?? null,
         link: a.permalink || null, status: a.status || null, catalogo: !!a.catalog_listing, campanhas: new Set(),
-        vendas: 0, direta: 0, unidades: 0, cliques: 0, impressoes: 0, investimento: 0 };
+        vendas: 0, direta: 0, unidades: 0, un_direta: 0, un_indireta: 0, tem_un_tipo: false, cliques: 0, impressoes: 0, investimento: 0 };
       x.vendas += Number(met.total_amount) || (Number(met.direct_amount) || 0) + (Number(met.indirect_amount) || 0);
       x.direta += Number(met.direct_amount) || 0;
       x.unidades += Number(met.units_quantity) || 0;
+      if (met.direct_units_quantity != null || met.indirect_units_quantity != null) {
+        x.tem_un_tipo = true; x.un_direta += Number(met.direct_units_quantity) || 0; x.un_indireta += Number(met.indirect_units_quantity) || 0;
+      }
       x.cliques += Number(met.clicks) || 0; x.impressoes += Number(met.prints) || 0; x.investimento += Number(met.cost) || 0;
       if (a.campaign_id) x.campanhas.add(a.campaign_id);
       m.set(a.item_id, x);
@@ -117,14 +120,32 @@ function vendasPorAnuncio(atual, antes = [], nomes = {}) {
   const totalAntes = [...mb.values()].reduce((s, x) => s + x.vendas, 0);
   const anuncios = venderam.map((x) => {
     const b = mb.get(x.item_id);
-    return { ...x, campanhas: [...x.campanhas].map((id) => nomes[id] || String(id)), vendas: r2(x.vendas), direta: r2(x.direta), investimento: r2(x.investimento),
+    const un = (o) => (o.tem_un_tipo ? { un_direta: o.un_direta, un_indireta: o.un_indireta } : { un_direta: null, un_indireta: null });
+    const { tem_un_tipo, ...y } = x;
+    return { ...y, ...un(x), campanhas: [...x.campanhas].map((id) => nomes[id] || String(id)), vendas: r2(x.vendas), direta: r2(x.direta), indireta: r2(x.vendas - x.direta), investimento: r2(x.investimento),
       roas: x.investimento > 0 ? x.vendas / x.investimento : null, participacao: total > 0 ? x.vendas / total : 0,
-      antes: b ? { vendas: r2(b.vendas), unidades: b.unidades } : { vendas: 0, unidades: 0 },
+      antes: b ? { vendas: r2(b.vendas), direta: r2(b.direta), indireta: r2(b.vendas - b.direta), unidades: b.unidades, ...un(b) }
+        : { vendas: 0, direta: 0, indireta: 0, unidades: 0, un_direta: 0, un_indireta: 0 },
       variacao: b && b.vendas > 0 ? x.vendas / b.vendas - 1 : null };
   }).sort((a, b) => b.vendas - a.vendas || b.unidades - a.unidades);
   return { anuncios, total: { anuncios: anuncios.length, vendas: r2(total), unidades: anuncios.reduce((s, x) => s + x.unidades, 0),
     investimento: r2(anuncios.reduce((s, x) => s + x.investimento, 0)), vendas_antes: r2(totalAntes),
     variacao: totalAntes > 0 ? total / totalAntes - 1 : null } };
+}
+// Período da tela: os últimos N dias ou de/até escolhidos (AAAA-MM-DD), dentro dos 90 dias que o ML guarda e até ontem.
+// Função pura: testada.
+function janelaEscolhida({ dias, de, ate }, hojeMs = Date.now()) {
+  const d = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const ontem = d(hojeMs - 3 * 3600e3 - 864e5), limite = d(hojeMs - 3 * 3600e3 - 90 * 864e5);
+  if (de || ate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(de || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(ate || ''))) throw erro('Escolha as duas datas (de e até).');
+    if (de > ate) throw erro('A data inicial é depois da final.');
+    if (ate > ontem) throw erro('A data final precisa ser até ontem (o Mercado Livre fecha o dia anterior às 10h).');
+    if (de < limite) throw erro('O Mercado Ads guarda só 90 dias: escolha uma data inicial mais recente.');
+    return { date_from: de, date_to: ate, dias: Math.round((Date.parse(ate) - Date.parse(de)) / 864e5) + 1, personalizado: true };
+  }
+  const n = [7, 15, 30, 60, 90].includes(Number(dias)) ? Number(dias) : 30;
+  return { date_from: d(Date.parse(ontem + 'T12:00:00Z') - (n - 1) * 864e5), date_to: ontem, dias: n, personalizado: false };
 }
 // Período de mesmo tamanho logo antes de { date_from, date_to } (AAAA-MM-DD). Função pura: testada.
 function janelaAnterior({ date_from, date_to }) {
@@ -244,11 +265,11 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
 
   // ads/search paginado (50 por página; teto alto: a conta tem ~2.000 linhas).
   // dias: número (os últimos N dias até ontem) ou { date_from, date_to } (AAAA-MM-DD)
-  async function anunciosAds(adv, filtros = {}, dias = 30, teto = 60) {
+  async function anunciosAds(adv, filtros = {}, dias = 30, teto = 60, metricas = METRICAS) {
     const { date_from, date_to } = typeof dias === 'object' ? dias : janelaAds(dias);
     const tudo = [];
     for (let p = 0; p < teto; p++) {
-      const qs = new URLSearchParams({ ...filtros, date_from, date_to, metrics: METRICAS, limit: '50', offset: String(p * 50) });
+      const qs = new URLSearchParams({ ...filtros, date_from, date_to, metrics: metricas, limit: '50', offset: String(p * 50) });
       const r = await ler(`/advertising/${site()}/advertisers/${adv.advertiser_id}/product_ads/ads/search?${qs}`);
       const lote = r.results || [];
       tudo.push(...lote);
@@ -321,20 +342,22 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
     'GET /api/ads/anuncios-vendas': async (url) => {
       const adv = await exigeAnunciante();
       const conta = contaOuErro().ml_user_id;
-      const dias = [7, 15, 30, 60, 90].includes(Number(url?.searchParams.get('dias'))) ? Number(url.searchParams.get('dias')) : 30;
-      const campanha = /^\d+$/.test(url?.searchParams.get('campanha') || '') ? Number(url.searchParams.get('campanha')) : null;
-      const chave = `${conta}|${dias}|${campanha || ''}`;
+      const q = url?.searchParams;
+      const jan = janelaEscolhida({ dias: q?.get('dias'), de: q?.get('de'), ate: q?.get('ate') });
+      const campanha = /^\d+$/.test(q?.get('campanha') || '') ? Number(q.get('campanha')) : null;
+      const chave = `${conta}|${jan.date_from}|${jan.date_to}|${campanha || ''}`;
       const g = cacheVendas.get(chave);
       if (g && Date.now() - g.em < 10 * 60e3 && url?.searchParams.get('recarregar') !== '1') return g.dados;
-      const jan = janelaAds(dias), ant = janelaAnterior(jan);
+      const ant = janelaAnterior(jan);
+      const temAnterior = ant.date_from >= janelaEscolhida({ de: null, ate: null, dias: 90 }).date_from;   // o ML guarda 90 dias
+      const extras = METRICAS + ',direct_units_quantity,indirect_units_quantity';
+      const ler = (j) => anunciosAds(adv, filtro, j, 60, extras).catch((e) => (e.status === 400 ? anunciosAds(adv, filtro, j) : Promise.reject(e)));
       const filtro = campanha ? { 'filters[campaign_id]': String(campanha) } : {};
       const so = (ls) => (campanha ? ls.filter((a) => Number(a.campaign_id) === campanha) : ls);
-      // o ML guarda 90 dias: no período de 90 o anterior não existe
-      const [la, lb, camps] = await Promise.all([anunciosAds(adv, filtro, jan),
-        dias < 90 ? anunciosAds(adv, filtro, ant).catch(() => null) : Promise.resolve(null), campanhas(adv)]);
+      const [la, lb, camps] = await Promise.all([ler(jan), temAnterior ? ler(ant).catch(() => null) : Promise.resolve(null), campanhas(adv)]);
       const nomes = Object.fromEntries(camps.map((c) => [c.id, c.name]));
       const r = vendasPorAnuncio(so(la), lb ? so(lb) : [], nomes);
-      const dados = { dias, campanha, date_from: jan.date_from, date_to: jan.date_to, anterior: lb ? ant : null,
+      const dados = { dias: jan.dias, personalizado: jan.personalizado, campanha, date_from: jan.date_from, date_to: jan.date_to, anterior: lb ? ant : null,
         total: lb ? r.total : { ...r.total, vendas_antes: null, variacao: null },
         anuncios: lb ? r.anuncios : r.anuncios.map((x) => ({ ...x, antes: null, variacao: null })),
         nota: 'Vendas atribuídas ao ADS pelo Mercado Livre: direta (comprou o anúncio clicado) + indireta (comprou outro anúncio seu depois do clique). O ML fecha o dia anterior às 10h.' };
@@ -465,4 +488,4 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
   return { rotas, rotasParam };
 }
 
-module.exports = { criar, leilaoDe, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios, janelasAntesDepois, somarAntesDepois, vendasPorAnuncio, janelaAnterior };
+module.exports = { criar, leilaoDe, campanhaDoCorpo, gruposDoCorpo, agruparAnuncios, janelasAntesDepois, somarAntesDepois, vendasPorAnuncio, janelaAnterior, janelaEscolhida };
