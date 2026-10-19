@@ -67,3 +67,28 @@ assert.strictEqual(F.pecasDo(item, porNumero, undefined, null).estoque, 'sem_con
   assert.deepStrictEqual([...r.saldos].sort(), [[694, 1], [831, 3]]);
   assert.deepStrictEqual(r.grupos.map((g) => [g.fornecedor, g.pecas, g.valor]), [['BRUNO', 1, 100], ['ZEZE', 3, 30]], 'fornecedor do cadastro, senão o da saída');
 }
+
+// peça NÃO devolvida pelo cliente: nem estoque bom nem de defeitos; o custo soma como perdida
+{
+  const v = F.validar({ chave: 'shopee:1:R2:0', sku: 'AMG-694.831', quantidade: 2, produtos: [0], qtds: { 0: 1 }, faltam: { 1: 2, 0: 1 } });
+  assert.deepStrictEqual(v.faltam, { 0: 1, 1: 2 });
+  assert.throws(() => F.validar({ chave: 'shopee:1:R2:0', quantidade: 2, produtos: [0], qtds: { 0: 2 }, faltam: { 0: 1 } }), /passa de 2/);
+  const p = F.pecasDo({ ...item, quantidade: 2 }, porNumero, { produtos: [0], qtds: { 0: 1 }, faltam: { 0: 1, 1: 2 } });
+  assert.deepStrictEqual([p.peca_defeito, p.peca_faltando], [100, 120]);
+  // estoque: de 2 kits, 1 ducha com defeito e 1 não devolvida -> 0 duchas; 2 niples não devolvidos -> 0 niples
+  const l = { ref: 'devolucao:shopee:1:R2:0', sku: 'AMG-694.831', qtd: 2, data: 'x', valida: true, sinal: 1, sem: [0], defeituosos: { 0: 1 }, faltam: { 0: 1, 1: 2 }, tipo: 'devolucao', origem: 'Shopee' };
+  assert.deepStrictEqual(E.diferencas([l], new Map(), porSku).lancar, []);
+  // só não devolvida (sem defeito): de 2 kits faltou 1 niple -> voltam 2 duchas e 1 niple
+  const l2 = { ...l, sem: null, defeituosos: null, faltam: { 1: 1 } };
+  assert.deepStrictEqual(E.diferencas([l2], new Map(), porSku).lancar.map((m) => [m.numero, m.qtd]).sort(), [[694, 2], [831, 1]]);
+  // e não entra nas peças com defeito
+  const cat = { porSku, porNumero: new Map([[694, { numero: 694, sku: 'DH-694', custo: 100 }], [831, { numero: 831, sku: 'NI-831', custo: 10 }]]) };
+  assert.deepStrictEqual([...E.defeitosDe({ devolucoes: [l, l2] }, cat).saldos], [[694, 1]]);
+}
+// ML (kit): peça não devolvida soma no custo da devolução
+{
+  const { custoDa } = require('./devolucoes.js');
+  const c = custoDa({ status_devolucao: 'delivered', quantidade: 1, reembolso_vendedor: 50, defeito: false, defeito_produtos: [],
+    componentes: [{ sku: 'DH-694', custo: 100 }, { sku: 'NI-831', custo: 10 }], defeito_faltam: { 1: 1 } });
+  assert.deepStrictEqual([c.peca_faltando, c.peca_defeito, c.total, c.faltam], [10, 0, 10, { 1: 1 }]);
+}

@@ -3,6 +3,8 @@
 // (pedido do dono, 19/10/2026). Cada item devolvido mostra os produtos do SKU (kit aberto pela tabela Produtos, com as
 // composições e as trocas do painel); o vendedor marca QUAIS peças voltaram com defeito e, com 2+ unidades, quantas.
 // - Custo: só as peças marcadas somam (custo do produto × unidades com defeito) no custo da devolução.
+// - Peça NÃO DEVOLVIDA pelo cliente (pedido do dono, 19/10/2026: o cliente devolve o kit sem uma peça): não entra no estoque
+//   bom nem no de defeitos; o custo dela soma como perdida (faltam = { posição: n }).
 // - Estoque (estoque.js#linhasDeDevolucao): o item CONFERIDO (marcado, mesmo sem defeito) volta ao estoque sem as peças
 //   com defeito, na hora de conferir (qualquer que seja a data da devolução; conferido antes da 1ª contagem não volta).
 //   Sem conferir = não volta (a loja não diz quando o produto chegou).
@@ -22,12 +24,15 @@ function pecasDo({ chave, sku, quantidade, data }, porNumero, marca, inicio = nu
   const marcadas = marca ? [...new Set(marca.produtos || [])].filter((i) => comps[i]) : [];
   const qtdDe = (i) => { const v = marca?.qtds?.[i]; return v == null ? q : Math.max(0, Math.min(q, Math.round(Number(v)) || 0)); };
   const qtds = Object.fromEntries(marcadas.map((i) => [i, qtdDe(i)]));
+  const faltam = Object.fromEntries(Object.entries(marca?.faltam || {}).map(([i, v]) => [Number(i), Math.max(0, Math.min(q, Math.round(Number(v)) || 0))])
+    .filter(([i, v]) => comps[i] && v > 0));
   return { chave, sku: sku || null, quantidade: q, data: data || null, componentes: comps,
     conferida: !!marca, conferida_em: marca?.atualizado_em || null, produtos_defeito: marcadas, qtds_defeito: qtds,
     // volta ao estoque sozinha? só com a contagem feita e devolução a partir dela (estoque.js#linhasDeDevolucaoCanais)
     estoque: !inicio ? 'sem_contagem' : !marca || marca.atualizado_em >= inicio ? 'volta' : 'antes_contagem', inicio_estoque: inicio,
     peca_defeito: r2(marcadas.reduce((s, i) => s + (Number(comps[i].custo) || 0) * qtds[i], 0)),
-    sem_custo: marcadas.some((i) => comps[i].custo == null) };
+    faltam, peca_faltando: r2(Object.entries(faltam).reduce((s, [i, v]) => s + (Number(comps[i].custo) || 0) * v, 0)),
+    sem_custo: marcadas.some((i) => comps[i].custo == null) || Object.keys(faltam).some((i) => comps[i].custo == null) };
 }
 
 // Corpo do PUT -> linha para gravar (ou erro). Função pura: testada.
@@ -45,10 +50,22 @@ function validar(b) {
     if (!Number.isInteger(n) || n < 1 || n > quantidade) throw erro(`Quantidade com defeito: um número inteiro de 1 a ${quantidade}.`);
     if (n < quantidade) qtds[i] = n;   // todas = sem quantidade (como no ML)
   }
+  // peças que o cliente não devolveu: { posição: quantas } (sem defeito e sem volta ao estoque)
+  const faltam = {};
+  for (const [k, v] of Object.entries(b.faltam || {})) {
+    const i = Number(k), n = Number(v);
+    if (!Number.isInteger(i) || i < 0 || i > 49) throw erro('Peça não devolvida inválida.');
+    if (!Number.isInteger(n) || n < 0 || n > quantidade) throw erro(`Não devolvidas: um número inteiro de 0 a ${quantidade}.`);
+    if (n) faltam[i] = n;
+  }
+  for (const [i, n] of Object.entries(faltam)) {
+    const def = produtos.includes(Number(i)) ? (qtds[i] ?? quantidade) : 0;
+    if (def + n > quantidade) throw erro(`Com defeito + não devolvidas passa de ${quantidade} na mesma peça.`);
+  }
   const sku = b.sku == null ? null : String(b.sku).slice(0, 120);
   const data = b.data && !Number.isNaN(Date.parse(b.data)) ? new Date(b.data).toISOString() : null;
   const origem = b.origem == null ? null : String(b.origem).slice(0, 80);
-  return { chave, canal: chave.split(':')[0], sku, quantidade, data_dev: data, origem, produtos, qtds };
+  return { chave, canal: chave.split(':')[0], sku, quantidade, data_dev: data, origem, produtos, qtds, faltam };
 }
 
 function criar({ D, aposGravar = () => null }) {
@@ -80,12 +97,13 @@ function criar({ D, aposGravar = () => null }) {
     const porSku = new Map();
     const devolucoes = r.devolucoes.map((d, i) => {
       const meus = ps.slice(k, k += todos[i].length);
-      const soma = r2(meus.reduce((s, p) => s + p.peca_defeito, 0));
+      const soma = r2(meus.reduce((s, p) => s + p.peca_defeito + p.peca_faltando, 0));
       total += soma;
       if (soma && canal !== 'shopee') porSku.set(d.sku || d.titulo || d.pedido, r2((porSku.get(d.sku || d.titulo || d.pedido) || 0) + soma));
-      return { ...d, pecas: meus, pecas_defeito: soma, ...(canal !== 'shopee' && d.custo != null ? { custo: r2(d.custo + soma) } : {}) };
+      return { ...d, pecas: meus, pecas_defeito: r2(meus.reduce((s, p) => s + p.peca_defeito, 0)), pecas_faltando: r2(meus.reduce((s, p) => s + p.peca_faltando, 0)), ...(canal !== 'shopee' && d.custo != null ? { custo: r2(d.custo + soma) } : {}) };
     });
-    const resumo = { ...r.resumo, pecas_defeito: r2(total), conferir: ps.filter((p) => !p.conferida).length,
+    const resumo = { ...r.resumo, pecas_defeito: r2(ps.reduce((s, p) => s + p.peca_defeito, 0)), pecas_faltando: r2(ps.reduce((s, p) => s + p.peca_faltando, 0)),
+      conferir: ps.filter((p) => !p.conferida).length,
       ...(canal !== 'shopee' && r.resumo?.custo != null ? { custo: r2(r.resumo.custo + total) } : {}) };
     const por_produto = Array.isArray(r.por_produto) ? r.por_produto.map((m) => {
       const s = porSku.get(m.sku || m.titulo); return s ? { ...m, custo: r2(m.custo + s) } : m; }) : r.por_produto;
@@ -104,7 +122,7 @@ function criar({ D, aposGravar = () => null }) {
       D.defeitoCanalGravar(m);
       // a volta ao estoque sai na hora (sem esperar a baixa de 10 em 10 min)
       try { await aposGravar(); } catch { /* a baixa automática tenta de novo */ }
-      return { ok: true, chave: m.chave, produtos: m.produtos, qtds: m.qtds };
+      return { ok: true, chave: m.chave, produtos: m.produtos, qtds: m.qtds, faltam: m.faltam };
     },
   };
   return { pecas, comPecas, envolver, rotas };

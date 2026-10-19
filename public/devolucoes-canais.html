@@ -62,7 +62,7 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
-<script src="/defeito-pecas.js?v=3"></script>
+<script src="/defeito-pecas.js?v=4"></script>
 <script>
 // Devoluções da Amazon, Leroy e Magalu (?conta=amazon|leroy|magalu): GET /api/{canal}/devolucoes, todas no mesmo formato.
 // Nada desta tela vai para o MCP.
@@ -84,7 +84,7 @@ function cartao(rot, valor, nota, destaque){
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 function custoTd(d){
   const td = el('td', 'dinheiro ' + (d.custo > 0 ? 'neg' : ''), real(d.custo));
-  if(d.pecas_defeito) td.appendChild(el('span', 'pequeno', `com ${real(d.pecas_defeito)} de peças com defeito`));
+  if(d.pecas_defeito || d.pecas_faltando) td.appendChild(el('span', 'pequeno', [d.pecas_defeito ? `${real(d.pecas_defeito)} de peças com defeito` : '', d.pecas_faltando ? `${real(d.pecas_faltando)} não devolvidas` : ''].filter(Boolean).join(' + ')));
   return td;
 }
 function pintarLista(){
@@ -133,7 +133,7 @@ async function carregar(silencioso){
       cartao('Devoluções', numero(r.casos), `${numero(r.unidades)} unidade(s)` + (CANAL === 'amazon' ? ` · ${numero(r.fba)} do FBA` : '') + ` · ${numero(r.parciais)} parcial(is)`),
       cartao('Devolvido aos clientes', real(r.devolvido), 'sai do faturamento'),
       cartao('Taxa de devolução', r.taxa == null ? '—' : pct(r.taxa), `${numero(r.unidades)} de ${numero(r.vendidas)} unidade(s) vendidas no período`),
-      cartao('Peças com defeito', real(r.pecas_defeito || 0), r.conferir ? `${numero(r.conferir)} item(ns) para conferir quando chegar` : 'custo das peças marcadas (não voltam à venda)'),
+      cartao('Peças com defeito', real(r.pecas_defeito || 0), (r.pecas_faltando ? `+ ${real(r.pecas_faltando)} de peças não devolvidas · ` : '') + (r.conferir ? `${numero(r.conferir)} item(ns) para conferir quando chegar` : 'custo das peças marcadas (não voltam à venda)')),
     );
     const tab = el('table'); const cab = el('tr'); for(const h of ['Produto', 'Devoluções', 'Unidades', 'Devolvido', 'Custo']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');

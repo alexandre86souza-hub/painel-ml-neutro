@@ -843,9 +843,12 @@ colunaNova('devolucao_defeito', 'produtos TEXT');
 // qtds: QUANTAS unidades de cada peça marcada estão com defeito ({"1":1}; "*" = produto de um SKU só).
 // NULL = todas as unidades devolvidas (marcação antiga).
 colunaNova('devolucao_defeito', 'qtds TEXT');
-const defeitoGravar = (claimId, defeito, produtos = null, qtds = null) =>
-  db.prepare('INSERT OR REPLACE INTO devolucao_defeito (claim_id, defeito, produtos, qtds, atualizado_em) VALUES (?,?,?,?,?)')
-    .run(claimId, defeito ? 1 : 0, Array.isArray(produtos) ? JSON.stringify(produtos) : null, qtds ? JSON.stringify(qtds) : null, agora());
+// faltam: peças do kit que o cliente NÃO devolveu ({"2":1}); não voltam ao estoque nem vão às peças com defeito.
+colunaNova('devolucao_defeito', 'faltam TEXT');
+const defeitoGravar = (claimId, defeito, produtos = null, qtds = null, faltam = null) =>
+  db.prepare('INSERT OR REPLACE INTO devolucao_defeito (claim_id, defeito, produtos, qtds, faltam, atualizado_em) VALUES (?,?,?,?,?,?)')
+    .run(claimId, defeito ? 1 : 0, Array.isArray(produtos) ? JSON.stringify(produtos) : null, qtds ? JSON.stringify(qtds) : null,
+      faltam && Object.keys(faltam).length ? JSON.stringify(faltam) : null, agora());
 // Crédito do ML digitado pelo vendedor numa reclamação (quando o depósito não foi ligado sozinho,
 // ou veio com valor diferente). Vale no lugar do crédito ligado automaticamente.
 db.exec(`CREATE TABLE IF NOT EXISTS devolucao_credito (claim_id INTEGER PRIMARY KEY, valor REAL NOT NULL, gravado_em TEXT NOT NULL)`);
@@ -860,19 +863,24 @@ const defeitoProdutosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, 
   .map((r) => { try { return [r.claim_id, JSON.parse(r.produtos)]; } catch { return [r.claim_id, null]; } }));
 const defeitoQtdsDe = () => Object.fromEntries(db.prepare('SELECT claim_id, qtds FROM devolucao_defeito WHERE qtds IS NOT NULL').all()
   .map((r) => { try { return [r.claim_id, JSON.parse(r.qtds)]; } catch { return [r.claim_id, null]; } }));
+const defeitoFaltamDe = () => Object.fromEntries(db.prepare('SELECT claim_id, faltam FROM devolucao_defeito WHERE faltam IS NOT NULL').all()
+  .map((r) => { try { return [r.claim_id, JSON.parse(r.faltam)]; } catch { return [r.claim_id, null]; } }));
 // Peças com defeito nas devoluções da Shopee, Amazon, Leroy e Magalu (defeito-canais.js): uma linha por item devolvido
 // (chave "shopee:{loja}:{devolução}:{i}", "amazon:{pedido}:{sku}"…), com o SKU do painel, a quantidade e a data da
 // devolução para a volta ao estoque. produtos = posições das peças com defeito ([] = conferida, tudo bom); qtds = {posição: n}.
 db.exec(`CREATE TABLE IF NOT EXISTS devolucao_defeito_canal (
   chave TEXT PRIMARY KEY, canal TEXT NOT NULL, sku TEXT, quantidade INTEGER NOT NULL, data_dev TEXT, origem TEXT,
   produtos TEXT NOT NULL, qtds TEXT, atualizado_em TEXT NOT NULL)`);
+// faltam = peças que o cliente NÃO devolveu ({posição: n}): nem estoque bom nem de defeitos.
+colunaNova('devolucao_defeito_canal', 'faltam TEXT');
+const jsonOuNull = (o) => (o && Object.keys(o).length ? JSON.stringify(o) : null);
 const defeitoCanalGravar = (m) => db.prepare(`INSERT OR REPLACE INTO devolucao_defeito_canal
-  (chave, canal, sku, quantidade, data_dev, origem, produtos, qtds, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?)`)
+  (chave, canal, sku, quantidade, data_dev, origem, produtos, qtds, faltam, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?,?)`)
   .run(m.chave, m.canal, m.sku || null, m.quantidade, m.data_dev || null, m.origem || null, JSON.stringify(m.produtos),
-    m.qtds && Object.keys(m.qtds).length ? JSON.stringify(m.qtds) : null, agora());
+    jsonOuNull(m.qtds), jsonOuNull(m.faltam), agora());
 const defeitosCanalListar = () => db.prepare('SELECT * FROM devolucao_defeito_canal').all().map((r) => {
   const j = (t) => { try { return JSON.parse(t); } catch { return null; } };
-  return { ...r, produtos: j(r.produtos) || [], qtds: r.qtds ? j(r.qtds) : null };
+  return { ...r, produtos: j(r.produtos) || [], qtds: r.qtds ? j(r.qtds) : null, faltam: r.faltam ? j(r.faltam) : null };
 });
 // SKU da unidade vendida em cada pedido (para abrir o kit da devolução nos produtos dele).
 const skusDosPedidos = (orderIds) => {
@@ -2192,7 +2200,7 @@ module.exports = {
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, defeitoQtdsDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,

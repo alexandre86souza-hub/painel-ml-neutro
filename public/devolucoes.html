@@ -421,6 +421,8 @@ function pintarLista(){
     par('Peça com defeito', x.custo.total ? '− ' + real(x.custo.total) : real(0), x.custo.total ? 'neg' : null,
       x.custo.na_venda ? 'reembolso parcial: produto, frete de ida e tarifas já estão na venda (tela Pedidos)' : x.custo.nao_voltou ? 'produto não voltou' : comDefeito.length ? comDefeito.join(' + ') + ' · não volta à venda'
         : x.custo.defeito ? (x.quantidade > 1 ? `${qd['*'] ?? x.quantidade} de ${x.quantidade} un. · ` : '') + 'não volta à venda' : null);
+    const naoDev = Object.entries(x.custo.faltam || {}).map(([i, n]) => x.componentes[i]?.sku && (x.quantidade > 1 ? `${n}× ` : '') + x.componentes[i].sku).filter(Boolean);
+    if(naoDev.length) par('Não devolvida', '− ' + real(x.custo.peca_faltando), 'neg', naoDev.join(' + ') + ' · o cliente não devolveu (já está no total acima)');
     par('Crédito do ML', x.credito_ml ? '+ ' + real(x.credito_ml.valor) : '—', x.credito_ml ? 'pos' : null,
       x.credito_ml ? (x.credito_ml.manual ? 'informado por você' + (x.credito_ml.automatico != null ? ` (no lugar de ${real(x.credito_ml.automatico)})` : '')
         : `em ${data(x.credito_ml.data)}`) : null);
@@ -465,7 +467,8 @@ function pintarLista(){
       grupo.appendChild(el('legend', null, 'Quais produtos voltaram com defeito?'));
       if(x.defeito_marcado == null && x.defeito_sugerido && voltou) grupo.appendChild(el('small', null, 'a revisão do ML apontou defeito: confira quais peças'));
       if(x.defeito_marcado == null && x.custo.nao_voltou) grupo.appendChild(el('small', null, 'o produto não voltou: hoje conta o kit inteiro como perdido. Marque as peças para contar só elas.'));
-      const qtdsKit = [];
+      const qtdsKit = [], faltamKit = [];
+      const fal = x.custo.faltam || {};
       const caixas = pecas.map((p, i) => {
         const lab = el('label');
         const ck = el('input'); ck.type = 'checkbox'; ck.checked = marcadas.has(i);
@@ -480,6 +483,17 @@ function pintarLista(){
           qt.append(document.createTextNode('com defeito:'), n, document.createTextNode(`de ${x.quantidade}`));
           grupo.appendChild(qt); qtdsKit[i] = n;
         }
+        // o cliente não devolveu esta peça: nem estoque bom nem peças com defeito (o custo dela soma como perdida)
+        const nf = el('label', 'qtd-defeito');
+        const cf = el('input'); cf.type = 'checkbox'; cf.checked = !!fal[i]; cf.setAttribute('aria-label', `${p.sku} não devolvida`);
+        nf.append(cf, document.createTextNode(' não devolvida pelo cliente'));
+        let nn = null;
+        if(x.quantidade > 1 && cf.checked){
+          nn = el('input'); nn.type = 'number'; nn.min = '1'; nn.max = String(x.quantidade); nn.step = '1'; nn.value = String(fal[i] || x.quantidade);
+          nn.setAttribute('aria-label', `Quantas ${p.sku} não devolvidas`);
+          nf.append(nn, document.createTextNode(`de ${x.quantidade}`));
+        }
+        grupo.appendChild(nf); faltamKit[i] = { cf, nn };
         return ck;
       });
       if(x.quantidade > 1) grupo.appendChild(el('small', null, `${x.quantidade} unidades devolvidas: diga quantas de cada peça marcada estão com defeito; as outras voltam ao estoque.`));
@@ -488,14 +502,17 @@ function pintarLista(){
         const produtos = caixas.map((c, i) => (c.checked ? i : -1)).filter((i) => i >= 0);
         const qtds = {};
         for(const i of produtos) if(qtdsKit[i]) qtds[i] = Math.min(x.quantidade, Math.max(1, Math.round(Number(qtdsKit[i].value) || x.quantidade)));
+        const faltam = {};
+        faltamKit.forEach((f, i) => { if(f?.cf.checked) faltam[i] = f.nn ? Math.min(x.quantidade, Math.max(1, Math.round(Number(f.nn.value) || x.quantidade))) : x.quantidade; });
         try{
           await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ produtos, ...(Object.keys(qtds).length ? { qtds } : {}) }) });
+            body: JSON.stringify({ produtos, ...(Object.keys(qtds).length ? { qtds } : {}), faltam }) });
           carregar(true);
         }catch(e){ if(ck) ck.checked = !ck.checked; $('msg').textContent = e.message; $('msg').style.display = 'block'; caixas.forEach((c) => { c.disabled = false; }); }
       };
       for(const ck of caixas) ck.onchange = () => salvarKit(ck);
       for(const n of qtdsKit) if(n) n.onchange = () => salvarKit(null);
+      for(const f of faltamKit){ if(!f) continue; f.cf.onchange = () => salvarKit(null); if(f.nn) f.nn.onchange = () => salvarKit(null); }
       b3.appendChild(grupo);
     }else{
       const lab = el('label', 'defeito');
