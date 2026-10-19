@@ -448,8 +448,9 @@ function criar({ D, janela }) {
       return importarPrecos(v.itens.map((i) => ({ ...i, inicio: v.inicio, fim: v.fim })));
     },
     // Anúncios (ofertas) da Leroy com custo, vendas de 30 dias e a taxa média de cada SKU (tela leroy-anuncios.html):
-    // taxa = (comissão + reembolsos + frete líquido) ÷ faturamento das vendas de 90 dias do SKU (sem venda: a média da
-    // loja). Usada no lucro estimado e no "Preço pela margem".
+    // taxa = (comissão líquida + frete líquido) ÷ faturamento das vendas de 90 dias do SKU (sem venda: a média da loja), SEM
+    // as devolvidas e sem o reembolso: uma venda só, devolvida, dava taxa de 106% (reembolso > venda) e lucro negativo na
+    // prévia das campanhas — o custo da devolução está na tela Devoluções. Usada no lucro estimado e no "Preço pela margem".
     'GET /api/leroy/anuncios': async (url) => {
       const lista = await ofertas(url.searchParams.get('recarregar') === '1');
       const agora = Date.now();
@@ -463,7 +464,7 @@ function criar({ D, janela }) {
         const x = porSku.get(l.sku) || { fat: 0, taxa: 0, v30: 0, foto: null };
         x.foto ||= l.foto;
         if (l.data >= d30) x.v30 += n(l.quantidade);
-        if (l.frete != null) { x.fat += n(l.faturamento); x.taxa += n(l.tarifa) + n(l.frete); loja.fat += n(l.faturamento); loja.taxa += n(l.tarifa) + n(l.frete); }
+        if (l.frete != null && !l.devolvido) { const t = n(l.comissao) + n(l.frete); x.fat += n(l.faturamento); x.taxa += t; loja.fat += n(l.faturamento); loja.taxa += t; }
         porSku.set(l.sku, x);
       }
       const media = loja.fat > 0 ? loja.taxa / loja.fat : null;
