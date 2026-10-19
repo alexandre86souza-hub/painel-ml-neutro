@@ -268,7 +268,9 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
     const sem = falhas.every((f) => f.status === 401 || f.status === 403 || f.status === 404) && falhas.some((f) => f.status === 401 || f.status === 403);
     const txt = ult.msg.trim() ? ult.msg
       : sem ? `o Mercado Livre não autorizou a mudança (HTTP ${falhas.map((f) => f.status + (f.codigo ? ' ' + f.codigo : '')).join(' / ')}). `
-        + 'Com "Publicidade" em leitura e escrita no aplicativo, o token desta conta pode ser de antes da permissão: reconecte a conta (Configurações) e tente de novo.'
+        + (/urn:ml:mktp:ads:\/read-write/.test(contaOuErro().scope || '')
+          ? 'O token desta conta JÁ tem Publicidade com leitura e escrita: a recusa é do lado do Mercado Livre para este aplicativo. Enquanto isso, mude a campanha pelo Mercado Ads, no site do ML.'
+          : 'O token desta conta não tem Publicidade com escrita: deixe "Publicidade" em leitura e escrita no aplicativo (DevCenter) e reconecte a conta (Configurações).')
         : `HTTP ${ult.status}${ult.codigo ? ' · ' + ult.codigo : ''}`;
     throw Object.assign(new Error(txt), { status: ult.status === 401 ? 409 : ult.status || 502, tentativas: falhas.map(({ caminho: c, status, codigo }) => ({ caminho: c, status, codigo })) });
   }
