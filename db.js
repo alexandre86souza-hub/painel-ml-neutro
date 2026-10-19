@@ -2088,7 +2088,7 @@ const estoqueSaldos = () => new Map(db.prepare('SELECT numero, SUM(qtd) s FROM e
 // Para a reposição e o custo médio: por produto, saídas (sem ajustes) desde `de` e entradas com valor.
 function estoqueResumoMov(de) {
   return db.prepare(`SELECT numero,
-      SUM(CASE WHEN qtd < 0 AND tipo <> 'ajuste' AND data >= ? THEN -qtd ELSE 0 END) AS saidas,
+      SUM(CASE WHEN qtd < 0 AND tipo NOT IN ('ajuste', 'defeito') AND data >= ? THEN -qtd ELSE 0 END) AS saidas,
       SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd ELSE 0 END) AS ent_qtd,
       SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd * COALESCE(valor_unit, 0) ELSE 0 END) AS ent_valor,
       MAX(CASE WHEN qtd < 0 AND tipo <> 'ajuste' THEN data END) AS ultima_saida

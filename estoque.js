@@ -30,9 +30,10 @@ const r2 = (v) => Math.round(v * 100) / 100;
 const erro = (m, status = 400) => Object.assign(new Error(m), { status });
 const diaLocal = (iso) => new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10);
 const meioDia = (dia) => `${dia}T15:00:00.000Z`;   // 12h de Brasília: o dia não muda com o fuso
-const TIPOS_MANUAIS = { entrada: 1, saida: -1, devolucao: 1 };
+// defeito = saída das peças com defeito que vão para a troca com o fornecedor (fora da média de saída da reposição)
+const TIPOS_MANUAIS = { entrada: 1, saida: -1, devolucao: 1, defeito: -1 };
 const TIPO_NOME = { entrada: 'Entrada', compra: 'Recebimento de compra', saida: 'Saída', venda: 'Venda', cancelamento: 'Venda cancelada',
-  devolucao: 'Devolução', ajuste: 'Ajuste de contagem' };
+  devolucao: 'Devolução', defeito: 'Defeito (troca com fornecedor)', ajuste: 'Ajuste de contagem' };
 
 // ---------- funções puras (testadas) ----------
 
@@ -143,14 +144,16 @@ function relatorio(movs, { periodo = 'mes', por = 'total', nomes = new Map() } =
     const p = periodoDe(diaLocal(m.data), periodo);
     const g = por === 'loja' ? (m.origem || 'Sem origem') : por === 'canal' ? canalDe(m.origem) : por === 'produto' ? (nomes.get(m.numero) || String(m.numero)) : 'Total';
     const k = `${p}|${g}`;
-    const x = linhas.get(k) || { periodo: p, grupo: g, entradas: 0, saidas: 0, ajustes: 0, valor_entradas: 0, valor_saidas: 0 };
+    const x = linhas.get(k) || { periodo: p, grupo: g, entradas: 0, saidas: 0, ajustes: 0, devolucoes: 0, defeitos: 0, valor_entradas: 0, valor_saidas: 0, valor_defeitos: 0 };
     const v = (m.valor_unit || 0) * Math.abs(m.qtd);
     if (m.tipo === 'ajuste') x.ajustes += m.qtd;
+    else if (m.tipo === 'devolucao') x.devolucoes += m.qtd;   // devolução de cliente: à parte das entradas
+    else if (m.tipo === 'defeito') { x.defeitos -= m.qtd; x.valor_defeitos += m.qtd < 0 ? v : -v; }   // peças para a troca com o fornecedor
     else if (['venda', 'saida', 'cancelamento'].includes(m.tipo)) { x.saidas -= m.qtd; x.valor_saidas += m.qtd < 0 ? v : -v; }
     else { x.entradas += m.qtd; x.valor_entradas += v; }
     linhas.set(k, x);
   }
-  return [...linhas.values()].map((x) => ({ ...x, valor_entradas: r2(x.valor_entradas), valor_saidas: r2(x.valor_saidas) }))
+  return [...linhas.values()].map((x) => ({ ...x, valor_entradas: r2(x.valor_entradas), valor_saidas: r2(x.valor_saidas), valor_defeitos: r2(x.valor_defeitos) }))
     .sort((a, b) => b.periodo.localeCompare(a.periodo) || b.saidas - a.saidas);
 }
 
@@ -301,10 +304,11 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       }).concat(linhasDeDevolucaoCanais(desde));
   }
   // Shopee, Amazon, Leroy e Magalu (defeito-canais.js): só o item CONFERIDO na tela de devoluções volta, sem as peças
-  // marcadas com defeito; devolução com data antes da 1ª contagem fica de fora (o produto já estava na prateleira).
+  // marcadas com defeito — conferir = o produto chegou (pedido do dono, 19/10/2026: lança ao conferir, qualquer que seja a
+  // data da devolução). Conferido antes da 1ª contagem não volta (já estava na prateleira contada).
   function linhasDeDevolucaoCanais(desde) {
     const NOME = { shopee: 'Shopee', amazon: 'Amazon', leroy: 'Leroy Merlin', magalu: 'Magalu' };
-    return (D.defeitosCanalListar ? D.defeitosCanalListar() : []).filter((m) => m.data_dev && m.data_dev >= desde).map((m) => ({
+    return (D.defeitosCanalListar ? D.defeitosCanalListar() : []).filter((m) => m.atualizado_em >= desde).map((m) => ({
       ref: `devolucao:${m.chave}`, sku: m.sku, qtd: m.quantidade, data: m.atualizado_em, valida: true, sinal: 1,
       sem: m.produtos.length ? m.produtos : null, defeituosos: m.produtos.length && m.qtds ? m.qtds : null, pendente: null,
       tipo: 'devolucao', origem: m.origem || NOME[m.canal] || m.canal }));
@@ -402,7 +406,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
         ate: q.get('ate') ? new Date(Date.parse(`${q.get('ate')}T03:00:00.000Z`) + 864e5 - 1).toISOString() : null, tipo: q.get('tipo') || null, origem: q.get('origem') || null,
         historico: q.get('historico') === '1' ? null : false, limite: 1000 })
         .map((m) => ({ ...m, sku: cat.porNumero.get(m.numero)?.sku || null, nome: cat.porNumero.get(m.numero)?.nome || null,
-          tipo_nome: TIPO_NOME[m.tipo] || m.tipo, pode_desfazer: !m.historico && !m.desfeito && ['entrada', 'saida', 'devolucao'].includes(m.tipo) })) };
+          tipo_nome: TIPO_NOME[m.tipo] || m.tipo, pode_desfazer: !m.historico && !m.desfeito && ['entrada', 'saida', 'devolucao', 'defeito'].includes(m.tipo) })) };
     },
     // Relatório de entradas e saídas: dia, semana, mês ou ano; total, por loja, canal ou produto.
     'GET /api/estoque/relatorio': async (url) => {
@@ -420,8 +424,9 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const nomes = new Map(cat.lista.map((p) => [p.numero, `${p.sku || p.numero} · ${p.nome || ''}`]));
       const linhas = relatorio(movs, { periodo, por, nomes });
       const tot = linhas.reduce((t, l) => ({ entradas: t.entradas + l.entradas, saidas: t.saidas + l.saidas, ajustes: t.ajustes + l.ajustes,
-        valor_entradas: r2(t.valor_entradas + l.valor_entradas), valor_saidas: r2(t.valor_saidas + l.valor_saidas) }),
-      { entradas: 0, saidas: 0, ajustes: 0, valor_entradas: 0, valor_saidas: 0 });
+        devolucoes: t.devolucoes + l.devolucoes, defeitos: t.defeitos + l.defeitos,
+        valor_entradas: r2(t.valor_entradas + l.valor_entradas), valor_saidas: r2(t.valor_saidas + l.valor_saidas), valor_defeitos: r2(t.valor_defeitos + l.valor_defeitos) }),
+      { entradas: 0, saidas: 0, ajustes: 0, devolucoes: 0, defeitos: 0, valor_entradas: 0, valor_saidas: 0, valor_defeitos: 0 });
       const lojas = [...new Set(D.estoqueRelatorio('2000', '9999').map((m) => m.origem || 'Sem origem'))].sort();
       return { de, ate, periodo, por, linhas: linhas.slice(0, 5000), total: tot, lojas, canais: [...new Set(lojas.map(canalDe))].sort() };
     },
@@ -430,7 +435,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const sinal = TIPOS_MANUAIS[b?.tipo];
       if (!sinal) throw erro('Tipo inválido.');
       const origem = String(b?.origem || '').trim().slice(0, 60);
-      if (!origem) throw erro(b.tipo === 'entrada' ? 'Informe o fornecedor (ou de onde veio).' : 'Informe o destino/loja.');
+      if (!origem) throw erro(b.tipo === 'entrada' || b.tipo === 'defeito' ? 'Informe o fornecedor.' : 'Informe o destino/loja.');
       const cat = catalogo();
       const linhas = expandir(b.itens, cat);
       const data = dataOuAgora(b.data);
@@ -442,7 +447,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
     },
     'POST /api/estoque/desfazer': async (_u, b) => {
       const m = D.estoqueMovObter(Number(b?.id));
-      if (!m || m.historico || m.desfeito || !['entrada', 'saida', 'devolucao'].includes(m.tipo)) throw erro('Esse lançamento não pode ser desfeito aqui.');
+      if (!m || m.historico || m.desfeito || !['entrada', 'saida', 'devolucao', 'defeito'].includes(m.tipo)) throw erro('Esse lançamento não pode ser desfeito aqui.');
       return { desfeitos: D.estoqueMovDesfeito(m) };
     },
     // Contagem física: rascunho por produto e, ao finalizar, o ajuste (contado − saldo). A 1ª liga a baixa automática.

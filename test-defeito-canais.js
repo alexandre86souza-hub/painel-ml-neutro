@@ -50,5 +50,6 @@ assert.deepStrictEqual(d2.lancar.map((m) => [m.numero, m.qtd]), [[694, -1]]);
 console.log('Peças com defeito nas devoluções da Shopee, Amazon, Leroy e Magalu e a volta ao estoque: ok');
 // volta ao estoque sozinha só com a contagem feita e devolução a partir dela
 assert.strictEqual(F.pecasDo(item, porNumero, undefined, '2026-10-16T15:00:00.000Z').estoque, 'volta');
-assert.strictEqual(F.pecasDo({ ...item, data: '2026-10-07T12:00:00.000Z' }, porNumero, undefined, '2026-10-16T15:00:00.000Z').estoque, 'antes_contagem');
+assert.strictEqual(F.pecasDo({ ...item, data: '2026-10-07T12:00:00.000Z' }, porNumero, { produtos: [], atualizado_em: '2026-10-19T18:00:00.000Z' }, '2026-10-16T15:00:00.000Z').estoque, 'volta', 'devolução antiga conferida depois da contagem volta');
+assert.strictEqual(F.pecasDo(item, porNumero, { produtos: [], atualizado_em: '2026-10-15T18:00:00.000Z' }, '2026-10-16T15:00:00.000Z').estoque, 'antes_contagem');
 assert.strictEqual(F.pecasDo(item, porNumero, undefined, null).estoque, 'sem_contagem');

@@ -96,7 +96,7 @@
       Devolução de outra loja: lance só o que voltou SEM defeito (com defeito não volta ao estoque) e nunca a do Full/FBA (volta ao armazém do marketplace). Aqui vão as entradas de fornecedor, as saídas manuais (Josi, troca, envio ao Full, OLX…) e as devoluções de cliente. Kit (KIT-407.408) vira os produtos dele.</p>
     <form id="fLancar" autocomplete="off">
       <div class="form">
-        <label>Tipo<select id="lTipo"><option value="entrada">Entrada (fornecedor)</option><option value="saida">Saída manual</option><option value="devolucao">Devolução de cliente (volta ao estoque)</option></select></label>
+        <label>Tipo<select id="lTipo"><option value="entrada">Entrada (fornecedor)</option><option value="saida">Saída manual</option><option value="devolucao">Devolução de cliente (volta ao estoque)</option><option value="defeito">Peças com defeito (troca com fornecedor)</option></select></label>
         <label><span id="lOrigemRot">Fornecedor</span><input id="lOrigem" required maxlength="60" list="lOrigens"></label>
         <label>Data<input id="lData" type="date"></label>
         <label>Observação<input id="lObs" maxlength="200"></label>
@@ -113,7 +113,7 @@
       <input id="mProd" placeholder="SKU (ex.: DQ-407)" aria-label="Produto">
       <label style="font-size:13px">De <input type="date" id="mDe"></label>
       <label style="font-size:13px">Até <input type="date" id="mAte"></label>
-      <select id="mTipo" aria-label="Tipo"><option value="">Todos os tipos</option><option value="venda">Venda</option><option value="cancelamento">Venda cancelada</option><option value="entrada">Entrada</option><option value="compra">Recebimento de compra</option><option value="saida">Saída manual</option><option value="devolucao">Devolução</option><option value="ajuste">Ajuste de contagem</option></select>
+      <select id="mTipo" aria-label="Tipo"><option value="">Todos os tipos</option><option value="venda">Venda</option><option value="cancelamento">Venda cancelada</option><option value="entrada">Entrada</option><option value="compra">Recebimento de compra</option><option value="saida">Saída manual</option><option value="devolucao">Devolução</option><option value="defeito">Defeito (troca com fornecedor)</option><option value="ajuste">Ajuste de contagem</option></select>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="mHist"> Incluir a planilha (histórico)</label>
       <button type="button" class="bt" id="mBuscar">Buscar</button>
     </div>
@@ -333,12 +333,13 @@ function linha(box, { codigo = '', qtd = 1, valor = '', comValor = true } = {}){
 const itensDe = (box) => [...box.querySelectorAll('.linha')].map((l) => ({ codigo: l.querySelector('.cod').value.trim(), qtd: Number(l.querySelector('.qtd').value),
   valor_unit: Number(l.querySelector('.valor').value) || null })).filter((i) => i.codigo);
 const ORIGENS = { entrada: ['Fornecedor', []], saida: ['Destino / loja', ['Josi', 'Troca', 'Envio Full Mercado Livre', 'Envio Full Amazon', 'OLX', 'Shein', 'Enjoei', 'Amostra', 'Perda / quebra']],
-  devolucao: ['Loja da venda', ['Mercado Livre', 'Shopee', 'Amazon', 'Leroy Merlin', 'Magalu', 'Josi', 'Venda direta']] };
+  devolucao: ['Loja da venda', ['Mercado Livre', 'Shopee', 'Amazon', 'Leroy Merlin', 'Magalu', 'Josi', 'Venda direta']],
+  defeito: ['Fornecedor (troca)', []] };
 function pintarOrigens(){
   const [rot, lista] = ORIGENS[$('lTipo').value];
   $('lOrigemRot').textContent = rot;
   const dl = $('lOrigens'); dl.innerHTML = '';
-  for(const o of ($('lTipo').value === 'entrada' ? [...$('listaForn').options].map((x) => x.value) : lista)){ const op = el('option'); op.value = o; dl.appendChild(op); }
+  for(const o of (['entrada', 'defeito'].includes($('lTipo').value) ? [...$('listaForn').options].map((x) => x.value) : lista)){ const op = el('option'); op.value = o; dl.appendChild(op); }
   for(const v of $('lLinhas').querySelectorAll('.valor')) v.style.visibility = $('lTipo').value === 'entrada' ? 'visible' : 'hidden';
 }
 async function prepararLancar(){
@@ -354,7 +355,8 @@ $('fLancar').onsubmit = async (ev) => {
   const itens = itensDe($('lLinhas'));
   const tipo = $('lTipo').value;
   const total = itens.reduce((s, i) => s + i.qtd, 0);
-  if(!confirm(`${tipo === 'saida' ? 'Tirar' : 'Dar entrada de'} ${total} peça(s) ${tipo === 'saida' ? 'para' : 'de'} "${$('lOrigem').value}"?`)) return;
+  const sai = tipo === 'saida' || tipo === 'defeito';
+  if(!confirm(`${sai ? 'Tirar' : 'Dar entrada de'} ${total} peça(s) ${tipo === 'defeito' ? 'com defeito para a troca com' : sai ? 'para' : 'de'} "${$('lOrigem').value}"?`)) return;
   try{
     const r = await post('/api/estoque/lancar', { tipo, origem: $('lOrigem').value, data: $('lData').value, obs: $('lObs').value, itens });
     aviso(`${r.lancados} produto(s) lançado(s).`, 'ok');
@@ -407,20 +409,22 @@ async function gerarRel(){
   grupo('Canais', rel.canais); grupo('Lojas', rel.lojas.filter((l) => !rel.canais.includes(l)));
   const t = rel.total, cs = $('rTotais'); cs.innerHTML = '';
   const cartao = (rot, val) => { const c = el('div', 'cartao'); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
-  cartao('Entradas (peças)', n0(t.entradas)); cartao('Saídas (peças)', n0(t.saidas)); cartao('Ajustes de contagem', (t.ajustes > 0 ? '+' : '') + n0(t.ajustes));
+  cartao('Entradas (peças)', n0(t.entradas)); cartao('Saídas (peças)', n0(t.saidas)); cartao('Devoluções de clientes (peças)', n0(t.devolucoes));
+  cartao('Defeito p/ troca com fornecedor', `${n0(t.defeitos)} peça(s) · ${real(t.valor_defeitos)}`); cartao('Ajustes de contagem', (t.ajustes > 0 ? '+' : '') + n0(t.ajustes));
   cartao('Valor das entradas', real(t.valor_entradas)); cartao('Valor das saídas', real(t.valor_saidas));
   const NOME_P = { dia: 'Dia', semana: 'Semana (seg.)', mes: 'Mês', ano: 'Ano' };
   const fmt = (pp) => (rel.periodo === 'mes' ? pp.split('-').reverse().join('/') : rel.periodo === 'ano' ? pp : diaBR(pp));
   const box = $('rLista'); box.innerHTML = '';
   if(!rel.linhas.length){ box.appendChild(el('p', 'vazio', 'Nada no período.')); return; }
-  box.appendChild(tabela([[NOME_P[rel.periodo]], ...(rel.por === 'total' ? [] : [[{ canal: 'Canal', loja: 'Loja', produto: 'Produto' }[rel.por]]]), ['Entradas', 'n'], ['Saídas', 'n'], ['Ajustes', 'n'], ['Valor entradas', 'n'], ['Valor saídas', 'n']],
+  box.appendChild(tabela([[NOME_P[rel.periodo]], ...(rel.por === 'total' ? [] : [[{ canal: 'Canal', loja: 'Loja', produto: 'Produto' }[rel.por]]]), ['Entradas', 'n'], ['Saídas', 'n'], ['Devoluções', 'n'], ['Defeito (troca)', 'n'], ['Ajustes', 'n'], ['Valor entradas', 'n'], ['Valor saídas', 'n']],
     rel.linhas.map((l) => { const tr = el('tr'); tr.append(td(fmt(l.periodo)), ...(rel.por === 'total' ? [] : [td(l.grupo)]), td(n0(l.entradas), 'n'), td(n0(l.saidas), 'n'),
+      td(l.devolucoes ? n0(l.devolucoes) : '—', 'n'), td(l.defeitos ? n0(l.defeitos) : '—', 'n'),
       td(l.ajustes ? (l.ajustes > 0 ? '+' : '') + n0(l.ajustes) : '—', 'n'), td(real(l.valor_entradas), 'n'), td(real(l.valor_saidas), 'n')); return tr; })));
 }
 $('rGerar').onclick = gerarRel;
 for(const id of ['rPeriodo', 'rPor', 'rLoja']) $(id).onchange = gerarRel;
-$('rCsv').onclick = () => rel && csv(`estoque-entradas-saidas-${rel.de}-a-${rel.ate}.csv`, ['Período', 'Grupo', 'Entradas', 'Saídas', 'Ajustes', 'Valor entradas', 'Valor saídas'],
-  rel.linhas.map((l) => [l.periodo, l.grupo, l.entradas, l.saidas, l.ajustes, String(l.valor_entradas).replace('.', ','), String(l.valor_saidas).replace('.', ',')]));
+$('rCsv').onclick = () => rel && csv(`estoque-entradas-saidas-${rel.de}-a-${rel.ate}.csv`, ['Período', 'Grupo', 'Entradas', 'Saídas', 'Devoluções', 'Defeito (troca)', 'Ajustes', 'Valor entradas', 'Valor saídas'],
+  rel.linhas.map((l) => [l.periodo, l.grupo, l.entradas, l.saidas, l.devolucoes, l.defeitos, l.ajustes, String(l.valor_entradas).replace('.', ','), String(l.valor_saidas).replace('.', ',')]));
 
 // ---------- CONTAGEM ----------
 let cont = null;

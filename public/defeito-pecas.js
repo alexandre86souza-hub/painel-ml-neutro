@@ -60,7 +60,7 @@
     // o que acontece com o estoque (a mesma regra de estoque.js#linhasDeDevolucaoCanais)
     const est = el('small', p.estoque === 'volta' ? 'ok' : 'pendente',
       p.estoque === 'volta' ? (p.conferida ? (marcadas.size ? 'O que não está marcado voltou ao estoque.' : 'Voltou ao estoque.') : 'Ao conferir, o que não estiver marcado volta ao estoque.')
-        : p.estoque === 'antes_contagem' ? `Devolução de antes da contagem de estoque (${dataHora(p.inicio_estoque).slice(0, 5)}): não volta sozinha. Se o produto chegou depois da contagem, lance a entrada na tela Estoque.`
+        : p.estoque === 'antes_contagem' ? `Conferida antes da contagem de estoque (${dataHora(p.inicio_estoque).slice(0, 5)}): já estava na prateleira contada.`
           : 'O estoque ainda não começou (falta a 1ª contagem): nada volta sozinho.');
     pe.append(bt, situ); grupo.append(pe, est);
     bt.onclick = async () => {

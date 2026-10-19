@@ -4,8 +4,8 @@
 // composições e as trocas do painel); o vendedor marca QUAIS peças voltaram com defeito e, com 2+ unidades, quantas.
 // - Custo: só as peças marcadas somam (custo do produto × unidades com defeito) no custo da devolução.
 // - Estoque (estoque.js#linhasDeDevolucao): o item CONFERIDO (marcado, mesmo sem defeito) volta ao estoque sem as peças
-//   com defeito — só devolução com data a partir da 1ª contagem (antes dela o produto já estava na prateleira contada
-//   ou entra à mão na tela Estoque). Sem conferir = não volta (a loja não diz quando o produto chegou).
+//   com defeito, na hora de conferir (qualquer que seja a data da devolução; conferido antes da 1ª contagem não volta).
+//   Sem conferir = não volta (a loja não diz quando o produto chegou).
 // - FBA da Amazon volta ao armazém da Amazon: a tela não mostra a marcação. Nada disto vai ao MCP.
 const C = require('./custos.js');
 
@@ -25,7 +25,7 @@ function pecasDo({ chave, sku, quantidade, data }, porNumero, marca, inicio = nu
   return { chave, sku: sku || null, quantidade: q, data: data || null, componentes: comps,
     conferida: !!marca, conferida_em: marca?.atualizado_em || null, produtos_defeito: marcadas, qtds_defeito: qtds,
     // volta ao estoque sozinha? só com a contagem feita e devolução a partir dela (estoque.js#linhasDeDevolucaoCanais)
-    estoque: !inicio ? 'sem_contagem' : data && data >= inicio ? 'volta' : 'antes_contagem', inicio_estoque: inicio,
+    estoque: !inicio ? 'sem_contagem' : !marca || marca.atualizado_em >= inicio ? 'volta' : 'antes_contagem', inicio_estoque: inicio,
     peca_defeito: r2(marcadas.reduce((s, i) => s + (Number(comps[i].custo) || 0) * qtds[i], 0)),
     sem_custo: marcadas.some((i) => comps[i].custo == null) };
 }

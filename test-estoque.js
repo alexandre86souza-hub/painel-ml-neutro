@@ -140,11 +140,13 @@ const movs = [
   { data: '2026-10-07T02:00:00.000Z', tipo: 'cancelamento', origem: 'Mercado Livre · LOJA', numero: 407, qtd: 1, valor_unit: 30 },   // 06/10 em Brasília
   { data: '2026-10-08T15:00:00.000Z', tipo: 'entrada', origem: 'BRUNO', numero: 407, qtd: 10, valor_unit: 31 },
   { data: '2026-10-08T15:00:00.000Z', tipo: 'ajuste', origem: 'Contagem de estoque', numero: 408, qtd: -3, valor_unit: 5 },
+  { data: '2026-10-09T15:00:00.000Z', tipo: 'devolucao', origem: 'Shopee', numero: 408, qtd: 2, valor_unit: 5 },   // devolução: à parte das entradas
+  { data: '2026-10-09T15:00:00.000Z', tipo: 'defeito', origem: 'BRUNO', numero: 407, qtd: -1, valor_unit: 30 },   // troca com o fornecedor: à parte das saídas
 ];
 assert.strictEqual(E.periodoDe('2026-10-08', 'semana'), '2026-10-05', 'semana começa na segunda');
 assert.strictEqual(E.periodoDe('2026-10-05', 'semana'), '2026-10-05');
 let rel = E.relatorio(movs, { periodo: 'mes', por: 'total' });
-assert.deepStrictEqual(rel, [{ periodo: '2026-10', grupo: 'Total', entradas: 10, saidas: 2, ajustes: -3, valor_entradas: 310, valor_saidas: 60 }]);
+assert.deepStrictEqual(rel, [{ periodo: '2026-10', grupo: 'Total', entradas: 10, saidas: 2, ajustes: -3, devolucoes: 2, defeitos: 1, valor_entradas: 310, valor_saidas: 60, valor_defeitos: 30 }]);
 rel = E.relatorio(movs, { periodo: 'dia', por: 'canal' });
 assert.deepStrictEqual(rel.filter((l) => l.grupo === 'Mercado Livre').map((l) => [l.periodo, l.saidas]), [['2026-10-06', 0], ['2026-10-05', 2]]);
 rel = E.relatorio(movs, { periodo: 'ano', por: 'loja' });

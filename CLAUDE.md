@@ -352,7 +352,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Peças com defeito nessas telas e na de devoluções da Shopee (`defeito-canais.js`, `public/defeito-pecas.js`, tabela `devolucao_defeito_canal`,
   `PUT /api/devolucoes/canais/defeito`): a mesma marcação do ML por item devolvido (kit aberto, quantas com defeito); `envolver` acrescenta
   `d.pecas` às rotas GET de devoluções e soma as peças marcadas no custo. "Conferir" = chegou: volta ao estoque sem as peças com defeito,
-  só devolução com data a partir da 1ª contagem (`estoque.js#linhasDeDevolucaoCanais`); sem conferir não volta. FBA fica fora. Fora do MCP.
+  na hora de conferir, qualquer data de devolução (conferido antes da 1ª contagem não volta; `estoque.js#linhasDeDevolucaoCanais`); sem conferir não volta. FBA fica fora. Fora do MCP.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,
@@ -367,7 +367,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   lança só o que falta (nunca duplica); SKU sem produto = pendente na tela. Reposição = fórmulas da planilha
   (`reposicao`: média 6m, mínimo ⌈média×prazo⌉, máximo, sugestão menos pedidos em aberto, status). Relatório
   (`relatorio`): dia/semana/mês/ano × total/canal/loja/produto. Comanda manual (Venda direta, `comandas.js`) tira do
-  estoque com ref comanda:… e cancelar devolve. Nada no MCP (`test-estoque.js`).
+  estoque com ref comanda:… e cancelar devolve. Saída manual "defeito" = peças com defeito para a troca com o fornecedor (fora da média de saída da reposição; relatório mostra devoluções e defeitos à parte). Nada no MCP (`test-estoque.js`).
 - Campanhas da Amazon e da Leroy (`campanhas-canais.js`, tela `public/campanhas-canais.html?conta=amazon|leroy`; o menu
   troca Campanhas por ela): (1) preço promocional com início e fim em cada anúncio, agrupado pelo período,
   com o resultado (vendas e lucro no período contra os mesmos dias antes); criar/encerrar só pelo clique, com
