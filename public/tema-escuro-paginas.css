@@ -278,6 +278,8 @@ html[data-tema="escuro"][data-pagina="etiquetas"] dialog{background:hsla(43,41%,
 html[data-tema="escuro"][data-pagina="etiquetas"] .dlg-topo{border-bottom:1px solid hsla(41,30%,60%,.35)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .arquivo{border:1px solid hsla(41,25%,60%,.35);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .falhas{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="etiquetas"] .res-zip{border:1px solid hsla(150,37%,60%,.35);background:hsla(152,37%,60%,.14);color:hsl(154,55%,72%)}
+html[data-tema="escuro"][data-pagina="etiquetas"] .res-zip.erro{border-color:hsla(16,73%,60%,.35);background:hsla(17,84%,60%,.14);color:hsl(15,71%,72%)}
 html[data-tema="escuro"][data-pagina="etiquetas"] .dlg-pe{border-top:1px solid hsla(41,30%,60%,.35)}
 /* financeiro.html */
 html[data-tema="escuro"][data-pagina="financeiro"] .cartao.alerta .valor{color:hsl(26,90%,72%)}

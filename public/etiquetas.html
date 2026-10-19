@@ -53,6 +53,10 @@
     #impressao img:last-child{page-break-after:auto;break-after:auto}
   }
   .falhas{margin:6px 0 0;padding-left:18px;color:#b42318;font-size:13px}
+  .res-zip{border:1px solid #b9dfcc;background:#e7f4ee;color:#1f6b4a;border-radius:12px;padding:10px 14px;margin:0 0 10px;font-size:14px;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  .res-zip.erro{border-color:#f3c3b1;background:#fdeee8;color:#b4441e}
+  .res-zip ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+  .res-zip .acoes{align-items:center}
   .dlg-pe{padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #ece7dc}
 </style>
 </head>
@@ -90,6 +94,7 @@
       <button type="button" class="bt imprimir" id="btSel" disabled>Imprimir selecionadas</button>
       <button type="button" class="bt" id="btZip" disabled title="Um .txt (ZPL) por conta/loja, para mandar direto à térmica">Baixar ZIP (.txt)</button>
     </div>
+    <div id="resZip" class="res-zip" role="status" aria-live="polite" hidden></div>
     <p class="sub" id="nota"></p>
     <div class="tabela-rolagem" id="lista"><p class="carregando">Buscando os envios de todas as lojas…</p></div>
     <p class="sub">Na impressão, escolha a impressora térmica: a página já vai em 100 × 150 mm (margens "Nenhuma", escala padrão).
@@ -316,18 +321,51 @@ async function baixarZip(chaves){
         if(ml){ const buf = new Uint8Array(await r.arrayBuffer()); texto = Array.from(buf, (v) => String.fromCharCode(v)).join(''); }
         else texto = (await etiquetasDoPdf(new Uint8Array(await r.arrayBuffer()))).map((p) => zplDaImagem(p.cv)).join('\n');
         const sufixo = lista.length > 50 ? ` parte ${i / 50 + 1}` : '';
-        arquivos.push({ nome: nomeArquivo(`${nomeGrupo(parte[0])} ${hoje}${sufixo}`) + '.txt', texto });
+        const falhou = new Set(falhas.map((f) => f.chave));
+        arquivos.push({ nome: nomeArquivo(`${nomeGrupo(parte[0])} ${hoje}${sufixo}`) + '.txt', texto,
+          comandas: parte.filter((e) => !falhou.has(e.chave)).map(nomeComanda) });
       }catch(x){ problemas.push(`${nomeGrupo(parte[0])}: ${x.message}`); }
     }
   }
   b.textContent = txtBt; b.disabled = false;
+  let nomeZip = null;
   if(arquivos.length){
-    const a = document.createElement('a'); a.href = URL.createObjectURL(zipDe(arquivos)); a.download = `etiquetas ${hoje}.zip`;
-    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    const hora = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+    nomeZip = `etiquetas ${hoje} ${hora}.zip`;
+    if(urlZip) URL.revokeObjectURL(urlZip);
+    urlZip = URL.createObjectURL(zipDe(arquivos));
+    salvarZip(nomeZip);
   }
-  aviso(problemas.length ? 'Algumas etiquetas não saíram: ' + problemas.join(' · ') : (arquivos.length ? `ZIP baixado com ${arquivos.length} arquivo(s) .txt.` : ''), problemas.length ? '' : 'ok');
+  resultadoZip(nomeZip, arquivos, problemas);
   for(const k of chaves) sel.delete(k);
   carregar(false);
+}
+// O ZIP fica na memória da tela até o próximo: dá para baixar de novo se o navegador não salvou.
+let urlZip = null;
+function salvarZip(nome){
+  const a = document.createElement('a'); a.href = urlZip; a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+// Resultado fica na tela (o aviso do topo some na próxima atualização da lista).
+function resultadoZip(nomeZip, arquivos, problemas){
+  const box = $('resZip'); box.innerHTML = ''; box.className = 'res-zip' + (nomeZip ? '' : ' erro');
+  const txt = el('div');
+  if(nomeZip){
+    const total = arquivos.reduce((s, f) => s + f.comandas.length, 0);
+    txt.appendChild(el('b', null, `Baixado: "${nomeZip}" — ${total} etiqueta(s) em ${arquivos.length} arquivo(s) .txt`));
+    txt.appendChild(el('div', null, 'Salvo na pasta de downloads do navegador (normalmente "Downloads"). Ctrl+J abre a lista de downloads e mostra a pasta.'));
+    const ul = el('ul');
+    for(const f of arquivos) ul.appendChild(el('li', null, `${f.nome}: ${f.comandas.join(', ')}`));
+    txt.appendChild(ul);
+  }else txt.appendChild(el('b', null, 'Nenhuma etiqueta saiu: nada foi baixado.'));
+  if(problemas.length){
+    txt.appendChild(el('div', null, 'Não saíram:'));
+    const ul = el('ul'); for(const p of problemas) ul.appendChild(el('li', null, p)); txt.appendChild(ul);
+  }
+  const ac = el('div', 'acoes');
+  if(nomeZip){ const bt = el('button', 'bt', 'Baixar de novo'); bt.type = 'button'; bt.onclick = () => salvarZip(nomeZip); ac.appendChild(bt); }
+  const fx = el('button', 'bt', 'Fechar'); fx.type = 'button'; fx.onclick = () => { box.hidden = true; }; ac.appendChild(fx);
+  box.append(txt, ac); box.hidden = false;
 }
 
 let paginas = [];
