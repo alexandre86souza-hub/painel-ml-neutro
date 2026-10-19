@@ -71,6 +71,7 @@
   .dup{font-weight:400;white-space:normal;font-size:12px;color:#7a5600;margin-top:4px}
   .dup a{font-weight:600}
   tr.duplica td{background:#fffbeb}
+  tr.travado td{opacity:.6}
   .alerta-troca{background:#fff4d6;color:#7a5600;border:1px solid #f0d890;border-radius:9px;padding:9px 12px;font-size:13px;margin:0 0 10px}
   .todas-lojas{flex-direction:row!important;align-items:center;gap:6px;font-size:13px;font-weight:600;align-self:center}
   .troca-canal{font-size:14px;font-weight:700;margin:16px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
@@ -529,6 +530,10 @@ const skuNorm = (s) => String(s || '').toUpperCase().replace(/\s/g, '').replace(
 const skuProdutos = (s) => { const t = String(s || ''); const i = t.indexOf('-');
   return (t.slice(i + 1).match(/\d+/g) || []).map(Number).sort((a, b) => a - b).join('.') + '|' + (i >= 0 ? t.slice(0, i).toUpperCase() : ''); };
 const SITUACAO = { active: 'ativo', paused: 'pausado', closed: 'encerrado', under_review: 'em revisão' };
+// o ML recusa editar anúncio encerrado ou em revisão ("Cannot update item … status:closed"): começam desmarcados
+const TRAVADO = new Set(['closed', 'under_review', 'inactive']);
+const MSG_TRAVADO = 'o ML não deixa editar anúncio encerrado ou em revisão';
+const erroMl = (e) => (/Cannot update item .*status:(closed|under_review|inactive)/i.test(String(e)) ? MSG_TRAVADO : e);
 $('formTroca').onsubmit = async (ev) => {
   ev.preventDefault();
   const de = numeroDo($('tDe').value), para = numeroDo($('tPara').value);
@@ -589,11 +594,15 @@ $('formTroca').onsubmit = async (ev) => {
       avisar(rep.mesmos, '⚠ Já existe anúncio com os mesmos produtos (outra ordem):');
       const duplica = rep.iguais.length + rep.mesmos.length > 0;
       if(duplica) tr.classList.add('duplica');
+      const travado = TRAVADO.has(a.status);
+      if(travado){ tr.classList.add('travado'); res.textContent = MSG_TRAVADO; res.style.color = '#8a8f98'; }
       tr.append(c0, c1, el('td', null, SITUACAO[a.status] || a.status), el('td', 'sku', skus.join(', ')), cNovo, res);
       tb.appendChild(tr);
-      return { a, ck, tr, res, duplica };
+      return { a, ck, tr, res, duplica, travado };
     });
     const nDup = linhas.filter((l) => l.duplica).length;
+    const nTrav = linhas.filter((l) => l.travado).length;
+    if(nTrav) box.appendChild(el('p', 'sub', `${nTrav} anúncio(s) encerrado(s) ou em revisão: o Mercado Livre não deixa mudar o SKU deles, então começam desmarcados e "Selecionar todos" não os marca. Encerrado não vende; o em revisão dá para trocar quando o ML terminar a revisão. Com "só no painel" marcado, dá para marcar um a um.`));
     if(nDup) box.appendChild(el('p', 'alerta-troca', `${nDup} anúncio(s) ficariam com o mesmo SKU de outro anúncio da conta (marcados em amarelo). Eles começam desmarcados: marque só se quiser mesmo os dois anúncios com o mesmo SKU.`));
     t.appendChild(tb);
     const contar = () => {
@@ -603,7 +612,7 @@ $('formTroca').onsubmit = async (ev) => {
     };
     for(const l of linhas) l.ck.onchange = contar;
     // "todos" não marca os que repetiriam SKU: esses só um a um
-    ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled && !l.duplica) l.ck.checked = ckTodos.checked; contar(); };
+    ckTodos.onchange = () => { for(const l of linhas) if(!l.ck.disabled && !l.duplica && !(l.travado && !$('tPainel').checked)) l.ck.checked = ckTodos.checked; contar(); };
     contar();
     ok.onclick = async () => {
       const escolhidos = linhas.filter((l) => l.ck.checked && !l.ck.disabled);
@@ -624,7 +633,7 @@ $('formTroca').onsubmit = async (ev) => {
           for(const rr of x.resultado){
             const l = lote.find((q) => q.a.id === rr.id); if(!l) continue;
             if(rr.ok){ feitos++; l.res.textContent = rr.no_painel ? 'trocado no painel' : 'trocado'; l.ck.checked = false; l.ck.disabled = true; l.tr.classList.remove('sujo'); }
-            else{ falhas++; l.res.textContent = 'não trocou: ' + rr.erro; l.res.style.color = '#8c1d18'; }
+            else{ falhas++; l.res.textContent = 'não trocou: ' + erroMl(rr.erro); l.res.style.color = '#8c1d18'; }
           }
         }catch(e){ falhas += lote.length; for(const l of lote){ l.res.textContent = 'não trocou: ' + e.message; l.res.style.color = '#8c1d18'; } }
         ok.textContent = `Trocando… ${Math.min(i + 50, escolhidos.length)} de ${escolhidos.length}`;
