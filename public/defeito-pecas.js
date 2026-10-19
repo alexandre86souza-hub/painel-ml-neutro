@@ -14,6 +14,7 @@
   .defeito-kit small{font-size:11px;color:var(--muted)}
   .defeito-kit .qtd-defeito{display:flex;align-items:center;gap:6px;font-weight:600;margin:0 0 2px 22px;cursor:default}
   .defeito-kit .qtd-defeito input{width:64px;font:inherit;font-weight:700;text-align:center;padding:2px 6px;border:1px solid var(--line);border-radius:8px}
+  .defeito-kit [hidden]{display:none !important}
   .defeito-kit .pe{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .defeito-kit .ok{color:var(--pos,#0b6b33);font-weight:600}
   .defeito-kit .pendente{color:var(--alerta,#b45309);font-weight:600}`;
