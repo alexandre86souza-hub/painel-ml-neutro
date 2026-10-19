@@ -124,7 +124,7 @@ function contaObter(id) {
 
 // Nunca devolve token — é o que vai para o browser.
 function contasListar() {
-  return db.prepare(`SELECT ml_user_id, nickname, site_id, expires_at, conectada_em,
+  return db.prepare(`SELECT ml_user_id, nickname, site_id, expires_at, conectada_em, scope,
                             (SELECT COUNT(*) FROM produtos p WHERE p.ml_user_id = c.ml_user_id) AS produtos
                      FROM contas c ORDER BY conectada_em`).all();
 }

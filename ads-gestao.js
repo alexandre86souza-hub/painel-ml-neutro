@@ -258,7 +258,7 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
     for (const t of tentativas) {
       try { return await ml(t, opts); }
       catch (e) {
-        const codigo = e.body?.error || e.body?.code || e.body?.status_code || null;
+        const codigo = e.body?.error || e.body?.code || (e.body && typeof e.body === 'object' && Object.keys(e.body).length ? JSON.stringify(e.body).slice(0, 100) : null);
         falhas.push({ caminho: t, status: e.status || null, codigo, msg: e.message || '' });
         const doCaminho = e.status === 404 || ((e.status === 401 || e.status === 403) && !String(e.message || '').trim());
         if (!doCaminho) break;
@@ -267,7 +267,8 @@ function criar({ ml, contaOuErro, anunciante, siteAtivo, janelaAds, D, vendasDaC
     const ult = falhas[falhas.length - 1];
     const sem = falhas.every((f) => f.status === 401 || f.status === 403 || f.status === 404) && falhas.some((f) => f.status === 401 || f.status === 403);
     const txt = ult.msg.trim() ? ult.msg
-      : sem ? `o Mercado Livre não autorizou a mudança (HTTP ${falhas.map((f) => f.status).join('/')}). O aplicativo do painel pode estar só com LEITURA em Publicidade: no DevCenter do Mercado Livre, no seu aplicativo, deixe "Publicidade" com leitura e escrita e reconecte a conta (Configurações).`
+      : sem ? `o Mercado Livre não autorizou a mudança (HTTP ${falhas.map((f) => f.status + (f.codigo ? ' ' + f.codigo : '')).join(' / ')}). `
+        + 'Com "Publicidade" em leitura e escrita no aplicativo, o token desta conta pode ser de antes da permissão: reconecte a conta (Configurações) e tente de novo.'
         : `HTTP ${ult.status}${ult.codigo ? ' · ' + ult.codigo : ''}`;
     throw Object.assign(new Error(txt), { status: ult.status === 401 ? 409 : ult.status || 502, tentativas: falhas.map(({ caminho: c, status, codigo }) => ({ caminho: c, status, codigo })) });
   }
