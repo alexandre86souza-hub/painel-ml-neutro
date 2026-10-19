@@ -315,7 +315,7 @@ $('soAtivos').onchange = () => { mostrar = 200; pintarLista(); };
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
 
 // Margem no preço cheio e produtos do kit vêm da tela de anúncios do canal (mesma conta da coluna de lucro de lá)
-let extras = null;   // sku -> { margem, produtos }
+let extras = null;   // sku -> { margem, produtos, lucroEm(preco) }
 async function carregarExtras(){
   if(extras || CANAL === 'magalu') return;
   try{
@@ -323,19 +323,16 @@ async function carregarExtras(){
     const imp = (r.imposto_pct || 0) / 100;
     extras = new Map((r.itens || []).map((i) => {
       const p = i.cheio ?? i.preco;
-      let margem = null;
-      if(p > 0 && i.custo_unit != null){
-        const lucro = CANAL === 'amazon'
-          ? (i.tarifa_pct == null ? null : p - p * i.tarifa_pct - ((i.fixa_un || 0) + (i.frete_un || 0) + (i.armazem_un || 0) + i.custo_unit + (i.embalagem_unit || 0)) - p * imp)
-          : (i.taxa_pct == null ? null : p - p * i.taxa_pct - i.custo_unit - (r.embalagem_pedido || 0) - p * imp);
-        if(lucro != null) margem = lucro / p;
-      }
-      return [i.sku, { margem, produtos: i.produtos || [] }];
+      const lucroEm = (v) => (!(v > 0) || i.custo_unit == null ? null : CANAL === 'amazon'
+        ? (i.tarifa_pct == null ? null : v - v * i.tarifa_pct - ((i.fixa_un || 0) + (i.frete_un || 0) + (i.armazem_un || 0) + i.custo_unit + (i.embalagem_unit || 0)) - v * imp)
+        : (i.taxa_pct == null ? null : v - v * i.taxa_pct - i.custo_unit - (r.embalagem_pedido || 0) - v * imp));
+      const lucro = lucroEm(p);
+      return [i.sku, { margem: lucro == null ? null : lucro / p, produtos: i.produtos || [], lucroEm }];
     }));
     pintarLista();
   }catch{ extras = new Map(); }
 }
-const numerosSku = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+const numerosSku = (t) => (String(t || '').match(/\d+/g) || []).map(Number);
 function passaFiltros(a){
   const tit = $('fTitulo').value.trim().toLowerCase();
   if(tit && !(a.titulo || '').toLowerCase().includes(tit)) return false;
@@ -409,33 +406,50 @@ $('btLimpar').onclick = () => { escolhidos.clear(); pintarLista(); pintarAcao();
 $('inIni').value = diaInput(Date.now()); $('inFim').value = diaInput(Date.now() + 7 * 864e5);
 
 let previa = [];
-$('btPrevia').onclick = () => {
+$('btPrevia').onclick = async () => {
+  if(!extras) await carregarExtras();
   const p = Number($('inPct').value);
   if(!(p > 0 && p < 90)){ aviso('Informe um desconto entre 1% e 90%.'); return; }
   const mapa = new Map(dados.anuncios.map((a) => [a.sku, a]));
   previa = [...escolhidos].map((s) => mapa.get(s)).filter((a) => a && a.cheio).map((a) => ({ sku: a.sku, titulo: a.titulo, cheio: a.cheio,
     preco: Math.round(a.cheio * (1 - p / 100) * 100) / 100 }));
+  pintarPrevia();
+};
+function pintarPrevia(){
   const box = $('previa'); box.innerHTML = '';
+  if(!previa.length){ box.hidden = true; $('acoesPrevia').hidden = true; return; }
   const t = el('table'); const cab = el('tr');
-  for(const h of ['Anúncio', 'Preço cheio', 'Preço promocional', 'Desconto']) cab.appendChild(el('th', null, h));
+  for(const h of ['Anúncio', 'Preço cheio', 'Desconto (%)', 'Preço promocional', 'Lucro no preço', 'Margem', '']) cab.appendChild(el('th', null, h));
   t.appendChild(cab);
+  const fmtLucro = (x, tdL, tdM) => {
+    const l = extras?.get(x.sku)?.lucroEm?.(x.preco);
+    tdL.textContent = l == null ? 'sem custo' : real(l); tdL.classList.toggle('neg', l != null && l < 0);
+    tdM.textContent = l == null || !(x.preco > 0) ? '—' : pct(l / x.preco);
+  };
   for(const x of previa){
     const tr = el('tr');
-    const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0.01'; inp.value = x.preco.toFixed(2); inp.setAttribute('aria-label', 'Preço promocional de ' + x.sku);
-    const off = el('td', null, pct(1 - x.preco / x.cheio));
-    inp.oninput = () => { x.preco = Number(inp.value); off.textContent = x.preco > 0 ? pct(1 - x.preco / x.cheio) : '—'; };
-    const tdi = el('td'); tdi.appendChild(inp);
-    tr.append(celulaProduto(null, x.titulo, x.sku), el('td', 'dinheiro', real(x.cheio)), tdi, off);
+    const inPct = el('input'); inPct.type = 'number'; inPct.step = '0.5'; inPct.min = '0'; inPct.max = '90'; inPct.setAttribute('aria-label', 'Desconto de ' + x.sku);
+    const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0.01'; inp.setAttribute('aria-label', 'Preço promocional de ' + x.sku);
+    const tdL = el('td', 'dinheiro'), tdM = el('td');
+    const escrever = () => { inp.value = x.preco.toFixed(2); inPct.value = String(Math.round((1 - x.preco / x.cheio) * 1000) / 10); fmtLucro(x, tdL, tdM); };
+    inPct.oninput = () => { const v = Number(inPct.value); if(v >= 0 && v < 90){ x.preco = Math.round(x.cheio * (1 - v / 100) * 100) / 100; inp.value = x.preco.toFixed(2); fmtLucro(x, tdL, tdM); } };
+    inp.oninput = () => { x.preco = Number(inp.value); inPct.value = x.preco > 0 ? String(Math.round((1 - x.preco / x.cheio) * 1000) / 10) : ''; fmtLucro(x, tdL, tdM); };
+    escrever();
+    const tirar = el('button', 'bt', 'Tirar'); tirar.type = 'button'; tirar.title = 'Tirar este anúncio da promoção';
+    tirar.onclick = () => { previa = previa.filter((y) => y !== x); escolhidos.delete(x.sku); $('qtdEsc').textContent = numero(escolhidos.size); pintarLista(); pintarPrevia(); };
+    const tdP = el('td'); tdP.appendChild(inPct); const tdi = el('td'); tdi.appendChild(inp); const tdT = el('td'); tdT.appendChild(tirar);
+    tr.append(celulaProduto(null, x.titulo, x.sku), el('td', 'dinheiro', real(x.cheio)), tdP, tdi, tdL, tdM, tdT);
     t.appendChild(tr);
   }
   box.appendChild(t); box.hidden = false;
   $('acoesPrevia').hidden = false;
   $('btAplicar').textContent = `Aplicar na ${NOME}`;
-  $('resumoPrevia').textContent = `${numero(previa.length)} anúncio(s), de ${dataBR($('inIni').value + 'T12:00:00')} a ${dataBR($('inFim').value + 'T12:00:00')}. Você pode mudar o preço de cada um antes de aplicar.`;
-};
+  $('resumoPrevia').textContent = `${numero(previa.length)} anúncio(s), de ${dataBR($('inIni').value + 'T12:00:00')} a ${dataBR($('inFim').value + 'T12:00:00')}. O % de cima vale para todos; mude o % ou o preço de cada um antes de aplicar.`;
+}
 
 $('btAplicar').onclick = async () => {
   if(!previa.length) return;
+  if(previa.some((x) => !(x.preco > 0 && x.preco < x.cheio))){ aviso('Há anúncio com preço promocional vazio ou igual/acima do preço cheio: corrija ou tire da lista.'); return; }
   if(!confirm(`Colocar preço promocional em ${previa.length} anúncio(s) na ${NOME}, de ${dataBR($('inIni').value + 'T12:00:00')} a ${dataBR($('inFim').value + 'T12:00:00')}?`)) return;
   $('btAplicar').disabled = true; $('recusas').textContent = '';
   try{
