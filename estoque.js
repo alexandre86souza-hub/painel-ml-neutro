@@ -189,6 +189,44 @@ function diferencas(linhas, jaLancado, porSku) {
   return { lancar, pendentes };
 }
 
+// Estoque de peças com defeito para a troca com o fornecedor (pedido do dono, 19/10/2026). Entram: a saída "defeito" do
+// estoque, as peças com defeito das devoluções conferidas (as MESMAS linhas da volta ao estoque: sem = posições com defeito,
+// defeituosos = quantas) e a entrada direta; saem: recolhidas pelo fornecedor e descartadas (manuais com qtd < 0).
+// Fornecedor = o do cadastro do produto (senão o escolhido na saída). Função pura: testada.
+function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
+  const porNum = new Map();
+  const add = (numero, qtd, o, forn) => {
+    const x = porNum.get(numero) || { numero, qtd: 0, origens: [], forn: null };
+    x.qtd += qtd; if (o) x.origens.push(o); if (forn) x.forn = forn; porNum.set(numero, x);
+  };
+  for (const l of devolucoes) {
+    if (!l.sem || l.pendente) continue;
+    numerosDoCodigo(l.sku, cat.porSku).forEach((n, i) => {
+      if (!l.sem.includes(i)) return;
+      const o = l.defeituosos || {}; const v = o[i] ?? o['*'];
+      const q = v == null ? l.qtd : Math.max(0, Math.min(l.qtd, Math.round(Number(v)) || 0));
+      if (q > 0) add(n, q, { data: l.data, qtd: q, de: `Devolução · ${l.origem}` });
+    });
+  }
+  for (const m of saidas) add(m.numero, -m.qtd, { data: m.data, qtd: -m.qtd, de: 'Tirado do estoque', obs: m.obs || null }, m.origem);
+  for (const m of manuais) add(m.numero, m.qtd, m.qtd > 0 ? { data: m.data, qtd: m.qtd, de: 'Entrada direta', obs: m.obs || null } : null, m.qtd > 0 ? m.fornecedor : null);
+  const grupos = new Map();
+  for (const x of porNum.values()) {
+    if (x.qtd <= 0) continue;
+    const p = cat.porNumero.get(x.numero);
+    const forn = p?.fornecedor || x.forn || 'Sem fornecedor';
+    const g = grupos.get(forn) || { fornecedor: forn, itens: [], pecas: 0, valor: 0 };
+    const custo = p?.custo ?? null;
+    g.itens.push({ numero: x.numero, sku: p?.sku || String(x.numero).padStart(3, '0'), nome: p?.nome || null, qtd: x.qtd, custo,
+      valor: custo == null ? null : r2(custo * x.qtd), origens: x.origens.sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 30) });
+    g.pecas += x.qtd; g.valor += (custo || 0) * x.qtd;
+    grupos.set(forn, g);
+  }
+  return { saldos: new Map([...porNum.values()].map((x) => [x.numero, x.qtd])),
+    grupos: [...grupos.values()].map((g) => ({ ...g, valor: r2(g.valor), itens: g.itens.sort((a, b) => a.sku.localeCompare(b.sku)) }))
+      .sort((a, b) => (a.fornecedor === 'Sem fornecedor') - (b.fornecedor === 'Sem fornecedor') || a.fornecedor.localeCompare(b.fornecedor)) };
+}
+
 // ---------- módulo ----------
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
@@ -389,7 +427,51 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   };
   const addMeses = (dia, meses) => { const d = new Date(dia + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + Math.round(meses || 0)); return d.toISOString().slice(0, 10); };
 
+  function defeitos() {
+    const cat = catalogo();
+    const desde = inicio();
+    return defeitosDe({ devolucoes: desde ? linhasDeDevolucao(desde) : [], saidas: D.estoqueMovDefeitos(), manuais: D.estoqueDefeitoListar() }, cat);
+  }
+
   const rotas = {
+    // Estoque de peças com defeito, por fornecedor, e os lançamentos à mão (para desfazer).
+    'GET /api/estoque/defeitos': async () => {
+      const r = defeitos();
+      const cat = catalogo();
+      const lotes = new Map();
+      for (const m of D.estoqueDefeitoListar()) {
+        const l = lotes.get(m.lote) || { lote: m.lote, data: m.data, tipo: m.tipo, fornecedor: m.fornecedor, obs: m.obs, quem: m.quem, itens: [] };
+        l.itens.push({ sku: cat.porNumero.get(m.numero)?.sku || String(m.numero), qtd: Math.abs(m.qtd) }); lotes.set(m.lote, l);
+      }
+      return { grupos: r.grupos, pecas: r.grupos.reduce((s, g) => s + g.pecas, 0), valor: r2(r.grupos.reduce((s, g) => s + g.valor, 0)),
+        lancamentos: [...lotes.values()].slice(0, 200) };
+    },
+    // Recolhida pelo fornecedor / descartada (sai do estoque de defeitos) ou entrada direta (peça com defeito que não estava no estoque).
+    'POST /api/estoque/defeitos': async (_u, b) => {
+      const tipo = b?.tipo;
+      if (!['recolhido', 'descarte', 'entrada'].includes(tipo)) throw erro('Tipo inválido.');
+      const fornecedor = String(b?.fornecedor || '').trim().slice(0, 60) || null;
+      if (tipo === 'recolhido' && !fornecedor) throw erro('Informe o fornecedor que recolheu.');
+      const cat = catalogo();
+      const linhas = expandir(b.itens, cat);
+      if (!linhas.length) throw erro('Informe as peças.');
+      if (tipo !== 'entrada') {
+        const saldos = defeitos().saldos;
+        for (const l of linhas) {
+          const s = saldos.get(l.numero) || 0;
+          if (l.qtd > s) throw erro(`${cat.porNumero.get(l.numero)?.sku || l.numero}: só há ${s} peça(s) com defeito.`);
+        }
+      }
+      const data = dataOuAgora(b.data);
+      const obs = String(b?.obs || '').trim().slice(0, 200) || null;
+      const lote = D.estoqueDefeitoGravar(linhas.map((l) => ({ data, tipo, numero: l.numero, qtd: tipo === 'entrada' ? l.qtd : -l.qtd, fornecedor, obs, quem: quem() })));
+      return { lote, pecas: linhas.reduce((s, l) => s + l.qtd, 0) };
+    },
+    'POST /api/estoque/defeitos/desfazer': async (_u, b) => {
+      const n = D.estoqueDefeitoDesfazer(String(b?.lote || ''));
+      if (!n) throw erro('Lançamento não encontrado.');
+      return { desfeitos: n };
+    },
     'GET /api/estoque': async (url) => {
       if (inicio()) {
         const espera = baixar({ sincronizar: url.searchParams.get('recarregar') === '1' || !ultimaBaixa || Date.now() - Date.parse(ultimaBaixa) > 5 * 60e3 });
@@ -599,4 +681,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, TIPO_NOME };
+module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, TIPO_NOME };

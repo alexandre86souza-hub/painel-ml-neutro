@@ -15,6 +15,14 @@
   .abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
   .abas button{font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);cursor:pointer}
   .abas button[aria-selected="true"]{background:#1f2937;color:#fff;border-color:#1f2937}
+  .def-forn{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px}
+  .def-topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+  .def-topo h3{margin:0;font-size:16px}
+  .def-topo .acoes{display:flex;gap:6px;flex-wrap:wrap}
+  .def-origens{font-size:12px;color:var(--muted)}
+  .def-recolher{border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:8px}
+  .def-recolher input[type=number]{width:70px}
+  .def-extra{margin-top:12px}.def-extra summary{cursor:pointer;font-weight:600}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .cartao small{display:block;font-size:12px;color:var(--muted)}
@@ -64,6 +72,7 @@
   <div class="abas" role="tablist" id="abas">
     <button type="button" role="tab" data-aba="saldo" aria-selected="true">Estoque</button>
     <button type="button" role="tab" data-aba="lancar" aria-selected="false">Lançar entrada/saída</button>
+    <button type="button" role="tab" data-aba="defeitos" aria-selected="false">Defeitos (troca)</button>
     <button type="button" role="tab" data-aba="movs" aria-selected="false">Movimentações</button>
     <button type="button" role="tab" data-aba="rel" aria-selected="false">Relatórios</button>
     <button type="button" role="tab" data-aba="contagem" aria-selected="false">Contagem</button>
@@ -105,6 +114,31 @@
       <div class="linhas" id="lLinhas"></div>
       <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="bt" id="lMais">+ Produto</button><button class="bt forte">Lançar</button></div>
     </form>
+  </section>
+
+  <!-- DEFEITOS (troca com fornecedor) -->
+  <section class="bloco escondido" data-painel="defeitos">
+    <h2>Peças com defeito para trocar</h2>
+    <p class="sub">Entram sozinhas: as peças que você tirou do estoque como "Peças com defeito (troca com fornecedor)" e as peças marcadas com defeito
+      nas devoluções conferidas (todas as lojas). Quando o fornecedor recolher, clique em "Recolhido" no bloco dele e elas saem daqui.</p>
+    <div class="cartoes" id="dCartoes"></div>
+    <div id="dGrupos"><p class="carregando">Carregando…</p></div>
+    <details class="def-extra">
+      <summary>Entrada direta (peça com defeito que não estava no estoque)</summary>
+      <form id="fDefEnt" autocomplete="off">
+        <div class="form">
+          <label>Fornecedor<input id="deForn" maxlength="60" list="listaForn" placeholder="opcional"></label>
+          <label>Data<input id="deData" type="date"></label>
+          <label>Observação<input id="deObs" maxlength="200"></label>
+        </div>
+        <div class="linhas" id="deLinhas"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="bt" id="deMais">+ Produto</button><button class="bt forte">Lançar</button></div>
+      </form>
+    </details>
+    <details class="def-extra">
+      <summary>Recolhidas e lançadas à mão</summary>
+      <div class="tabela-rolagem" id="dLanc"></div>
+    </details>
   </section>
 
   <!-- MOVIMENTAÇÕES -->
@@ -238,10 +272,100 @@ function abrir(nome){
   for(const s of document.querySelectorAll('[data-painel]')) s.classList.toggle('escondido', s.dataset.painel !== nome);
   aviso('');
   ({ saldo: carregarSaldo, movs: () => carregadas.movs || buscarMovs(), rel: () => carregadas.rel || gerarRel(), contagem: carregarContagem,
-    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar })[nome]?.();
+    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar, defeitos: carregarDefeitos })[nome]?.();
   try{ history.replaceState(null, '', '#' + nome); }catch{}
 }
 $('abas').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abrir(b.dataset.aba); };
+
+// ---------- DEFEITOS (troca com fornecedor) ----------
+let defs = null;
+async function carregarDefeitos(){
+  await garantirNomes();
+  try{ defs = await api('/api/estoque/defeitos'); }catch(e){ aviso(e.message); return; }
+  if(!$('deLinhas').children.length) linha($('deLinhas'), { comValor: false });
+  if(!$('deData').value) $('deData').value = hoje();
+  if(!$('listaForn').options.length){ try{ const v = visao || await api('/api/estoque'); for(const f of [...new Set(v.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option'); o.value = f; $('listaForn').appendChild(o); } }catch{} }
+  const cs = $('dCartoes'); cs.innerHTML = '';
+  const cartao = (rot, val) => { const c = el('div', 'cartao'); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
+  cartao('Peças com defeito', n0(defs.pecas)); cartao('Valor (custo)', real(defs.valor)); cartao('Fornecedores', n0(defs.grupos.length));
+  const box = $('dGrupos'); box.innerHTML = '';
+  if(!defs.grupos.length) box.appendChild(el('p', 'vazio', 'Nenhuma peça com defeito esperando troca.'));
+  for(const g of defs.grupos){
+    const b = el('div', 'def-forn');
+    const topo = el('div', 'def-topo');
+    topo.appendChild(el('h3', null, `${g.fornecedor} · ${n0(g.pecas)} peça(s) · ${real(g.valor)}`));
+    const ac = el('div', 'acoes');
+    const btCop = el('button', 'bt', 'Copiar lista'); btCop.type = 'button';
+    btCop.onclick = async () => {
+      const txt = `Peças com defeito para troca (${new Date().toLocaleDateString('pt-BR')}):\n` + g.itens.map((i) => `${i.qtd}x ${i.sku}${i.nome ? ' - ' + i.nome : ''}`).join('\n') + `\nTotal: ${g.pecas} peça(s)`;
+      try{ await navigator.clipboard.writeText(txt); btCop.textContent = 'Lista copiada'; }catch{ prompt('Copie a lista:', txt); }
+      setTimeout(() => { btCop.textContent = 'Copiar lista'; }, 2500);
+    };
+    const btRec = el('button', 'bt forte', 'Recolhido pelo fornecedor'); btRec.type = 'button';
+    ac.append(btCop, btRec); topo.appendChild(ac); b.appendChild(topo);
+    b.appendChild(tabela([['SKU'], ['Produto'], ['Peças', 'n'], ['Custo', 'n'], ['Valor', 'n'], ['De onde veio']], g.itens.map((i) => {
+      const tr = el('tr');
+      const o = el('td', 'def-origens', i.origens.slice(0, 4).map((x) => `${diaBR(String(x.data).slice(0, 10))} · ${x.de} (${x.qtd})${x.obs ? ' · ' + x.obs : ''}`).join(' | ') + (i.origens.length > 4 ? ` | +${i.origens.length - 4}` : ''));
+      tr.append(td(i.sku), td(i.nome || '—'), td(n0(i.qtd), 'n'), td(i.custo == null ? 'sem custo' : real(i.custo), 'n'), td(i.valor == null ? '—' : real(i.valor), 'n'), o);
+      return tr;
+    })));
+    // recolher: quantas de cada peça o fornecedor levou (ou descartar)
+    btRec.onclick = () => {
+      if(b.querySelector('.def-recolher')) return;
+      const f = el('form', 'def-recolher');
+      const linhaTopo = el('div', 'form');
+      const selT = el('select'); selT.innerHTML = '<option value="recolhido">Recolhido pelo fornecedor (vai trocar)</option><option value="descarte">Descartada (sem troca)</option>';
+      const lT = el('label', null, 'O que aconteceu'); lT.appendChild(selT);
+      const dt = el('input'); dt.type = 'date'; dt.value = hoje(); const lD = el('label', null, 'Data'); lD.appendChild(dt);
+      const ob = el('input'); ob.maxLength = 200; ob.placeholder = 'ex.: nota de devolução 123'; const lO = el('label', null, 'Observação'); lO.appendChild(ob);
+      linhaTopo.append(lT, lD, lO); f.appendChild(linhaTopo);
+      const qs = g.itens.map((i) => {
+        const l = el('label', null, `${i.sku} ${i.nome || ''} — de ${i.qtd}: `);
+        const n = el('input'); n.type = 'number'; n.min = '0'; n.max = String(i.qtd); n.step = '1'; n.value = String(i.qtd);
+        l.appendChild(n); f.appendChild(l); return [i, n];
+      });
+      const pe = el('div', 'acoes');
+      const ok = el('button', 'bt forte', 'Confirmar'); const cancel = el('button', 'bt', 'Cancelar'); cancel.type = 'button';
+      cancel.onclick = () => f.remove();
+      pe.append(ok, cancel); f.appendChild(pe); b.appendChild(f);
+      f.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const itens = qs.map(([i, n]) => ({ codigo: i.sku, qtd: Math.round(Number(n.value) || 0) })).filter((x) => x.qtd > 0);
+        if(!itens.length){ aviso('Informe quantas peças saíram.'); return; }
+        const total = itens.reduce((s2, x) => s2 + x.qtd, 0);
+        if(!confirm(`${selT.value === 'recolhido' ? 'Marcar como recolhidas por' : 'Descartar'} ${total} peça(s)${selT.value === 'recolhido' ? ' "' + g.fornecedor + '"' : ''}?`)) return;
+        ok.disabled = true;
+        try{
+          const r = await post('/api/estoque/defeitos', { tipo: selT.value, fornecedor: g.fornecedor === 'Sem fornecedor' ? 'Sem fornecedor' : g.fornecedor, data: dt.value, obs: ob.value, itens });
+          aviso(`${r.pecas} peça(s) saíram das peças com defeito.`, 'ok'); carregarDefeitos();
+        }catch(e){ aviso(e.message); ok.disabled = false; }
+      };
+    };
+    box.appendChild(b);
+  }
+  const NOME_T = { recolhido: 'Recolhido pelo fornecedor', descarte: 'Descartada', entrada: 'Entrada direta' };
+  const lb = $('dLanc'); lb.innerHTML = '';
+  if(!defs.lancamentos.length) lb.appendChild(el('p', 'vazio', 'Nada lançado à mão ainda.'));
+  else lb.appendChild(tabela([['Data'], ['O quê'], ['Fornecedor'], ['Peças'], ['Observação'], ['Quem'], ['']], defs.lancamentos.map((l) => {
+    const tr = el('tr'); const t = el('td'); const bt = el('button', 'bt', 'Desfazer'); bt.type = 'button';
+    bt.onclick = async () => { if(!confirm('Desfazer esse lançamento?')) return; try{ await post('/api/estoque/defeitos/desfazer', { lote: l.lote }); carregarDefeitos(); }catch(e){ aviso(e.message); } };
+    t.appendChild(bt);
+    tr.append(td(quando(l.data)), td(NOME_T[l.tipo] || l.tipo), td(l.fornecedor || '—'), td(l.itens.map((i) => `${i.qtd}x ${i.sku}`).join(', ')), td(l.obs || '—'), td(l.quem || '—'), t);
+    return tr;
+  })));
+}
+$('deMais').onclick = () => linha($('deLinhas'), { comValor: false });
+$('fDefEnt').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const itens = itensDe($('deLinhas')).map(({ codigo, qtd }) => ({ codigo, qtd }));
+  if(!itens.length){ aviso('Informe as peças.'); return; }
+  try{
+    const r = await post('/api/estoque/defeitos', { tipo: 'entrada', fornecedor: $('deForn').value, data: $('deData').value, obs: $('deObs').value, itens });
+    aviso(`${r.pecas} peça(s) com defeito lançada(s).`, 'ok');
+    $('deLinhas').innerHTML = ''; linha($('deLinhas'), { comValor: false }); $('deObs').value = '';
+    carregarDefeitos();
+  }catch(e){ aviso(e.message); }
+};
 
 // ---------- ESTOQUE ----------
 let visao = null;

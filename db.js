@@ -2110,6 +2110,24 @@ const estoqueMovObter = (id) => db.prepare('SELECT * FROM estoque_mov WHERE id=?
 // Desfazer um lançamento manual: todas as linhas dele (um kit vira várias), gravadas juntas.
 const estoqueMovDesfeito = (m) => db.prepare(`UPDATE estoque_mov SET desfeito=1 WHERE historico=0 AND criado_em=? AND tipo=? AND ref IS ? AND origem IS ? AND quem IS ?`)
   .run(m.criado_em, m.tipo, m.ref, m.origem, m.quem).changes;
+// Estoque de peças com defeito para a troca com o fornecedor (estoque.js#defeitos): aqui só o que é lançado à mão —
+// entrada direta (+), recolhida pelo fornecedor (−) ou descartada (−). As peças que saem do estoque (tipo 'defeito') e as
+// das devoluções com defeito entram sozinhas, calculadas na hora. lote = um lançamento (para desfazer junto).
+db.exec(`CREATE TABLE IF NOT EXISTS estoque_defeito (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, lote TEXT NOT NULL, data TEXT NOT NULL, tipo TEXT NOT NULL, numero INTEGER NOT NULL,
+  qtd INTEGER NOT NULL, fornecedor TEXT, obs TEXT, quem TEXT, desfeito INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL)`);
+function estoqueDefeitoGravar(linhas) {
+  const lote = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  const st = db.prepare('INSERT INTO estoque_defeito (lote, data, tipo, numero, qtd, fornecedor, obs, quem, criado_em) VALUES (?,?,?,?,?,?,?,?,?)');
+  const em = agora();
+  db.exec('BEGIN');
+  try { for (const l of linhas) st.run(lote, l.data, l.tipo, l.numero, l.qtd, l.fornecedor ?? null, l.obs ?? null, l.quem ?? null, em); db.exec('COMMIT'); }
+  catch (e) { db.exec('ROLLBACK'); throw e; }
+  return lote;
+}
+const estoqueDefeitoListar = () => db.prepare('SELECT * FROM estoque_defeito WHERE desfeito=0 ORDER BY data DESC, id DESC').all();
+const estoqueDefeitoDesfazer = (lote) => db.prepare('UPDATE estoque_defeito SET desfeito=1 WHERE lote=? AND desfeito=0').run(String(lote)).changes;
+const estoqueMovDefeitos = () => db.prepare("SELECT id, data, numero, qtd, origem, obs, quem FROM estoque_mov WHERE tipo='defeito' AND historico=0 AND desfeito=0").all();
 // Relatório: soma por período e origem (dia, semana, mês ou ano), entre duas datas.
 function estoqueRelatorio(de, ate) {
   return db.prepare(`SELECT data, tipo, origem, numero, qtd, valor_unit FROM estoque_mov WHERE data >= ? AND data <= ? AND desfeito=0`).all(de, ate);
@@ -2194,6 +2212,6 @@ module.exports = {
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
-  estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
+  estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar,
 };

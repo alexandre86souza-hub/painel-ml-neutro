@@ -53,3 +53,17 @@ assert.strictEqual(F.pecasDo(item, porNumero, undefined, '2026-10-16T15:00:00.00
 assert.strictEqual(F.pecasDo({ ...item, data: '2026-10-07T12:00:00.000Z' }, porNumero, { produtos: [], atualizado_em: '2026-10-19T18:00:00.000Z' }, '2026-10-16T15:00:00.000Z').estoque, 'volta', 'devolução antiga conferida depois da contagem volta');
 assert.strictEqual(F.pecasDo(item, porNumero, { produtos: [], atualizado_em: '2026-10-15T18:00:00.000Z' }, '2026-10-16T15:00:00.000Z').estoque, 'antes_contagem');
 assert.strictEqual(F.pecasDo(item, porNumero, undefined, null).estoque, 'sem_contagem');
+
+// estoque de peças com defeito: saída do estoque + devolução conferida com defeito + entrada direta − recolhidas
+{
+  const cat = { porSku, porNumero: new Map([[694, { numero: 694, sku: 'DH-694', nome: 'Ducha', custo: 100, fornecedor: 'BRUNO' }],
+    [831, { numero: 831, sku: 'NI-831', nome: 'Niple', custo: 10, fornecedor: null }]]) };
+  const r = E.defeitosDe({
+    devolucoes: [linha, { ...linha, ref: 'devolucao:x', sem: null }, { ...linha, ref: 'devolucao:ml:9', sem: [...Array(50).keys()], defeituosos: null, qtd: 1 }],
+    saidas: [{ numero: 831, qtd: -2, data: '2026-10-19', origem: 'ZEZE' }],
+    manuais: [{ numero: 694, qtd: 1, data: '2026-10-19', tipo: 'entrada' }, { numero: 694, qtd: -2, data: '2026-10-20', tipo: 'recolhido' }],
+  }, cat);
+  // DH-694: 1 (devolução, 1 de 4) + 1 (ML, kit todo) + 1 (entrada) − 2 recolhidas = 1; NI-831: 1 (ML) + 2 (tirado do estoque) = 3
+  assert.deepStrictEqual([...r.saldos].sort(), [[694, 1], [831, 3]]);
+  assert.deepStrictEqual(r.grupos.map((g) => [g.fornecedor, g.pecas, g.valor]), [['BRUNO', 1, 100], ['ZEZE', 3, 30]], 'fornecedor do cadastro, senão o da saída');
+}
