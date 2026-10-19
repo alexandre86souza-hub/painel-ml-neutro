@@ -489,7 +489,7 @@ function alertaDe(a){
   return null;
 }
 // produtos do SKU: os números (AMG-407.408 -> 407 e 408; BP-408 -> 408)
-const numerosSku = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+const numerosSku = (t) => (String(t || '').match(/\d+/g) || []).map(Number);
 const daBusca = () => {
   const q = $('buscaAn').value.trim().toLowerCase();
   const tit = $('fTitulo').value.trim().toLowerCase();

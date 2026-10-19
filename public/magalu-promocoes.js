@@ -234,7 +234,7 @@
       const bDesm = el('button', 'bt pequeno', 'Desmarcar todos'); bDesm.type = 'button';
       const info = el('span', 'sub');
       f.append(busca, lp, rot('Margem mínima', fM, '%'), rot('Título contém', fT), rot('Produto no kit', fP), bMarcar, bDesm, info); d.appendChild(f);
-      const nums = (t) => (String(t || '').match(/d+/g) || []).map(Number);
+      const nums = (t) => (String(t || '').match(/\d+/g) || []).map(Number);
       const filtrados = () => {
         const q = busca.value.trim().toLowerCase(), tit = fT.value.trim().toLowerCase(), prods = nums(fP.value);
         const mMin = fM.value.trim() === '' ? null : Number(fM.value.replace(',', '.')) / 100;

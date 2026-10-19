@@ -70,4 +70,14 @@ assert.deepStrictEqual(P.porCanal([]).map((c) => [c.canal, c.pedidos, c.faturame
   assert.ok(/^hsla\(/.test(G.escura('#dcfce7', 'fundo')), 'chip verde-claro vira verde translúcido');
 }
 
+// expressão de número sem a barra (/d+/ acha a letra "d"): já quebrou "Produto no kit" em 4 telas (edição pelo terminal come a barra)
+{
+  const fs = require('node:fs'), path = require('node:path');
+  const dir = path.join(__dirname, 'public');
+  for (const f of fs.readdirSync(dir).filter((n) => /\.(html|js)$/.test(n))) {
+    const txt = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.ok(!/match\(\/d[+*]|\/d\/\.test|\/\^d[+*{]/.test(txt), `${f}: expressão com /d sem a barra (use \\d)`);
+  }
+}
+
 console.log('Full, qualidade dos anúncios, campanha do vendedor e canais de envio: ok');

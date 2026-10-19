@@ -555,15 +555,17 @@ function atualizarLote(){
   $('loteQtd').textContent = `${numero(n)} selecionado(s)`;
   $('btLote').disabled = !n;
   $('btLote').textContent = n ? `Aderir ${numero(n)} selecionado(s)` : 'Aderir selecionados';
-  const caixas = [...$('itens').querySelectorAll('input.ck-item:not(:disabled)')];
+  // só os anúncios que o filtro mostra (contar os escondidos desmarcava o "todos" no meio da marcação: entrava um por vez)
+  const caixas = caixasVisiveis();
   $('ckTodos').checked = caixas.length > 0 && caixas.every((c) => c.checked);
 }
+const caixasVisiveis = () => [...$('itens').querySelectorAll('li:not([style*="display: none"]) input.ck-item:not(:disabled)')];
 // ---------- filtros para escolher os anúncios (margem na promoção, título, produto do kit) ----------
 let idsProduto = null, prodPedido = '';
 async function lerProduto(){
   const v = $('fProduto').value.trim(); prodPedido = v;
   if(!v){ idsProduto = null; aplicarFiltros(); return; }
-  if(!/d/.test(v)){ $('fInfo').textContent = 'digite o SKU (DQ-407) ou o número (407)'; return; }
+  if(!/\d/.test(v)){ $('fInfo').textContent = 'digite o SKU (DQ-407) ou o número (407)'; return; }
   // 1ª vez lê o SKU de todos os anúncios da conta (20 a 40 s); depois fica guardado por 5 min
   $('fInfo').textContent = `procurando os anúncios com ${v}… (a 1ª busca leva até 40 s)`;
   try{ const r = await api('/api/promocoes/com-produto?produto=' + encodeURIComponent(v)); if(prodPedido === v){ idsProduto = new Set(r.ids); aplicarFiltros();
@@ -604,9 +606,9 @@ function aplicarFiltros(){
   $('fInfo').textContent = ativo ? `${numero(vis)} de ${numero(tot)} carregado(s) no filtro` : '';
 }
 $('ckTodos').onchange = () => {
-  for(const c of $('itens').querySelectorAll('li:not([style*="display: none"]) input.ck-item:not(:disabled)')){
-    if(c.checked !== $('ckTodos').checked){ c.checked = $('ckTodos').checked; c.onchange(); }
-  }
+  const marcar = $('ckTodos').checked;   // guardado antes: cada onchange recalcula a caixa "todos"
+  for(const c of caixasVisiveis()) if(c.checked !== marcar){ c.checked = marcar; c.onchange(); }
+  $('ckTodos').checked = marcar && caixasVisiveis().length > 0;
 };
 $('selModo').onchange = () => { $('inPct').hidden = $('selModo').value !== 'pct'; if($('fDescMax').value.trim() !== '') aplicarFiltros(); };
 $('inPct').addEventListener('input', () => { if($('fDescMax').value.trim() !== '') aplicarFiltros(); });
