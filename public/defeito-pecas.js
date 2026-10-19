@@ -20,6 +20,7 @@
   .defeito-kit .pendente{color:var(--alerta,#b45309);font-weight:600}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
+  const salvos = new Map();   // chave -> quando salvou nesta tela (mostra "Salvo às…" depois de reler a lista)
   window.blocoDefeito = function(p, { origem, aoSalvar } = {}){
     const grupo = el('fieldset', 'defeito-kit');
     const pecas = p.componentes || [];
@@ -49,10 +50,19 @@
     const pe = el('div', 'pe');
     const bt = el('button', 'bt', p.conferida ? 'Salvar conferência' : 'Conferir: chegou');
     bt.type = 'button';
-    const situ = el('small', p.conferida ? 'ok' : 'pendente', p.conferida
-      ? (marcadas.size ? `conferida · peças com defeito: ${real(p.peca_defeito)}` : 'conferida · voltou tudo bom') + ' · o resto volta ao estoque'
-      : 'ainda não conferida: marque o que veio com defeito e clique quando o produto chegar');
-    pe.append(bt, situ); grupo.appendChild(pe);
+    const dataHora = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const recente = salvos.get(p.chave);
+    const situ = el('small', p.conferida ? 'ok' : 'pendente');
+    if(p.conferida){
+      situ.append(el('b', null, recente && Date.now() - recente < 120e3 ? `✓ Salvo às ${dataHora(recente).slice(-5)}` : `✓ Conferida em ${dataHora(p.conferida_em)}`),
+        document.createTextNode(marcadas.size ? ` · peças com defeito: ${real(p.peca_defeito)}` : ' · voltou tudo bom'));
+    }else situ.textContent = 'Ainda não conferida: marque o que veio com defeito e clique quando o produto chegar.';
+    // o que acontece com o estoque (a mesma regra de estoque.js#linhasDeDevolucaoCanais)
+    const est = el('small', p.estoque === 'volta' ? 'ok' : 'pendente',
+      p.estoque === 'volta' ? (p.conferida ? (marcadas.size ? 'O que não está marcado voltou ao estoque.' : 'Voltou ao estoque.') : 'Ao conferir, o que não estiver marcado volta ao estoque.')
+        : p.estoque === 'antes_contagem' ? `Devolução de antes da contagem de estoque (${dataHora(p.inicio_estoque).slice(0, 5)}): não volta sozinha. Se o produto chegou depois da contagem, lance a entrada na tela Estoque.`
+          : 'O estoque ainda não começou (falta a 1ª contagem): nada volta sozinho.');
+    pe.append(bt, situ); grupo.append(pe, est);
     bt.onclick = async () => {
       const produtos = caixas.map((c, i) => (c.checked ? i : -1)).filter((i) => i >= 0);
       const q = {};
@@ -61,7 +71,9 @@
       try{
         await api('/api/devolucoes/canais/defeito', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chave: p.chave, sku: p.sku, quantidade: p.quantidade, data: p.data, origem, produtos, qtds: q }) });
+        salvos.set(p.chave, Date.now());
         if(aoSalvar) aoSalvar();
+        else { bt.disabled = false; bt.textContent = 'Salvar conferência'; situ.className = 'ok'; situ.textContent = '✓ Salvo'; }
       }catch(e){ bt.disabled = false; bt.textContent = p.conferida ? 'Salvar conferência' : 'Conferir: chegou'; situ.className = 'pendente'; situ.textContent = e.message; }
     };
     return grupo;

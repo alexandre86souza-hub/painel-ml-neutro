@@ -15,7 +15,7 @@ const CHAVE = /^(shopee|amazon|leroy|magalu):[A-Za-z0-9_.:|-]{1,200}$/;
 
 // Item devolvido -> o que a tela mostra para marcar e o custo das peças marcadas. marca = linha de
 // devolucao_defeito_canal (ou undefined). Função pura: testada.
-function pecasDo({ chave, sku, quantidade, data }, porNumero, marca) {
+function pecasDo({ chave, sku, quantidade, data }, porNumero, marca, inicio = null) {
   const cs = C.custoDoSku(sku, porNumero, data || null);
   const comps = cs.componentes.map((c) => ({ sku: c.sku || String(c.numero).padStart(3, '0'), nome: c.nome || null, custo: c.custo }));
   const q = Math.max(1, Math.round(Number(quantidade) || 1));
@@ -23,7 +23,9 @@ function pecasDo({ chave, sku, quantidade, data }, porNumero, marca) {
   const qtdDe = (i) => { const v = marca?.qtds?.[i]; return v == null ? q : Math.max(0, Math.min(q, Math.round(Number(v)) || 0)); };
   const qtds = Object.fromEntries(marcadas.map((i) => [i, qtdDe(i)]));
   return { chave, sku: sku || null, quantidade: q, data: data || null, componentes: comps,
-    conferida: !!marca, produtos_defeito: marcadas, qtds_defeito: qtds,
+    conferida: !!marca, conferida_em: marca?.atualizado_em || null, produtos_defeito: marcadas, qtds_defeito: qtds,
+    // volta ao estoque sozinha? só com a contagem feita e devolução a partir dela (estoque.js#linhasDeDevolucaoCanais)
+    estoque: !inicio ? 'sem_contagem' : data && data >= inicio ? 'volta' : 'antes_contagem', inicio_estoque: inicio,
     peca_defeito: r2(marcadas.reduce((s, i) => s + (Number(comps[i].custo) || 0) * qtds[i], 0)),
     sem_custo: marcadas.some((i) => comps[i].custo == null) };
 }
@@ -49,13 +51,14 @@ function validar(b) {
   return { chave, canal: chave.split(':')[0], sku, quantidade, data_dev: data, origem, produtos, qtds };
 }
 
-function criar({ D }) {
+function criar({ D, aposGravar = () => null }) {
   const marcas = () => new Map(D.defeitosCanalListar().map((m) => [m.chave, m]));
   // itens: [{ chave, sku (do painel), quantidade, data }] -> com as peças e a marcação
   function pecas(itens) {
     const porNumero = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const m = marcas();
-    return itens.map((i) => pecasDo(i, porNumero, m.get(i.chave)));
+    const inicio = D.configLer('estoque_inicio') || null;
+    return itens.map((i) => pecasDo({ ...i, data: i.data ? new Date(i.data).toISOString() : null }, porNumero, m.get(i.chave), inicio));
   }
   // A resposta das rotas de devoluções de cada loja ganha as peças de cada item (d.pecas) e o custo das peças com defeito
   // (Amazon, Leroy e Magalu: somado em d.custo e no resumo; Shopee: resumo.pecas_defeito). Não muda o objeto do cache.
@@ -99,6 +102,8 @@ function criar({ D }) {
     'PUT /api/devolucoes/canais/defeito': async (_u, b) => {
       const m = validar(b);
       D.defeitoCanalGravar(m);
+      // a volta ao estoque sai na hora (sem esperar a baixa de 10 em 10 min)
+      try { await aposGravar(); } catch { /* a baixa automática tenta de novo */ }
       return { ok: true, chave: m.chave, produtos: m.produtos, qtds: m.qtds };
     },
   };
