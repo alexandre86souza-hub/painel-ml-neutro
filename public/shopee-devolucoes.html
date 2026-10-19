@@ -18,6 +18,8 @@
   .chip.verde{background:#e6f4ea;color:#0b6b33}.chip.amarelo{background:#fff4d6;color:#7a5600}.chip.vermelho{background:#fde2e1;color:#b91c1c}
   td.dinheiro{white-space:nowrap;text-align:right}
   .prod{display:flex;gap:8px;align-items:center}.prod img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:#f1f5f9}
+  tr.pecas td{border-top:0;padding-top:0}
+  .pecas-lista{display:flex;gap:10px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -60,6 +62,7 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/defeito-pecas.js?v=1"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
 let dias = 90, dados = null;
@@ -88,14 +91,23 @@ function pintarLista(){
     const t4 = el('td', 'dinheiro'); t4.appendChild(document.createTextNode(real(d.reembolso))); if(d.valor_original != null && d.valor_original !== d.reembolso) t4.appendChild(el('span', 'pequeno', `de ${real(d.valor_original)}`));
     const t5 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t5.appendChild(a);
     tr.append(t0, el('td', null, dataBR(d.data)), t2, t3, t4, t5); tb.appendChild(tr);
+    // peças com defeito (a mesma marcação das devoluções do ML): o que não estiver marcado volta ao estoque
+    if(d.pecas?.length){
+      const tr2 = el('tr', 'pecas'); const td = el('td'); td.colSpan = 6; const box = el('div', 'pecas-lista');
+      if(!d.precisa_devolver) box.appendChild(el('span', 'pequeno', 'Reembolso sem devolver o produto: ele fica com o comprador e nada volta ao estoque.'));
+      else for(const pc of d.pecas) box.appendChild(blocoDefeito(pc, { origem: 'Shopee', aoSalvar: () => carregar(true) }));
+      td.appendChild(box); tr2.appendChild(td); tb.appendChild(tr2);
+    }
   }
   if(!itens.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma devolução por aqui.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
   tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
 }
-async function carregar(){
+// silencioso: depois de conferir uma devolução, relê sem apagar a tela nem perder a rolagem
+async function carregar(silencioso){
   erroTela('');
   if(!LOJA){ erroTela('Escolha a loja da Shopee na lista "Conta" do topo.'); $('cartoes').innerHTML = ''; return; }
-  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…'));
+  if(!silencioso){ $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', 'Perguntando à Shopee…')); }
+  const rolagem = window.scrollY;
   try{
     dados = await api(`/api/shopee/devolucoes?loja=${LOJA}&dias=${dias}`);
     const r = dados.resumo;
@@ -104,13 +116,15 @@ async function carregar(){
       cartao(`Reembolsado em ${dias} dias`, real(r.reembolsado), `${numero(r.aceitas)} devolução(ões) aceita(s)`, true),
       cartao('Pedidos de devolução', numero(r.total), `${numero(r.canceladas)} cancelada(s) · ${numero(r.abertas)} em aberto`),
       cartao('Motivo mais comum', r.por_motivo[0]?.motivo || '—', r.por_motivo[0] ? `${numero(r.por_motivo[0].qtd)} caso(s)` : ''),
+      cartao('Peças com defeito', real(r.pecas_defeito || 0), r.conferir ? `${numero(r.conferir)} item(ns) para conferir quando chegar` : 'custo das peças marcadas (não voltam à venda)'),
     );
     const tab = el('table'); const cab = el('tr'); for(const h of ['Motivo', 'Casos', 'Reembolsado']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
     for(const m of r.por_motivo){ const tr = el('tr'); tr.append(el('td', null, m.motivo), el('td', null, numero(m.qtd)), el('td', 'dinheiro', real(m.reembolso))); tb.appendChild(tr); }
     tab.appendChild(tb); $('motivos').innerHTML = ''; $('motivos').appendChild(tab);
     pintarLista();
-  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+    if(silencioso) window.scrollTo(0, rolagem);
+  }catch(e){ erroTela(e.message); if(!silencioso) $('cartoes').innerHTML = ''; }
 }
 $('busca').oninput = () => dados && pintarLista();
 periodo('segDias', dias, (d) => { dias = d; carregar(); });

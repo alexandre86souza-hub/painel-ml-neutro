@@ -860,6 +860,20 @@ const defeitoProdutosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, 
   .map((r) => { try { return [r.claim_id, JSON.parse(r.produtos)]; } catch { return [r.claim_id, null]; } }));
 const defeitoQtdsDe = () => Object.fromEntries(db.prepare('SELECT claim_id, qtds FROM devolucao_defeito WHERE qtds IS NOT NULL').all()
   .map((r) => { try { return [r.claim_id, JSON.parse(r.qtds)]; } catch { return [r.claim_id, null]; } }));
+// Peças com defeito nas devoluções da Shopee, Amazon, Leroy e Magalu (defeito-canais.js): uma linha por item devolvido
+// (chave "shopee:{loja}:{devolução}:{i}", "amazon:{pedido}:{sku}"…), com o SKU do painel, a quantidade e a data da
+// devolução para a volta ao estoque. produtos = posições das peças com defeito ([] = conferida, tudo bom); qtds = {posição: n}.
+db.exec(`CREATE TABLE IF NOT EXISTS devolucao_defeito_canal (
+  chave TEXT PRIMARY KEY, canal TEXT NOT NULL, sku TEXT, quantidade INTEGER NOT NULL, data_dev TEXT, origem TEXT,
+  produtos TEXT NOT NULL, qtds TEXT, atualizado_em TEXT NOT NULL)`);
+const defeitoCanalGravar = (m) => db.prepare(`INSERT OR REPLACE INTO devolucao_defeito_canal
+  (chave, canal, sku, quantidade, data_dev, origem, produtos, qtds, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?)`)
+  .run(m.chave, m.canal, m.sku || null, m.quantidade, m.data_dev || null, m.origem || null, JSON.stringify(m.produtos),
+    m.qtds && Object.keys(m.qtds).length ? JSON.stringify(m.qtds) : null, agora());
+const defeitosCanalListar = () => db.prepare('SELECT * FROM devolucao_defeito_canal').all().map((r) => {
+  const j = (t) => { try { return JSON.parse(t); } catch { return null; } };
+  return { ...r, produtos: j(r.produtos) || [], qtds: r.qtds ? j(r.qtds) : null };
+});
 // SKU da unidade vendida em cada pedido (para abrir o kit da devolução nos produtos dele).
 const skusDosPedidos = (orderIds) => {
   const out = {};
@@ -2160,7 +2174,7 @@ module.exports = {
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, defeitoQtdsDe, creditoManualGravar, creditosManuais,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, defeitoQtdsDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,

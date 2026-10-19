@@ -19,6 +19,8 @@
   td.dinheiro{white-space:nowrap;text-align:right}
   .prod{display:flex;gap:8px;align-items:center;min-width:300px}.prod img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:#f1f5f9}
   #lista td{white-space:nowrap}#lista td:first-child{white-space:normal}
+  #lista tr.pecas td{border-top:0;padding-top:0;white-space:normal}
+  .pecas-lista{display:flex;gap:10px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -60,6 +62,7 @@
   </div>
 </div>
 <script src="/comum.js?v=8"></script>
+<script src="/defeito-pecas.js?v=1"></script>
 <script>
 // Devoluções da Amazon, Leroy e Magalu (?conta=amazon|leroy|magalu): GET /api/{canal}/devolucoes, todas no mesmo formato.
 // Nada desta tela vai para o MCP.
@@ -79,6 +82,11 @@ function cartao(rot, valor, nota, destaque){
   return c;
 }
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+function custoTd(d){
+  const td = el('td', 'dinheiro ' + (d.custo > 0 ? 'neg' : ''), real(d.custo));
+  if(d.pecas_defeito) td.appendChild(el('span', 'pequeno', `com ${real(d.pecas_defeito)} de peças com defeito`));
+  return td;
+}
 function pintarLista(){
   const qv = $('busca').value.trim().toLowerCase();
   const itens = dados.devolucoes.filter((d) => !qv || [d.pedido, d.sku, d.titulo].some((x) => String(x || '').toLowerCase().includes(qv)));
@@ -96,15 +104,24 @@ function pintarLista(){
     tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, d.data ? dataBR(d.data) : '—'), el('td', null, d.envio || (d.canal === 'FBA' ? 'FBA' : 'envio próprio')),
       el('td', 'dinheiro', d.valor_venda == null ? 'fora do período lido' : real(d.valor_venda)), el('td', 'dinheiro', real(d.devolvido)),
       el('td', 'dinheiro', d.tarifas_venda == null ? '—' : real((d.tarifas_venda || 0) + (d.frete_venda || 0)) + (d.frete_desconhecido ? ' (sem o frete)' : '')),
-      el('td', 'dinheiro', d.tarifas_reembolso == null ? '—' : real(d.tarifas_reembolso + d.frete_reembolso)), el('td', 'dinheiro ' + (d.custo > 0 ? 'neg' : ''), real(d.custo)), t9);
+      el('td', 'dinheiro', d.tarifas_reembolso == null ? '—' : real(d.tarifas_reembolso + d.frete_reembolso)), custoTd(d), t9);
     tb.appendChild(tr);
+    // peças com defeito (a mesma marcação das devoluções do ML): o que não estiver marcado volta ao estoque
+    if(d.pecas?.length || d.canal === 'FBA'){
+      const tr2 = el('tr', 'pecas'); const td = el('td'); td.colSpan = 10; const box = el('div', 'pecas-lista');
+      if(d.canal === 'FBA') box.appendChild(el('span', 'pequeno', 'Devolução do FBA: o produto volta ao armazém da Amazon, fora do seu estoque.'));
+      else for(const pc of d.pecas) box.appendChild(blocoDefeito(pc, { origem: NOME, aoSalvar: () => carregar(true) }));
+      td.appendChild(box); tr2.appendChild(td); tb.appendChild(tr2);
+    }
   }
   if(!itens.length){ const tr = el('tr'); const td = el('td', null, 'Nenhuma devolução por aqui.'); td.colSpan = 10; tr.appendChild(td); tb.appendChild(tr); }
   tab.appendChild(tb); $('lista').innerHTML = ''; $('lista').appendChild(tab);
 }
-async function carregar(){
+// silencioso: depois de conferir uma devolução, relê sem apagar a tela nem perder a rolagem
+async function carregar(silencioso){
   erroTela('');
-  $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', `Lendo as vendas da ${NOME}…`));
+  if(!silencioso){ $('cartoes').innerHTML = ''; $('cartoes').appendChild(el('p', 'carregando', `Lendo as vendas da ${NOME}…`)); }
+  const rolagem = window.scrollY;
   try{
     dados = await api(`/api/${CANAL}/devolucoes?dias=${dias}`);
     if(dados.conectada === false){ erroTela(`Conecte a ${NOME} na tela de conexão.`); $('cartoes').innerHTML = ''; return; }
@@ -112,10 +129,11 @@ async function carregar(){
     const r = dados.resumo;
     const box = $('cartoes'); box.innerHTML = '';
     box.append(
-      cartao(`Custo das devoluções em ${dias} dias`, real(r.custo), `tarifas e frete que a ${NOME} não devolveu` + (r.sem_frete ? ` · ${numero(r.sem_frete)} sem o frete informado` : ''), true),
+      cartao(`Custo das devoluções em ${dias} dias`, real(r.custo), `tarifas e frete que a ${NOME} não devolveu` + (r.pecas_defeito ? ` + ${real(r.pecas_defeito)} de peças com defeito` : '') + (r.sem_frete ? ` · ${numero(r.sem_frete)} sem o frete informado` : ''), true),
       cartao('Devoluções', numero(r.casos), `${numero(r.unidades)} unidade(s)` + (CANAL === 'amazon' ? ` · ${numero(r.fba)} do FBA` : '') + ` · ${numero(r.parciais)} parcial(is)`),
       cartao('Devolvido aos clientes', real(r.devolvido), 'sai do faturamento'),
       cartao('Taxa de devolução', r.taxa == null ? '—' : pct(r.taxa), `${numero(r.unidades)} de ${numero(r.vendidas)} unidade(s) vendidas no período`),
+      cartao('Peças com defeito', real(r.pecas_defeito || 0), r.conferir ? `${numero(r.conferir)} item(ns) para conferir quando chegar` : 'custo das peças marcadas (não voltam à venda)'),
     );
     const tab = el('table'); const cab = el('tr'); for(const h of ['Produto', 'Devoluções', 'Unidades', 'Devolvido', 'Custo']) cab.appendChild(el('th', null, h));
     const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
@@ -125,7 +143,8 @@ async function carregar(){
     tab.appendChild(tb); $('produtos').innerHTML = ''; $('produtos').appendChild(tab);
     $('topoTxt').textContent = TOPO + (dados.nota ? ' ' + dados.nota : '');
     pintarLista();
-  }catch(e){ erroTela(e.message); $('cartoes').innerHTML = ''; }
+    if(silencioso) window.scrollTo(0, rolagem);
+  }catch(e){ erroTela(e.message); if(!silencioso) $('cartoes').innerHTML = ''; }
 }
 $('busca').oninput = () => dados && pintarLista();
 periodo('segDias', dias, (d) => { dias = d; carregar(); });

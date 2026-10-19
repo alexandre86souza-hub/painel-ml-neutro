@@ -138,6 +138,7 @@ function devolucoesDe(pedidos, financeiro) {
     const frete = r2(-ts.filter(ehFrete).reduce((a, t) => a + sinal(t), 0));
     const itens = p.itens || [];
     out.push({ pedido: p.code, sku: itens.map((i) => i.sku).filter(Boolean).join(', ') || null, skus: itens.map((i) => i.sku).filter(Boolean),
+      itens: itens.map((i) => ({ sku: i.sku || null, quantidade: n(i.quantidade) })),
       titulo: itens.map((i) => i.titulo).filter(Boolean).join(' + ') || null, foto: itens[0]?.foto || null,
       data_venda: p.data, data: ref.map((t) => t.data).filter(Boolean).sort().at(-1) || null, envio: 'Magalu',
       quantidade: itens.reduce((a, i) => a + n(i.quantidade), 0), valor_venda: venda || null, devolvido, parcial: venda > 0 && devolvido < venda - 0.01,

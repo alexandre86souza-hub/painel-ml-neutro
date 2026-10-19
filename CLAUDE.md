@@ -349,6 +349,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Leroy = linhas com reembolso, custo = comissão não devolvida + frete da entrega; Magalu = pedidos com REFUND no financeiro, custo =
   tarifas que ficaram + frete; resumo em `canais.js#resumoDevolucoes`; Amazon:
   `devolucoesDe`): reembolsos dos lançamentos + a venda do mesmo pedido; custo = tarifas e frete da venda + do reembolso.
+  Peças com defeito nessas telas e na de devoluções da Shopee (`defeito-canais.js`, `public/defeito-pecas.js`, tabela `devolucao_defeito_canal`,
+  `PUT /api/devolucoes/canais/defeito`): a mesma marcação do ML por item devolvido (kit aberto, quantas com defeito); `envolver` acrescenta
+  `d.pecas` às rotas GET de devoluções e soma as peças marcadas no custo. "Conferir" = chegou: volta ao estoque sem as peças com defeito,
+  só devolução com data a partir da 1ª contagem (`estoque.js#linhasDeDevolucaoCanais`); sem conferir não volta. FBA fica fora. Fora do MCP.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,

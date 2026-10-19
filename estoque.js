@@ -298,7 +298,16 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
           try { defeituosos = JSON.parse(d.qtds || 'null'); } catch { defeituosos = null; } }
         return { ref: `devolucao:ml:${d.claim_id}`, sku: d.sku, qtd: Math.round(d.quantidade || 1), data: d.atualizada_em || new Date().toISOString(),
           valida: true, sinal: 1, sem, defeituosos, pendente, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(d.ml_user_id) || d.ml_user_id}` };
-      });
+      }).concat(linhasDeDevolucaoCanais(desde));
+  }
+  // Shopee, Amazon, Leroy e Magalu (defeito-canais.js): só o item CONFERIDO na tela de devoluções volta, sem as peças
+  // marcadas com defeito; devolução com data antes da 1ª contagem fica de fora (o produto já estava na prateleira).
+  function linhasDeDevolucaoCanais(desde) {
+    const NOME = { shopee: 'Shopee', amazon: 'Amazon', leroy: 'Leroy Merlin', magalu: 'Magalu' };
+    return (D.defeitosCanalListar ? D.defeitosCanalListar() : []).filter((m) => m.data_dev && m.data_dev >= desde).map((m) => ({
+      ref: `devolucao:${m.chave}`, sku: m.sku, qtd: m.quantidade, data: m.atualizado_em, valida: true, sinal: 1,
+      sem: m.produtos.length ? m.produtos : null, defeituosos: m.produtos.length && m.qtds ? m.qtds : null, pendente: null,
+      tipo: 'devolucao', origem: m.origem || NOME[m.canal] || m.canal }));
   }
   let pendentes = [], ultimaBaixa = null, baixando = null, errosBaixa = [];
   function baixar({ sincronizar = true } = {}) {
