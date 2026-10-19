@@ -155,7 +155,7 @@
   .filtros-esc{display:inline-flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;margin-right:10px}
   .filtros-esc label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
   .filtros-esc input{font:inherit;font-size:13px;padding:5px 8px;border:1px solid #d5d7db;border-radius:8px;width:120px}
-  .filtros-esc input#fMargemMin{width:64px}
+  .filtros-esc input#fMargemMin, .filtros-esc input#fDescMax{width:64px}
   .res-item{margin:6px 0 0;font-size:13px;font-weight:600}
   .res-item.ok{color:#0b6b33}
   .res-item.falha{color:#b42318}
@@ -254,6 +254,10 @@
         <label>Margem na promoção ≥ <input id="fMargemMin" type="number" step="1" min="-100" max="100" placeholder="ex.: 30" aria-label="Margem mínima na promoção em %"> %</label>
         <label>Título contém <input id="fTitulo" type="text" placeholder="ex.: autolimpante" aria-label="Palavra no título"></label>
         <label>Produto no kit <input id="fProduto" type="text" placeholder="ex.: BP-408" aria-label="Produto do kit"></label>
+        <label title="Desconto sobre o preço atual no preço que vai ser usado (o escolhido em 'Preço' ao lado; promoção de preço fixo: o do ML)">Desconto até <input id="fDescMax" type="number" step="0.5" min="0" max="90" placeholder="ex.: 5" aria-label="Desconto máximo em %"> %</label>
+        <label>Coparticipação <select id="fCopart" aria-label="Coparticipação do Mercado Livre no desconto">
+          <option value="">todas</option><option value="com">o ML paga parte do desconto</option><option value="sem">só eu pago o desconto</option>
+        </select></label>
         <span id="fInfo" class="lote-qtd"></span>
       </span>
       <label class="marcar-todos"><input type="checkbox" id="ckTodos"> Selecionar todos da lista</label>
@@ -569,10 +573,19 @@ async function lerProduto(){
 let tmProd = null;
 $('fProduto').oninput = () => { clearTimeout(tmProd); tmProd = setTimeout(lerProduto, 600); };
 $('fProduto').onkeydown = (ev) => { if(ev.key === 'Enter'){ ev.preventDefault(); clearTimeout(tmProd); lerProduto(); } };
-$('fTitulo').oninput = $('fMargemMin').oninput = () => aplicarFiltros();
+$('fTitulo').oninput = $('fMargemMin').oninput = $('fDescMax').oninput = $('fCopart').onchange = () => aplicarFiltros();
+// desconto do anúncio no preço que vai ser usado: o do modo escolhido em "Preço" (promoção de preço fixo: o do ML)
+function descontoDe(x){
+  const orig = x.preco_original; if(!orig) return null;
+  const v = promoAtual?.precisa_preco ? precoDoLote(x) : (x.preco || x.preco_sugerido || x.preco_max);
+  return v ? Math.max(0, 1 - v / orig) : null;
+}
+const temCopart = (x) => Number(x.ml_pct) > 0;
 function aplicarFiltros(){
   const tit = $('fTitulo').value.trim().toLowerCase();
   const mTxt = $('fMargemMin').value.trim(); const mMin = mTxt === '' ? null : Number(mTxt.replace(',', '.')) / 100;
+  const dTxt = $('fDescMax').value.trim(); const dMax = dTxt === '' ? null : Number(dTxt.replace(',', '.')) / 100;
+  const cop = $('fCopart').value;
   let vis = 0, tot = 0;
   for(const li of $('itens').children){
     if(!li._item) continue; tot++;
@@ -580,12 +593,14 @@ function aplicarFiltros(){
     let ok = !tit || (x.titulo || '').toLowerCase().includes(tit);
     if(ok && idsProduto) ok = idsProduto.has(x.id);
     if(ok && mMin != null){ const m = li._lucro?.promo?.margem; ok = m != null && m >= mMin; }   // sem lucro calculado ainda: fica de fora
+    if(ok && dMax != null){ const d = descontoDe(x); ok = d != null && d <= dMax + 0.0005; }
+    if(ok && cop) ok = cop === 'com' ? temCopart(x) : !temCopart(x);
     li.style.display = ok ? '' : 'none';
     // escondido não fica selecionado
     const ck = li.querySelector('input.ck-item'); if(!ok && ck?.checked){ ck.checked = false; ck.onchange(); }
     if(ok) vis++;
   }
-  const ativo = tit || idsProduto || mMin != null;
+  const ativo = tit || idsProduto || mMin != null || dMax != null || cop;
   $('fInfo').textContent = ativo ? `${numero(vis)} de ${numero(tot)} carregado(s) no filtro` : '';
 }
 $('ckTodos').onchange = () => {
@@ -593,7 +608,8 @@ $('ckTodos').onchange = () => {
     if(c.checked !== $('ckTodos').checked){ c.checked = $('ckTodos').checked; c.onchange(); }
   }
 };
-$('selModo').onchange = () => { $('inPct').hidden = $('selModo').value !== 'pct'; };
+$('selModo').onchange = () => { $('inPct').hidden = $('selModo').value !== 'pct'; if($('fDescMax').value.trim() !== '') aplicarFiltros(); };
+$('inPct').addEventListener('input', () => { if($('fDescMax').value.trim() !== '') aplicarFiltros(); });
 
 // Preço de cada anúncio no lote, dentro dos limites que o ML informou para ele.
 function precoDoLote(p){
