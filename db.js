@@ -857,6 +857,8 @@ const creditoManualGravar = (claimId, valor) => (valor == null
   : db.prepare('INSERT OR REPLACE INTO devolucao_credito (claim_id, valor, gravado_em) VALUES (?,?,?)').run(claimId, valor, agora()));
 const creditosManuais = () => Object.fromEntries(db.prepare('SELECT claim_id, valor, gravado_em FROM devolucao_credito').all()
   .map((r) => [r.claim_id, { valor: r.valor, gravado_em: r.gravado_em }]));
+// quando o vendedor conferiu (marcou defeito, não devolvida ou "recebi, tudo ok")
+const defeitoEmDe = () => Object.fromEntries(db.prepare('SELECT claim_id, atualizado_em FROM devolucao_defeito').all().map((r) => [r.claim_id, r.atualizado_em]));
 const defeitosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, defeito FROM devolucao_defeito').all()
   .map((r) => [r.claim_id, r.defeito === 1]));
 const defeitoProdutosDe = () => Object.fromEntries(db.prepare('SELECT claim_id, produtos FROM devolucao_defeito WHERE produtos IS NOT NULL').all()
@@ -2200,7 +2202,7 @@ module.exports = {
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,

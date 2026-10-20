@@ -82,9 +82,11 @@
   .defeito-kit label .custo,.defeito-kit label .sem-custo{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:8px}
   .defeito-kit label .sem-custo{color:#b91c1c}
   .defeito-kit small{font-size:11px;color:var(--muted)}
+  .conferencia{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;margin:6px 0 2px}
+  .conferencia .ok{color:#0b6b33;font-weight:600}.conferencia .pend{color:#b45309;font-weight:600}
   .qtd-defeito,.defeito-kit .qtd-defeito{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;margin:2px 0 4px 22px;cursor:default}
   /* mais específico que ".defeito-kit label input" (caixinha 16 px): campo de número de verdade */
-  .defeito-kit .qtd-defeito input,.qtd-defeito input{width:64px;height:30px;flex:0 0 64px;font:inherit;font-size:14px;font-weight:700;text-align:center;padding:2px 6px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#0f172a;-webkit-appearance:auto;appearance:auto}
+  .defeito-kit .qtd-defeito input[type=number],.qtd-defeito input[type=number]{width:64px;height:30px;flex:0 0 64px;font:inherit;font-size:14px;font-weight:700;text-align:center;padding:2px 6px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#0f172a;-webkit-appearance:auto;appearance:auto}
   @media (max-width:1000px){ .rec{grid-template-columns:1fr 1fr} .rec-nf{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center} .rec-link{margin:0 0 0 auto} }
   @media (max-width:640px){ .rec{grid-template-columns:1fr} }
   .composicao{display:flex;flex-direction:column;gap:8px}
@@ -540,6 +542,30 @@ function pintarLista(){
         n.onchange = salvar;
         b3.appendChild(qt);
       }
+    }
+    // Conferência: "Recebi, tudo ok" (sem defeito e nada faltando) — sem ela a devolução fica pendente e não volta ao estoque.
+    {
+      const cf = el('div', 'conferencia');
+      const quando = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const temMarca = (x.custo.produtos_defeito || []).length || x.custo.defeito || Object.keys(x.custo.faltam || {}).length;
+      if(x.defeito_marcado == null){
+        const bt = el('button', 'bt', 'Recebi, tudo ok'); bt.type = 'button';
+        bt.title = 'O produto chegou sem defeito e com todas as peças: volta ao estoque';
+        bt.onclick = async () => {
+          bt.disabled = true; bt.textContent = 'Salvando…';
+          try{
+            await api(`/api/devolucoes/${x.id}/defeito`, { method:'PUT', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify(pecas.length > 1 ? { produtos: [], faltam: {} } : { defeito: false }) });
+            carregar(true);
+          }catch(e){ bt.disabled = false; bt.textContent = 'Recebi, tudo ok'; $('msg').textContent = e.message; $('msg').style.display = 'block'; }
+        };
+        cf.append(bt, el('span', 'pend', voltou ? 'Ainda não conferida: confira e marque.' : 'Ainda não conferida.'));
+      }else{
+        cf.appendChild(el('span', 'ok', `✓ Conferida${x.conferida_em ? ' em ' + quando(x.conferida_em) : ''}${temMarca ? '' : ' · tudo ok'}`));
+        const chegou = ['Entregue ao vendedor', 'Encerrada'].includes(x.status_devolucao);
+        cf.appendChild(el('span', null, chegou ? (temMarca ? 'O que não está marcado volta ao estoque.' : 'Volta ao estoque.') : 'Volta ao estoque quando o ML marcar a devolução como entregue.'));
+      }
+      b3.appendChild(cf);
     }
     const a = el('a', 'rec-link', 'Abrir no Mercado Livre ↗'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener';
     b3.appendChild(a);

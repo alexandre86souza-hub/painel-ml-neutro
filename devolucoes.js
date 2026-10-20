@@ -435,6 +435,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
       const manuais = D.creditosManuais();   // crédito do ML digitado pelo vendedor (vale no lugar do ligado)
       const defeitosProdutos = D.defeitoProdutosDe();
       const defeitosQtds = D.defeitoQtdsDe();
+      const defeitosEm = D.defeitoEmDe ? D.defeitoEmDe() : {};
       const defeitosFaltam = D.defeitoFaltamDe ? D.defeitoFaltamDe() : {};
       const skusVenda = D.skusDosPedidos([...new Set(linhas.map((l) => l.order_id).filter(Boolean))]);
       const pedidosDev = [...new Set(linhas.map((l) => l.order_id).filter(Boolean))];
@@ -497,7 +498,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, D }) {
           mensagem_ml: json(l.detalhe_ml),
           acoes_pendentes: acoes.filter((a) => a.acao !== 'recontact'),
           // defeito: marcado pelo vendedor, ou sugerido pela revisão do ML (produto avariado…)
-          defeito_marcado: marcado ?? null, defeito_sugerido: comDefeito({ revisao: l.revisao }),
+          defeito_marcado: marcado ?? null, conferida_em: marcado == null ? null : defeitosEm[l.claim_id] || null, defeito_sugerido: comDefeito({ revisao: l.revisao }),
           nf_venda: json(l.nf_venda),
           link: `https://www.mercadolivre.com.br/vendas/${l.order_id}/detalhe`,
         };
