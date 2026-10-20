@@ -127,8 +127,9 @@ function linhasDe(pedidos, ctx) {
       const cs = l.sku ? C.custoDoSku(C.skuNaData(ctx.trocas, l.sku, p.data), ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
       const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
-      // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto)
-      const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * fat : 0;
+      // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto). A nota da Leroy leva o FRETE
+      // que o cliente pagou (confirmado pelo vendedor em 20/10/2026): o imposto incide sobre produto + frete do cliente.
+      const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * (fat + n(l.frete_cliente)) : 0;
       const falta = [];
       if (produto == null) falta.push('custo');
       if (valida && custoEntrega == null) falta.push('entrega');

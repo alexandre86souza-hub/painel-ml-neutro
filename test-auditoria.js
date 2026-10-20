@@ -147,9 +147,9 @@ caso('SP-08', 'Pedido de valor ZERO concluído (troca/reenvio?) com repasse 0', 
 const lr = (linha, ctxExtra = {}, status = 'SHIPPED') => L.linhasDe([{ order_id: 'L1', data: '2026-09-10T12:00:00Z', status,
   linhas: [{ id: 'L1-1', estado: status, preco: 100, quantidade: 1, comissao: 15, comissao_devolvida: 0, reembolso: 0, reembolso_frete: 0, frete_cliente: 10, sku: 'DQ-001', ...linha }] }],
   { mapa, imposto_pct: 10, embalagem_pedido: 2, trocas: new Map(), fretes: new Map([['L1', 20]]), entrega_propria: null, ...ctxExtra })[0];
-caso('LR-01', 'Venda: recebido 95 (100 + 10 frete do cliente − 15) − entrega 20 − 30 − 2 − 10', () => {
+caso('LR-01', 'Venda: recebido 95 (100 + 10 frete do cliente − 15) − entrega 20 − 30 − 2 − 11 (imposto sobre produto + frete: a nota leva o frete)', () => {
   const r = lr({});
-  return { ok: perto(r.lucro, 95 - 20 - 30 - 2 - 10) && perto(r.recebido, 95), obtido: `${r.lucro} (recebido ${r.recebido})`, esperado: '33 (recebido 95)' };
+  return { ok: perto(r.lucro, 95 - 20 - 30 - 2 - 11) && perto(r.recebido, 95), obtido: `${r.lucro} (recebido ${r.recebido})`, esperado: '32 (recebido 95)' };
 });
 caso('LR-02', 'Reembolso total com comissão devolvida: produto volta, sem imposto', () => {
   const r = lr({ reembolso: 100, comissao_devolvida: 15 });

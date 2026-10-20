@@ -276,7 +276,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   linhas. Tarifa = comissão líquida + reembolsos; frete = o que o vendedor pagou pela entrega do pedido
   (contratada no Melhor Envio, digitada na coluna Frete da tela Pedidos: `POST /api/leroy/frete`, tabela
   `leroy_fretes`; sem ela vale `empresa.entrega_propria`, marcado ≈) rateado − frete pago pelo cliente
-  (a Leroy o repassa); sem nenhum dos dois o lucro fica pendente.
+  (a Leroy o repassa); sem nenhum dos dois o lucro fica pendente. Imposto sobre produto + frete pago pelo cliente (a nota leva o frete).
   Pedido antes do pagamento aprovado (STAGING, WAITING_ACCEPTANCE, WAITING_DEBIT, WAITING_DEBIT_PAYMENT: `SEM_PAGAMENTO`) fica fora
   de todas as telas de vendas (`linhasDe`) até a Leroy aprovar; a cópia relê pelo start_update_date.
   Repasses (`GET /api/leroy/repasses`, tela leroy.html): ciclo fecha dia 10 e 25 (00h Brasília),
