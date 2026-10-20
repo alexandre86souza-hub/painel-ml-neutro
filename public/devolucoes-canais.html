@@ -55,7 +55,7 @@
   </section>
   <section class="bloco">
     <h2>Devoluções</h2>
-    <div class="filtros"><input id="busca" type="search" placeholder="Buscar por pedido, produto ou SKU" aria-label="Buscar devolução"></div>
+    <div class="filtros"><input id="busca" type="search" placeholder="Buscar por pedido, produto ou SKU" aria-label="Buscar devolução"><select id="fEstado" aria-label="Situação da devolução"><option value="">Todas as situações</option><option value="conferir">Falta conferir (não chegou)</option><option value="aberta">Em aberto (aguardando o marketplace)</option><option value="fechada">Fechadas</option></select></div>
     <div class="tabela-rolagem" id="lista"></div>
   </section>
 </main>
@@ -63,6 +63,7 @@
 </div>
 <script src="/comum.js?v=8"></script>
 <script src="/defeito-pecas.js?v=4"></script>
+<script src="/devolucao-acomp.js?v=1"></script>
 <script>
 // Devoluções da Amazon, Leroy e Magalu (?conta=amazon|leroy|magalu): GET /api/{canal}/devolucoes, todas no mesmo formato.
 // Nada desta tela vai para o MCP.
@@ -89,7 +90,8 @@ function custoTd(d){
 }
 function pintarLista(){
   const qv = $('busca').value.trim().toLowerCase();
-  const itens = dados.devolucoes.filter((d) => !qv || [d.pedido, d.sku, d.titulo].some((x) => String(x || '').toLowerCase().includes(qv)));
+  const fe = $('fEstado').value;
+  const itens = dados.devolucoes.filter((d) => (!fe || estadoDe(d) === fe)) .filter((d) => !qv || [d.pedido, d.sku, d.titulo].some((x) => String(x || '').toLowerCase().includes(qv)));
   const tab = el('table'); const cab = el('tr');
   for(const h of ['Produto', 'Venda', 'Devolução', 'Envio', 'Valor da venda', 'Devolvido ao cliente', 'Tarifas e frete da venda', 'Tarifas e frete do reembolso', 'Custo da devolução', '']) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); tab.appendChild(th); const tb = el('tbody');
@@ -99,6 +101,7 @@ function pintarLista(){
     const cx = el('div'); cx.appendChild(document.createTextNode(d.titulo || d.sku || 'item'));
     cx.appendChild(el('span', 'pequeno', `${d.sku || 'sem SKU'} × ${numero(d.quantidade)} · pedido ${d.pedido}`));
     if(d.parcial) cx.appendChild(el('span', 'chip amarelo', 'reembolso parcial'));
+    cx.appendChild(chipEstado(estadoDe(d)));
     p.append(im, cx); t0.appendChild(p);
     const t9 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t9.appendChild(a);
     tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, d.data ? dataBR(d.data) : '—'), el('td', null, d.envio || (d.canal === 'FBA' ? 'FBA' : 'envio próprio')),
@@ -110,7 +113,7 @@ function pintarLista(){
     if(d.pecas?.length || d.canal === 'FBA'){
       const tr2 = el('tr', 'pecas'); const td = el('td'); td.colSpan = 10; const box = el('div', 'pecas-lista');
       if(d.canal === 'FBA') box.appendChild(el('span', 'pequeno', 'Devolução do FBA: o produto volta ao armazém da Amazon, fora do seu estoque.'));
-      else for(const pc of d.pecas) box.appendChild(blocoDefeito(pc, { origem: NOME, aoSalvar: () => carregar(true) }));
+      else for(const pc of d.pecas){ box.appendChild(blocoDefeito(pc, { origem: NOME, aoSalvar: () => carregar(true) })); box.appendChild(blocoAcomp(pc.chave, pc.acomp, { aoSalvar: () => carregar(true) })); }
       td.appendChild(box); tr2.appendChild(td); tb.appendChild(tr2);
     }
   }
@@ -147,6 +150,14 @@ async function carregar(silencioso){
   }catch(e){ erroTela(e.message); if(!silencioso) $('cartoes').innerHTML = ''; }
 }
 $('busca').oninput = () => dados && pintarLista();
+$('fEstado').onchange = () => dados && pintarLista();
+// situação da devolução: algum item esperando o marketplace = em aberto; todos conferidos (ou resolvidos) = fechada
+function estadoDe(d){
+  const ps = d.pecas || [];
+  if(!ps.length) return 'fechada';   // cancelada, FBA ou sem item para conferir
+  const es = ps.map((p) => estadoDevolucao(p.conferida || d.precisa_devolver === false, p.acomp));
+  return es.includes('aberta') ? 'aberta' : es.includes('conferir') ? 'conferir' : 'fechada';
+}
 periodo('segDias', dias, (d) => { dias = d; carregar(); });
 carregar();
 </script>

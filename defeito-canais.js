@@ -14,6 +14,18 @@ const C = require('./custos.js');
 const r2 = (v) => Math.round(v * 100) / 100;
 const erro = (m) => Object.assign(new Error(m), { status: 400 });
 const CHAVE = /^(shopee|amazon|leroy|magalu):[A-Za-z0-9_.:|-]{1,200}$/;
+// Acompanhamento da devolução (todas as lojas, ML incluso: "ml:{claim}"): pedi reembolso ao marketplace = em aberto até a resposta.
+const CHAVE_ACOMP = /^(ml|shopee|amazon|leroy|magalu):[A-Za-z0-9_.:|-]{1,200}$/;
+const SITUACOES = ['aguardando', 'reembolsado', 'negado'];
+// Corpo do PUT do acompanhamento -> { chave, situacao, obs } (ou erro). Função pura: testada.
+function validarAcomp(b) {
+  const chave = String(b?.chave || '');
+  if (!CHAVE_ACOMP.test(chave)) throw erro('Devolução não informada.');
+  const situacao = b?.situacao == null || b.situacao === '' ? null : String(b.situacao);
+  if (situacao && !SITUACOES.includes(situacao)) throw erro('Situação inválida.');
+  const obs = String(b?.obs ?? '').trim().slice(0, 500) || null;
+  return { chave, situacao, obs };
+}
 
 // Item devolvido -> o que a tela mostra para marcar e o custo das peças marcadas. marca = linha de
 // devolucao_defeito_canal (ou undefined). Função pura: testada.
@@ -68,14 +80,16 @@ function validar(b) {
   return { chave, canal: chave.split(':')[0], sku, quantidade, data_dev: data, origem, produtos, qtds, faltam };
 }
 
-function criar({ D, aposGravar = () => null }) {
+function criar({ D, aposGravar = () => null, quem = () => null }) {
   const marcas = () => new Map(D.defeitosCanalListar().map((m) => [m.chave, m]));
   // itens: [{ chave, sku (do painel), quantidade, data }] -> com as peças e a marcação
   function pecas(itens) {
     const porNumero = new Map(D.catalogoListar().map((p) => [p.numero, p]));
     const m = marcas();
     const inicio = D.configLer('estoque_inicio') || null;
-    return itens.map((i) => pecasDo({ ...i, data: i.data ? new Date(i.data).toISOString() : null }, porNumero, m.get(i.chave), inicio));
+    const ac = D.devAcompListar ? D.devAcompListar() : new Map();
+    return itens.map((i) => ({ ...pecasDo({ ...i, data: i.data ? new Date(i.data).toISOString() : null }, porNumero, m.get(i.chave), inicio),
+      acomp: ac.get(i.chave) || null }));
   }
   // A resposta das rotas de devoluções de cada loja ganha as peças de cada item (d.pecas) e o custo das peças com defeito
   // (Amazon, Leroy e Magalu: somado em d.custo e no resumo; Shopee: resumo.pecas_defeito). Não muda o objeto do cache.
@@ -116,6 +130,12 @@ function criar({ D, aposGravar = () => null }) {
     }
   }
   const rotas = {
+    // Acompanhamento: pedi reembolso ao marketplace (em aberto) / reembolsado / negado (fechada), com observação. Escrita só pela tela.
+    'PUT /api/devolucoes/acompanhamento': async (_u, b) => {
+      const a = validarAcomp(b);
+      D.devAcompGravar(a.chave, a.situacao, a.obs, quem());
+      return { ok: true, ...a };
+    },
     // Marca as peças com defeito de um item devolvido ([] = conferido, voltou tudo bom). Escrita só pela tela.
     'PUT /api/devolucoes/canais/defeito': async (_u, b) => {
       const m = validar(b);
@@ -128,4 +148,4 @@ function criar({ D, aposGravar = () => null }) {
   return { pecas, comPecas, envolver, rotas };
 }
 
-module.exports = { criar, pecasDo, validar };
+module.exports = { criar, pecasDo, validar, validarAcomp };

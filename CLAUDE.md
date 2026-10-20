@@ -354,6 +354,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `PUT /api/devolucoes/canais/defeito`): a mesma marcação do ML por item devolvido (kit aberto, quantas com defeito); `envolver` acrescenta
   `d.pecas` às rotas GET de devoluções e soma as peças marcadas no custo. "Conferir" = chegou: volta ao estoque sem as peças com defeito,
   na hora de conferir, qualquer data de devolução (conferido antes da 1ª contagem não volta; `estoque.js#linhasDeDevolucaoCanais`); sem conferir não volta. FBA fica fora. Fora do MCP.
+  Acompanhamento em TODAS as telas de devoluções (ML incluso; `public/devolucao-acomp.js`, `PUT /api/devolucoes/acompanhamento`, tabela `devolucao_acomp`,
+  chave "ml:{claim}" ou a do item): pedi reembolso ao marketplace = EM ABERTO até reembolsado/negado = fechada, com observação; filtro
+  Falta conferir / Em aberto / Fechadas (`estadoDevolucao`). A observação (`acomp`) sai do MCP com os campos do cliente.
 - Estoque (`estoque.js`, tela `public/estoque.html`, módulo "estoque" dos usuários): feito da planilha do vendedor (Controle de
   Estoque). Produto = número do catálogo (`produtos_custo`); kit KIT-407.408 = 1 DQ-407 + 1 BP-408 (`custos.js#componentes`).
   Importar (.xlsx, só o administrador, `xlsx.js` lê sem biblioteca): cadastro extra (`estoque_produtos`), `fornecedores`,

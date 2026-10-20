@@ -92,3 +92,10 @@ assert.strictEqual(F.pecasDo(item, porNumero, undefined, null).estoque, 'sem_con
     componentes: [{ sku: 'DH-694', custo: 100 }, { sku: 'NI-831', custo: 10 }], defeito_faltam: { 1: 1 } });
   assert.deepStrictEqual([c.peca_faltando, c.peca_defeito, c.total, c.faltam], [10, 0, 10, { 1: 1 }]);
 }
+// acompanhamento da devolução: pedi reembolso ao marketplace (em aberto) / resposta (fechada)
+{
+  assert.deepStrictEqual(F.validarAcomp({ chave: 'ml:123', situacao: 'aguardando', obs: '  protocolo 9 ' }), { chave: 'ml:123', situacao: 'aguardando', obs: 'protocolo 9' });
+  assert.deepStrictEqual(F.validarAcomp({ chave: 'shopee:1:R:0', situacao: '', obs: '' }), { chave: 'shopee:1:R:0', situacao: null, obs: null });
+  assert.throws(() => F.validarAcomp({ chave: 'ml:1', situacao: 'talvez' }), /Situação/);
+  assert.throws(() => F.validarAcomp({ chave: 'x:1' }), /Devolução/);
+}

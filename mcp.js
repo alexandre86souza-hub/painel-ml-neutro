@@ -505,7 +505,8 @@ async function chamarFerramenta(f, args) {
 
 // Apelido e nome do cliente servem à busca das telas Pedidos e Devoluções; ao Claude não
 // vão (dado pessoal do comprador, sem uso para as análises).
-const CAMPOS_CLIENTE = new Set(['comprador', 'comprador_nome']);
+// acomp = observação livre do vendedor na devolução (pode ter dado do cliente): também fica fora
+const CAMPOS_CLIENTE = new Set(['comprador', 'comprador_nome', 'acomp']);
 function semCliente(v) {
   if (Array.isArray(v)) return v.map(semCliente);
   if (v && typeof v === 'object') {

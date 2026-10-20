@@ -884,6 +884,12 @@ const defeitosCanalListar = () => db.prepare('SELECT * FROM devolucao_defeito_ca
   const j = (t) => { try { return JSON.parse(t); } catch { return null; } };
   return { ...r, produtos: j(r.produtos) || [], qtds: r.qtds ? j(r.qtds) : null, faltam: r.faltam ? j(r.faltam) : null };
 });
+// Acompanhamento da devolução (todas as lojas; chave "ml:{claim}" ou a do item em devolucao_defeito_canal): o vendedor pediu
+// reembolso ao marketplace (situacao 'aguardando' = em aberto) e a resposta ('reembolsado' | 'negado' = fechada), com observação.
+db.exec(`CREATE TABLE IF NOT EXISTS devolucao_acomp (chave TEXT PRIMARY KEY, situacao TEXT, obs TEXT, quem TEXT, atualizado_em TEXT NOT NULL)`);
+const devAcompGravar = (chave, situacao, obs, quem) => db.prepare('INSERT OR REPLACE INTO devolucao_acomp (chave, situacao, obs, quem, atualizado_em) VALUES (?,?,?,?,?)')
+  .run(chave, situacao || null, obs || null, quem || null, agora());
+const devAcompListar = () => new Map(db.prepare('SELECT * FROM devolucao_acomp').all().map((r) => [r.chave, r]));
 // SKU da unidade vendida em cada pedido (para abrir o kit da devolução nos produtos dele).
 const skusDosPedidos = (orderIds) => {
   const out = {};
@@ -2202,7 +2208,7 @@ module.exports = {
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, creditoManualGravar, creditosManuais,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, devAcompGravar, devAcompListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,

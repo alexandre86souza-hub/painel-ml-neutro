@@ -2207,7 +2207,8 @@ const magaluMod = require('./magalu.js').criar({ D, janela, novoEstadoOAuth, con
   enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a), pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, magaluMod.rotas);
 // Peças com defeito nas devoluções da Shopee, Amazon, Leroy e Magalu (defeito-canais.js): a mesma marcação do ML.
-const defeitoCanaisMod = require('./defeito-canais.js').criar({ D, aposGravar: () => estoqueMod?.baixar({ sincronizar: false }) });
+const defeitoCanaisMod = require('./defeito-canais.js').criar({ D, aposGravar: () => estoqueMod?.baixar({ sincronizar: false }),
+  quem: () => CTX.atual()?.usuario?.login || null });
 defeitoCanaisMod.envolver(routes);
 Object.assign(routes, defeitoCanaisMod.rotas);
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
