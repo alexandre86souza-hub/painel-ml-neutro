@@ -287,7 +287,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     const lotes = [];
     for (let i = 0; i < ids.length; i += 20) lotes.push(ids.slice(i, i + 20));
     const lista = (await emLotes(lotes, 4, (lote) => ml(`/items?ids=${lote.join(',')}&attributes=id,title,`
-      + 'thumbnail,permalink,status,price,original_price,available_quantity,seller_custom_field,attributes,variations')))
+      + 'thumbnail,permalink,status,price,original_price,available_quantity,seller_custom_field,attributes,variations,shipping')))
       .flat().filter((x) => x.code === 200).map((x) => x.body);
     cacheAnuncios = { conta: conta.ml_user_id, em: Date.now(), lista };
     return lista;

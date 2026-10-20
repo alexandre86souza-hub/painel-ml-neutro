@@ -2217,6 +2217,74 @@ const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) =
   atualizarDevolucoes: (c, de) => devolucoesMod.atualizarDevolucoes(c, de),
   amazon: amazonMod, leroy: leroyMod, magalu: magaluMod, quem: () => CTX.atual()?.usuario?.login || null });
 Object.assign(routes, estoqueMod.rotas);
+// Estoque nos anúncios (etapa 1 do estoque sincronizado: SÓ comparação, nada vai às lojas). Junta os anúncios de todas as
+// lojas com o estoque de cada um — ML das duas contas (lista de anúncios, Full fora), Shopee e Magalu pelas cópias locais,
+// Leroy e Amazon pelas telas de anúncios (FBA fora) — e compara com o saldo do painel (estoque.js#estoqueDosAnuncios).
+// Leitura pesada (todos os anúncios do ML): roda em segundo plano, guardada 10 min; a tela pergunta de novo até ficar pronta.
+let estAnuncios = null;
+async function montarEstoqueAnuncios() {
+  const C = require('./custos.js');
+  const anuncios = [], erros = [];
+  const passo = async (nome, fn) => { try { await fn(); } catch (e) { erros.push(`${nome}: ${e.message}`); } };
+  const urlDe = (p) => new URL(p, 'http://painel');
+  for (const c of D.contasListar()) {
+    await passo(`Mercado Livre ${c.nickname}`, () => CTX.comConta(c.ml_user_id, async () => {
+      for (const it of await custosMod.anuncios(D.contaObter(c.ml_user_id))) {
+        if (!['active', 'paused'].includes(it.status)) continue;
+        const full = it.shipping?.logistic_type === 'fulfillment';
+        const { base, variacoes } = C.skusDoAnuncio(it);
+        const loja = `Mercado Livre · ${c.nickname}`, link = it.permalink || null;
+        if (variacoes.length) variacoes.forEach((v, i) => anuncios.push({ canal: 'ml', loja, id: it.id, variacao: v.nome, titulo: it.title, sku: v.sku || base,
+          estoque: it.variations?.[i]?.available_quantity ?? null, status: it.status, full, link }));
+        else anuncios.push({ canal: 'ml', loja, id: it.id, variacao: null, titulo: it.title, sku: base, estoque: it.available_quantity ?? null, status: it.status, full, link });
+      }
+    }));
+  }
+  for (const l of D.shopeeLojasListar()) {
+    for (const a of D.shopeeAnuncios(l.shop_id)) {
+      if (a.status && !/NORMAL|UNLIST/i.test(a.status)) continue;
+      anuncios.push({ canal: 'shopee', loja: `Shopee · ${l.nome || l.shop_id}`, id: String(a.item_id), variacao: a.variacao || null, titulo: a.nome, sku: a.sku,
+        estoque: a.estoque ?? null, status: a.status, full: false, link: `https://shopee.com.br/product/${l.shop_id}/${a.item_id}` });
+    }
+  }
+  if (magaluMod.config()?.refresh || D.magaluAnuncios().length) {
+    const vinc = D.skuVinculos('magalu'), tr = D.skuTrocas('magalu');
+    for (const a of D.magaluAnuncios()) {
+      if (!a.ativo && !/PUBLISHED/i.test(a.status || '')) continue;
+      anuncios.push({ canal: 'magalu', loja: 'Magalu', id: a.sku, variacao: null, titulo: a.titulo, sku: C.skuNaData(tr, vinc.get(a.sku) || a.sku),
+        estoque: a.estoque ?? null, status: a.status, full: false, link: a.url || null });
+    }
+  }
+  await passo('Leroy', async () => {
+    if (!leroyMod.config()?.api_key) return;
+    const tr = D.skuTrocas('leroy');
+    for (const o of (await routes['GET /api/leroy/anuncios'](urlDe('/api/leroy/anuncios'))).itens || []) {
+      if (!o.ativa) continue;
+      anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku),
+        estoque: o.estoque ?? null, status: 'ativa', full: false, link: null });
+    }
+  });
+  await passo('Amazon', async () => {
+    if (!D.configLer('amazon_refresh_token')) return;
+    for (const i of (await routes['GET /api/amazon/anuncios'](urlDe('/api/amazon/anuncios'))).itens || []) {
+      anuncios.push({ canal: 'amazon', loja: 'Amazon', id: i.sku, variacao: null, titulo: i.titulo, sku: i.sku_painel || i.sku,
+        estoque: i.estoque ?? null, status: (i.status || []).join(', '), full: i.canal === 'FBA', link: i.link });
+    }
+  });
+  const r = require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo());
+  return { ...r, erros, inicio: D.configLer('estoque_inicio') || null, lido_em: new Date().toISOString() };
+}
+routes['GET /api/estoque/anuncios'] = async (url) => {
+  const recarregar = url?.searchParams.get('recarregar') === '1';
+  if (!estAnuncios || (recarregar && !estAnuncios.rodando) || (!estAnuncios.rodando && Date.now() - estAnuncios.em > 10 * 60e3)) {
+    const anterior = estAnuncios?.dados || null;
+    estAnuncios = { rodando: true, em: Date.now(), dados: anterior, erro: null };
+    const atual = estAnuncios;
+    montarEstoqueAnuncios().then((d) => { atual.dados = d; atual.em = Date.now(); }).catch((e) => { atual.erro = e.message; }).finally(() => { atual.rodando = false; });
+  }
+  await Promise.race([new Promise((ok) => { const t = setInterval(() => { if (!estAnuncios.rodando) { clearInterval(t); ok(); } }, 300); }), new Promise((ok) => setTimeout(ok, 20000))]);
+  return { pronto: !estAnuncios.rodando, erro: estAnuncios.erro, ...(estAnuncios.dados || {}) };
+};
 const comandasMod = require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
   estoque: estoqueMod });
 Object.assign(routes, comandasMod.rotas);

@@ -229,6 +229,32 @@ function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
       .sort((a, b) => (a.fornecedor === 'Sem fornecedor') - (b.fornecedor === 'Sem fornecedor') || a.fornecedor.localeCompare(b.fornecedor)) };
 }
 
+// Estoque nos anúncios (etapa 1 do estoque sincronizado, pedido do dono 19/10/2026: SÓ comparação, nada é enviado às lojas).
+// Para cada anúncio (ou variação): o estoque que está na loja contra o que deveria ter pelo saldo do painel — kit = o
+// componente que acaba primeiro (⌊saldo ÷ vezes no kit⌋; saldo negativo conta 0). Full/FBA fica de fora (estoque do
+// armazém do marketplace). anuncios: [{ canal, loja, id, variacao, titulo, sku, estoque, status, full }]. Função pura: testada.
+function estoqueDosAnuncios(anuncios, saldos, cat) {
+  const linhas = anuncios.map((a) => {
+    const base = { ...a, deveria: null, diferenca: null, limita: null, situacao: null };
+    if (a.full) return { ...base, situacao: 'full' };
+    const nums = numerosDoCodigo(a.sku, cat.porSku);
+    if (!nums.length || nums.some((n) => !cat.porNumero.has(n))) return { ...base, situacao: 'sem_produto' };
+    let deveria = Infinity, limita = null;
+    for (const [n, vezes] of contar(nums)) {
+      const s = Math.max(0, saldos.get(n) || 0), pode = Math.floor(s / vezes);
+      if (pode < deveria) { deveria = pode; limita = { sku: cat.porNumero.get(n)?.sku || String(n), saldo: saldos.get(n) || 0, vezes }; }
+    }
+    if (a.estoque == null) return { ...base, deveria, limita, situacao: 'sem_estoque_loja' };
+    const diferenca = a.estoque - deveria;
+    return { ...base, deveria, limita, diferenca, situacao: diferenca === 0 ? 'igual' : diferenca > 0 ? 'loja_mais' : 'loja_menos' };
+  });
+  const conta = (s) => linhas.filter((l) => l.situacao === s).length;
+  return { linhas, resumo: { anuncios: linhas.length, iguais: conta('igual'), loja_mais: conta('loja_mais'), loja_menos: conta('loja_menos'),
+    sem_produto: conta('sem_produto'), full: conta('full'), sem_estoque_loja: conta('sem_estoque_loja'),
+    // anúncio com estoque na loja mas o painel diz que não há peça: pode vender o que não tem
+    risco: linhas.filter((l) => l.situacao === 'loja_mais' && l.deveria === 0).length } };
+}
+
 // ---------- módulo ----------
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
@@ -684,4 +710,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, TIPO_NOME };
+module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, TIPO_NOME };

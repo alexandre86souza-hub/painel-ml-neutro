@@ -23,6 +23,7 @@
   .def-recolher{border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:8px}
   .def-recolher input[type=number]{width:70px}
   .def-extra{margin-top:12px}.def-extra summary{cursor:pointer;font-weight:600}
+  tr.alerta td{background:#fdeee8}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .cartao small{display:block;font-size:12px;color:var(--muted)}
@@ -73,6 +74,7 @@
     <button type="button" role="tab" data-aba="saldo" aria-selected="true">Estoque</button>
     <button type="button" role="tab" data-aba="lancar" aria-selected="false">Lançar entrada/saída</button>
     <button type="button" role="tab" data-aba="defeitos" aria-selected="false">Defeitos (troca)</button>
+    <button type="button" role="tab" data-aba="anuncios" aria-selected="false">Estoque nos anúncios</button>
     <button type="button" role="tab" data-aba="movs" aria-selected="false">Movimentações</button>
     <button type="button" role="tab" data-aba="rel" aria-selected="false">Relatórios</button>
     <button type="button" role="tab" data-aba="contagem" aria-selected="false">Contagem</button>
@@ -139,6 +141,27 @@
       <summary>Recolhidas e lançadas à mão</summary>
       <div class="tabela-rolagem" id="dLanc"></div>
     </details>
+  </section>
+
+  <!-- ESTOQUE NOS ANÚNCIOS (só comparação) -->
+  <section class="bloco escondido" data-painel="anuncios">
+    <h2>Estoque nos anúncios</h2>
+    <p class="sub">Só comparação: nada é mudado nas lojas. Para cada anúncio, o estoque que está na loja e o que ele deveria ter pelo saldo do painel
+      (kit = o produto que acaba primeiro). Full e FBA ficam de fora (estoque do armazém do marketplace).</p>
+    <div id="eaSituacao"></div>
+    <div class="cartoes" id="eaCartoes"></div>
+    <div class="filtros">
+      <input type="search" id="eaBusca" placeholder="Buscar anúncio, SKU ou produto" aria-label="Buscar anúncio">
+      <select id="eaLoja" aria-label="Loja"><option value="">Todas as lojas</option></select>
+      <select id="eaSit" aria-label="Situação">
+        <option value="dif">Com diferença</option><option value="risco">Loja com estoque, painel sem peça</option><option value="loja_mais">Loja com mais que o painel</option>
+        <option value="loja_menos">Loja com menos que o painel</option><option value="igual">Iguais</option><option value="sem_produto">SKU sem produto</option>
+        <option value="full">Full / FBA</option><option value="">Todos</option>
+      </select>
+      <button type="button" class="bt" id="eaCsv">Baixar CSV</button>
+      <button type="button" class="bt" id="eaReler">Ler de novo</button>
+    </div>
+    <div class="tabela-rolagem" id="eaLista"><p class="carregando">Carregando…</p></div>
   </section>
 
   <!-- MOVIMENTAÇÕES -->
@@ -272,10 +295,69 @@ function abrir(nome){
   for(const s of document.querySelectorAll('[data-painel]')) s.classList.toggle('escondido', s.dataset.painel !== nome);
   aviso('');
   ({ saldo: carregarSaldo, movs: () => carregadas.movs || buscarMovs(), rel: () => carregadas.rel || gerarRel(), contagem: carregarContagem,
-    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar, defeitos: carregarDefeitos })[nome]?.();
+    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar, defeitos: carregarDefeitos, anuncios: () => carregarEstAnuncios(false) })[nome]?.();
   try{ history.replaceState(null, '', '#' + nome); }catch{}
 }
 $('abas').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abrir(b.dataset.aba); };
+
+// ---------- ESTOQUE NOS ANÚNCIOS (só comparação) ----------
+let ea = null, eaLendo = false;
+const EA_SIT = { igual: 'Igual', loja_mais: 'Loja com mais', loja_menos: 'Loja com menos', sem_produto: 'SKU sem produto', full: 'Full / FBA', sem_estoque_loja: 'Loja sem estoque informado' };
+async function carregarEstAnuncios(recarregar){
+  if(eaLendo) return; eaLendo = true;
+  const st = $('eaSituacao'); st.innerHTML = '';
+  const cx = el('div', 'aviso-caixa', 'Lendo os anúncios de todas as lojas (o Mercado Livre leva até 1 minuto na primeira vez)…'); st.appendChild(cx);
+  try{
+    let r = await api('/api/estoque/anuncios' + (recarregar ? '?recarregar=1' : ''));
+    for(let i = 0; i < 12 && !r.pronto; i++){ if(r.linhas) { ea = r; pintarEstAnuncios(); } r = await api('/api/estoque/anuncios'); }
+    ea = r;
+    st.innerHTML = '';
+    const c = el('div', 'aviso-caixa' + (r.erros?.length || r.erro ? '' : ' ok'));
+    c.textContent = (r.pronto ? `Lido em ${quando(r.lido_em)}.` : 'Ainda lendo…') + (!r.inicio ? ' A contagem de estoque ainda não foi feita: o saldo do painel é zero.' : '')
+      + (r.erro ? ' Erro: ' + r.erro : '') + (r.erros?.length ? ' Não consegui ler: ' + r.erros.join(' · ') : '');
+    st.appendChild(c);
+    pintarEstAnuncios();
+  }catch(e){ aviso(e.message); st.innerHTML = ''; }
+  eaLendo = false;
+}
+function pintarEstAnuncios(){
+  if(!ea?.linhas) return;
+  const r = ea.resumo, cs = $('eaCartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
+  cartao('Anúncios comparados', n0(r.anuncios - r.full - r.sem_produto)); cartao('Iguais', n0(r.iguais));
+  cartao('Loja com estoque, painel sem peça', n0(r.risco), r.risco > 0); cartao('Loja com mais que o painel', n0(r.loja_mais), r.loja_mais > 0);
+  cartao('Loja com menos que o painel', n0(r.loja_menos)); cartao('SKU sem produto', n0(r.sem_produto));
+  const sl = $('eaLoja'), atual = sl.value; sl.innerHTML = '<option value="">Todas as lojas</option>';
+  for(const l of [...new Set(ea.linhas.map((x) => x.loja))].sort()){ const o = el('option', null, l); o.value = l; o.selected = l === atual; sl.appendChild(o); }
+  const q = $('eaBusca').value.trim().toLowerCase(), sit = $('eaSit').value, loja = $('eaLoja').value;
+  const ls = eaFiltradas(q, sit, loja);
+  const box = $('eaLista'); box.innerHTML = '';
+  if(!ls.length){ box.appendChild(el('p', 'vazio', 'Nada com esse filtro.')); return; }
+  box.appendChild(tabela([['Loja'], ['Anúncio'], ['SKU'], ['Na loja', 'n'], ['Pelo painel', 'n'], ['Diferença', 'n'], ['Produto que limita'], ['Situação']], ls.slice(0, 1500).map((x) => {
+    const tr = el('tr');
+    const t1 = el('td'); const nome = el('div', null, x.titulo || x.id);
+    if(x.link){ const a = el('a', null, x.titulo || x.id); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; nome.textContent = ''; nome.appendChild(a); }
+    t1.append(nome, el('span', 'pequeno', [x.id, x.variacao, x.status].filter(Boolean).join(' · ')));
+    const lim = x.limita ? `${x.limita.sku}: saldo ${n0(x.limita.saldo)}${x.limita.vezes > 1 ? ` (${x.limita.vezes} por kit)` : ''}` : '—';
+    const dif = x.diferenca == null ? '—' : (x.diferenca > 0 ? '+' : '') + n0(x.diferenca);
+    tr.append(td(x.loja), t1, td(x.sku || '—'), td(n0(x.estoque), 'n'), td(n0(x.deveria), 'n'), td(dif, 'n'), td(lim), td(EA_SIT[x.situacao] || x.situacao));
+    if(x.situacao === 'loja_mais' && x.deveria === 0) tr.className = 'alerta';
+    return tr;
+  })));
+  if(ls.length > 1500) box.appendChild(el('p', 'sub', `Mostrando 1.500 de ${n0(ls.length)}: use a busca ou o filtro de loja.`));
+}
+function eaFiltradas(q, sit, loja){
+  return ea.linhas.filter((x) => (!loja || x.loja === loja)
+    && (!sit || (sit === 'dif' ? ['loja_mais', 'loja_menos'].includes(x.situacao) : sit === 'risco' ? x.situacao === 'loja_mais' && x.deveria === 0 : x.situacao === sit))
+    && (!q || [x.titulo, x.id, x.sku, x.limita?.sku].some((t) => String(t || '').toLowerCase().includes(q))))
+    .sort((a, b) => Math.abs(b.diferenca || 0) - Math.abs(a.diferenca || 0) || String(a.loja).localeCompare(b.loja));
+}
+for(const id of ['eaBusca']) $(id).oninput = () => pintarEstAnuncios();
+for(const id of ['eaLoja', 'eaSit']) $(id).onchange = () => pintarEstAnuncios();
+$('eaReler').onclick = () => carregarEstAnuncios(true);
+$('eaCsv').onclick = () => ea?.linhas && csv(`estoque-nos-anuncios-${hoje()}.csv`, ['Loja', 'Anúncio', 'Variação', 'Título', 'SKU', 'Na loja', 'Pelo painel', 'Diferença', 'Produto que limita', 'Saldo dele', 'Situação'],
+  eaFiltradas($('eaBusca').value.trim().toLowerCase(), $('eaSit').value, $('eaLoja').value).map((x) => [x.loja, x.id, x.variacao, x.titulo, x.sku, x.estoque, x.deveria, x.diferenca,
+    x.limita?.sku, x.limita?.saldo, EA_SIT[x.situacao] || x.situacao]));
 
 // ---------- DEFEITOS (troca com fornecedor) ----------
 let defs = null;

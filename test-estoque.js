@@ -333,3 +333,21 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
   }
 })().catch((e) => { console.error(e); process.exit(1); });
 function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
+
+// estoque nos anúncios (só comparação): kit = o produto que acaba primeiro; Full fora; SKU sem produto à parte
+{
+  const cat = { porSku: Object.assign(new Map([['DQ-407', 407], ['BP-408', 408]]), { numeros: new Set([407, 408]) }),
+    porNumero: new Map([[407, { sku: 'DQ-407' }], [408, { sku: 'BP-408' }]]) };
+  const saldos = new Map([[407, 10], [408, 3]]);
+  const r = E.estoqueDosAnuncios([
+    { loja: 'ML', id: 'A', sku: 'AMG-407.408', estoque: 3 },
+    { loja: 'ML', id: 'B', sku: 'AMG-407.407', estoque: 8 },
+    { loja: 'ML', id: 'C', sku: 'DQ-408', estoque: 5 },
+    { loja: 'ML', id: 'D', sku: 'AMG-999', estoque: 2 },
+    { loja: 'ML', id: 'E', sku: 'AMG-407.408', estoque: 9, full: true },
+  ], saldos, cat);
+  assert.deepStrictEqual(r.linhas.map((l) => [l.id, l.deveria, l.diferenca, l.situacao]),
+    [['A', 3, 0, 'igual'], ['B', 5, 3, 'loja_mais'], ['C', 3, 2, 'loja_mais'], ['D', null, null, 'sem_produto'], ['E', null, null, 'full']]);
+  assert.strictEqual(r.linhas[0].limita.sku, 'BP-408');
+  assert.strictEqual(E.estoqueDosAnuncios([{ id: 'X', sku: 'DQ-407', estoque: 4 }], new Map([[407, -2]]), cat).resumo.risco, 1, 'saldo negativo conta 0');
+}
