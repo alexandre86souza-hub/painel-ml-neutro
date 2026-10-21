@@ -238,6 +238,7 @@ function estoqueDosAnuncios(anuncios, saldos, cat) {
     const base = { ...a, deveria: null, diferenca: null, limita: null, situacao: null };
     if (a.full) return { ...base, situacao: 'full' };
     const nums = numerosDoCodigo(a.sku, cat.porSku);
+    base.produtos = nums;   // números dos produtos do anúncio (já com as trocas e composições do painel)
     if (!nums.length || nums.some((n) => !cat.porNumero.has(n))) return { ...base, situacao: 'sem_produto' };
     let deveria = Infinity, limita = null;
     for (const [n, vezes] of contar(nums)) {
