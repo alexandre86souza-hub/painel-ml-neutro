@@ -93,6 +93,7 @@
       <select id="sForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sAtivos" checked> Só ativos</label>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center" title="Produto que não vai mais ser comprado (descontinuado ou fornecedor descontinuado) e ainda tem saldo"><input type="checkbox" id="sDescEst"> Descontinuado com estoque</label>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center" title="Peças que ficam guardadas: não vão para os anúncios. Vale para todo produto sem um valor próprio na coluna Segurança.">Segurança padrão <input id="sSegPadrao" type="number" min="0" step="1" style="width:64px"></label>
       <button type="button" class="bt" id="sCsv">Baixar CSV</button>
       <button type="button" class="bt" id="sReler">Dar baixa agora</button>
     </div>
@@ -333,12 +334,12 @@ function pintarEstAnuncios(){
   const ls = eaFiltradas(q, sit, loja);
   const box = $('eaLista'); box.innerHTML = '';
   if(!ls.length){ box.appendChild(el('p', 'vazio', 'Nada com esse filtro.')); return; }
-  box.appendChild(tabela([['Loja'], ['Anúncio'], ['SKU'], ['Na loja', 'n'], ['Pelo painel', 'n'], ['Diferença', 'n'], ['Produto que limita'], ['Situação']], ls.slice(0, 1500).map((x) => {
+  box.appendChild(tabela([['Loja'], ['Anúncio'], ['SKU'], ['Na loja', 'n'], ['Pelo painel (− segurança)', 'n'], ['Diferença', 'n'], ['Produto que limita'], ['Situação']], ls.slice(0, 1500).map((x) => {
     const tr = el('tr');
     const t1 = el('td'); const nome = el('div', null, x.titulo || x.id);
     if(x.link){ const a = el('a', null, x.titulo || x.id); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; nome.textContent = ''; nome.appendChild(a); }
     t1.append(nome, el('span', 'pequeno', [x.id, x.variacao, x.status].filter(Boolean).join(' · ')));
-    const lim = x.limita ? `${x.limita.sku}: saldo ${n0(x.limita.saldo)}${x.limita.vezes > 1 ? ` (${x.limita.vezes} por kit)` : ''}` : '—';
+    const lim = x.limita ? `${x.limita.sku}: saldo ${n0(x.limita.saldo)}${x.limita.seguranca ? ` − ${n0(x.limita.seguranca)} de segurança` : ''}${x.limita.vezes > 1 ? ` (${x.limita.vezes} por kit)` : ''}` : '—';
     const dif = x.diferenca == null ? '—' : (x.diferenca > 0 ? '+' : '') + n0(x.diferenca);
     tr.append(td(x.loja), t1, td(x.sku || '—'), td(n0(x.estoque), 'n'), td(n0(x.deveria), 'n'), td(dif, 'n'), td(lim), td(EA_SIT[x.situacao] || x.situacao));
     if(x.situacao === 'loja_mais' && x.deveria === 0) tr.className = 'alerta';
@@ -456,6 +457,7 @@ async function carregarSaldo(recarregar){
   const fs = $('sForn'), atual = fs.value; fs.innerHTML = '<option value="">Todos os fornecedores</option>';
   for(const f of [...new Set(visao.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option', null, f); o.value = f; o.selected = f === atual; fs.appendChild(o); }
   $('listaForn').innerHTML = ''; for(const f of [...new Set(visao.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option'); o.value = f; $('listaForn').appendChild(o); }
+  if(document.activeElement !== $('sSegPadrao')) $('sSegPadrao').value = visao.seguranca_padrao ?? 3;
   const sb = $('situacaoBaixa'); sb.innerHTML = '';
   const caixa = el('div', 'aviso-caixa' + (visao.inicio ? ' ok' : ''));
   if(!visao.inicio) caixa.textContent = 'A baixa automática ainda não está ligada: o saldo começa na contagem física. Vá em "Contagem", conte os produtos e clique em "Finalizar contagem". '
@@ -499,12 +501,23 @@ function pintarSaldo(){
   const lst = saldoFiltrado().sort((a, b) => (Number(a.numero) || 1e9) - (Number(b.numero) || 1e9) || String(a.sku || '').localeCompare(String(b.sku || ''), 'pt-BR', { numeric: true }));
   const box = $('sLista'); box.innerHTML = '';
   if(!lst.length){ box.appendChild(el('p', 'vazio', 'Nenhum produto com esse filtro.')); return; }
-  box.appendChild(tabela([['Produto'], ['Fornecedor'], ['Saldo', 'n'], ['Média/mês', 'n'], ['Mínimo', 'n'], ['Máximo', 'n'], ['Em pedido', 'n'], ['Sugestão', 'n'], ['Status'], ['Custo médio', 'n'], ['Valor', 'n'], ['Dias', 'n']],
+  box.appendChild(tabela([['Produto'], ['Fornecedor'], ['Saldo', 'n'], ['Segurança', 'n'], ['Para os anúncios', 'n'], ['Média/mês', 'n'], ['Mínimo', 'n'], ['Máximo', 'n'], ['Em pedido', 'n'], ['Sugestão', 'n'], ['Status'], ['Custo médio', 'n'], ['Valor', 'n'], ['Dias', 'n']],
     lst.slice(0, 1500).map((p) => {
       const tr = el('tr');
       const tP = el('td'); tP.append(el('b', null, p.sku || p.numero), el('span', 'pequeno', p.nome || ''));
       const tS = el('td'); tS.appendChild(el('span', 'chip ' + (CHIP[p.status] || ''), p.status));
-      tr.append(tP, td(p.fornecedor || '—'), td(n0(p.saldo), 'n' + (p.saldo < 0 ? ' neg' : '')), td(n0(p.media), 'n'), td(n0(p.minimo), 'n'), td(n0(p.maximo), 'n'),
+      // estoque de segurança: vazio = o padrão; grava ao sair do campo (o clique no campo não abre as movimentações)
+      const tG = el('td', 'n'); const iG = el('input'); iG.type = 'number'; iG.min = '0'; iG.step = '1'; iG.style.width = '64px'; iG.style.textAlign = 'right';
+      iG.value = p.seguranca_propria ? String(p.seguranca) : ''; iG.placeholder = String(visao.seguranca_padrao ?? 3);
+      iG.title = p.seguranca_propria ? 'Valor próprio deste produto (apague para voltar ao padrão)' : 'Usando o padrão';
+      iG.setAttribute('aria-label', `Estoque de segurança de ${p.sku}`);
+      iG.onclick = (ev) => ev.stopPropagation();
+      const tD = td(n0(p.disponivel), 'n');
+      iG.onchange = async () => { try{ const r = await post('/api/estoque/seguranca', { numero: p.numero, qtd: iG.value.trim() }, 'PUT');
+        p.seguranca = r.seguranca; p.seguranca_propria = r.propria; p.disponivel = Math.max(0, p.saldo - r.seguranca); tD.textContent = n0(p.disponivel);
+        iG.style.borderColor = '#16a34a'; }catch(e){ aviso(e.message); } };
+      tG.appendChild(iG);
+      tr.append(tP, td(p.fornecedor || '—'), td(n0(p.saldo), 'n' + (p.saldo < 0 ? ' neg' : '')), tG, tD, td(n0(p.media), 'n'), td(n0(p.minimo), 'n'), td(n0(p.maximo), 'n'),
         td(p.em_pedido ? n0(p.em_pedido) : '—', 'n'), td(p.sugestao ? n0(p.sugestao) : '—', 'n'), tS, td(real(p.custo_medio), 'n'), td(real(p.valor), 'n'), td(p.dias == null ? '—' : n0(p.dias), 'n'));
       tr.style.cursor = 'pointer'; tr.title = 'Ver as movimentações deste produto';
       tr.onclick = () => { $('mProd').value = p.sku || p.numero; abrir('movs'); buscarMovs(); };
@@ -512,6 +525,11 @@ function pintarSaldo(){
     })));
 }
 for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos', 'sDescEst']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => visao && pintarSaldo());
+$('sSegPadrao').onchange = async () => {
+  const v = $('sSegPadrao').value.trim(); if(v === '') return;
+  if(!confirm(`Estoque de segurança padrão = ${v} peça(s) para todo produto sem valor próprio?`)){ $('sSegPadrao').value = visao?.seguranca_padrao ?? 3; return; }
+  try{ await post('/api/estoque/seguranca-padrao', { qtd: Number(v) }, 'PUT'); aviso(`Segurança padrão: ${v} peça(s).`, 'ok'); carregarSaldo(); }catch(e){ aviso(e.message); }
+};
 $('sReler').onclick = () => carregarSaldo(true);
 $('sCsv').onclick = () => csv(`estoque-${hoje()}.csv`, ['SKU', 'Produto', 'Fornecedor', 'Situação', 'Saldo', 'Saídas 6m', 'Média/mês', 'Prazo (meses)', 'Mínimo', 'Máximo', 'Em pedido', 'Sugestão', 'Status', 'Custo médio', 'Valor', 'Dias'],
   saldoFiltrado().map((p) => [p.sku, p.nome, p.fornecedor, p.situacao, p.saldo, p.saidas6m, String(p.media).replace('.', ','), p.prazo, p.minimo, p.maximo, p.em_pedido, p.sugestao, p.status,

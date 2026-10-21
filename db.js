@@ -2064,6 +2064,12 @@ try { db.exec('ALTER TABLE comandas ADD COLUMN etiqueta_em TEXT'); } catch { /* 
 try { db.exec('ALTER TABLE fornecedores ADD COLUMN situacao TEXT'); } catch { /* já existe */ }
 
 const estoqueProdutos = () => db.prepare('SELECT * FROM estoque_produtos').all();
+// Estoque de segurança por produto (o que NÃO vai para os anúncios): sem linha = o padrão (estado estoque_seguranca_padrao, 3).
+db.exec('CREATE TABLE IF NOT EXISTS estoque_seguranca (numero INTEGER PRIMARY KEY, qtd INTEGER NOT NULL, atualizado_em TEXT NOT NULL)');
+const estoqueSegurancas = () => new Map(db.prepare('SELECT numero, qtd FROM estoque_seguranca').all().map((r) => [r.numero, r.qtd]));
+const estoqueSegurancaGravar = (numero, qtd) => (qtd == null
+  ? db.prepare('DELETE FROM estoque_seguranca WHERE numero=?').run(numero)
+  : db.prepare('INSERT OR REPLACE INTO estoque_seguranca (numero, qtd, atualizado_em) VALUES (?,?,?)').run(numero, qtd, agora()));
 function estoqueProdutoGravar(numero, p) {
   db.prepare(`INSERT INTO estoque_produtos (numero, situacao, classificacao, ref_compra, fornecedor, atualizado_em) VALUES (?,?,?,?,?,?)
     ON CONFLICT(numero) DO UPDATE SET situacao=excluded.situacao, classificacao=excluded.classificacao, ref_compra=excluded.ref_compra,
@@ -2230,7 +2236,7 @@ module.exports = {
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
-  estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
+  estoqueProdutos, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar,
 };

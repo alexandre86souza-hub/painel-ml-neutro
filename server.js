@@ -2271,7 +2271,7 @@ async function montarEstoqueAnuncios() {
         estoque: i.estoque ?? null, status: (i.status || []).join(', '), full: i.canal === 'FBA', link: i.link });
     }
   });
-  const r = require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo());
+  const r = require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe());
   return { ...r, erros, inicio: D.configLer('estoque_inicio') || null, lido_em: new Date().toISOString() };
 }
 routes['GET /api/estoque/anuncios'] = async (url) => {

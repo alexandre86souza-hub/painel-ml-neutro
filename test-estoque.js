@@ -351,3 +351,13 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
   assert.strictEqual(r.linhas[0].limita.sku, 'BP-408');
   assert.strictEqual(E.estoqueDosAnuncios([{ id: 'X', sku: 'DQ-407', estoque: 4 }], new Map([[407, -2]]), cat).resumo.risco, 1, 'saldo negativo conta 0');
 }
+
+// estoque de segurança: o anúncio recebe ⌊(saldo − segurança) ÷ vezes⌋
+{
+  const cat = { porSku: Object.assign(new Map([['DQ-407', 407], ['BP-408', 408]]), { numeros: new Set([407, 408]) }),
+    porNumero: new Map([[407, { sku: 'DQ-407' }], [408, { sku: 'BP-408' }]]) };
+  const r = E.estoqueDosAnuncios([{ id: 'A', sku: 'AMG-407.408', estoque: 7 }, { id: 'B', sku: 'AMG-407.407', estoque: 1 }],
+    new Map([[407, 10], [408, 9]]), cat, (n) => (n === 408 ? 5 : 3));
+  assert.deepStrictEqual(r.linhas.map((l) => [l.id, l.deveria, l.limita.sku, l.limita.seguranca]), [['A', 4, 'BP-408', 5], ['B', 3, 'DQ-407', 3]]);
+  console.log('estoque de segurança: ok');
+}

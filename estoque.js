@@ -232,8 +232,10 @@ function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
 // Estoque nos anúncios (etapa 1 do estoque sincronizado, pedido do dono 19/10/2026: SÓ comparação, nada é enviado às lojas).
 // Para cada anúncio (ou variação): o estoque que está na loja contra o que deveria ter pelo saldo do painel — kit = o
 // componente que acaba primeiro (⌊saldo ÷ vezes no kit⌋; saldo negativo conta 0). Full/FBA fica de fora (estoque do
-// armazém do marketplace). anuncios: [{ canal, loja, id, variacao, titulo, sku, estoque, status, full }]. Função pura: testada.
-function estoqueDosAnuncios(anuncios, saldos, cat) {
+// armazém do marketplace). anuncios: [{ canal, loja, id, variacao, titulo, sku, estoque, status, full }].
+// seguranca(n) = estoque de segurança do produto (o que não vai para os anúncios; pedido do dono, 21/10/2026: padrão 3,
+// maior para o que vende muito ou dá muito defeito): o anúncio recebe ⌊(saldo − segurança) ÷ vezes no kit⌋. Função pura: testada.
+function estoqueDosAnuncios(anuncios, saldos, cat, seguranca = () => 0) {
   const linhas = anuncios.map((a) => {
     const base = { ...a, deveria: null, diferenca: null, limita: null, situacao: null };
     if (a.full) return { ...base, situacao: 'full' };
@@ -242,8 +244,9 @@ function estoqueDosAnuncios(anuncios, saldos, cat) {
     if (!nums.length || nums.some((n) => !cat.porNumero.has(n))) return { ...base, situacao: 'sem_produto' };
     let deveria = Infinity, limita = null;
     for (const [n, vezes] of contar(nums)) {
-      const s = Math.max(0, saldos.get(n) || 0), pode = Math.floor(s / vezes);
-      if (pode < deveria) { deveria = pode; limita = { sku: cat.porNumero.get(n)?.sku || String(n), saldo: saldos.get(n) || 0, vezes }; }
+      const seg = Math.max(0, Number(seguranca(n)) || 0);
+      const s = Math.max(0, (saldos.get(n) || 0) - seg), pode = Math.floor(s / vezes);
+      if (pode < deveria) { deveria = pode; limita = { sku: cat.porNumero.get(n)?.sku || String(n), saldo: saldos.get(n) || 0, seguranca: seg, vezes }; }
     }
     if (a.estoque == null) return { ...base, deveria, limita, situacao: 'sem_estoque_loja' };
     const diferenca = a.estoque - deveria;
@@ -417,8 +420,13 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   timer.unref?.();
 
   // ---- visão geral (aba Estoque)
+  // Estoque de segurança: o do produto, senão o padrão (3, editável).
+  const segurancaPadrao = () => { const v = Number(D.configLer('estoque_seguranca_padrao')); return Number.isInteger(v) && v >= 0 ? v : 3; };
+  function segurancaDe() { const m = D.estoqueSegurancas(), p = segurancaPadrao(); return (n) => (m.has(n) ? m.get(n) : p); }
+
   function visao() {
     const cat = catalogo();
+    const seg = D.estoqueSegurancas(), segPadrao = segurancaPadrao();
     const saldos = D.estoqueSaldos();
     const seis = new Date(); seis.setMonth(seis.getMonth() - 6);
     const res = new Map(D.estoqueResumoMov(seis.toISOString()).map((r) => [r.numero, r]));
@@ -434,12 +442,14 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const rep = reposicao({ ativo: p.situacao === 'Ativo', saldo, saidas6m: r.saidas || 0, prazo, abertos: abertos.get(p.numero) || 0,
         repor: !parados.has(String(p.fornecedor || '').toLowerCase()) });
       const custoMedio = r.ent_qtd ? r2(r.ent_valor / r.ent_qtd) : p.custo;
-      return { ...p, saldo, saidas6m: r.saidas || 0, prazo, em_pedido: abertos.get(p.numero) || 0, ...rep, custo_medio: custoMedio,
+      const seguranca = seg.has(p.numero) ? seg.get(p.numero) : segPadrao;
+      return { ...p, saldo, seguranca, seguranca_propria: seg.has(p.numero), disponivel: Math.max(0, saldo - seguranca),
+        saidas6m: r.saidas || 0, prazo, em_pedido: abertos.get(p.numero) || 0, ...rep, custo_medio: custoMedio,
         valor: custoMedio != null ? r2(saldo * custoMedio) : null, ultima_saida: r.ultima_saida || null };
     });
     const ativos = produtos.filter((p) => p.situacao === 'Ativo');
     return { inicio: inicio(), ultima_baixa: ultimaBaixa, baixando: !!baixando, erros: errosBaixa, pendentes: pendentes.slice(0, 300),
-      total_pendentes: pendentes.length, importado_em: D.configLer('estoque_importado_em'),
+      total_pendentes: pendentes.length, importado_em: D.configLer('estoque_importado_em'), seguranca_padrao: segPadrao,
       resumo: { ativos: ativos.length, repor: ativos.filter((p) => p.status === 'Repor agora').length,
         proximo: ativos.filter((p) => p.status === 'Próximo de repor').length, nao_repor: ativos.filter((p) => p.status === 'Não repor').length,
         vender_restante: produtos.filter((p) => p.status === 'Vender o restante').length,
@@ -464,6 +474,21 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   }
 
   const rotas = {
+    // Estoque de segurança de um produto (vazio = volta ao padrão) e o padrão de todos.
+    'PUT /api/estoque/seguranca': async (_u, b) => {
+      const numero = Number(b?.numero);
+      if (!catalogo().porNumero.has(numero)) throw erro('Produto não encontrado.');
+      const v = b?.qtd === '' || b?.qtd == null ? null : Number(b.qtd);
+      if (v != null && (!Number.isInteger(v) || v < 0 || v > 100000)) throw erro('Estoque de segurança: um número inteiro de 0 para cima.');
+      D.estoqueSegurancaGravar(numero, v);
+      return { numero, seguranca: v ?? segurancaPadrao(), propria: v != null };
+    },
+    'PUT /api/estoque/seguranca-padrao': async (_u, b) => {
+      const v = Number(b?.qtd);
+      if (!Number.isInteger(v) || v < 0 || v > 100000) throw erro('Estoque de segurança padrão: um número inteiro de 0 para cima.');
+      D.configGravar('estoque_seguranca_padrao', String(v));
+      return { seguranca_padrao: v };
+    },
     // Estoque de peças com defeito, por fornecedor, e os lançamentos à mão (para desfazer).
     'GET /api/estoque/defeitos': async () => {
       const r = defeitos();
@@ -718,7 +743,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       compras: dados.compras.length, avisos: { ...dados.avisos, sem_produto: dados.movimentos.length - movs.length } };
   }
 
-  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao };
+  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
 }
 
 module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, TIPO_NOME };
