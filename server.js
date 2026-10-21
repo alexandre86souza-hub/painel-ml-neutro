@@ -2259,9 +2259,9 @@ async function montarEstoqueAnuncios() {
     if (!leroyMod.config()?.api_key) return;
     const tr = D.skuTrocas('leroy');
     for (const o of (await routes['GET /api/leroy/anuncios'](urlDe('/api/leroy/anuncios'))).itens || []) {
-      if (!o.ativa) continue;
+      // oferta inativa entra: na Leroy a oferta com estoque 0 fica inativa (medido 21/10/2026) e volta quando recebe estoque
       anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku),
-        estoque: o.estoque ?? null, status: 'ativa', full: false, link: null });
+        estoque: o.estoque ?? null, status: o.ativa ? 'ativa' : 'inativa', full: false, link: null });
     }
   });
   await passo('Amazon', async () => {
@@ -2281,8 +2281,8 @@ async function linhasLeroy() {
   const C = require('./custos.js');
   const tr = D.skuTrocas('leroy'), anuncios = [];
   for (const o of (await routes['GET /api/leroy/anuncios'](new URL('/api/leroy/anuncios', 'http://painel'))).itens || []) {
-    if (!o.ativa) continue;
-    anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku), estoque: o.estoque ?? null, status: 'ativa', full: false });
+    // inativa entra (estoque 0 deixa a oferta inativa; o envio de estoque a reativa)
+    anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku), estoque: o.estoque ?? null, status: o.ativa ? 'ativa' : 'inativa', full: false });
   }
   return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
 }
