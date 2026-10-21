@@ -487,9 +487,12 @@ async function carregarSaldo(recarregar){
 }
 function saldoFiltrado(){
   const q = $('sBusca').value.trim().toLowerCase(), st = $('sStatus').value, f = $('sForn').value, at = $('sAtivos').checked, de = $('sDescEst').checked;
-  // Descontinuado com estoque = não compra mais e ainda tem saldo (status 'Vender o restante'); ignora o 'Só ativos'
-  return visao.produtos.filter((p) => (de ? p.status === 'Vender o restante' && p.saldo > 0 : (!at || p.situacao === 'Ativo' || st === 'Vender o restante')) && (!st || p.status === st) && (!f || p.fornecedor === f)
-    && (!q || [p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => String(t || '').toLowerCase().includes(q))));
+  // Descontinuado com estoque = não compra mais e ainda tem saldo (status 'Vender o restante'); ignora o 'Só ativos'.
+  // Com algo digitado na busca, o 'Só ativos' não esconde (o produto procurado pode estar descontinuado) e o número do
+  // SKU também acha: "AD-176" ou "176" acham o AA-176 (pedido do dono, 21/10/2026).
+  const num = (/^(?:[a-z*]{1,4}-)?0*(\d{1,5})$/.exec(q) || [])[1];
+  return visao.produtos.filter((p) => (de ? p.status === 'Vender o restante' && p.saldo > 0 : (!at || q || p.situacao === 'Ativo' || st === 'Vender o restante')) && (!st || p.status === st) && (!f || p.fornecedor === f)
+    && (!q || (num != null && Number(p.numero) === Number(num)) || [p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => String(t || '').toLowerCase().includes(q))));
 }
 function pintarSaldo(){
   // pelo número do produto no SKU (GA-101, DQ-102…: 001, 002…), não pelo nome nem pela situação
