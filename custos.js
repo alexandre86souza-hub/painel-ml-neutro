@@ -291,7 +291,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     const lotes = [];
     for (let i = 0; i < ids.length; i += 20) lotes.push(ids.slice(i, i + 20));
     const lista = (await emLotes(lotes, 4, (lote) => ml(`/items?ids=${lote.join(',')}&attributes=id,title,`
-      + 'thumbnail,permalink,status,price,original_price,available_quantity,seller_custom_field,attributes,variations,shipping')))
+      + 'thumbnail,permalink,status,price,original_price,available_quantity,seller_custom_field,attributes,variations,shipping&include_attributes=all')))   // include_attributes: o SELLER_SKU de cada variação
       .flat().filter((x) => x.code === 200).map((x) => x.body);
     cacheAnuncios = { conta: conta.ml_user_id, em: Date.now(), lista };
     return lista;
@@ -754,7 +754,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     // (variação fora do PUT é apagada) — e relê para conferir. Escrita só pela tela/pedido do vendedor, com confirmação.
     { m: 'GET', re: /^\/api\/items\/(MLB\d+)\/variacoes-sku$/, fn: async ([id]) => {
       contaOuErro();
-      const it = await ml(`/items/${id}?attributes=id,title,status,variations,attributes,seller_custom_field`);
+      // include_attributes=all: sem ele o ML não manda os atributos (SELLER_SKU) de cada variação
+      const it = await ml(`/items/${id}?include_attributes=all`);
       const { base, variacoes } = skusDoAnuncio(it);
       return { id, titulo: it.title, status: it.status, sku_anuncio: base, variacoes: variacoes.map((v, i) => ({ id: v.id, nome: v.nome, sku: v.sku,
         estoque: it.variations?.[i]?.available_quantity ?? null, produtos: v.sku ? componentes(v.sku) : [] })) };
@@ -771,7 +772,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       if (fora.length) throw erro(`Variação não encontrada no anúncio: ${fora.join(', ')}.`);
       await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify({ variations: vars.map((v) => (pedidos.has(String(v.id))
         ? { id: v.id, attributes: [{ id: 'SELLER_SKU', value_name: pedidos.get(String(v.id)) }] } : { id: v.id })) }) });
-      const novo = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field`);
+      const novo = await ml(`/items/${id}?include_attributes=all`);
       const { variacoes } = skusDoAnuncio(novo);
       const resultado = [...pedidos].map(([vid, sku]) => { const v = variacoes.find((x) => String(x.id) === vid); return { id: vid, pedido: sku, ficou: v?.sku || null, ok: v?.sku === sku }; });
       cacheAnuncios = null;
@@ -797,7 +798,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       if (body?.so_painel) {
         const resultado = await emLotes(ids, 3, async (id) => {
           try {
-            const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field`);
+            const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field&include_attributes=all`);
             const { base, variacoes } = skusDoAnuncio(it);
             const skus = [...new Set([base, ...variacoes.map((v) => v.sku)].filter(Boolean))];
             const trocas = trocarComposicao(skus.length ? skus : [id], de, para);
@@ -812,7 +813,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const mapa = catalogoMapa();
       const resultado = await emLotes(ids, 3, async (id) => {
         try {
-          const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field,status`);
+          const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field,status&include_attributes=all`);
           const corpo = {}, trocas = [];
           // SKU no anúncio: atributo SELLER_SKU; conta antiga pode ter no seller_custom_field
           const baseAttr = attrSku(it.attributes);
@@ -836,7 +837,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           if (!trocas.length) return { id, ok: false, erro: 'o SKU deste anúncio não tem mais esse produto' };
           await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify(corpo) });
           // confere no ML e recalcula o custo do anúncio
-          const novo = await ml(`/items/${id}?attributes=id,title,available_quantity,seller_custom_field,attributes,variations,status`);
+          const novo = await ml(`/items/${id}?attributes=id,title,available_quantity,seller_custom_field,attributes,variations,status&include_attributes=all`);
           const { base, variacoes } = skusDoAnuncio(novo);
           if ([base, ...variacoes.map((v) => v.sku)].some(tem)) return { id, ok: false, trocas, erro: 'o Mercado Livre aceitou, mas o SKU antigo continua no anúncio' };
           const comp = composicao(novo, mapa);
@@ -882,7 +883,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       exigeItemId(id);
       const sku = String(body?.sku ?? '').trim();
       if (!sku || sku.length > 60) throw erro('Informe o SKU (até 60 caracteres).');
-      const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field,status`);
+      const it = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field,status&include_attributes=all`);
       const vars = it.variations || [];
       let corpo;
       if (vars.length) {
@@ -895,7 +896,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       }
       await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify(corpo) });
       cacheAnuncios = null;
-      const novo = await ml(`/items/${id}?attributes=id,title,available_quantity,seller_custom_field,attributes,variations,status`);
+      const novo = await ml(`/items/${id}?attributes=id,title,available_quantity,seller_custom_field,attributes,variations,status&include_attributes=all`);
       const comp = composicao(novo);
       const custos = comp.filter((c) => c.custo != null).map((c) => c.custo);
       const atual = D.custoObter(id);
