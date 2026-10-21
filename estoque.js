@@ -43,7 +43,7 @@ function numerosDoCodigo(codigo, porSku) {
   if (!c) return [];
   const exato = porSku.get(c.toUpperCase());
   if (exato != null) return [exato];
-  if (/^\d+$/.test(c)) return [Number(c)];
+  if (/^\d+$/.test(c)) return C.composicaoDe(c) ? C.componentes(c) : [Number(c)];   // número puro com troca só no painel segue a composição
   return C.componentes(c);
 }
 // [numero, numero…] -> Map(numero -> quantas vezes)
