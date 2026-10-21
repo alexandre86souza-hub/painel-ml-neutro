@@ -103,3 +103,11 @@ assert.ok(!/\/api\/leroy/.test(mcp), 'nenhuma ferramenta MCP aponta para /api/le
 }
 
 console.log('Leroy Merlin: endereço, chave, ID da loja, sem dados de comprador, lucro por linha, repasses e fora do MCP: ok');
+
+// STO01: arquivo só de estoque (offer-sku e quantity, sem depósito), quantidade inteira e nunca negativa
+{
+  const L2 = require('./leroy.js');
+  require('node:assert').strictEqual(L2.csvEstoqueMirakl([{ sku: 'AMG-521', quantidade: 1042 }, { sku: 'X"1', quantidade: -3 }]),
+    '"offer-sku";"quantity";"warehouse-code";"update-delete"\n"AMG-521";"1042";"";"update"\n"X""1";"0";"";"update"\n');
+  console.log('Leroy: arquivo de estoque (STO01): ok');
+}

@@ -167,6 +167,12 @@ function devolucoesDe(linhas) {
   })).sort((a, b) => String(b.data_venda).localeCompare(String(a.data_venda)));
 }
 
+// Arquivo do STO01 (estoque): ; entre as colunas, valores entre aspas, sem depósito (vale para a oferta toda). Função pura: testada.
+const aspas = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+function csvEstoqueMirakl(linhas) {
+  return ['"offer-sku";"quantity";"warehouse-code";"update-delete"', ...linhas.map((l) => [aspas(l.sku), aspas(Math.max(0, Math.round(Number(l.quantidade) || 0))), aspas(''), aspas('update')].join(';'))].join('\n') + '\n';
+}
+
 // Oferta do OF21 -> o que a tela de campanhas usa. Preço cheio = o de origem (com desconto ativo
 // o price continua o cheio; medido: 833 de 972 ofertas com discount, todas de um só preço).
 // complexo = preço por canal ou por quantidade: o PRI01 apagaria esses preços, então o painel não
@@ -354,6 +360,35 @@ function criar({ D, janela }) {
     const id = r?.import_id ?? r?.importId ?? null;
     if (id != null) D.configGravar('leroy_pri01_ultima', String(id));
     return { import_id: id, ofertas: linhas.length };
+  }
+  // STO01 (estoque das ofertas; pedido do dono 21/10/2026, a Leroy é a 1ª loja com o estoque mandado pelo painel): arquivo
+  // só com offer-sku e quantity — não mexe em preço nem nos outros campos (o OF24 zeraria). No máximo 1 por minuto.
+  async function importarEstoque(linhas) {
+    const ultima = D.configLer('leroy_sto01_em');
+    if (ultima && Date.now() - Date.parse(ultima) < 61e3) throw erro('A Leroy aceita um envio de estoque por minuto. Espere um pouco e tente de novo.', 429);
+    const c = exigir();
+    D.configGravar('leroy_sto01_em', new Date().toISOString());
+    const r = await mkArquivo(c, '/api/offers/stock/imports', 'estoque.csv', csvEstoqueMirakl(linhas));
+    cacheOfertas = null;
+    const id = r?.import_id ?? r?.importId ?? null;
+    if (id != null) D.configGravar('leroy_sto01_ultima', String(id));
+    return { import_id: id, ofertas: linhas.length };
+  }
+  // STO02 (situação) e, com erro, o relatório.
+  async function situacaoEstoque(id) {
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(String(id || ''))) throw erro('Envio de estoque não informado.');
+    const c = exigir();
+    const r = await mk(c, `/api/offers/stock/imports/${encodeURIComponent(id)}/status`);
+    let erros = null;
+    if (r?.has_error_report) {
+      try {
+        const qs = c.shop_id ? `?shop_id=${encodeURIComponent(c.shop_id)}` : '';
+        const e = await fetch(`${c.host}/api/offers/stock/imports/${encodeURIComponent(id)}/error_report${qs}`, { headers: { Authorization: c.api_key }, signal: AbortSignal.timeout(30000) });
+        erros = (await e.text()).split(/\r?\n/).filter(Boolean).slice(0, 21).join('\n');
+      } catch { /* sem relatório */ }
+    }
+    if (r?.status === 'COMPLETE') cacheOfertas = null;
+    return { import_id: id, situacao: r?.status || 'WAITING', ok: r?.lines_in_success ?? null, com_erro: r?.lines_in_error ?? null, erros };
   }
   async function ofertasEditaveis(skus) {
     const mapa = new Map((await ofertas(true)).map((o) => [o.sku, o]));
@@ -606,7 +641,7 @@ function criar({ D, janela }) {
       };
     },
   };
-  return { rotas, rotasParam: [], config, mk, sincronizar, ofertas };
+  return { rotas, rotasParam: [], config, mk, sincronizar, ofertas, importarEstoque, situacaoEstoque };
 }
 
-module.exports = { SEM_PAGAMENTO, criar, devolucoesDe, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };
+module.exports = { SEM_PAGAMENTO, criar, csvEstoqueMirakl, devolucoesDe, validarConfig, semPessoais, pedidoDe, ofertaDe, linhasDe, transacaoDe, cicloDe, estadosDasLinhas, proximoFechamento, repassesDe };

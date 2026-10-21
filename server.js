@@ -2274,6 +2274,25 @@ async function montarEstoqueAnuncios() {
   const r = require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe());
   return { ...r, erros, inicio: D.configLer('estoque_inicio') || null, lido_em: new Date().toISOString() };
 }
+// Etapa 2, Leroy (a loja que o vendedor controla à mão; as outras ficam com o UpSeller por enquanto): manda às ofertas
+// escolhidas o que a comparação calcula (saldo − segurança, kit = o que acaba primeiro), relida na hora. STO01 só de estoque.
+routes['POST /api/estoque/anuncios/leroy'] = async (_u, b) => {
+  const skus = [...new Set((Array.isArray(b?.skus) ? b.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];
+  if (!skus.length || skus.length > 1000) throw Object.assign(new Error('Escolha de 1 a 1.000 ofertas da Leroy.'), { status: 400 });
+  const d = await montarEstoqueAnuncios();
+  estAnuncios = { rodando: false, em: Date.now(), dados: d, erro: null };
+  const porSku = new Map(d.linhas.filter((l) => l.canal === 'leroy').map((l) => [l.id, l]));
+  const linhas = [], fora = [];
+  for (const s of skus) {
+    const l = porSku.get(s);
+    if (!l || l.deveria == null) fora.push({ sku: s, motivo: !l ? 'oferta não encontrada na Leroy' : l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' });
+    else linhas.push({ sku: s, quantidade: l.deveria, antes: l.estoque });
+  }
+  if (!linhas.length) throw Object.assign(new Error('Nenhuma oferta com estoque calculado: ' + fora.map((f) => `${f.sku} (${f.motivo})`).join(', ')), { status: 400 });
+  const r = await leroyMod.importarEstoque(linhas);
+  return { ...r, enviadas: linhas, fora };
+};
+routes['GET /api/estoque/anuncios/leroy/situacao'] = async (url) => leroyMod.situacaoEstoque(url.searchParams.get('id') || D.configLer('leroy_sto01_ultima'));
 routes['GET /api/estoque/anuncios'] = async (url) => {
   const recarregar = url?.searchParams.get('recarregar') === '1';
   if (!estAnuncios || (recarregar && !estAnuncios.rodando) || (!estAnuncios.rodando && Date.now() - estAnuncios.em > 10 * 60e3)) {

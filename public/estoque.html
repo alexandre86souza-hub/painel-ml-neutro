@@ -162,6 +162,7 @@
       <button type="button" class="bt" id="eaCsv">Baixar CSV</button>
       <button type="button" class="bt" id="eaReler">Ler de novo</button>
     </div>
+    <div id="eaEnvio" class="aviso-caixa" hidden></div>
     <div class="tabela-rolagem" id="eaLista"><p class="carregando">Carregando…</p></div>
   </section>
 
@@ -334,8 +335,13 @@ function pintarEstAnuncios(){
   const ls = eaFiltradas(q, sit, loja);
   const box = $('eaLista'); box.innerHTML = '';
   if(!ls.length){ box.appendChild(el('p', 'vazio', 'Nada com esse filtro.')); return; }
-  box.appendChild(tabela([['Loja'], ['Anúncio'], ['SKU'], ['Na loja', 'n'], ['Pelo painel (− segurança)', 'n'], ['Diferença', 'n'], ['Produto que limita'], ['Situação']], ls.slice(0, 1500).map((x) => {
+  // Leroy escolhida: caixinhas e o botão para mandar o estoque (as outras lojas ficam com o UpSeller por enquanto)
+  const leroy = loja === 'Leroy Merlin';
+  pintarEnvioLeroy(leroy, ls);
+  box.appendChild(tabela([...(leroy ? [['']] : []), ['Loja'], ['Anúncio'], ['SKU'], ['Na loja', 'n'], ['Pelo painel (− segurança)', 'n'], ['Diferença', 'n'], ['Produto que limita'], ['Situação']], ls.slice(0, 1500).map((x) => {
     const tr = el('tr');
+    if(leroy){ const tc = el('td'); if(x.deveria != null){ const c = el('input'); c.type = 'checkbox'; c.checked = eaMarcadas.has(x.id); c.setAttribute('aria-label', `Marcar ${x.id}`);
+      c.onchange = () => { c.checked ? eaMarcadas.add(x.id) : eaMarcadas.delete(x.id); pintarEnvioLeroy(true, ls); }; tc.appendChild(c); } tr.appendChild(tc); }
     const t1 = el('td'); const nome = el('div', null, x.titulo || x.id);
     if(x.link){ const a = el('a', null, x.titulo || x.id); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; nome.textContent = ''; nome.appendChild(a); }
     t1.append(nome, el('span', 'pequeno', [x.id, x.variacao, x.status].filter(Boolean).join(' · ')));
@@ -347,6 +353,39 @@ function pintarEstAnuncios(){
   })));
   if(ls.length > 1500) box.appendChild(el('p', 'sub', `Mostrando 1.500 de ${n0(ls.length)}: use a busca ou o filtro de loja.`));
 }
+// envio de estoque para a Leroy: marcadas (por offer-sku), botão, e a conferência do envio (STO02)
+const eaMarcadas = new Set();
+function pintarEnvioLeroy(leroy, ls){
+  const box = $('eaEnvio'); box.hidden = !leroy; if(!leroy) return;
+  box.innerHTML = '';
+  const marcadas = ls.filter((x) => eaMarcadas.has(x.id));
+  box.append(el('span', null, `Leroy: ${n0(eaMarcadas.size)} oferta(s) marcada(s). O painel manda o saldo − segurança, calculado na hora (só o estoque; preço e o resto não mudam).`));
+  const todas = el('button', 'bt', 'Marcar todas da lista'); todas.type = 'button';
+  todas.onclick = () => { for(const x of ls) if(x.deveria != null) eaMarcadas.add(x.id); pintarEstAnuncios(); };
+  const limpar = el('button', 'bt', 'Desmarcar'); limpar.type = 'button'; limpar.onclick = () => { eaMarcadas.clear(); pintarEstAnuncios(); };
+  const env = el('button', 'bt forte', `Enviar estoque (${n0(eaMarcadas.size)})`); env.type = 'button'; env.disabled = !eaMarcadas.size;
+  env.onclick = async () => {
+    const prev = marcadas.slice(0, 8).map((x) => `${x.id}: ${n0(x.estoque)} → ${n0(x.deveria)}`).join('\n');
+    if(!confirm(`Mandar o estoque de ${eaMarcadas.size} oferta(s) para a Leroy?\n\n${prev}${eaMarcadas.size > 8 ? '\n…' : ''}`)) return;
+    env.disabled = true; env.textContent = 'Enviando…';
+    try{
+      const r = await post('/api/estoque/anuncios/leroy', { skus: [...eaMarcadas] });
+      eaUltimoEnvio = r.import_id;
+      aviso(`Enviado à Leroy: ${n0(r.enviadas.length)} oferta(s)${r.fora?.length ? `; ${r.fora.length} ficaram de fora (${r.fora.slice(0, 3).map((f) => f.sku + ': ' + f.motivo).join(', ')})` : ''}. Clique em "Conferir o envio" em 1 a 5 minutos.`, 'ok');
+      eaMarcadas.clear(); pintarEstAnuncios();
+    }catch(e){ aviso(e.message); env.disabled = false; env.textContent = `Enviar estoque (${n0(eaMarcadas.size)})`; }
+  };
+  const conf = el('button', 'bt', 'Conferir o envio'); conf.type = 'button';
+  conf.onclick = async () => {
+    try{ const r = await api('/api/estoque/anuncios/leroy/situacao' + (eaUltimoEnvio ? '?id=' + encodeURIComponent(eaUltimoEnvio) : ''));
+      const NOME = { WAITING: 'na fila', RUNNING: 'processando', COMPLETE: 'concluído', FAILED: 'falhou' };
+      aviso(`Envio de estoque ${NOME[r.situacao] || r.situacao}${r.ok != null ? `: ${n0(r.ok)} ok` : ''}${r.com_erro ? `, ${n0(r.com_erro)} com erro` : ''}.${r.erros ? ' ' + r.erros.split('\n').slice(1, 4).join(' | ') : ''}`, r.com_erro || r.situacao === 'FAILED' ? '' : 'ok');
+      if(r.situacao === 'COMPLETE') carregarEstAnuncios(true);
+    }catch(e){ aviso(e.message); }
+  };
+  const ac = el('div', 'acoes'); ac.append(todas, limpar, env, conf); box.appendChild(ac);
+}
+let eaUltimoEnvio = null;
 function eaFiltradas(q, sit, loja){
   return ea.linhas.filter((x) => (!loja || x.loja === loja)
     && (!sit || (sit === 'dif' ? ['loja_mais', 'loja_menos'].includes(x.situacao) : sit === 'risco' ? x.situacao === 'loja_mais' && x.deveria === 0 : x.situacao === sit))
