@@ -2275,24 +2275,81 @@ async function montarEstoqueAnuncios() {
   return { ...r, erros, inicio: D.configLer('estoque_inicio') || null, lido_em: new Date().toISOString() };
 }
 // Etapa 2, Leroy (a loja que o vendedor controla à mão; as outras ficam com o UpSeller por enquanto): manda às ofertas
-// escolhidas o que a comparação calcula (saldo − segurança, kit = o que acaba primeiro), relida na hora. STO01 só de estoque.
-routes['POST /api/estoque/anuncios/leroy'] = async (_u, b) => {
-  const skus = [...new Set((Array.isArray(b?.skus) ? b.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];
-  if (!skus.length || skus.length > 1000) throw Object.assign(new Error('Escolha de 1 a 1.000 ofertas da Leroy.'), { status: 400 });
-  const d = await montarEstoqueAnuncios();
-  estAnuncios = { rodando: false, em: Date.now(), dados: d, erro: null };
-  const porSku = new Map(d.linhas.filter((l) => l.canal === 'leroy').map((l) => [l.id, l]));
+// o que a comparação calcula (saldo − segurança, kit = o que acaba primeiro), relido na hora — só as ofertas da Leroy (rápido,
+// sem ler o ML). STO01 só de estoque. Cada envio fica em estoque_envios e é conferido no STO02 (falha = aviso no sino).
+async function linhasLeroy() {
+  const C = require('./custos.js');
+  const tr = D.skuTrocas('leroy'), anuncios = [];
+  for (const o of (await routes['GET /api/leroy/anuncios'](new URL('/api/leroy/anuncios', 'http://painel'))).itens || []) {
+    if (!o.ativa) continue;
+    anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku), estoque: o.estoque ?? null, status: 'ativa', full: false });
+  }
+  return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
+}
+async function enviarEstoqueLeroy(skus, quem) {
+  const porSku = new Map((await linhasLeroy()).map((l) => [l.id, l]));
   const linhas = [], fora = [];
   for (const s of skus) {
     const l = porSku.get(s);
     if (!l || l.deveria == null) fora.push({ sku: s, motivo: !l ? 'oferta não encontrada na Leroy' : l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' });
     else linhas.push({ sku: s, quantidade: l.deveria, antes: l.estoque });
   }
-  if (!linhas.length) throw Object.assign(new Error('Nenhuma oferta com estoque calculado: ' + fora.map((f) => `${f.sku} (${f.motivo})`).join(', ')), { status: 400 });
+  if (!linhas.length) return { enviadas: [], fora };
   const r = await leroyMod.importarEstoque(linhas);
-  return { ...r, enviadas: linhas, fora };
+  const envio = D.estoqueEnvioGravar({ canal: 'leroy', quem, import_id: r.import_id, linhas: linhas.map((l) => ({ sku: l.sku, antes: l.antes, depois: l.quantidade })) });
+  estAnuncios = null;   // a comparação relê na próxima abertura
+  return { ...r, envio, enviadas: linhas, fora };
+}
+// Confere no STO02 os envios ainda sem resposta (até 6 h); recusa ou linhas com erro viram aviso no sino de todas as contas.
+async function conferirEnviosLeroy() {
+  for (const e of D.estoqueEnviosListar('leroy', 30)) {
+    if (!e.import_id || ['COMPLETE', 'FAILED'].includes(e.situacao) || Date.now() - Date.parse(e.em) > 6 * 3600e3) continue;
+    let r; try { r = await leroyMod.situacaoEstoque(e.import_id); } catch { continue; }
+    D.estoqueEnvioAtualizar(e.id, r);
+    if (r.situacao === 'FAILED' || r.com_erro > 0) {
+      for (const c of D.contasListar()) D.avisoCriar(c.ml_user_id, { tipo: 'estoque_leroy', chave: `estoque_leroy:${e.import_id}`,
+        titulo: `Envio de estoque à Leroy ${r.situacao === 'FAILED' ? 'falhou' : `com ${r.com_erro} linha(s) recusada(s)`}`,
+        texto: (r.erros || '').split('\n').slice(1, 4).join(' | ') || `${e.linhas.length} oferta(s) no envio de ${new Date(e.em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`,
+        link: '/estoque.html#anuncios' });
+    }
+  }
+}
+// Automático (desligado até o vendedor ligar; leroy_estoque_auto = '1'): a cada 10 min confere os envios e manda só as ofertas
+// cujo estoque na Leroy ficou diferente do que o painel calcula.
+let leroyAutoRodando = false;
+async function leroyAuto() {
+  if (leroyAutoRodando || D.configLer('leroy_estoque_auto') !== '1' || !D.configLer('estoque_inicio') || !leroyMod.config()?.api_key) return;
+  leroyAutoRodando = true;
+  try {
+    await conferirEnviosLeroy();
+    const mudar = (await linhasLeroy()).filter((l) => l.deveria != null && l.estoque != null && l.deveria !== l.estoque).map((l) => l.id);
+    if (mudar.length) await enviarEstoqueLeroy(mudar.slice(0, 1000), 'automático');
+    D.configGravar('leroy_estoque_auto_ultimo', new Date().toISOString());
+  } catch (e) { D.configGravar('leroy_estoque_auto_erro', `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
+  finally { leroyAutoRodando = false; }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { conferirEnviosLeroy().catch(() => null); leroyAuto().catch(() => null); }, 10 * 60e3).unref?.();
+routes['POST /api/estoque/anuncios/leroy'] = async (_u, b) => {
+  const skus = [...new Set((Array.isArray(b?.skus) ? b.skus : []).map((s) => String(s ?? '').trim()).filter(Boolean))];
+  if (!skus.length || skus.length > 1000) throw Object.assign(new Error('Escolha de 1 a 1.000 ofertas da Leroy.'), { status: 400 });
+  const r = await enviarEstoqueLeroy(skus, CTX.atual()?.usuario?.login || 'admin');
+  if (!r.enviadas.length) throw Object.assign(new Error('Nenhuma oferta com estoque calculado: ' + r.fora.map((f) => `${f.sku} (${f.motivo})`).join(', ')), { status: 400 });
+  return r;
 };
-routes['GET /api/estoque/anuncios/leroy/situacao'] = async (url) => leroyMod.situacaoEstoque(url.searchParams.get('id') || D.configLer('leroy_sto01_ultima'));
+routes['GET /api/estoque/anuncios/leroy/situacao'] = async (url) => {
+  await conferirEnviosLeroy().catch(() => null);
+  return leroyMod.situacaoEstoque(url.searchParams.get('id') || D.configLer('leroy_sto01_ultima'));
+};
+// Envios recentes e o automático (ligar/desligar).
+routes['GET /api/estoque/anuncios/leroy/envios'] = async () => ({ automatico: D.configLer('leroy_estoque_auto') === '1',
+  ultimo_automatico: D.configLer('leroy_estoque_auto_ultimo'), erro_automatico: D.configLer('leroy_estoque_auto_erro'),
+  envios: D.estoqueEnviosListar('leroy', 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) });
+routes['PUT /api/estoque/anuncios/leroy/auto'] = async (_u, b) => {
+  if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
+  D.configGravar('leroy_estoque_auto', b.ligado ? '1' : '0');
+  if (b.ligado) leroyAuto().catch(() => null);
+  return { automatico: b.ligado };
+};
 routes['GET /api/estoque/anuncios'] = async (url) => {
   const recarregar = url?.searchParams.get('recarregar') === '1';
   if (!estAnuncios || (recarregar && !estAnuncios.rodando) || (!estAnuncios.rodando && Date.now() - estAnuncios.em > 10 * 60e3)) {

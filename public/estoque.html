@@ -163,6 +163,7 @@
       <button type="button" class="bt" id="eaReler">Ler de novo</button>
     </div>
     <div id="eaEnvio" class="aviso-caixa" hidden></div>
+    <details id="eaEnvios" hidden style="margin:0 0 10px"><summary style="cursor:pointer;font-weight:600">Envios de estoque à Leroy</summary><div class="tabela-rolagem" id="eaEnviosLista"></div></details>
     <div class="tabela-rolagem" id="eaLista"><p class="carregando">Carregando…</p></div>
   </section>
 
@@ -356,7 +357,7 @@ function pintarEstAnuncios(){
 // envio de estoque para a Leroy: marcadas (por offer-sku), botão, e a conferência do envio (STO02)
 const eaMarcadas = new Set();
 function pintarEnvioLeroy(leroy, ls){
-  const box = $('eaEnvio'); box.hidden = !leroy; if(!leroy) return;
+  const box = $('eaEnvio'); box.hidden = !leroy; $('eaEnvios').hidden = !leroy; if(!leroy) return;
   box.innerHTML = '';
   const marcadas = ls.filter((x) => eaMarcadas.has(x.id));
   box.append(el('span', null, `Leroy: ${n0(eaMarcadas.size)} oferta(s) marcada(s). O painel manda o saldo − segurança, calculado na hora (só o estoque; preço e o resto não mudam).`));
@@ -384,6 +385,36 @@ function pintarEnvioLeroy(leroy, ls){
     }catch(e){ aviso(e.message); }
   };
   const ac = el('div', 'acoes'); ac.append(todas, limpar, env, conf); box.appendChild(ac);
+  // automático (a cada 10 min, só as ofertas que mudaram) e a lista dos envios
+  const au = el('label', null); au.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px';
+  const ck = el('input'); ck.type = 'checkbox'; ck.checked = !!eaEnviosDados?.automatico;
+  au.append(ck, document.createTextNode(' Envio automático a cada 10 minutos (manda só as ofertas em que a Leroy ficou diferente do painel)'));
+  if(eaEnviosDados?.ultimo_automatico) au.appendChild(el('small', null, ` · última vez ${quando(eaEnviosDados.ultimo_automatico)}`));
+  ck.onchange = async () => {
+    const ligar = ck.checked;
+    if(ligar && !confirm('Ligar o envio automático? Na primeira vez ele manda TODAS as ofertas da Leroy que estão diferentes do painel (saldo − segurança).')){ ck.checked = false; return; }
+    try{ await post('/api/estoque/anuncios/leroy/auto', { ligado: ligar }, 'PUT'); aviso(ligar ? 'Envio automático ligado.' : 'Envio automático desligado.', 'ok'); carregarEnviosLeroy(); }
+    catch(e){ ck.checked = !ligar; aviso(e.message); }
+  };
+  box.appendChild(au);
+  if(!eaEnviosDados) carregarEnviosLeroy();
+}
+let eaEnviosDados = null;
+async function carregarEnviosLeroy(){
+  try{ eaEnviosDados = await api('/api/estoque/anuncios/leroy/envios'); }catch{ return; }
+  const det = $('eaEnvios'); det.hidden = false;
+  const box = $('eaEnviosLista'); box.innerHTML = '';
+  const NOME = { WAITING: 'na fila', RUNNING: 'processando', COMPLETE: 'concluído', FAILED: 'falhou' };
+  if(!eaEnviosDados.envios.length){ box.appendChild(el('p', 'vazio', 'Nenhum envio ainda.')); }
+  else box.appendChild(tabela([['Quando'], ['Quem'], ['Ofertas', 'n'], ['Resultado'], ['Exemplos']], eaEnviosDados.envios.map((e) => {
+    const tr = el('tr');
+    tr.append(td(quando(e.em)), td(e.quem || '—'), td(n0(e.total), 'n'),
+      td((NOME[e.situacao] || e.situacao || '—') + (e.ok != null ? ` · ${n0(e.ok)} ok` : '') + (e.com_erro ? ` · ${n0(e.com_erro)} com erro` : '')),
+      td(e.linhas.slice(0, 4).map((l) => `${l.sku}: ${n0(l.antes)} → ${n0(l.depois)}`).join(' | ') + (e.total > 4 ? ' …' : '')));
+    return tr;
+  })));
+  if(eaEnviosDados.erro_automatico) box.appendChild(el('p', 'sub', 'Último erro do automático: ' + eaEnviosDados.erro_automatico));
+  const leroy = $('eaLoja').value === 'Leroy Merlin'; if(leroy && ea?.linhas) pintarEnvioLeroy(true, eaFiltradas($('eaBusca').value.trim().toLowerCase(), $('eaSit').value, 'Leroy Merlin'));
 }
 let eaUltimoEnvio = null;
 function eaFiltradas(q, sit, loja){

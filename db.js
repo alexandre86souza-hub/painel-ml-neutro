@@ -2064,6 +2064,18 @@ try { db.exec('ALTER TABLE comandas ADD COLUMN etiqueta_em TEXT'); } catch { /* 
 try { db.exec('ALTER TABLE fornecedores ADD COLUMN situacao TEXT'); } catch { /* já existe */ }
 
 const estoqueProdutos = () => db.prepare('SELECT * FROM estoque_produtos').all();
+// Envios de estoque às lojas (por enquanto só a Leroy, STO01): o que foi mandado (sku, antes, depois), por quem
+// ('automático' ou o login) e o resultado que a loja deu (STO02). Fica 180 dias.
+db.exec(`CREATE TABLE IF NOT EXISTS estoque_envios (id INTEGER PRIMARY KEY AUTOINCREMENT, canal TEXT NOT NULL, em TEXT NOT NULL, quem TEXT,
+  import_id TEXT, linhas TEXT NOT NULL, situacao TEXT, ok INTEGER, com_erro INTEGER, erros TEXT, conferido_em TEXT)`);
+const estoqueEnvioGravar = (e) => Number(db.prepare('INSERT INTO estoque_envios (canal, em, quem, import_id, linhas, situacao) VALUES (?,?,?,?,?,?)')
+  .run(e.canal, agora(), e.quem ?? null, e.import_id ?? null, JSON.stringify(e.linhas || []), e.situacao || 'WAITING').lastInsertRowid);
+const estoqueEnvioAtualizar = (id, r) => db.prepare('UPDATE estoque_envios SET situacao=?, ok=?, com_erro=?, erros=?, conferido_em=? WHERE id=?')
+  .run(r.situacao ?? null, r.ok ?? null, r.com_erro ?? null, r.erros ?? null, agora(), id);
+const estoqueEnviosListar = (canal, n = 50) => {
+  db.prepare("DELETE FROM estoque_envios WHERE em < datetime('now', '-180 days')").run();
+  return db.prepare('SELECT * FROM estoque_envios WHERE canal=? ORDER BY id DESC LIMIT ?').all(canal, n).map((r) => ({ ...r, linhas: JSON.parse(r.linhas || '[]') }));
+};
 // Estoque de segurança por produto (o que NÃO vai para os anúncios): sem linha = o padrão (estado estoque_seguranca_padrao, 3).
 db.exec('CREATE TABLE IF NOT EXISTS estoque_seguranca (numero INTEGER PRIMARY KEY, qtd INTEGER NOT NULL, atualizado_em TEXT NOT NULL)');
 const estoqueSegurancas = () => new Map(db.prepare('SELECT numero, qtd FROM estoque_seguranca').all().map((r) => [r.numero, r.qtd]));
@@ -2236,7 +2248,7 @@ module.exports = {
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
-  estoqueProdutos, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
+  estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar,
 };
