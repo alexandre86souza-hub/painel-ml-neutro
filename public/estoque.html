@@ -730,7 +730,7 @@ function pintarCompras(){
     const tit = el('div'); tit.append(el('b', null, `${pedido} · ${c0.fornecedor || '—'}`), el('span', 'pequeno', ` pedido em ${diaBR(c0.data)} · previsão ${diaBR(c0.previsao)} · ${itens.length} item(ns)`));
     const bI = el('button', 'bt', 'Imprimir pedido'); bI.type = 'button'; bI.onclick = () => imprimirPedido(pedido);
     h.append(tit, bI); s.appendChild(h);
-    const t = tabela([['Produto'], ['Ref. compra'], ['Pedido', 'n'], ['Recebido', 'n'], ['Situação'], ['']], itens.map((c) => {
+    const t = tabela([['Produto'], ['Ref. compra'], ['Pedido', 'n'], ['Preço (R$/un.)', 'n'], ['Recebido', 'n'], ['Situação'], ['']], itens.map((c) => {
       const tr = el('tr');
       const tP = el('td'); tP.append(el('b', null, c.sku || c.numero), el('span', 'pequeno', c.nome || ''));
       const tA = el('td'); const ac = el('div', 'acoes');
@@ -741,7 +741,12 @@ function pintarCompras(){
       }
       tA.appendChild(ac);
       const SIT = { aberto: 'Em aberto', parcial: 'Parcial', recebido: 'Recebido', cancelado: 'Cancelado' };
-      tr.append(tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
+      // preço combinado: muda a qualquer momento (grava ao sair do campo)
+      const tPr = el('td', 'n'); const iP = el('input'); iP.type = 'text'; iP.inputMode = 'decimal'; iP.style.width = '86px'; iP.style.textAlign = 'right';
+      iP.value = c.preco != null ? String(c.preco).replace('.', ',') : ''; iP.placeholder = '—'; iP.setAttribute('aria-label', `Preço de ${c.sku}`);
+      iP.onchange = async () => { try{ const r = await post('/api/estoque/compras/preco', { id: c.id, preco: iP.value.trim() }); c.preco = r.preco; iP.value = r.preco != null ? String(r.preco).replace('.', ',') : ''; iP.style.borderColor = '#16a34a'; }catch(e){ aviso(e.message); } };
+      tPr.appendChild(iP);
+      tr.append(tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), tPr, td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
         td(SIT[c.status] + (c.recebido_em ? ` em ${diaBR(c.recebido_em)}` : '') + (c.valor_pago ? ` · ${real(c.valor_pago)}/un.` : '')), tA);
       return tr;
     }));
@@ -751,9 +756,11 @@ function pintarCompras(){
 async function receber(c){
   const falta = c.qtd - c.recebido_qtd;
   const q = prompt(`Quantas peças de ${c.sku} chegaram? (faltam ${falta})`, String(falta)); if(q == null) return;
-  const v = prompt('Valor pago por unidade (R$). Deixe em branco para usar o custo do cadastro.', c.valor_pago ? String(c.valor_pago).replace('.', ',') : ''); if(v == null) return;
+  const v = prompt('Valor pago por unidade (R$). Deixe em branco para usar o custo do cadastro.', c.preco != null ? String(c.preco).replace('.', ',') : c.valor_pago ? String(c.valor_pago).replace('.', ',') : ''); if(v == null) return;
+  const dia = prompt('Data de entrada (dd/mm/aaaa)', new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10).split('-').reverse().join('/')); if(dia == null) return;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dia.trim()); if(!m){ aviso('Data de entrada inválida: use dd/mm/aaaa.'); return; }
   const qtd = Number(q); const fechar = qtd < falta && confirm('Chegou menos do que o pedido. Fechar este item assim mesmo? (Cancelar = continua esperando o resto)');
-  try{ await post('/api/estoque/compras/receber', { id: c.id, qtd, valor_unit: Number(String(v).replace(',', '.')) || null, fechar }); aviso(`${qtd} peça(s) de ${c.sku} entraram no estoque.`, 'ok'); visao = null; carregarCompras(); }
+  try{ await post('/api/estoque/compras/receber', { id: c.id, qtd, valor_unit: Number(String(v).replace(',', '.')) || null, fechar, data: `${m[3]}-${m[2]}-${m[1]}` }); aviso(`${qtd} peça(s) de ${c.sku} entraram no estoque em ${dia}.`, 'ok'); visao = null; carregarCompras(); }
   catch(e){ aviso(e.message); }
 }
 function imprimirPedido(pedido){

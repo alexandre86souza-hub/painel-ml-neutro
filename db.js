@@ -2171,6 +2171,9 @@ function comprasCriar(linhas) {
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 const comprasDaPlanilhaApagar = () => db.prepare('DELETE FROM compras WHERE da_planilha=1').run();
+// preço combinado por unidade (muda a qualquer momento até receber; no recebimento vem preenchido)
+colunaNova('compras', 'preco REAL');
+const compraPrecoGravar = (id, preco) => db.prepare('UPDATE compras SET preco=? WHERE id=?').run(preco ?? null, id);
 function compraAtualizar(id, c) {
   db.prepare('UPDATE compras SET status=?, recebido_qtd=?, valor_pago=?, recebido_em=? WHERE id=?')
     .run(c.status, c.recebido_qtd, c.valor_pago ?? null, c.recebido_em ?? null, id);
@@ -2229,5 +2232,5 @@ module.exports = {
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
-  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar,
+  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar,
 };

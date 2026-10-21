@@ -660,19 +660,29 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       if (!fornecedor) throw erro('Informe o fornecedor.');
       const data = /^\d{4}-\d{2}-\d{2}$/.test(b?.data || '') ? b.data : diaLocal(new Date().toISOString());
       const pedido = String(b?.pedido || '').trim().slice(0, 30) || proximoPedido();
-      if (D.comprasListar().some((c) => c.pedido === pedido)) throw erro(`Já existe o pedido ${pedido}.`);
+      // adicionar = mais itens num pedido que já existe (ex.: o mesmo pedido com itens de dois fornecedores)
+      if (!b?.adicionar && D.comprasListar().some((c) => c.pedido === pedido)) throw erro(`Já existe o pedido ${pedido}.`);
       const f = D.fornecedoresListar().find((x) => x.nome.toLowerCase() === fornecedor.toLowerCase());
       const previsao = /^\d{4}-\d{2}-\d{2}$/.test(b?.previsao || '') ? b.previsao : addMeses(data, f?.prazo_meses ?? 1);
       const linhas = expandir(b.itens, catalogo());
       D.comprasCriar(linhas.map((l) => ({ pedido, data, fornecedor, numero: l.numero, qtd: l.qtd, previsao, obs: String(b.obs || '').slice(0, 200) || null })));
       return { pedido, itens: linhas.length };
     },
+    // Preço combinado de um item (por unidade); vazio apaga. Muda a qualquer momento; no recebimento vem preenchido.
+    'POST /api/estoque/compras/preco': async (_u, b) => {
+      const c = D.compraObter(Number(b?.id));
+      if (!c) throw erro('Item de compra não encontrado.');
+      const v = b?.preco === '' || b?.preco == null ? null : Number(String(b.preco).replace(',', '.'));
+      if (v != null && (!Number.isFinite(v) || v < 0 || v > 1e6)) throw erro('Preço inválido.');
+      D.compraPrecoGravar(c.id, v == null ? null : r2(v));
+      return { ok: true, id: c.id, preco: v == null ? null : r2(v) };
+    },
     'POST /api/estoque/compras/receber': async (_u, b) => {
       const c = D.compraObter(Number(b?.id));
       if (!c || c.status === 'recebido' || c.status === 'cancelado') throw erro('Item de compra não encontrado ou já fechado.');
       const q = Math.round(Number(b?.qtd));
       if (!Number.isFinite(q) || q <= 0) throw erro('Quantidade recebida inválida.');
-      const valor = Number(b?.valor_unit) || null;
+      const valor = Number(b?.valor_unit) || c.preco || null;   // sem valor digitado: o preço combinado do item
       const data = dataOuAgora(b?.data);
       D.estoqueMovGravar([{ data, tipo: 'compra', numero: c.numero, qtd: q, valor_unit: valor ?? catalogo().porNumero.get(c.numero)?.custo ?? null,
         origem: c.fornecedor || 'Fornecedor', ref: `compra:${c.id}`, quem: quem(), obs: `Pedido ${c.pedido}` }]);
