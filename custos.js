@@ -102,8 +102,12 @@ function trocarComponente(sku, de, para) {
 // SKU que vale numa data, com as trocas feitas no painel (Amazon, Leroy, Magalu): a troca mais nova com
 // "desde" <= data; em cadeia (795 -> 854 -> 900). trocas: Map sku -> [{ sku_novo, desde }]. Função pura: testada.
 function skuNaData(trocas, sku, data = new Date().toISOString()) {
+  // Kit com vários produtos trocados um depois do outro (580, 584, 630, 615… no mesmo SKU, 21/10/2026) faz uma corrente
+  // longa: o limite era 5 e o resto ficava com o produto antigo. Segue até o fim; o conjunto de vistos evita volta em círculo.
   let s = sku;
-  for (let i = 0; i < 5 && s && trocas?.size; i++) {
+  const vistos = new Set();
+  while (s && trocas?.size && !vistos.has(s) && vistos.size < 200) {
+    vistos.add(s);
     const t = (trocas.get(s) || []).filter((x) => x.desde <= data).sort((a, b) => b.desde.localeCompare(a.desde))[0];
     if (!t || t.sku_novo === s) break;
     s = t.sku_novo;
@@ -809,7 +813,13 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
             D.custoAutoGravar(conta.ml_user_id, id, Math.round(custos.reduce((s, v) => s + v, 0) / custos.length * 100) / 100);
           }
           const agora = new Date().toISOString();
-          for (const t of trocas) D.skuTrocaGravar('ml', t.antes, t.depois, agora, null);
+          for (const t of trocas) {
+            D.skuTrocaGravar('ml', t.antes, t.depois, agora, null);
+            // O SKU antigo tinha troca "só no painel" (composição): ela passa para o SKU novo, com esta troca aplicada.
+            // Sem isso o anúncio voltava a contar o produto da troca anterior (medido 21/10/2026: DQ-580 voltou depois da troca do 584).
+            const compAntes = composicaoDe(t.antes);
+            if (compAntes && t.depois && !composicaoDe(t.depois)) gravarComposicao(t.depois, componentes(trocarComponente(compAntes, de, para), { cru: true }));
+          }
           return { id, ok: true, trocas };
         } catch (e) { return { id, ok: false, erro: e.message }; }
       });

@@ -126,8 +126,11 @@ function criar({ D, shopee, amazon, leroy, magalu, quem }) {
             if (!id || id.length > 80) throw erro('SKU inválido.');
             // o SKU que vale hoje (com o "SKU do painel" da Magalu e as trocas anteriores) ganha a troca a partir de agora
             const atual = C.skuNaData(trocas[canal], canal === 'magalu' ? (vinc.get(id) || id) : id);
-            if (!tem(atual, de)) throw erro('o SKU deste anúncio não tem mais esse produto');
-            const novo = C.trocarComponente(atual, de, para);
+            // SKU com troca "só no painel" (composição, gravada pelo texto do SKU — o mesmo de um anúncio do ML): a troca nova
+            // parte da composição, senão ela se perdia (medido 21/10/2026: o 615 voltava na Magalu depois da troca do 584).
+            const efetivo = C.composicaoDe(atual) || atual;
+            if (!tem(efetivo, de)) throw erro('o SKU deste anúncio não tem mais esse produto');
+            const novo = C.trocarComponente(efetivo, de, para);
             D.skuTrocaGravar(canal, atual, novo, agora, quem());
             resultado.push({ canal, id, ok: true, trocas: [{ antes: atual, depois: novo }], no_painel: true });
           } else throw erro('Canal inválido.');

@@ -168,3 +168,14 @@ assert.throws(() => C.validarEmpresa({ entrega_flex: '-1' }), /Flex inválido/);
 }
 
 console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma das contas: ok');
+
+// corrente longa de trocas no mesmo SKU (6 produtos trocados um depois do outro): segue até o fim, sem volta em círculo
+{
+  const { skuNaData } = require('./custos.js');
+  const passos = ['A-1.2.3.4.5.6', 'A-7.2.3.4.5.6', 'A-7.8.3.4.5.6', 'A-7.8.9.4.5.6', 'A-7.8.9.10.5.6', 'A-7.8.9.10.11.6', 'A-7.8.9.10.11.12'];
+  const tr = new Map(passos.slice(0, -1).map((s, i) => [s, [{ sku_novo: passos[i + 1], desde: `2026-10-2${Math.min(i, 9)}T00:00:00Z` }]]));
+  require('node:assert').strictEqual(skuNaData(tr, passos[0], '2026-10-30T00:00:00Z'), 'A-7.8.9.10.11.12');
+  const circulo = new Map([['X', [{ sku_novo: 'Y', desde: '2026-01-01' }]], ['Y', [{ sku_novo: 'X', desde: '2026-01-01' }]]]);
+  require('node:assert').ok(['X', 'Y'].includes(skuNaData(circulo, 'X', '2026-10-30')));
+  console.log('trocas de SKU em corrente longa: ok');
+}
