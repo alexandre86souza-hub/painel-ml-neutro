@@ -421,7 +421,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
 
   // ---- visão geral (aba Estoque)
   // Estoque de segurança: o do produto, senão o padrão (3, editável).
-  const segurancaPadrao = () => { const v = Number(D.configLer('estoque_seguranca_padrao')); return Number.isInteger(v) && v >= 0 ? v : 3; };
+  const segurancaPadrao = () => { const t = D.configLer('estoque_seguranca_padrao'); const v = t == null || t === '' ? NaN : Number(t); return Number.isInteger(v) && v >= 0 ? v : 3; };
   function segurancaDe() { const m = D.estoqueSegurancas(), p = segurancaPadrao(); return (n) => (m.has(n) ? m.get(n) : p); }
 
   function visao() {
