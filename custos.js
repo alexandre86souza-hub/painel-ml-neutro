@@ -749,6 +749,38 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       return { produto: D.catalogoListar().find((p) => p.numero === numero) || { numero }, total: anuncios.length, anuncios };
     } },
 
+    // SKU de cada VARIAÇÃO de um anúncio do ML (pedido do dono, 21/10/2026: variações sem SKU não diziam qual produto
+    // saiu). GET lista as variações; PUT grava o SELLER_SKU das escolhidas — o PUT do ML leva TODAS as variações pelo id
+    // (variação fora do PUT é apagada) — e relê para conferir. Escrita só pela tela/pedido do vendedor, com confirmação.
+    { m: 'GET', re: /^\/api\/items\/(MLB\d+)\/variacoes-sku$/, fn: async ([id]) => {
+      contaOuErro();
+      const it = await ml(`/items/${id}?attributes=id,title,status,variations,attributes,seller_custom_field`);
+      const { base, variacoes } = skusDoAnuncio(it);
+      return { id, titulo: it.title, status: it.status, sku_anuncio: base, variacoes: variacoes.map((v, i) => ({ id: v.id, nome: v.nome, sku: v.sku,
+        estoque: it.variations?.[i]?.available_quantity ?? null, produtos: v.sku ? componentes(v.sku) : [] })) };
+    } },
+    { m: 'PUT', re: /^\/api\/items\/(MLB\d+)\/variacoes-sku$/, fn: async ([id], body) => {
+      const conta = contaOuErro();
+      const pedidos = new Map((Array.isArray(body?.variacoes) ? body.variacoes : []).map((v) => [String(v?.id), String(v?.sku ?? '').trim()]));
+      if (!pedidos.size) throw erro('Informe as variações e o SKU de cada uma.');
+      for (const s of pedidos.values()) if (!s || s.length > 60 || !/^[\w.\-* ]+$/.test(s)) throw erro(`SKU inválido: "${s}".`);
+      const it = await ml(`/items/${id}?attributes=id,variations`);
+      const vars = it.variations || [];
+      if (!vars.length) throw erro('Este anúncio não tem variações.');
+      const fora = [...pedidos.keys()].filter((k) => !vars.some((v) => String(v.id) === k));
+      if (fora.length) throw erro(`Variação não encontrada no anúncio: ${fora.join(', ')}.`);
+      await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify({ variations: vars.map((v) => (pedidos.has(String(v.id))
+        ? { id: v.id, attributes: [{ id: 'SELLER_SKU', value_name: pedidos.get(String(v.id)) }] } : { id: v.id })) }) });
+      const novo = await ml(`/items/${id}?attributes=id,variations,attributes,seller_custom_field`);
+      const { variacoes } = skusDoAnuncio(novo);
+      const resultado = [...pedidos].map(([vid, sku]) => { const v = variacoes.find((x) => String(x.id) === vid); return { id: vid, pedido: sku, ficou: v?.sku || null, ok: v?.sku === sku }; });
+      cacheAnuncios = null;
+      // custo do anúncio pelo SKU novo (a média das variações), se não for manual
+      const mapa = catalogoMapa(), comp = composicao(novo, mapa), custos = comp.filter((c) => c.custo != null).map((c) => c.custo);
+      if (custos.length === comp.length && custos.length && D.custoObter(id)?.origem !== 'manual') D.custoAutoGravar(conta.ml_user_id, id, Math.round(custos.reduce((s, v) => s + v, 0) / custos.length * 100) / 100);
+      return { id, alterados: resultado.filter((r) => r.ok).length, resultado };
+    } },
+
     // Trocar um produto por outro no SKU dos anúncios escolhidos (mudou o fornecedor: 795 -> 854).
     // Muda no Mercado Livre (SELLER_SKU do anúncio e de cada variação que tem o produto) e
     // recalcula o custo. Variação fora do PUT é apagada pelo ML: vão todas, pelo id.
