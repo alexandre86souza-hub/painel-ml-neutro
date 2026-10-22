@@ -295,8 +295,43 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       .sort((x, y) => CATEGORIAS.indexOf(x.categoria) - CATEGORIAS.indexOf(y.categoria) || y.dia.localeCompare(x.dia) || y.numero - x.numero);   // maior número (a mais nova) primeiro
     return { em: new Date(p.em).toISOString(), erros: p.erros, categorias: CATEGORIAS, comandas };
   }
+  // Comandas canceladas (pedido do dono, 22/10/2026): comanda dos últimos `dias` que saiu da fila porque o PEDIDO foi
+  // cancelado na loja — pela cópia local de cada canal (ML vendas, Shopee CANCELLED/IN_CANCEL, Amazon Canceled, Leroy
+  // CANCELED/REFUSED, Magalu cancel*). Impressa = a separação pode estar pronta e precisa voltar à prateleira.
+  function canceladas(dias = 7) {
+    const db = D.db;
+    const desde = new Date(Date.now() - dias * 864e5).toISOString();
+    const naFila = new Set(cache?.chaves || []);
+    const todas = db.prepare("SELECT chave FROM comandas WHERE criada_em >= ? AND chave NOT LIKE 'manual:%'").all(desde).map((r) => r.chave).filter((c) => !naFila.has(c));
+    const st = {
+      ml: db.prepare('SELECT status FROM vendas WHERE order_id=?'),
+      shopee: db.prepare('SELECT status FROM shopee_pedidos WHERE order_sn=?'),
+      amazon: db.prepare('SELECT status FROM amazon_pedidos WHERE pedido=?'),
+      leroy: db.prepare('SELECT status FROM leroy_pedidos WHERE order_id=?'),
+      magalu: db.prepare('SELECT status FROM magalu_pedidos WHERE code=?'),
+    };
+    const cancelado = {
+      ml: (s) => s === 'cancelled', shopee: (s) => /^(CANCELLED|IN_CANCEL)$/.test(s || ''), amazon: (s) => /^cancel/i.test(s || ''),
+      leroy: (s) => /^(CANCELED|REFUSED)$/.test(s || ''), magalu: (s) => /cancel/i.test(s || ''),
+    };
+    const out = [];
+    for (const c of D.comandasListar(todas)) {
+      const q = st[c.canal]; if (!q) continue;
+      const ids = c.canal === 'ml' ? (c.pedidos?.length ? c.pedidos : [c.pedido]) : [c.pedido];
+      let sts = [];
+      try { sts = ids.map((id) => q.get(c.canal === 'ml' ? Number(id) : String(id))?.status).filter(Boolean); } catch { continue; }
+      if (sts.length && sts.every((s) => cancelado[c.canal](s))) out.push({ ...c, cancelada: true, status_loja: sts[0],
+        unidades: c.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0) });
+    }
+    return out.sort((a, b) => String(b.criada_em).localeCompare(String(a.criada_em)));
+  }
   const rotas = {
     'GET /api/comandas': async (url) => fila(url.searchParams.get('recarregar') === '1'),
+    'GET /api/comandas/canceladas': async (url) => {
+      const dias = Math.min(60, Math.max(1, Number(url.searchParams.get('dias')) || 7));
+      await pendentes(false).catch(() => null);   // a fila atual (o que ainda está nela não é cancelado)
+      return { dias, comandas: canceladas(dias) };
+    },
     // Diagnóstico (só leitura, só administrador): vendas pagas do ML nas últimas 48 h com a situação do envio de cada uma,
     // para ver por que uma venda não virou comanda (a fila só pega shipping.status=ready_to_ship). Sem nome de cliente.
     'GET /api/comandas/diagnostico': async () => {

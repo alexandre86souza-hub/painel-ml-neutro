@@ -324,7 +324,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Comanda nova: `public/comandas-aviso.js`
   (injetado pelo sino.js em todas as telas, só para quem abre /comandas.html) confere `/api/comandas` a cada minuto e, para
   comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som
-  (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Comanda: pedido no topo (sem código de
+  (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Atalho "Canceladas" (`GET /api/comandas/canceladas?dias=7`, `canceladas`): comanda que saiu da fila porque a loja cancelou o pedido (cópias locais de cada canal); impressa = devolver os produtos à prateleira. Comanda: pedido no topo (sem código de
   barras, pedido do vendedor; `public/codigo128.js` segue testado, sem uso). Nada no MCP (`test-comandas.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas

@@ -120,6 +120,7 @@
       <div class="seg" role="group" aria-label="Situação" id="segSit">
         <button type="button" data-f="aguarda" aria-pressed="true">Não impressas</button>
         <button type="button" data-f="impressa" aria-pressed="false">Impressas</button>
+        <button type="button" data-f="cancelada" aria-pressed="false" title="Comandas dos últimos 7 dias cujo pedido foi cancelado na loja">Canceladas</button>
         <button type="button" data-f="todas" aria-pressed="false">Todas</button>
       </div>
       <div class="seg" role="group" aria-label="Prazo" id="segPrazo">
@@ -235,9 +236,16 @@ function pintar(){
   pintarLista();
 }
 
+// Canceladas: comandas dos últimos 7 dias cujo pedido a loja cancelou (lidas à parte, GET /api/comandas/canceladas)
+let canceladas = null;
+async function carregarCanceladas(){
+  try{ canceladas = (await api('/api/comandas/canceladas?dias=7')).comandas; }catch(e){ canceladas = []; aviso(e.message); }
+  if(sit === 'cancelada') pintarLista();
+}
 function filtradas(){
   const q = $('busca').value.trim().toLowerCase();
-  return dados.comandas.filter((c) => {
+  const fonte = sit === 'cancelada' ? (canceladas || []) : dados.comandas;
+  return fonte.filter((c) => {
     if(cat !== 'Todas' && c.categoria !== cat) return false;
     if(lojaSel && lojaDe(c) !== lojaSel) return false;
     if(sit === 'aguarda' && c.impressa_em) return false;
@@ -253,7 +261,8 @@ function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   $('btTodas').disabled = !lst.some((c) => !c.impressa_em);
   pintarSel();
-  if(!lst.length){ box.appendChild(el('p', 'vazio', sit === 'aguarda' ? 'Nenhuma comanda na fila para imprimir aqui.' : 'Nenhuma comanda com esse filtro.')); return; }
+  if(sit === 'cancelada' && !canceladas){ box.appendChild(el('p', 'carregando', 'Procurando os pedidos cancelados…')); return; }
+  if(!lst.length){ box.appendChild(el('p', 'vazio', sit === 'aguarda' ? 'Nenhuma comanda na fila para imprimir aqui.' : sit === 'cancelada' ? 'Nenhuma comanda de pedido cancelado nos últimos 7 dias.' : 'Nenhuma comanda com esse filtro.')); return; }
   const t = el('table'); const cab = el('tr');
   const thT = el('th'); const todas = el('input'); todas.type = 'checkbox'; todas.setAttribute('aria-label', 'Selecionar todas as mostradas');
   todas.checked = lst.every((c) => sel.has(c.chave));
@@ -267,12 +276,18 @@ function pintarLista(){
     const tdP = el('td'); tdP.appendChild(el('b', null, c.pedido));
     const tdPr = el('td'); tdPr.appendChild(document.createTextNode(c.prazo ? horaBR(c.prazo) : '—'));
     if(PRAZO[c.situacao_prazo]) tdPr.appendChild(el('span', 'chip ' + (c.situacao_prazo === 'amanhã' ? 'amanha' : c.situacao_prazo), PRAZO[c.situacao_prazo]));
-    const tdS = el('td'); tdS.appendChild(el('span', 'chip ' + (c.impressa_em ? 'impressa' : 'aguarda'), c.impressa_em ? 'Impressa' : 'Aguardando impressão'));
-    if(c.impressa_em) tdS.appendChild(el('span', 'pequeno', horaBR(c.impressa_em) + (c.impressoes > 1 ? ` · ${c.impressoes}x` : '')));
+    const tdS = el('td');
+    if(c.cancelada){
+      tdS.appendChild(el('span', 'chip atrasado', 'Pedido cancelado'));
+      tdS.appendChild(el('span', 'pequeno', c.impressa_em ? `já impressa em ${horaBR(c.impressa_em)}: devolva os produtos à prateleira` : 'não chegou a ser impressa'));
+    }else{
+      tdS.appendChild(el('span', 'chip ' + (c.impressa_em ? 'impressa' : 'aguarda'), c.impressa_em ? 'Impressa' : 'Aguardando impressão'));
+      if(c.impressa_em) tdS.appendChild(el('span', 'pequeno', horaBR(c.impressa_em) + (c.impressoes > 1 ? ` · ${c.impressoes}x` : '')));
+    }
     const tdA = el('td'); const ac = el('div', 'acoes');
     const bI = el('button', 'bt ' + (c.impressa_em ? '' : 'imprimir'), c.impressa_em ? 'Reimprimir' : 'Imprimir ↗'); bI.type = 'button';
     bI.onclick = () => previa([c]);
-    ac.appendChild(bI);
+    if(!c.cancelada) ac.appendChild(bI);
     if(c.canal === 'manual'){
       const bC = el('button', 'bt leve', 'Concluir'); bC.type = 'button'; bC.title = 'Entregue/retirada: some da tela';
       bC.onclick = async () => { if(!confirm(`Concluir a comanda ${nomeComanda(c)} de ${c.cliente}? Ela sai da tela.`)) return;
@@ -284,7 +299,7 @@ function pintarLista(){
       bE.onclick = () => imprimirEtiqueta(c);
       ac.append(bE, bC, bX);
     }
-    if(c.impressa_em){
+    if(c.impressa_em && !c.cancelada){
       const bV = el('button', 'bt leve', 'Voltar para a fila'); bV.type = 'button';
       bV.onclick = async () => { try{ await marcar([c.chave], false); }catch(e){ aviso(e.message); } };
       ac.appendChild(bV);
@@ -417,7 +432,8 @@ function pintarSel(){
 }
 $('btSel').onclick = () => { const lst = dados.comandas.filter((c) => sel.has(c.chave)); if(lst.length) previa(lst); };
 $('btTodas').onclick = () => { const lst = filtradas().filter((c) => !c.impressa_em); if(lst.length) previa(lst); };
-$('segSit').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
+$('segSit').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  if(sit === 'cancelada'){ canceladas = null; carregarCanceladas(); } pintarLista(); };
 $('segPrazo').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; prazo = b.dataset.p; for(const x of $('segPrazo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
 $('busca').oninput = pintarLista;
 $('btReler').onclick = () => { $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Buscando os envios de todas as lojas…')); carregar(true); };
