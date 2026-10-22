@@ -268,6 +268,15 @@ function precisaEnviar(naLoja, deveria, { pct = 0.1, baixo = 20 } = {}) {
   return Math.abs(naLoja - deveria) > pct * deveria;
 }
 
+// Custo médio ponderado MÓVEL (pedido do dono, 22/10/2026): a cada entrada com preço, (peças em estoque × custo atual +
+// peças recebidas × preço) ÷ total. Estoque zerado/negativo ou sem custo = o preço novo. Função pura: testada.
+function custoMovel(saldoAntes, custoAntes, qtd, preco) {
+  const s = Math.max(0, Number(saldoAntes) || 0), q = Number(qtd) || 0;
+  if (!(q > 0) || preco == null) return custoAntes ?? null;
+  if (custoAntes == null || s === 0) return r2(preco);
+  return r2((s * custoAntes + q * preco) / (s + q));
+}
+
 // ---------- módulo ----------
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
@@ -429,6 +438,15 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   timer.unref?.();
 
   // ---- visão geral (aba Estoque)
+  // Custo médio móvel no CADASTRO do produto (vale a partir de agora para o lucro das vendas; custos.js usa o custo da data).
+  function aplicarCustoMovel(numero, saldoAntes, custoAntes, qtd, preco) {
+    const p = D.catalogoListar().find((x) => x.numero === numero);
+    if (!p || preco == null) return null;
+    const novo = custoMovel(saldoAntes, custoAntes, qtd, preco);
+    if (novo == null || (p.custo != null && Math.abs(p.custo - novo) < 0.005)) return { antes: p.custo, novo: p.custo };
+    D.catalogoGravar([{ numero: p.numero, sku: p.sku, nome: p.nome, custo: novo, situacao: p.situacao, fornecedor: p.fornecedor }]);
+    return { antes: p.custo, novo };
+  }
   // Estoque de segurança: o do produto, senão o padrão (3, editável).
   const segurancaPadrao = () => { const t = D.configLer('estoque_seguranca_padrao'); const v = t == null || t === '' ? NaN : Number(t); return Number.isInteger(v) && v >= 0 ? v : 3; };
   function segurancaDe() { const m = D.estoqueSegurancas(), p = segurancaPadrao(); return (n) => (m.has(n) ? m.get(n) : p); }
@@ -450,7 +468,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const prazo = prazos.get(String(p.fornecedor || '').toLowerCase()) ?? 1;
       const rep = reposicao({ ativo: p.situacao === 'Ativo', saldo, saidas6m: r.saidas || 0, prazo, abertos: abertos.get(p.numero) || 0,
         repor: !parados.has(String(p.fornecedor || '').toLowerCase()) });
-      const custoMedio = r.ent_qtd ? r2(r.ent_valor / r.ent_qtd) : p.custo;
+      const custoMedio = p.custo ?? (r.ent_qtd ? r2(r.ent_valor / r.ent_qtd) : null);   // o custo do cadastro = médio ponderado móvel
       const seguranca = seg.has(p.numero) ? seg.get(p.numero) : segPadrao;
       return { ...p, saldo, seguranca, seguranca_propria: seg.has(p.numero), disponivel: Math.max(0, saldo - seguranca),
         saidas6m: r.saidas || 0, prazo, em_pedido: abertos.get(p.numero) || 0, ...rep, custo_medio: custoMedio,
@@ -586,6 +604,8 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const linhas = expandir(b.itens, cat);
       const data = dataOuAgora(b.data);
       const obs = String(b?.obs || '').trim().slice(0, 200) || null;
+      // entrada de fornecedor COM preço: custo médio móvel no cadastro (sem preço, o custo não muda)
+      if (b.tipo === 'entrada') { const sal = D.estoqueSaldos(); for (const l of linhas) if (l.valor_unit != null) aplicarCustoMovel(l.numero, sal.get(l.numero) || 0, cat.porNumero.get(l.numero)?.custo ?? null, l.qtd, l.valor_unit); }
       const ids = D.estoqueMovGravar(linhas.map((l) => ({ data, tipo: b.tipo, numero: l.numero, qtd: sinal * l.qtd,
         valor_unit: l.valor_unit ?? cat.porNumero.get(l.numero)?.custo ?? null,
         origem, ref: `manual:${b.tipo}`, quem: quem(), obs })));
@@ -710,8 +730,14 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       if (v != null && (!Number.isFinite(v) || v < 0 || v > 1e6)) throw erro('Preço inválido.');
       D.compraPrecoGravar(c.id, v == null ? null : r2(v));
       // já recebido (sem preço na hora): o preço vale também nas peças que entraram (custo médio do estoque)
-      if (c.recebido_qtd > 0) D.compraPrecoRecebido(c.id, v == null ? null : r2(v));
-      return { ok: true, id: c.id, preco: v == null ? null : r2(v), recebido: c.recebido_qtd > 0 };
+      let custo = null;
+      if (c.recebido_qtd > 0) {
+        D.compraPrecoRecebido(c.id, v == null ? null : r2(v));
+        // refaz o custo médio móvel com o saldo e o custo de antes do recebimento (sem eles: o saldo de hoje − o recebido)
+        if (v != null) custo = c.saldo_antes != null ? aplicarCustoMovel(c.numero, c.saldo_antes, c.custo_antes, c.recebido_qtd, r2(v))
+          : aplicarCustoMovel(c.numero, (D.estoqueSaldos().get(c.numero) || 0) - c.recebido_qtd, catalogo().porNumero.get(c.numero)?.custo ?? null, c.recebido_qtd, r2(v));
+      }
+      return { ok: true, id: c.id, preco: v == null ? null : r2(v), recebido: c.recebido_qtd > 0, custo };
     },
     'POST /api/estoque/compras/receber': async (_u, b) => {
       const c = D.compraObter(Number(b?.id));
@@ -720,12 +746,16 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       if (!Number.isFinite(q) || q <= 0) throw erro('Quantidade recebida inválida.');
       const valor = Number(b?.valor_unit) || c.preco || null;   // sem valor digitado: o preço combinado do item
       const data = dataOuAgora(b?.data);
+      // custo médio móvel: saldo e custo de antes desta entrada (guardados, para refazer se o preço vier depois)
+      const saldoAntes = D.estoqueSaldos().get(c.numero) || 0, custoAntes = catalogo().porNumero.get(c.numero)?.custo ?? null;
+      D.compraAntesGravar(c.id, saldoAntes, custoAntes);
+      const custo = valor != null ? aplicarCustoMovel(c.numero, saldoAntes, custoAntes, q, valor) : null;
       D.estoqueMovGravar([{ data, tipo: 'compra', numero: c.numero, qtd: q, valor_unit: valor ?? catalogo().porNumero.get(c.numero)?.custo ?? null,
         origem: c.fornecedor || 'Fornecedor', ref: `compra:${c.id}`, quem: quem(), obs: `Pedido ${c.pedido}` }]);
       const recebido = c.recebido_qtd + q;
       D.compraAtualizar(c.id, { status: recebido >= c.qtd || b?.fechar ? 'recebido' : 'parcial', recebido_qtd: recebido,
         valor_pago: valor ?? c.valor_pago, recebido_em: data.slice(0, 10) });
-      return { ok: true, recebido };
+      return { ok: true, recebido, custo };
     },
     'POST /api/estoque/compras/cancelar': async (_u, b) => {
       const c = D.compraObter(Number(b?.id));
@@ -757,4 +787,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, TIPO_NOME };
+module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, custoMovel, TIPO_NOME };

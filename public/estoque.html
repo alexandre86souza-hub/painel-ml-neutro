@@ -832,7 +832,8 @@ function pintarCompras(){
       // preço combinado: muda a qualquer momento (grava ao sair do campo)
       const tPr = el('td', 'n'); const iP = el('input'); iP.type = 'text'; iP.inputMode = 'decimal'; iP.style.width = '86px'; iP.style.textAlign = 'right';
       iP.value = c.preco != null ? String(c.preco).replace('.', ',') : ''; iP.placeholder = '—'; iP.setAttribute('aria-label', `Preço de ${c.sku}`);
-      iP.onchange = async () => { try{ const r = await post('/api/estoque/compras/preco', { id: c.id, preco: iP.value.trim() }); c.preco = r.preco; iP.value = r.preco != null ? String(r.preco).replace('.', ',') : ''; iP.style.borderColor = '#16a34a'; }catch(e){ aviso(e.message); } };
+      iP.onchange = async () => { try{ const r = await post('/api/estoque/compras/preco', { id: c.id, preco: iP.value.trim() }); c.preco = r.preco; iP.value = r.preco != null ? String(r.preco).replace('.', ',') : ''; iP.style.borderColor = '#16a34a';
+        if(r.custo && r.custo.novo !== r.custo.antes) aviso(`Custo médio de ${c.sku}: ${real(r.custo.antes)} → ${real(r.custo.novo)} (vale para as vendas de agora em diante).`, 'ok'); }catch(e){ aviso(e.message); } };
       tPr.appendChild(iP);
       tr.append(tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), tPr, td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
         td(SIT[c.status] + (c.recebido_em ? ` em ${diaBR(c.recebido_em)}` : '') + (c.valor_pago ? ` · ${real(c.valor_pago)}/un.` : '')), tA);
@@ -848,7 +849,8 @@ async function receber(c){
   const dia = prompt('Data de entrada (dd/mm/aaaa)', new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10).split('-').reverse().join('/')); if(dia == null) return;
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dia.trim()); if(!m){ aviso('Data de entrada inválida: use dd/mm/aaaa.'); return; }
   const qtd = Number(q); const fechar = qtd < falta && confirm('Chegou menos do que o pedido. Fechar este item assim mesmo? (Cancelar = continua esperando o resto)');
-  try{ await post('/api/estoque/compras/receber', { id: c.id, qtd, valor_unit: Number(String(v).replace(',', '.')) || null, fechar, data: `${m[3]}-${m[2]}-${m[1]}` }); aviso(`${qtd} peça(s) de ${c.sku} entraram no estoque em ${dia}.`, 'ok'); visao = null; carregarCompras(); }
+  try{ const r = await post('/api/estoque/compras/receber', { id: c.id, qtd, valor_unit: Number(String(v).replace(',', '.')) || null, fechar, data: `${m[3]}-${m[2]}-${m[1]}` });
+    aviso(`${qtd} peça(s) de ${c.sku} entraram no estoque em ${dia}.` + (r.custo && r.custo.novo !== r.custo.antes ? ` Custo médio de ${c.sku}: ${real(r.custo.antes)} → ${real(r.custo.novo)} (vale para as vendas de agora em diante).` : ''), 'ok'); visao = null; carregarCompras(); }
   catch(e){ aviso(e.message); }
 }
 function imprimirPedido(pedido){

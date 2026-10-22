@@ -2193,6 +2193,10 @@ const comprasDaPlanilhaApagar = () => db.prepare('DELETE FROM compras WHERE da_p
 // preço combinado por unidade (muda a qualquer momento até receber; no recebimento vem preenchido)
 colunaNova('compras', 'preco REAL');
 const compraPrecoGravar = (id, preco) => db.prepare('UPDATE compras SET preco=? WHERE id=?').run(preco ?? null, id);
+// saldo e custo do produto ANTES do recebimento (custo médio móvel refeito se o preço vier depois)
+colunaNova('compras', 'saldo_antes INTEGER');
+colunaNova('compras', 'custo_antes REAL');
+const compraAntesGravar = (id, saldo, custo) => db.prepare('UPDATE compras SET saldo_antes=?, custo_antes=? WHERE id=?').run(saldo, custo ?? null, id);
 // preço posto depois do recebimento: vale também no que já entrou no estoque (custo médio) e no valor pago do item
 const compraPrecoRecebido = (id, preco) => { db.prepare("UPDATE estoque_mov SET valor_unit=? WHERE ref=? AND tipo='compra'").run(preco ?? null, `compra:${id}`);
   db.prepare('UPDATE compras SET valor_pago=? WHERE id=?').run(preco ?? null, id); };
@@ -2254,5 +2258,5 @@ module.exports = {
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
-  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido,
+  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido, compraAntesGravar,
 };

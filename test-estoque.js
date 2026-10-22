@@ -186,7 +186,8 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     assert.strictEqual(v.inicio, null);
     const p407 = () => v.produtos.find((x) => x.numero === 407);
     assert.strictEqual(p407().saldo, 0);
-    assert.strictEqual(p407().custo_medio, 33, 'custo médio das entradas (100 a 30 + 100 a 36)');
+    // custo médio da tela = o custo do cadastro (médio ponderado MÓVEL, atualizado a cada entrada com preço; 22/10/2026)
+    assert.strictEqual(p407().custo_medio, p407().custo, 'custo médio = o do cadastro');
     assert.strictEqual(p407().em_pedido, 50);
     assert.strictEqual(p407().fornecedor, 'BRUNO');
 
@@ -372,4 +373,15 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
   assert.strictEqual(E.precisaEnviar(10, 10), false, 'igual nunca');
   assert.strictEqual(E.precisaEnviar(128, 125), false, '128 x 125: dentro da faixa');
   console.log('faixa do envio automático: ok');
+}
+
+// custo médio ponderado móvel: (estoque × custo atual + recebido × preço) ÷ total
+{
+  assert.strictEqual(E.custoMovel(10, 1, 10, 2), 1.5, 'o exemplo do dono: 10 a R$ 1 + 10 a R$ 2 = R$ 1,50');
+  assert.strictEqual(E.custoMovel(0, 1, 10, 2), 2, 'estoque zerado: o preço novo');
+  assert.strictEqual(E.custoMovel(-3, 1, 10, 2), 2, 'saldo negativo conta 0');
+  assert.strictEqual(E.custoMovel(10, null, 5, 3), 3, 'sem custo: o preço novo');
+  assert.strictEqual(E.custoMovel(30, 4, 10, 6), 4.5);
+  assert.strictEqual(E.custoMovel(10, 1, 10, null), 1, 'sem preço: não muda');
+  console.log('custo médio móvel: ok');
 }
