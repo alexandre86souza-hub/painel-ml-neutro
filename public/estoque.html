@@ -24,6 +24,10 @@
   .def-recolher input[type=number]{width:70px}
   .def-extra{margin-top:12px}.def-extra summary{cursor:pointer;font-weight:600}
   tr.alerta td{background:#fdeee8}
+  .massa{position:sticky;bottom:max(12px, env(safe-area-inset-bottom, 0px));z-index:25;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    background:#1f2937;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+  .massa label{display:flex;gap:6px;align-items:center;font-size:13px}
+  .pedido header .marcar{font-size:13px;display:flex;gap:6px;align-items:center}
   #msg.fixo{position:fixed;top:max(12px, env(safe-area-inset-top, 0px));right:16px;left:auto;max-width:min(560px, calc(100vw - 32px));z-index:60;margin:0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
@@ -227,6 +231,12 @@
     </form>
     <h2 style="margin-top:22px">Pedidos</h2>
     <div class="filtros"><select id="pFiltro" aria-label="Situação"><option value="abertos">Em aberto</option><option value="todos">Todos</option></select><input type="search" id="pBusca" placeholder="Buscar pedido, fornecedor ou SKU"></div>
+    <div id="pMassa" class="massa" hidden>
+      <span id="pMassaTxt"></span>
+      <label>Data de entrada <input type="date" id="pMassaData"></label>
+      <button type="button" class="bt forte" id="pMassaReceber">Receber marcados</button>
+      <button type="button" class="bt" id="pMassaLimpar">Desmarcar</button>
+    </div>
     <div id="pLista"></div>
   </section>
 
@@ -823,9 +833,19 @@ function pintarCompras(){
     const s = el('section', 'pedido'); const h = el('header');
     const tit = el('div'); tit.append(el('b', null, `${pedido} · ${c0.fornecedor || '—'}`), el('span', 'pequeno', ` pedido em ${diaBR(c0.data)} · previsão ${diaBR(c0.previsao)} · ${itens.length} item(ns)`));
     const bI = el('button', 'bt', 'Imprimir pedido'); bI.type = 'button'; bI.onclick = () => imprimirPedido(pedido);
-    h.append(tit, bI); s.appendChild(h);
-    const t = tabela([['Produto'], ['Ref. compra'], ['Pedido', 'n'], ['Preço (R$/un.)', 'n'], ['Recebido', 'n'], ['Situação'], ['']], itens.map((c) => {
+    // recebimento em massa: marcar todos os itens em aberto do pedido
+    const abertosDoPedido = itens.filter((c) => ['aberto', 'parcial'].includes(c.status));
+    const mt = el('label', 'marcar'); const ckT = el('input'); ckT.type = 'checkbox'; ckT.disabled = !abertosDoPedido.length;
+    ckT.checked = abertosDoPedido.length > 0 && abertosDoPedido.every((c) => pMarcados.has(c.id));
+    ckT.onchange = () => { for(const c of abertosDoPedido) ckT.checked ? pMarcados.add(c.id) : pMarcados.delete(c.id); pintarCompras(); };
+    mt.append(ckT, document.createTextNode(' Marcar todos do pedido'));
+    const acH = el('div', 'acoes'); acH.append(mt, bI);
+    h.append(tit, acH); s.appendChild(h);
+    const t = tabela([[''], ['Produto'], ['Ref. compra'], ['Pedido', 'n'], ['Preço (R$/un.)', 'n'], ['Recebido', 'n'], ['Situação'], ['']], itens.map((c) => {
       const tr = el('tr');
+      const tK = el('td');
+      if(['aberto', 'parcial'].includes(c.status)){ const k = el('input'); k.type = 'checkbox'; k.checked = pMarcados.has(c.id); k.setAttribute('aria-label', `Marcar ${c.sku} para receber`);
+        k.onchange = () => { k.checked ? pMarcados.add(c.id) : pMarcados.delete(c.id); pintarMassa(); }; tK.appendChild(k); }
       const tP = el('td'); tP.append(el('b', null, c.sku || c.numero), el('span', 'pequeno', c.nome || ''));
       const tA = el('td'); const ac = el('div', 'acoes');
       if(['aberto', 'parcial'].includes(c.status)){
@@ -848,13 +868,42 @@ function pintarCompras(){
       iP.onchange = async () => { try{ const r = await post('/api/estoque/compras/preco', { id: c.id, preco: iP.value.trim() }); c.preco = r.preco; iP.value = r.preco != null ? String(r.preco).replace('.', ',') : ''; iP.style.borderColor = '#16a34a';
         if(r.custo && r.custo.novo !== r.custo.antes) aviso(`Custo médio de ${c.sku}: ${real(r.custo.antes)} → ${real(r.custo.novo)} (vale para as vendas de agora em diante).`, 'ok'); }catch(e){ aviso(e.message); } };
       tPr.appendChild(iP);
-      tr.append(tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), tPr, td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
+      tr.append(tK, tP, td(c.ref_compra || '—'), td(n0(c.qtd), 'n'), tPr, td(c.recebido_qtd ? n0(c.recebido_qtd) : '—', 'n'),
         td(SIT[c.status] + (c.recebido_em ? ` em ${diaBR(c.recebido_em)}` : '') + (c.valor_pago ? ` · ${real(c.valor_pago)}/un.` : '')), tA);
       return tr;
     }));
     const w = el('div', 'tabela-rolagem'); w.appendChild(t); s.appendChild(w); box.appendChild(s);
   }
+  pintarMassa();
 }
+// Recebimento em massa: cada item marcado entra com o que falta receber, o preço combinado do item e a data escolhida.
+const pMarcados = new Set();
+function pintarMassa(){
+  const itens = (compras?.compras || []).filter((c) => pMarcados.has(c.id) && ['aberto', 'parcial'].includes(c.status));
+  for(const id of [...pMarcados]) if(!itens.some((c) => c.id === id)) pMarcados.delete(id);
+  const b = $('pMassa'); b.hidden = !itens.length;
+  if(!$('pMassaData').value) $('pMassaData').value = hoje();
+  const pecas = itens.reduce((s2, c) => s2 + (c.qtd - c.recebido_qtd), 0);
+  $('pMassaTxt').textContent = `${n0(itens.length)} item(ns) marcado(s) · ${n0(pecas)} peça(s) que faltam receber`;
+}
+$('pMassaLimpar').onclick = () => { pMarcados.clear(); pintarCompras(); };
+$('pMassaReceber').onclick = async () => {
+  const itens = compras.compras.filter((c) => pMarcados.has(c.id) && ['aberto', 'parcial'].includes(c.status));
+  if(!itens.length) return;
+  const dia = $('pMassaData').value; if(!/^\d{4}-\d{2}-\d{2}$/.test(dia)){ aviso('Escolha a data de entrada.'); return; }
+  const lista = itens.slice(0, 12).map((c) => `${c.sku}: ${c.qtd - c.recebido_qtd} (${c.pedido})${c.preco != null ? ' a ' + real(c.preco) : ' sem preço'}`).join('\n');
+  if(!confirm(`Receber ${itens.length} item(ns) em ${diaBR(dia)}, cada um com o que falta?\n\n${lista}${itens.length > 12 ? '\n…' : ''}`)) return;
+  const bt = $('pMassaReceber'); bt.disabled = true;
+  let ok = 0; const falhas = [];
+  for(const c of itens){
+    bt.textContent = `Recebendo ${ok + falhas.length + 1} de ${itens.length}…`;
+    try{ await post('/api/estoque/compras/receber', { id: c.id, qtd: c.qtd - c.recebido_qtd, valor_unit: null, data: dia }); ok++; pMarcados.delete(c.id); }
+    catch(e){ falhas.push(`${c.sku}: ${e.message}`); }
+  }
+  bt.disabled = false; bt.textContent = 'Receber marcados';
+  aviso(`${ok} item(ns) recebido(s) em ${diaBR(dia)}.` + (falhas.length ? ` Não entraram: ${falhas.join(' · ')}` : ''), falhas.length ? '' : 'ok');
+  visao = null; carregarCompras();
+};
 async function receber(c){
   const falta = c.qtd - c.recebido_qtd;
   const q = prompt(`Quantas peças de ${c.sku} chegaram? (faltam ${falta})`, String(falta)); if(q == null) return;
