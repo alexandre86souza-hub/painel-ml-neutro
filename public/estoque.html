@@ -28,6 +28,9 @@
     background:#1f2937;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .massa label{display:flex;gap:6px;align-items:center;font-size:13px}
   .pedido header .marcar{font-size:13px;display:flex;gap:6px;align-items:center}
+  /* caixinha do recebimento em massa: coluna estreita e o produto logo ao lado, alinhado à esquerda */
+  .pedido th:first-child,.pedido td:first-child{width:34px;padding-right:0}
+  .pedido th:nth-child(2),.pedido td:nth-child(2){text-align:left;padding-left:4px;width:34%}
   #msg.fixo{position:fixed;top:max(12px, env(safe-area-inset-top, 0px));right:16px;left:auto;max-width:min(560px, calc(100vw - 32px));z-index:60;margin:0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
