@@ -361,3 +361,15 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
   assert.deepStrictEqual(r.linhas.map((l) => [l.id, l.deveria, l.limita.sku, l.limita.seguranca]), [['A', 4, 'BP-408', 5], ['B', 3, 'DQ-407', 3]]);
   console.log('estoque de segurança: ok');
 }
+
+// faixa do envio automático: pouco estoque ou zerar = manda; estoque alto só com diferença acima de 10%
+{
+  assert.strictEqual(E.precisaEnviar(1972, 1965), false, 'alto e perto: espera');
+  assert.strictEqual(E.precisaEnviar(1972, 1700), true, 'mais de 10%');
+  assert.strictEqual(E.precisaEnviar(25, 19), true, 'painel com pouco');
+  assert.strictEqual(E.precisaEnviar(3, 0), true, 'zerar sempre');
+  assert.strictEqual(E.precisaEnviar(0, 50), true, 'loja zerada com peça no painel');
+  assert.strictEqual(E.precisaEnviar(10, 10), false, 'igual nunca');
+  assert.strictEqual(E.precisaEnviar(128, 125), false, '128 x 125: dentro da faixa');
+  console.log('faixa do envio automático: ok');
+}

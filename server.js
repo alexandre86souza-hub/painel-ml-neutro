@@ -2322,7 +2322,9 @@ async function leroyAuto() {
   leroyAutoRodando = true;
   try {
     await conferirEnviosLeroy();
-    const mudar = (await linhasLeroy()).filter((l) => l.deveria != null && l.estoque != null && l.deveria !== l.estoque).map((l) => l.id);
+    // rodada: várias vendas viram um número final por oferta; só o que mudou, e com estoque alto só fora da faixa (estoque.js#precisaEnviar)
+    const { precisaEnviar } = require('./estoque.js');
+    const mudar = (await linhasLeroy()).filter((l) => precisaEnviar(l.estoque, l.deveria)).map((l) => l.id);
     if (mudar.length) await enviarEstoqueLeroy(mudar.slice(0, 1000), 'automático');
     D.configGravar('leroy_estoque_auto_ultimo', new Date().toISOString());
   } catch (e) { D.configGravar('leroy_estoque_auto_erro', `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }

@@ -388,7 +388,7 @@ function pintarEnvioLeroy(leroy, ls){
   // automático (a cada 10 min, só as ofertas que mudaram) e a lista dos envios
   const au = el('label', null); au.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px';
   const ck = el('input'); ck.type = 'checkbox'; ck.checked = !!eaEnviosDados?.automatico;
-  au.append(ck, document.createTextNode(' Envio automático a cada 10 minutos (manda só as ofertas em que a Leroy ficou diferente do painel)'));
+  au.append(ck, document.createTextNode(' Envio automático a cada 10 minutos (junta as vendas da rodada e manda só o que mudou: com 20 peças ou menos, ao zerar ou com diferença acima de 10%)'));
   if(eaEnviosDados?.ultimo_automatico) au.appendChild(el('small', null, ` · última vez ${quando(eaEnviosDados.ultimo_automatico)}`));
   ck.onchange = async () => {
     const ligar = ck.checked;

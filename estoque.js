@@ -259,6 +259,15 @@ function estoqueDosAnuncios(anuncios, saldos, cat, seguranca = () => 0) {
     risco: linhas.filter((l) => l.situacao === 'loja_mais' && l.deveria === 0).length } };
 }
 
+// Faixa do envio automático (pedido do dono, 22/10/2026): com estoque alto, 1.972 ou 1.965 na loja não muda nada para o
+// cliente e economiza chamada; manda quando a loja ou o painel estão com pouco (≤ baixo), quando vai zerar, ou quando a
+// diferença passa de pct do que o painel calcula. Igual nunca manda. Função pura: testada.
+function precisaEnviar(naLoja, deveria, { pct = 0.1, baixo = 20 } = {}) {
+  if (deveria == null || naLoja == null || naLoja === deveria) return false;
+  if (deveria === 0 || deveria <= baixo || naLoja <= baixo) return true;
+  return Math.abs(naLoja - deveria) > pct * deveria;
+}
+
 // ---------- módulo ----------
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
@@ -746,4 +755,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, TIPO_NOME };
+module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, TIPO_NOME };
