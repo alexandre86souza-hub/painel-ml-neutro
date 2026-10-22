@@ -39,7 +39,12 @@ function criar({ D, shopee, amazon, leroy, magalu, quem }) {
       try {
         const tr = D.skuTrocas('amazon');
         const d = await amazon.anuncios(false);
-        const lista = d.itens.map((i) => ({ ...i, efetivo: C.skuNaData(tr, i.sku) })).filter((i) => tem(i.efetivo, numero));
+        // A Listings API não devolve todo anúncio que vende (medido 22/10/2026: 37 SKUs com venda nos últimos 90 dias ficaram
+        // de fora das trocas): entram também os SKUs vendidos em 180 dias, com o título do pedido.
+        const listados = new Set(d.itens.map((i) => i.sku));
+        const vendidos = (D.amazonUnidadesPorSku ? D.amazonUnidadesPorSku(new Date(Date.now() - 180 * 864e5).toISOString()) : [])
+          .filter((r) => r.sku && !listados.has(r.sku)).map((r) => ({ sku: r.sku, titulo: `${r.sku} (vendido; fora da lista de anúncios)`, foto: null, status: ['vendido'], link: null, canal: r.canal }));
+        const lista = [...d.itens, ...vendidos].map((i) => ({ ...i, efetivo: C.skuNaData(tr, i.sku) })).filter((i) => tem(i.efetivo, numero));
         canais.push({ canal: 'amazon', loja: null, nome: `${D.configLer('amazon_vendedor') || 'Amazon'} · Amazon`, modo: 'painel',
           anuncios: lista.map((i) => ({ id: i.sku, titulo: i.titulo, foto: i.foto, status: (i.status || []).join(', ') || null, link: i.link,
             skus: [{ ref: i.sku, variacao: i.canal === 'FBA' ? 'FBA' : null, sku: i.efetivo, sku_anuncio: i.sku }] })) });
