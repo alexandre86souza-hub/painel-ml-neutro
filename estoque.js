@@ -757,6 +757,23 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
         valor_pago: valor ?? c.valor_pago, recebido_em: data.slice(0, 10) });
       return { ok: true, recebido, custo };
     },
+    // Desfazer o recebimento (lançado no pedido errado): tira as peças do estoque, o item volta a "em aberto" e, se este
+    // recebimento tinha mudado o custo médio do cadastro, o custo volta ao de antes.
+    'POST /api/estoque/compras/desfazer-recebimento': async (_u, b) => {
+      const c = D.compraObter(Number(b?.id));
+      if (!c || !c.recebido_qtd) throw erro('Item de compra não encontrado ou sem recebimento.');
+      let custo = null;
+      if (c.custo_antes != null && c.valor_pago != null) {
+        const p = D.catalogoListar().find((x) => x.numero === c.numero);
+        const depois = custoMovel(c.saldo_antes, c.custo_antes, c.recebido_qtd, c.valor_pago);
+        if (p && p.custo != null && Math.abs(p.custo - depois) < 0.01) {   // o custo de hoje é o que este recebimento calculou
+          D.catalogoGravar([{ numero: p.numero, sku: p.sku, nome: p.nome, custo: c.custo_antes, situacao: p.situacao, fornecedor: p.fornecedor }]);
+          custo = { antes: p.custo, novo: c.custo_antes };
+        }
+      }
+      const desfeitos = D.compraRecebimentoDesfazer(c.id);
+      return { ok: true, id: c.id, pecas: c.recebido_qtd, desfeitos, custo };
+    },
     'POST /api/estoque/compras/cancelar': async (_u, b) => {
       const c = D.compraObter(Number(b?.id));
       if (!c || c.status === 'recebido') throw erro('Item não encontrado ou já recebido.');

@@ -2197,6 +2197,16 @@ const compraPrecoGravar = (id, preco) => db.prepare('UPDATE compras SET preco=? 
 colunaNova('compras', 'saldo_antes INTEGER');
 colunaNova('compras', 'custo_antes REAL');
 const compraAntesGravar = (id, saldo, custo) => db.prepare('UPDATE compras SET saldo_antes=?, custo_antes=? WHERE id=?').run(saldo, custo ?? null, id);
+// desfazer o recebimento (entrada no pedido errado): as peças saem do estoque e o item volta a "em aberto"
+function compraRecebimentoDesfazer(id) {
+  db.exec('BEGIN');
+  try {
+    const n = db.prepare("UPDATE estoque_mov SET desfeito=1 WHERE ref=? AND tipo='compra' AND desfeito=0").run(`compra:${id}`).changes;
+    db.prepare("UPDATE compras SET status='aberto', recebido_qtd=0, valor_pago=NULL, recebido_em=NULL, saldo_antes=NULL, custo_antes=NULL WHERE id=?").run(id);
+    db.exec('COMMIT');
+    return n;
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
 // preço posto depois do recebimento: vale também no que já entrou no estoque (custo médio) e no valor pago do item
 const compraPrecoRecebido = (id, preco) => { db.prepare("UPDATE estoque_mov SET valor_unit=? WHERE ref=? AND tipo='compra'").run(preco ?? null, `compra:${id}`);
   db.prepare('UPDATE compras SET valor_pago=? WHERE id=?').run(preco ?? null, id); };
@@ -2258,5 +2268,5 @@ module.exports = {
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
-  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido, compraAntesGravar,
+  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido, compraAntesGravar, compraRecebimentoDesfazer,
 };

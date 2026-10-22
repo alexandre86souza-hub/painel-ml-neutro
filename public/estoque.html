@@ -827,6 +827,13 @@ function pintarCompras(){
         const bC = el('button', 'bt', 'Cancelar'); bC.type = 'button'; bC.onclick = async () => { if(!confirm(`Cancelar ${c.sku} do pedido ${c.pedido}?`)) return; try{ await post('/api/estoque/compras/cancelar', { id: c.id }); carregarCompras(); }catch(e){ aviso(e.message); } };
         ac.append(bR, bC);
       }
+      if(c.recebido_qtd > 0){
+        const bD = el('button', 'bt', 'Desfazer recebimento'); bD.type = 'button'; bD.title = 'Recebido no pedido errado: tira as peças do estoque e o item volta a em aberto';
+        bD.onclick = async () => { if(!confirm(`Desfazer o recebimento de ${c.recebido_qtd} peça(s) de ${c.sku} no pedido ${c.pedido}? As peças saem do estoque e o item volta a "em aberto".`)) return;
+          try{ const r = await post('/api/estoque/compras/desfazer-recebimento', { id: c.id }); aviso(`Recebimento desfeito: ${r.pecas} peça(s) de ${c.sku} saíram do estoque.` + (r.custo ? ` Custo médio voltou para ${real(r.custo.novo)}.` : ''), 'ok'); visao = null; carregarCompras(); }
+          catch(e){ aviso(e.message); } };
+        ac.appendChild(bD);
+      }
       tA.appendChild(ac);
       const SIT = { aberto: 'Em aberto', parcial: 'Parcial', recebido: 'Recebido', cancelado: 'Cancelado' };
       // preço combinado: muda a qualquer momento (grava ao sair do campo)
