@@ -709,7 +709,9 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const v = b?.preco === '' || b?.preco == null ? null : Number(String(b.preco).replace(',', '.'));
       if (v != null && (!Number.isFinite(v) || v < 0 || v > 1e6)) throw erro('Preço inválido.');
       D.compraPrecoGravar(c.id, v == null ? null : r2(v));
-      return { ok: true, id: c.id, preco: v == null ? null : r2(v) };
+      // já recebido (sem preço na hora): o preço vale também nas peças que entraram (custo médio do estoque)
+      if (c.recebido_qtd > 0) D.compraPrecoRecebido(c.id, v == null ? null : r2(v));
+      return { ok: true, id: c.id, preco: v == null ? null : r2(v), recebido: c.recebido_qtd > 0 };
     },
     'POST /api/estoque/compras/receber': async (_u, b) => {
       const c = D.compraObter(Number(b?.id));

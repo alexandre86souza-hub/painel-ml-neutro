@@ -2123,8 +2123,9 @@ const estoqueSaldos = () => new Map(db.prepare('SELECT numero, SUM(qtd) s FROM e
 function estoqueResumoMov(de) {
   return db.prepare(`SELECT numero,
       SUM(CASE WHEN qtd < 0 AND tipo NOT IN ('ajuste', 'defeito') AND data >= ? THEN -qtd ELSE 0 END) AS saidas,
-      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd ELSE 0 END) AS ent_qtd,
-      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') THEN qtd * COALESCE(valor_unit, 0) ELSE 0 END) AS ent_valor,
+      -- custo médio só das entradas COM preço (entrada sem preço contava como R$ 0 e puxava a média para baixo)
+      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') AND valor_unit IS NOT NULL THEN qtd ELSE 0 END) AS ent_qtd,
+      SUM(CASE WHEN qtd > 0 AND tipo IN ('entrada','compra') AND valor_unit IS NOT NULL THEN qtd * valor_unit ELSE 0 END) AS ent_valor,
       MAX(CASE WHEN qtd < 0 AND tipo <> 'ajuste' THEN data END) AS ultima_saida
     FROM estoque_mov WHERE desfeito=0 GROUP BY numero`).all(de);
 }
@@ -2192,6 +2193,9 @@ const comprasDaPlanilhaApagar = () => db.prepare('DELETE FROM compras WHERE da_p
 // preço combinado por unidade (muda a qualquer momento até receber; no recebimento vem preenchido)
 colunaNova('compras', 'preco REAL');
 const compraPrecoGravar = (id, preco) => db.prepare('UPDATE compras SET preco=? WHERE id=?').run(preco ?? null, id);
+// preço posto depois do recebimento: vale também no que já entrou no estoque (custo médio) e no valor pago do item
+const compraPrecoRecebido = (id, preco) => { db.prepare("UPDATE estoque_mov SET valor_unit=? WHERE ref=? AND tipo='compra'").run(preco ?? null, `compra:${id}`);
+  db.prepare('UPDATE compras SET valor_pago=? WHERE id=?').run(preco ?? null, id); };
 function compraAtualizar(id, c) {
   db.prepare('UPDATE compras SET status=?, recebido_qtd=?, valor_pago=?, recebido_em=? WHERE id=?')
     .run(c.status, c.recebido_qtd, c.valor_pago ?? null, c.recebido_em ?? null, id);
@@ -2250,5 +2254,5 @@ module.exports = {
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
-  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar,
+  contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido,
 };
