@@ -24,7 +24,7 @@
   .def-recolher input[type=number]{width:70px}
   .def-extra{margin-top:12px}.def-extra summary{cursor:pointer;font-weight:600}
   tr.alerta td{background:#fdeee8}
-  #msg.fixo{position:sticky;top:8px;z-index:30;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  #msg.fixo{position:fixed;top:max(12px, env(safe-area-inset-top, 0px));right:16px;left:auto;max-width:min(560px, calc(100vw - 32px));z-index:60;margin:0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
   .cartao small{display:block;font-size:12px;color:var(--muted)}
@@ -271,7 +271,8 @@
 <script>
 // Na aba Compras a tela fica parada onde estava (pedido do dono, 22/10/2026): o aviso fica preso no topo da tela em vez de rolar até ele.
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none';
-  m.classList.toggle('fixo', aba === 'compras'); if(t && aba !== 'compras') m.scrollIntoView({ block: 'nearest' }); }
+  m.classList.toggle('fixo', aba === 'compras'); if(t && aba !== 'compras') m.scrollIntoView({ block: 'nearest' });
+  clearTimeout(aviso.t); if(t && aba === 'compras' && tipo === 'ok') aviso.t = setTimeout(() => { if(m.textContent === t) m.style.display = 'none'; }, 8000); }
 const JSONH = { 'Content-Type': 'application/json' };
 const hoje = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
 const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
