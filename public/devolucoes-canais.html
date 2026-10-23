@@ -21,6 +21,10 @@
   #lista td{white-space:nowrap}#lista td:first-child{white-space:normal}
   #lista tr.pecas td{border-top:0;padding-top:0;white-space:normal}
   .pecas-lista{display:flex;gap:10px;flex-wrap:wrap}
+  .reg-dev{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:12px;border:1px solid #e3e8f0;border-radius:10px;margin-bottom:10px}
+  .reg-dev p{flex:1 1 100%;margin:0}.reg-dev label{display:flex;flex-direction:column;gap:4px;font-size:12px}.reg-dev label.largo{flex:1 1 220px}
+  .reg-dev .acoes{display:flex;gap:8px}
+  .link-bt{background:none;border:0;padding:0;color:#b42318;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 </style>
 </head>
 <body>
@@ -55,7 +59,17 @@
   </section>
   <section class="bloco">
     <h2>Devoluções</h2>
-    <div class="filtros"><input id="busca" type="search" placeholder="Buscar por pedido, produto ou SKU" aria-label="Buscar devolução"><select id="fEstado" aria-label="Situação da devolução"><option value="">Todas as situações</option><option value="conferir">Falta conferir (não chegou)</option><option value="aberta">Em aberto (aguardando o marketplace)</option><option value="fechada">Fechadas</option></select></div>
+    <form id="regDev" class="reg-dev" hidden>
+      <p class="pequeno">A Amazon só lança a devolução quando reembolsa o cliente (no escaneamento do pacote). Registre aqui a que o cliente já pediu: ela aparece como <b>aguardando reembolso</b> e, quando o reembolso entrar, junta-se a ela sozinha.</p>
+      <label>Pedido da Amazon <input id="rdPedido" required placeholder="702-1234567-1234567" inputmode="numeric" autocomplete="off"></label>
+      <label>SKU <input id="rdSku" placeholder="só se o pedido tiver mais de um produto" autocomplete="off"></label>
+      <label>Unidades <input id="rdQtd" type="number" min="1" max="999" value="1"></label>
+      <label>Motivo <select id="rdMotivo" required></select></label>
+      <label>Pedido de devolução em <input id="rdData" type="date"></label>
+      <label class="largo">Observação <input id="rdObs" maxlength="300" placeholder="opcional"></label>
+      <div class="acoes"><button type="submit" class="bt forte">Registrar</button><button type="button" class="bt" id="rdCancelar">Cancelar</button></div>
+    </form>
+    <div class="filtros"><button type="button" class="bt" id="btRegDev" hidden>+ Registrar devolução aberta</button><input id="busca" type="search" placeholder="Buscar por pedido, produto ou SKU" aria-label="Buscar devolução"><select id="fEstado" aria-label="Situação da devolução"><option value="">Todas as situações</option><option value="conferir">Falta conferir (não chegou)</option><option value="aberta">Em aberto (aguardando o marketplace)</option><option value="fechada">Fechadas</option></select></div>
     <div class="tabela-rolagem" id="lista"></div>
   </section>
 </main>
@@ -101,11 +115,19 @@ function pintarLista(){
     const cx = el('div'); cx.appendChild(document.createTextNode(d.titulo || d.sku || 'item'));
     cx.appendChild(el('span', 'pequeno', `${d.sku || 'sem SKU'} × ${numero(d.quantidade)} · pedido ${d.pedido}`));
     if(d.parcial) cx.appendChild(el('span', 'chip amarelo', 'reembolso parcial'));
+    if(d.aguardando_reembolso) cx.appendChild(el('span', 'chip amarelo', 'aguardando reembolso'));
     cx.appendChild(chipEstado(estadoDe(d)));
+    if(d.manual){
+      cx.appendChild(el('span', 'pequeno', `Registrada à mão${d.registrada_em ? ' em ' + dataBR(d.registrada_em) : ''}: ${d.motivo || ''}${d.obs_manual ? ' · ' + d.obs_manual : ''}`));
+      if(d.aguardando_reembolso){ const rm = el('button', 'link-bt', 'Remover registro'); rm.type = 'button';
+        rm.onclick = async () => { if(!confirm(`Remover o registro da devolução do pedido ${d.pedido}?`)) return;
+          try{ await api('/api/devolucoes/amazon/remover', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pedido: d.pedido, sku: d.sku }) }); carregar(true); }catch(e){ erroTela(e.message); } };
+        cx.appendChild(rm); }
+    }
     p.append(im, cx); t0.appendChild(p);
     const t9 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t9.appendChild(a);
     tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, d.data ? dataBR(d.data) : '—'), el('td', null, d.envio || (d.canal === 'FBA' ? 'FBA' : 'envio próprio')),
-      el('td', 'dinheiro', d.valor_venda == null ? 'fora do período lido' : real(d.valor_venda)), el('td', 'dinheiro', real(d.devolvido)),
+      el('td', 'dinheiro', d.valor_venda == null ? 'fora do período lido' : real(d.valor_venda)), el('td', 'dinheiro', d.aguardando_reembolso ? 'ainda não' : real(d.devolvido)),
       el('td', 'dinheiro', d.tarifas_venda == null ? '—' : real((d.tarifas_venda || 0) + (d.frete_venda || 0)) + (d.frete_desconhecido ? ' (sem o frete)' : '')),
       el('td', 'dinheiro', d.tarifas_reembolso == null ? '—' : real(d.tarifas_reembolso + d.frete_reembolso)), custoTd(d), t9);
     tb.appendChild(tr);
@@ -157,6 +179,34 @@ function estadoDe(d){
   if(!ps.length) return 'fechada';   // cancelada, FBA ou sem item para conferir
   const es = ps.map((p) => estadoDevolucao(p.conferida || d.precisa_devolver === false, p.acomp));
   return es.includes('aberta') ? 'aberta' : es.includes('conferir') ? 'conferir' : 'fechada';
+}
+// Amazon: registrar à mão a devolução que o cliente pediu (POST /api/devolucoes/amazon/registrar)
+if(CANAL === 'amazon'){
+  $('btRegDev').hidden = false;
+  $('btRegDev').onclick = () => {
+    const f = $('regDev'); f.hidden = !f.hidden;
+    if(!f.hidden && !$('rdMotivo').options.length){
+      const ms = dados?.motivos || { incompativel: 'Incompatível ou sem utilidade', defeito: 'Com defeito', faltando: 'Peças ou acessórios ausentes', outro: 'Outro motivo' };
+      $('rdMotivo').innerHTML = '<option value="">Escolha…</option>' + Object.entries(ms).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+    }
+    if(!f.hidden) $('rdPedido').focus();
+  };
+  $('rdCancelar').onclick = () => { $('regDev').hidden = true; };
+  $('regDev').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const bt = ev.submitter; if(bt) bt.disabled = true;
+    try{
+      const r = await api('/api/devolucoes/amazon/registrar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+        pedido: $('rdPedido').value.trim(), sku: $('rdSku').value.trim() || null, quantidade: Number($('rdQtd').value) || 1,
+        motivo: $('rdMotivo').value, data_pedido: $('rdData').value || null, obs: $('rdObs').value.trim() || null }) });
+      for(const id of ['rdPedido', 'rdSku', 'rdData', 'rdObs']) $(id).value = '';
+      $('rdQtd').value = 1; $('regDev').hidden = true;
+      $('busca').value = r.pedido;
+      await carregar(true);
+      const m = $('msg'); m.className = 'ok'; m.textContent = `Devolução do pedido ${r.pedido} (${r.sku}) registrada: aguardando o reembolso da Amazon.`; m.style.display = 'block';
+    }catch(e){ erroTela(e.message); }
+    if(bt) bt.disabled = false;
+  };
 }
 periodo('segDias', dias, (d) => { dias = d; carregar(); });
 carregar();

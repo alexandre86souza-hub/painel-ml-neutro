@@ -241,6 +241,56 @@ function devolucoesDe(lancs) {
   }).sort((a, b) => String(b.data).localeCompare(String(a.data)));
 }
 
+// Devolução registrada à mão (pedido do dono, 23/10/2026): a lista de devoluções do envio próprio da Amazon só sai com o
+// papel restrito Direct to Consumer Shipping (dado pessoal), que o painel não usa; o reembolso entra no financeiro só
+// quando a transportadora escaneia o pacote. O vendedor cola o pedido e o motivo; a devolução fica "aguardando reembolso"
+// e, quando o reembolso chega (mesmo pedido + SKU), a linha real ganha o motivo e a mesma marcação de peças (mesma chave).
+const MOTIVOS_DEV = { incompativel: 'Incompatível ou sem utilidade', defeito: 'Com defeito', faltando: 'Peças ou acessórios ausentes',
+  diferente: 'Diferente do anunciado', danificado: 'Chegou danificado', desistiu: 'Desistiu da compra', outro: 'Outro motivo' };
+// Corpo do POST -> registro (ou erro). Função pura: testada.
+function validarDevManual(b, hoje = new Date()) {
+  const pedido = String(b?.pedido || '').trim();
+  if (!/^\d{3}-\d{7}-\d{7}$/.test(pedido)) throw erro('Informe o número do pedido da Amazon (ex.: 702-1234567-1234567).');
+  const sku = b?.sku == null || b.sku === '' ? null : String(b.sku).trim().slice(0, 120);
+  const quantidade = Number(b?.quantidade ?? 1);
+  if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 999) throw erro('Quantidade devolvida: um número inteiro de 1 a 999.');
+  const motivo = String(b?.motivo || '');
+  if (!MOTIVOS_DEV[motivo]) throw erro('Escolha o motivo da devolução.');
+  const obs = String(b?.obs ?? '').trim().slice(0, 300) || null;
+  let data = null;
+  if (b?.data_pedido) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data_pedido)) throw erro('Data do pedido de devolução inválida.');
+    if (b.data_pedido > new Date(hoje.getTime() - 3 * 3600e3).toISOString().slice(0, 10)) throw erro('A data do pedido de devolução não pode ser depois de hoje.');
+    data = `${b.data_pedido}T15:00:00.000Z`;   // meio-dia em Brasília
+  }
+  return { pedido, sku, quantidade, motivo, obs, data_pedido: data };
+}
+// Junta às devoluções do financeiro (devolucoesDe) as registradas à mão: com reembolso = a linha real ganha motivo;
+// sem reembolso = linha "aguardando reembolso" com a venda do mesmo pedido + SKU. Função pura: testada.
+function comManuais(devolucoes, manuais, lancs) {
+  const k = (p, s) => `${p}|${s || ''}`;
+  const porChave = new Map(manuais.map((m) => [k(m.pedido, m.sku), m]));
+  const info = (m) => ({ manual: true, motivo: MOTIVOS_DEV[m.motivo] || m.motivo || null, obs_manual: m.obs || null, registrada_em: m.criado_em || null });
+  const reais = new Set();
+  const out = devolucoes.map((d) => { const m = porChave.get(k(d.pedido, d.sku)); if (!m) return d; reais.add(k(d.pedido, d.sku)); return { ...d, ...info(m) }; });
+  const vendas = new Map();
+  for (const l of lancs) {
+    if (l.tipo !== 'venda' || !l.pedido || !porChave.has(k(l.pedido, l.sku))) continue;
+    const x = vendas.get(k(l.pedido, l.sku)) || { receita: 0, tarifa: 0, frete: 0, data: l.data, canal: l.canal };
+    x.receita += l.receita || 0; x.tarifa += l.tarifa || 0; x.frete += l.frete || 0; if (l.data < x.data) x.data = l.data;
+    vendas.set(k(l.pedido, l.sku), x);
+  }
+  for (const m of manuais) {
+    if (reais.has(k(m.pedido, m.sku))) continue;
+    const v = vendas.get(k(m.pedido, m.sku));
+    out.push({ pedido: m.pedido, sku: m.sku, canal: v?.canal || m.canal || 'proprio', data: m.data_pedido || m.criado_em, data_venda: v?.data || m.data_venda || null,
+      quantidade: m.quantidade, valor_venda: v ? r2(v.receita) : null, devolvido: 0, parcial: false,
+      tarifas_venda: v ? r2(v.tarifa) : null, frete_venda: v ? r2(v.frete) : null, tarifas_reembolso: null, frete_reembolso: null,
+      custo: 0, venda_encontrada: !!v, aguardando_reembolso: true, ...info(m) });
+  }
+  return out.sort((a, b) => String(b.data).localeCompare(String(a.data)));
+}
+
 // Resumo no mesmo formato das contas do Mercado Livre (tela "Todas as contas"). Pedidos e
 // unidades contam só as vendas. Função pura: testada.
 function resumoAmazon(linhas) {
@@ -365,7 +415,7 @@ function ofertasDe(p, eu) {
     menor_outro: outros[0] || null, em: new Date().toISOString() };
 }
 
-function criar({ D, janela }) {
+function criar({ D, janela, quem = () => null }) {
   const C = require('./custos.js');
   const config = () => ({
     client_id: D.configLer('amazon_lwa_client_id') || null,
@@ -1245,10 +1295,14 @@ function criar({ D, janela }) {
       try { await sincronizar(url.searchParams.get('recarregar') === '1'); } catch (e) { erroLeitura = e.message; }
       const agora = Date.now();
       const de = new Date(agora - dias * 864e5).toISOString();
-      const todas = devolucoesDe(D.amazonLancPeriodo(new Date(agora - (dias + 90) * 864e5).toISOString(), new Date(agora + 60e3).toISOString())).filter((d) => d.data >= de);
+      const lancs = D.amazonLancPeriodo(new Date(agora - (dias + 90) * 864e5).toISOString(), new Date(agora + 60e3).toISOString());
+      const todas = devolucoesDe(lancs).filter((d) => d.data >= de);
+      // registradas à mão: as que ainda esperam o reembolso aparecem sempre; as reembolsadas seguem a data do reembolso
+      const manuais = D.amazonDevManuais();
+      const lista = comManuais(todas, manuais, lancs);
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
       const fotos = D.amazonFotos();
-      for (const d of todas) {
+      for (const d of lista) {
         const cs = d.sku ? C.custoDoSku(d.sku, mapa) : null;
         d.titulo = cs?.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || d.sku;
         d.foto = (d.sku && fotos.get(d.sku)?.foto) || null;
@@ -1262,9 +1316,31 @@ function criar({ D, janela }) {
       return { dias, erro_leitura: erroLeitura,
         resumo: { casos: todas.length, unidades: todas.reduce((a, d) => a + d.quantidade, 0), devolvido: soma((d) => d.devolvido), custo: soma((d) => d.custo),
           parciais: todas.filter((d) => d.parcial).length, fba: todas.filter((d) => d.canal === 'FBA').length, vendidas,
-          taxa: vendidas ? todas.reduce((a, d) => a + d.quantidade, 0) / vendidas : null },
+          taxa: vendidas ? todas.reduce((a, d) => a + d.quantidade, 0) / vendidas : null,
+          aguardando_reembolso: lista.filter((d) => d.aguardando_reembolso).length },
         por_produto: [...porSku.values()].map((x) => ({ ...x, devolvido: r2(x.devolvido), custo: r2(x.custo) })).sort((a, b) => b.casos - a.casos).slice(0, 30),
-        devolucoes: todas };
+        motivos: MOTIVOS_DEV, devolucoes: lista };
+    },
+    // Registrar à mão uma devolução que o cliente pediu e a Amazon ainda não reembolsou (pedido + SKU da venda lida pelo
+    // painel). Caminho em /api/devolucoes/: mesmo módulo das telas de devoluções. Escrita só pela tela; nada no MCP.
+    'POST /api/devolucoes/amazon/registrar': async (_u, b) => {
+      const m = validarDevManual(b);
+      const itens = D.amazonItensDoPedido(m.pedido).filter((i) => i.sku);
+      if (!itens.length) throw erro(`O pedido ${m.pedido} não está nas vendas da Amazon lidas pelo painel (últimos 152 dias). Confira o número.`);
+      if (itens[0].canal === 'FBA') throw erro('Pedido do FBA: a devolução volta ao armazém da Amazon, fora do seu estoque.');
+      const skus = [...new Set(itens.map((i) => i.sku))];
+      const sku = m.sku || (skus.length === 1 ? skus[0] : null);
+      if (!sku) throw erro(`O pedido tem ${skus.length} produtos: escolha o SKU devolvido (${skus.join(', ')}).`);
+      if (!skus.includes(sku)) throw erro(`O SKU ${sku} não é deste pedido (${skus.join(', ')}).`);
+      const vendida = itens.filter((i) => i.sku === sku).reduce((s, i) => s + (i.quantidade || 0), 0);
+      if (vendida && m.quantidade > vendida) throw erro(`O pedido tem ${vendida} unidade(s) deste SKU.`);
+      D.amazonDevManualGravar({ ...m, sku, quem: quem() });
+      return { ok: true, pedido: m.pedido, sku, quantidade: m.quantidade, motivo: MOTIVOS_DEV[m.motivo] };
+    },
+    'POST /api/devolucoes/amazon/remover': async (_u, b) => {
+      const pedido = String(b?.pedido || ''), sku = String(b?.sku || '');
+      if (!/^\d{3}-\d{7}-\d{7}$/.test(pedido) || !sku) throw erro('Devolução não informada.');
+      return { ok: true, removidas: D.amazonDevManualApagar(pedido, sku) };
     },
     'GET /api/amazon/vendas': async (url) => {
       const mes = url.searchParams.get('mes');
@@ -1278,5 +1354,5 @@ function criar({ D, janela }) {
   return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon };
 }
 
-module.exports = { criar, devolucoesDe, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
+module.exports = { criar, devolucoesDe, comManuais, validarDevManual, MOTIVOS_DEV,validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
   pedidoDe, itemDe, janelaVendas, taxasDosLancamentos, linhaDoPedido, ofertasDe, BR, HOST };

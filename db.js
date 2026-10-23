@@ -1443,6 +1443,16 @@ db.exec(`
     PRIMARY KEY (pedido, item_id)
   );
 `);
+// Devolução da Amazon registrada à mão (o cliente pediu e o reembolso ainda não entrou no financeiro): a lista de devoluções
+// do envio próprio só sai com o papel restrito de dado pessoal, que o painel não usa. Liga-se ao reembolso por pedido + SKU.
+db.exec(`CREATE TABLE IF NOT EXISTS amazon_dev_manuais (pedido TEXT NOT NULL, sku TEXT NOT NULL, quantidade INTEGER NOT NULL,
+  motivo TEXT, obs TEXT, data_pedido TEXT, quem TEXT, criado_em TEXT NOT NULL, PRIMARY KEY (pedido, sku))`);
+const amazonDevManualGravar = (m) => db.prepare(`INSERT OR REPLACE INTO amazon_dev_manuais (pedido, sku, quantidade, motivo, obs, data_pedido, quem, criado_em)
+  VALUES (?,?,?,?,?,?,?,?)`).run(m.pedido, m.sku, m.quantidade, m.motivo || null, m.obs || null, m.data_pedido || null, m.quem || null, agora());
+const amazonDevManuais = () => db.prepare('SELECT * FROM amazon_dev_manuais ORDER BY criado_em DESC').all();
+const amazonDevManualApagar = (pedido, sku) => db.prepare('DELETE FROM amazon_dev_manuais WHERE pedido=? AND sku=?').run(pedido, sku).changes;
+const amazonItensDoPedido = (pedido) => db.prepare(`SELECT p.pedido, p.data, p.canal, i.sku, i.quantidade, i.preco
+  FROM amazon_pedidos p JOIN amazon_itens i ON i.pedido = p.pedido WHERE p.pedido=?`).all(pedido);
 // Pedido que estava pendente (sem preço nos itens) e mudou de situação: lê os itens de novo.
 const PENDENTES_AMZ = "('Pending','PendingAvailability')";
 function amazonPedidosGravar(lista) {
@@ -2255,7 +2265,7 @@ module.exports = {
   shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
   shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeePrecoGravar, shopeeRecusaGravar, shopeeRecusaLimpar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
-  amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
+  amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonDevManualGravar, amazonDevManuais, amazonDevManualApagar, amazonItensDoPedido, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,
   mpPagamentosGravar, mpPagamentos, mpPagamentosConta, mpExtratoImportar, mpExtrato, mpExtratoSaldos, mpConferencias, mpConferenciaGravar,
   mpVendasDesde, mpVendasDosPedidos, mpPedidosDosEnvios, flexDosEnvios, bonusFlexDosEnvios, bonusFlexMedias, reembolsosDosPedidos, statusDosPedidos,

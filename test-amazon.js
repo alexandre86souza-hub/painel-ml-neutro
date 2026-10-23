@@ -239,4 +239,26 @@ assert.ok(!/api\/amazon|amazon\.js/i.test(fonteMcp), 'nenhuma ferramenta do MCP 
   assert.deepStrictEqual({ d: dv[0].devolvido, c: dv[0].custo, p: dv[0].parcial }, { d: 100, c: 4, p: false }, 'custo = 20 de tarifa − 16 devolvidos');
 }
 
+// devolução registrada à mão: espera o reembolso; quando ele chega, a linha real ganha o motivo (sem duplicar)
+{
+  const venda = { tipo: 'venda', pedido: '702-1', sku: 'AMG-770.734', canal: 'proprio', data: '2026-10-14T11:00:00Z', quantidade: 1, receita: 239.9, tarifa: 30, frete: 21.45 };
+  const manual = { pedido: '702-1', sku: 'AMG-770.734', quantidade: 1, motivo: 'incompativel', obs: null, data_pedido: '2026-10-20T15:00:00.000Z', criado_em: '2026-10-23T17:00:00Z' };
+  const so = A.comManuais(A.devolucoesDe([venda]), [manual], [venda]);
+  assert.strictEqual(so.length, 1, 'sem reembolso: aparece a registrada');
+  assert.deepStrictEqual({ ag: so[0].aguardando_reembolso, v: so[0].valor_venda, dev: so[0].devolvido, c: so[0].custo, m: so[0].motivo, d: so[0].data },
+    { ag: true, v: 239.9, dev: 0, c: 0, m: 'Incompatível ou sem utilidade', d: '2026-10-20T15:00:00.000Z' });
+  const reemb = { tipo: 'reembolso', pedido: '702-1', sku: 'AMG-770.734', canal: 'proprio', data: '2026-10-25T10:00:00Z', quantidade: 1, receita: -239.9, tarifa: -24, frete: 0 };
+  const junto = A.comManuais(A.devolucoesDe([venda, reemb]), [manual], [venda, reemb]);
+  assert.strictEqual(junto.length, 1, 'reembolso chegou: uma linha só');
+  assert.deepStrictEqual({ ag: !!junto[0].aguardando_reembolso, man: junto[0].manual, dev: junto[0].devolvido, m: junto[0].motivo },
+    { ag: false, man: true, dev: 239.9, m: 'Incompatível ou sem utilidade' });
+  assert.strictEqual(A.comManuais([], [], []).length, 0);
+  const ok = A.validarDevManual({ pedido: ' 702-6949061-3457066 ', quantidade: 1, motivo: 'faltando', data_pedido: '2026-10-20' }, new Date('2026-10-23T12:00:00Z'));
+  assert.deepStrictEqual({ p: ok.pedido, s: ok.sku, d: ok.data_pedido }, { p: '702-6949061-3457066', s: null, d: '2026-10-20T15:00:00.000Z' });
+  assert.throws(() => A.validarDevManual({ pedido: '702-1', motivo: 'faltando' }), /número do pedido/);
+  assert.throws(() => A.validarDevManual({ pedido: '702-6949061-3457066', motivo: 'x' }), /motivo/);
+  assert.throws(() => A.validarDevManual({ pedido: '702-6949061-3457066', motivo: 'defeito', quantidade: 0 }), /Quantidade/);
+  assert.throws(() => A.validarDevManual({ pedido: '702-6949061-3457066', motivo: 'defeito', data_pedido: '2026-10-30' }, new Date('2026-10-23T12:00:00Z')), /depois de hoje/);
+}
+
 console.log('Amazon: credenciais, sem dados pessoais, forma sem valores e fora do MCP: ok');

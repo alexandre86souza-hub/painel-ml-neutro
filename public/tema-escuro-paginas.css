@@ -199,6 +199,8 @@ html[data-tema="escuro"][data-pagina="configuracao"] .cfg-password-form{backgrou
 /* devolucoes-canais.html */
 html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes-canais"] .reg-dev{border:1px solid hsla(217,30%,60%,.35)}
+html[data-tema="escuro"][data-pagina="devolucoes-canais"] .link-bt{color:hsl(4,76%,72%)}
 /* devolucoes.html */
 html[data-tema="escuro"][data-pagina="devolucoes"] .seg{border:1px solid var(--line);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .seg button{background:rgba(14,24,44,.72)}

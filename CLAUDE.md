@@ -357,6 +357,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Leroy = linhas com reembolso, custo = comissão não devolvida + frete da entrega; Magalu = pedidos com REFUND no financeiro, custo =
   tarifas que ficaram + frete; resumo em `canais.js#resumoDevolucoes`; Amazon:
   `devolucoesDe`): reembolsos dos lançamentos + a venda do mesmo pedido; custo = tarifas e frete da venda + do reembolso.
+  Devolução aberta registrada à mão (Amazon, botão da tela; `POST /api/devolucoes/amazon/registrar|remover`, tabela `amazon_dev_manuais`,
+  `amazon.js#comManuais`): a lista de devoluções do envio próprio exige o papel restrito Direct to Consumer Shipping (não usamos) e o
+  reembolso só entra no escaneamento do pacote; a registrada fica "aguardando reembolso" e se junta ao reembolso pelo pedido + SKU (mesma chave das peças).
   Peças com defeito nessas telas e na de devoluções da Shopee (`defeito-canais.js`, `public/defeito-pecas.js`, tabela `devolucao_defeito_canal`,
   `PUT /api/devolucoes/canais/defeito`): a mesma marcação do ML por item devolvido (kit aberto, quantas com defeito); `envolver` acrescenta
   `d.pecas` às rotas GET de devoluções e soma as peças marcadas no custo. "Conferir" = chegou: volta ao estoque sem as peças com defeito,
