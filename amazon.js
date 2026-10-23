@@ -1295,7 +1295,8 @@ function criar({ D, janela, quem = () => null }) {
       try { await sincronizar(url.searchParams.get('recarregar') === '1'); } catch (e) { erroLeitura = e.message; }
       const agora = Date.now();
       const de = new Date(agora - dias * 864e5).toISOString();
-      const lancs = D.amazonLancPeriodo(new Date(agora - (dias + 90) * 864e5).toISOString(), new Date(agora + 60e3).toISOString());
+      // a etiqueta do envio próprio (MfnPostageFee, lançada à parte) entra no frete da venda: a Amazon não a devolve
+      const lancs = comEtiquetas(D.amazonLancPeriodo(new Date(agora - (dias + 90) * 864e5).toISOString(), new Date(agora + 60e3).toISOString()));
       const todas = devolucoesDe(lancs).filter((d) => d.data >= de);
       // registradas à mão: as que ainda esperam o reembolso aparecem sempre; as reembolsadas seguem a data do reembolso
       const manuais = D.amazonDevManuais();

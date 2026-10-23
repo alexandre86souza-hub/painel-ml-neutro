@@ -24,6 +24,9 @@
   .reg-dev{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:12px;border:1px solid #e3e8f0;border-radius:10px;margin-bottom:10px}
   .reg-dev p{flex:1 1 100%;margin:0}.reg-dev label{display:flex;flex-direction:column;gap:4px;font-size:12px}.reg-dev label.largo{flex:1 1 220px}
   .reg-dev .acoes{display:flex;gap:8px}
+  .reg-dev input,.reg-dev select{min-width:0;height:34px;box-sizing:border-box}.reg-dev #rdPedido{width:190px}.reg-dev #rdQtd{width:80px}.reg-dev #rdMotivo{min-width:230px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.chips>span{display:inline-block;width:auto}
+  .filtros #busca{flex:1 1 220px}
   .link-bt{background:none;border:0;padding:0;color:#b42318;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 </style>
 </head>
@@ -64,7 +67,11 @@
       <label>Pedido da Amazon <input id="rdPedido" required placeholder="702-1234567-1234567" inputmode="numeric" autocomplete="off"></label>
       <label>SKU <input id="rdSku" placeholder="só se o pedido tiver mais de um produto" autocomplete="off"></label>
       <label>Unidades <input id="rdQtd" type="number" min="1" max="999" value="1"></label>
-      <label>Motivo <select id="rdMotivo" required></select></label>
+      <label>Motivo <select id="rdMotivo" required>
+        <option value="">Escolha…</option><option value="incompativel">Incompatível ou sem utilidade</option><option value="defeito">Com defeito</option>
+        <option value="faltando">Peças ou acessórios ausentes</option><option value="diferente">Diferente do anunciado</option>
+        <option value="danificado">Chegou danificado</option><option value="desistiu">Desistiu da compra</option><option value="outro">Outro motivo</option>
+      </select></label>
       <label>Pedido de devolução em <input id="rdData" type="date"></label>
       <label class="largo">Observação <input id="rdObs" maxlength="300" placeholder="opcional"></label>
       <div class="acoes"><button type="submit" class="bt forte">Registrar</button><button type="button" class="bt" id="rdCancelar">Cancelar</button></div>
@@ -114,9 +121,11 @@ function pintarLista(){
     const t0 = el('td'); const p = el('div', 'prod'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(d.foto) im.src = d.foto;
     const cx = el('div'); cx.appendChild(document.createTextNode(d.titulo || d.sku || 'item'));
     cx.appendChild(el('span', 'pequeno', `${d.sku || 'sem SKU'} × ${numero(d.quantidade)} · pedido ${d.pedido}`));
-    if(d.parcial) cx.appendChild(el('span', 'chip amarelo', 'reembolso parcial'));
-    if(d.aguardando_reembolso) cx.appendChild(el('span', 'chip amarelo', 'aguardando reembolso'));
-    cx.appendChild(chipEstado(estadoDe(d)));
+    const chips = el('div', 'chips');
+    if(d.parcial) chips.appendChild(el('span', 'chip amarelo', 'reembolso parcial'));
+    if(d.aguardando_reembolso) chips.appendChild(el('span', 'chip amarelo', 'aguardando reembolso'));
+    chips.appendChild(chipEstado(estadoDe(d)));
+    cx.appendChild(chips);
     if(d.manual){
       cx.appendChild(el('span', 'pequeno', `Registrada à mão${d.registrada_em ? ' em ' + dataBR(d.registrada_em) : ''}: ${d.motivo || ''}${d.obs_manual ? ' · ' + d.obs_manual : ''}`));
       if(d.aguardando_reembolso){ const rm = el('button', 'link-bt', 'Remover registro'); rm.type = 'button';
@@ -185,11 +194,7 @@ if(CANAL === 'amazon'){
   $('btRegDev').hidden = false;
   $('btRegDev').onclick = () => {
     const f = $('regDev'); f.hidden = !f.hidden;
-    if(!f.hidden && !$('rdMotivo').options.length){
-      const ms = dados?.motivos || { incompativel: 'Incompatível ou sem utilidade', defeito: 'Com defeito', faltando: 'Peças ou acessórios ausentes', outro: 'Outro motivo' };
-      $('rdMotivo').innerHTML = '<option value="">Escolha…</option>' + Object.entries(ms).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
-    }
-    if(!f.hidden) $('rdPedido').focus();
+    if(!f.hidden){ $('rdData').max = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); $('rdPedido').focus(); }
   };
   $('rdCancelar').onclick = () => { $('regDev').hidden = true; };
   $('regDev').onsubmit = async (ev) => {
