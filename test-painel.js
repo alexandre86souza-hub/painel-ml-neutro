@@ -80,4 +80,25 @@ assert.deepStrictEqual(P.porCanal([]).map((c) => [c.canal, c.pedidos, c.faturame
   }
 }
 
+// ---------- Análise ABC: Ads por anúncio e margem de contribuição ----------
+{
+  const g = P.gastoAdsPorItem([
+    { item_id: 'MLB1', campaign_id: 1, ad_group_id: 10, metrics: { cost: 12.5 } },
+    { item_id: 'MLB1', campaign_id: 1, ad_group_id: 10, metrics: { cost: 12.5 } },   // repetida na paginação
+    { item_id: 'MLB1', campaign_id: 2, ad_group_id: 11, metrics: { cost: 7.5 } },    // outra campanha soma
+    { item_id: 'MLB2', campaign_id: 1, ad_group_id: 12, metrics: { cost: 0 } },
+  ]);
+  assert.deepStrictEqual(g, { MLB1: 20 }, 'soma as campanhas e conta a linha repetida uma vez');
+  const t = P.totaisABC([
+    { faturamento: 100, unidades: 2, lucro: 30, ads: 10 },
+    { faturamento: 50, unidades: 1, lucro: null, ads: 5 },   // sem custo: fora das margens
+  ]);
+  assert.strictEqual(t.faturamento, 150);
+  assert.strictEqual(t.ads, 15, 'o Ads total soma também quem está sem custo');
+  assert.strictEqual(t.lucro_pos_ads, 20);
+  assert.strictEqual(t.margem, 0.3);
+  assert.strictEqual(t.margem_pos_ads, 0.2, 'margem só sobre o faturamento com lucro calculado');
+  assert.strictEqual(t.sem_lucro, 1);
+}
+
 console.log('Full, qualidade dos anúncios, campanha do vendedor e canais de envio: ok');

@@ -18,6 +18,35 @@ const A = require('./public/analise.js');
 const { lucroPorAnuncio } = require('./custos.js');
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
+
+// Gasto do Ads por anúncio: linhas do ads/search (product_ads) -> { item_id: custo }. Um anúncio pode estar em mais de uma
+// campanha (soma as linhas) e a paginação repete linha (conta uma vez, como ads-gestao.js#vendasPorAnuncio). Função pura: testada.
+function gastoAdsPorItem(linhas) {
+  const out = {}, vistos = new Set();
+  for (const a of linhas || []) {
+    const k = `${a.item_id}|${a.ad_group_id ?? ''}|${a.campaign_id ?? ''}`;
+    if (!a.item_id || vistos.has(k)) continue;
+    vistos.add(k);
+    const c = Number(a.metrics?.cost) || 0;
+    if (c) out[a.item_id] = r2((out[a.item_id] || 0) + c);
+  }
+  return out;
+}
+
+// Totais de uma classe da curva (ou da conta toda): margem de contribuição antes e depois do Ads. Anúncio sem lucro
+// calculado fica fora das duas margens (entra em sem_lucro), para a % não ficar inflada por faturamento sem custo.
+// Função pura: testada.
+function totaisABC(ls) {
+  const soma = (k, f = () => true) => ls.filter(f).reduce((s, l) => s + (l[k] || 0), 0);
+  const comLucro = (l) => l.lucro != null;
+  const fatLucro = soma('faturamento', comLucro);
+  const lucro = soma('lucro', comLucro), ads = soma('ads');
+  const posAds = lucro - soma('ads', comLucro);
+  return { anuncios: ls.length, faturamento: r2(soma('faturamento')), unidades: soma('unidades'), tarifa: r2(soma('tarifa')),
+    produto: r2(soma('produto')), frete: r2(soma('frete')), embalagem: r2(soma('embalagem')), imposto: r2(soma('imposto')),
+    ads: r2(ads), lucro: r2(lucro), margem: fatLucro > 0 ? lucro / fatLucro : null,
+    lucro_pos_ads: r2(posAds), margem_pos_ads: fatLucro > 0 ? posAds / fatLucro : null, sem_lucro: ls.filter((l) => !comLucro(l)).length };
+}
 const r2 = (v) => Math.round((v || 0) * 100) / 100;
 // Venda que saiu do armazém do ML: node_id do Full (BRSP04…), não o depósito do vendedor (BRP…).
 const ehFull = (origem) => !!origem && !/^BRP\d+$/.test(origem);
@@ -70,7 +99,7 @@ function cobertura(estoque, vendidas, dias) {
   return { media_dia: media, dias: media > 0 ? Math.floor(estoque / media) : null };
 }
 
-function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela, idsDaConta, baixarPedidos, linhasDoPedido, D, vendasDaConta }) {
+function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela, idsDaConta, baixarPedidos, linhasDoPedido, D, vendasDaConta, adsDaJanela }) {
   // Vendas baixadas antes de o painel guardar a origem do estoque (Full x depósito): baixa a
   // janela de novo uma vez, como a tela Vendas faz com o SKU.
   async function comOrigem(conta, dias) {
@@ -167,9 +196,17 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
 
   // ---------- Análise ABC ----------
   async function abc(conta, dias) {
-    await sincronizarVendas(conta, dias);
+    await sincronizarVendas(conta, dias * 2);   // o período anterior dá a tendência
     const j = janela(dias);
     const res = D.vendasResumo(conta.ml_user_id, j);
+    // Tendência: unidades no período contra o mesmo número de dias logo antes (A.tendencia: ±15% = estável).
+    const deAnt = new Date(Date.parse(j.de) - dias * 864e5).toISOString();
+    const antes = Object.fromEntries(D.vendasResumo(conta.ml_user_id, { de: deAnt, ate: j.de, meio: j.de })
+      .map((x) => [x.item_id, x]));
+    // Gasto do Ads de cada anúncio na mesma janela (o ML fecha o dia anterior às 10h: hoje fica fora). Sem anunciante
+    // ou janela além dos 90 dias que o Ads guarda: null (a tela diz por quê).
+    const ads = adsDaJanela ? await adsDaJanela(conta, j.primeiro, j.ultimo).catch((e) => ({ erro: e.message })) : null;
+    const gasto = ads?.linhas ? gastoAdsPorItem(ads.linhas) : {};
     const curva = A.curvaABC(Object.fromEntries(res.map((x) => [x.item_id, x.faturamento])));
     const custos = D.custosDe(res.map((x) => x.item_id));
     const imposto = D.impostoLer(conta.ml_user_id) || 0;
@@ -189,9 +226,19 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
           freteUnidade: frete, custo: c?.custo ?? null, outros: c?.outros_total ?? null, impostoPct: imposto });
         const pv = porVenda[x.item_id];
         const lucro = pv ? pv.lucro : e.lucro != null ? r2(e.lucro) : null;
+        const gastoAds = gasto[x.item_id] || 0;
+        const t = A.tendencia(antes[x.item_id]?.unidades || 0, x.unidades, A.MINIMO.vendas);
+        // Partes do custo, venda a venda (as mesmas do lucro); sem a venda a venda, só a tarifa dos pedidos
+        const parte = (k) => (pv ? pv[k] : null);
         return { id: x.item_id, classe: curva[x.item_id].classe, ranking: curva[x.item_id].ranking,
           faturamento: r2(x.faturamento), participacao: curva[x.item_id].participacao, acumulado: total ? acum / total : 0,
-          unidades: x.unidades, pedidos: x.pedidos, lucro, margem: pv ? pv.margem : e.margem, falta: pv ? pv.falta : e.falta };
+          unidades: x.unidades, pedidos: x.pedidos, ticket: x.pedidos ? r2(x.faturamento / x.pedidos) : null,
+          tarifa: pv ? pv.tarifa : r2(x.tarifas), produto: parte('produto'), frete: parte('frete'), embalagem: parte('embalagem'),
+          imposto: parte('imposto'), ads: r2(gastoAds),
+          lucro, margem: pv ? pv.margem : e.margem, falta: pv ? pv.falta : e.falta,
+          lucro_pos_ads: lucro == null ? null : r2(lucro - gastoAds),
+          margem_pos_ads: lucro == null || !(x.faturamento > 0) ? null : (lucro - gastoAds) / x.faturamento,
+          tendencia: t.direcao, tendencia_delta: t.delta, unidades_antes: antes[x.item_id]?.unidades || 0 };
       });
     const info = await infoItens(linhas.map((l) => l.id));
     for (const l of linhas) Object.assign(l, { titulo: info[l.id]?.title || null, foto: info[l.id]?.thumbnail || null,
@@ -212,11 +259,15 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
     }).sort((a, b) => (b.vendidos_total - a.vendidos_total) || String(b.ultima_venda).localeCompare(String(a.ultima_venda)));
     const classes = ['A', 'B', 'C'].map((k) => {
       const ls = linhas.filter((l) => l.classe === k);
-      return { classe: k, anuncios: ls.length, faturamento: r2(somaPor(ls, 'faturamento')),
-        participacao: total ? somaPor(ls, 'faturamento') / total : 0,
-        lucro: r2(ls.reduce((s, l) => s + (l.lucro || 0), 0)), sem_lucro: ls.filter((l) => l.lucro == null).length };
+      return { classe: k, ...totaisABC(ls), participacao: total ? somaPor(ls, 'faturamento') / total : 0 };
     });
-    return { dias, de: j.primeiro, ate: j.ultimo, total: r2(total), classes, linhas,
+    // Ads gasto em anúncios que não venderam nada no período (fora da curva): dinheiro sem retorno direto.
+    const naCurva = new Set(linhas.map((l) => l.id));
+    const adsSemVenda = Object.entries(gasto).filter(([id]) => !naCurva.has(id));
+    const adsInfo = !adsDaJanela ? null : ads?.erro ? { erro: ads.erro } : ads?.motivo ? { motivo: ads.motivo }
+      : { de: ads.de, ate: ads.ate, total: r2(Object.values(gasto).reduce((s, v) => s + v, 0)),
+        sem_venda: { anuncios: adsSemVenda.length, gasto: r2(adsSemVenda.reduce((s, [, v]) => s + v, 0)) } };
+    return { dias, de: j.primeiro, ate: j.ultimo, total: r2(total), geral: totaisABC(linhas), classes, ads: adsInfo, linhas,
       sem_venda: { total: semVenda.length, ativos: ativosIds.length,
         ja_venderam: semVenda.filter((x) => x.vendidos_total > 0).length, nunca: semVenda.filter((x) => !x.vendidos_total).length,
         itens: semVenda } };
@@ -556,4 +607,4 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, lerQualidade, cobertura, ehFull, canalDe, porCanal };
+module.exports = { criar, lerQualidade, cobertura, ehFull, canalDe, porCanal, gastoAdsPorItem, totaisABC };

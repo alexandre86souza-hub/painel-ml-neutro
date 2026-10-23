@@ -1692,6 +1692,33 @@ async function anunciante() {
   return adv;
 }
 
+// Linhas do Ads (product_ads/ads/search, só o custo) de uma janela de dias, para o gasto por anúncio da Análise ABC.
+// O ML fecha o dia anterior às 10h (hoje fica fora) e guarda 90 dias. Cache de 10 min por conta e janela.
+const adsJanelaCache = new Map();
+async function adsDaJanela(conta, primeiro, ultimo) {
+  const ontem = new Date(Date.now() - 3 * 3600e3 - 864e5).toISOString().slice(0, 10);
+  const limite = new Date(Date.now() - 3 * 3600e3 - 90 * 864e5).toISOString().slice(0, 10);
+  const de = primeiro, ate = ultimo < ontem ? ultimo : ontem;
+  if (de < limite) return { motivo: 'O Ads do Mercado Livre guarda só 90 dias: escolha um período de até 90 dias.' };
+  if (ate < de) return { motivo: 'O Ads só tem os números até ontem.' };
+  const adv = await anunciante();
+  if (!adv) return { motivo: 'Esta conta não tem anunciante no Mercado Ads.' };
+  const chave = `${conta.ml_user_id}|${de}|${ate}`;
+  const g = adsJanelaCache.get(chave);
+  if (g && Date.now() - g.em < 10 * 60e3) return g.dados;
+  const linhas = [];
+  for (let p = 0; p < 60; p++) {
+    const qs = new URLSearchParams({ date_from: de, date_to: ate, metrics: 'cost', limit: '50', offset: String(p * 50) });
+    const r = await ml(`/advertising/${siteAtivo()}/advertisers/${adv.advertiser_id}/product_ads/ads/search?${qs}`, { headers: { 'api-version': '2' } });
+    const lote = r.results || [];
+    linhas.push(...lote);
+    if (lote.length < 50) break;
+  }
+  const dados = { de, ate, linhas };
+  adsJanelaCache.set(chave, { em: Date.now(), dados });
+  return dados;
+}
+
 // metrics_summary resume só a PÁGINA, não o resultado: medido com limit=1 dando
 // R$ 724,20 e limit=50 dando R$ 20.853,13 no mesmo período. O total só sai
 // somando todas as páginas, então é isso que esta função faz.
@@ -2056,7 +2083,7 @@ let devolucoesMod = null;   // devoluções do ML: a baixa do estoque devolve o 
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
-    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D, vendasDaConta: (...a) => custosMod.vendasDaConta(...a) });
+    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D, vendasDaConta: (...a) => custosMod.vendasDaConta(...a), adsDaJanela });
   Object.assign(routes, m.rotas);
   rotasParam.push(...m.rotasParam);
   if (m.composicao) custosMod = m;
@@ -2196,7 +2223,7 @@ rotasParam.push(...concMod.rotasParam);
 // ---------- Amazon: conexão da conta (amazon.js) ----------
 // Aplicativo privado autorizado no Seller Central: sem retorno pelo túnel. Dados da Amazon
 // não vão para o MCP (compromisso com a Amazon; test-amazon.js confere).
-const amazonMod = require('./amazon.js').criar({ D, janela });
+const amazonMod = require('./amazon.js').criar({ D, janela, quem: () => CTX.atual()?.usuario?.login || null });
 Object.assign(routes, amazonMod.rotas);
 rotasParam.push(...amazonMod.rotasParam);
 Object.assign(routes, require('./calculadora.js').criar({ D, ml, amazon: amazonMod }).rotas);

@@ -54,6 +54,12 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `/user-products/{id}/stock` (meli_facility). Reposição (tela Full, no navegador, também FBA): enviar = ⌈venda/dia × (dias de
   cobertura + dias até chegar)⌉ − estoque no Full (− a caminho no FBA); sem estoque no Full e vendendo pelo depósito, usa essa venda. Menu lateral único em `public/menu.js`; sino de
   avisos em `public/sino.js` (os dois carregados em todas as telas).
+  Análise ABC do ML (`painel.js#abc`, `public/abc.html`): por anúncio as partes do lucro venda a venda (comissão, custo do
+  produto, frete, embalagem, imposto), ticket (faturamento ÷ pedidos), tendência (unidades contra os mesmos dias logo antes,
+  `A.tendencia`) e o gasto do Ads do anúncio na janela (`server.js#adsDaJanela`: product_ads/ads/search só com `cost`, até
+  ontem, máx. 90 dias, cache 10 min; `gastoAdsPorItem`) -> MC = lucro − Ads (`lucro_pos_ads`, `margem_pos_ads`). `lucro`/`margem`
+  seguem ANTES do Ads (outras telas e o MCP usam). Totais por classe e da conta em `totaisABC` (margem só sobre quem tem lucro);
+  `ads.sem_venda` = Ads gasto em anúncio que não vendeu no período. Só leitura do Ads (a AMG é da agência).
   Tipo de envio (Performance): Full pela origem do estoque; Flex = `logistic_type`
   `self_service` de `/shipments/{id}`, uma consulta por envio guardada em `envio_logistica`.
 - Cliente da venda (busca em Pedidos e Devoluções): `vendas.comprador` (apelido, vem na lista
