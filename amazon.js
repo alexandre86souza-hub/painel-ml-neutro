@@ -1303,6 +1303,8 @@ function criar({ D, janela, quem = () => null }) {
       const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
       const fotos = D.amazonFotos();
       for (const d of lista) {
+        // a registrada à mão mostra a data da COMPRA (o lançamento da venda tem a data do envio)
+        if (d.aguardando_reembolso) d.data_venda = D.amazonItensDoPedido(d.pedido)[0]?.data || d.data_venda;
         const cs = d.sku ? C.custoDoSku(d.sku, mapa) : null;
         d.titulo = cs?.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || d.sku;
         d.foto = (d.sku && fotos.get(d.sku)?.foto) || null;
