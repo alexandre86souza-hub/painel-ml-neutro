@@ -1898,7 +1898,8 @@ const rotasParam = [
     const descricao = await ml(`/items/${id}/description`).then((d) => d.plain_text || '').catch(() => '');
     const visitas = await ml(`/items/${id}/visits/time_window?last=30&unit=day`).catch(() => null);
     // o que a ML usa para travar campos — medido, nao suposto:
-    //   family_name presente  -> titulo nao muda
+    //   family_name presente  -> titulo nao muda; nem o family_name (PUT {family_name} em 23/10/2026,
+    //                            sem venda, com e sem marca: "The field family name is invalid")
     //   variations com itens   -> preco e estoque vivem na variacao
     return { ...item, descricao, visitas_30d: visitas?.total_visits ?? null,
       tem_familia: !!item.family_name, tem_variacoes: (item.variations || []).length > 0,
