@@ -168,6 +168,15 @@ function lucroNoPreco({ preco, precoOriginal, meliPct = 0, tarifa, custo, embala
 // Preço de uma promoção disponível para o anúncio (o mesmo que a tela usa no lucro): o do ML,
 // senão o sugerido, senão o maior aceito. Desconto = sobre o preço original. Função pura: testada.
 function precoDaPromo(p) { return p.preco || p.preco_sugerido || p.preco_max || null; }
+// Oferta relâmpago disponível: o preço que o ML lista vem com 3% de desconto, mas a adesão com 3% ou 5% é recusada
+// (MINIMUM_DISCOUNT_PERCENT, "more than 5 Percent"; medido em 23/10/2026, 6% aceito). Vale o menor entre o listado e
+// o preço com 6% de desconto, para o filtro, o lucro e o preço que a tela propõe. Função pura: testada.
+const RELAMPAGO_DESCONTO = 0.06;
+function precoRelampago(preco, original) {
+  if (!(original > 0)) return preco || null;
+  const teto = Math.floor(original * (1 - RELAMPAGO_DESCONTO) * 100) / 100;
+  return preco > 0 ? Math.min(preco, teto) : teto;
+}
 function descontoDaPromo(p, precoAtual) {
   const preco = precoDaPromo(p), orig = p.preco_original ?? precoAtual;
   return preco && orig > 0 ? Math.max(0, 1 - preco / orig) : null;
@@ -341,7 +350,10 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
         vendas_90: qtd90[id] || 0, ultima_venda: ultimas[id]?.[0] || null });
       const ordem = { started: 0, pending: 1, candidate: 2 };
       a.promocoes.sort((x, y) => (ordem[x.status] ?? 3) - (ordem[y.status] ?? 3));
-      for (const p of a.promocoes) p.desconto = descontoDaPromo(p, a.preco);
+      for (const p of a.promocoes) {
+        if (p.tipo === 'LIGHTNING' && p.status === 'candidate') p.preco = precoRelampago(p.preco, p.preco_original ?? a.preco);
+        p.desconto = descontoDaPromo(p, a.preco);
+      }
     }
     cachePorAnuncio = { conta: conta.ml_user_id, em: Date.now(), mapa, info,
       promocoes: promos.map((p) => ({ id: p.id, nome: p.name || tipoNome(p.type), tipo_nome: tipoNome(p.type) })) };
@@ -605,4 +617,4 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
   return { rotas, rotasParam };
 }
 
-module.exports = { criar, lucroNoPreco, precoDaPromo, descontoDaPromo, promoNoFiltro, corpoCampanha, corpoAdesao, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };
+module.exports = { criar, lucroNoPreco, precoDaPromo, precoRelampago, descontoDaPromo, promoNoFiltro, corpoCampanha, corpoAdesao, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };

@@ -41,7 +41,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Custo de devolução = frete de ida + `return-cost` (o `receiver.cost` é o valor cheio, fora da soma).
   Promoções por anúncio: `desconto_max` / `lucro_min` (%) deixam só as promoções DISPONÍVEIS
   (candidate) dentro do limite (`promoNoFiltro`); o lucro de cada uma é calculado na hora
-  (`lucroDe`, preço = do ML › sugerido › maior aceito) e fica no cache de 10 min.
+  (`lucroDe`, preço = do ML › sugerido › maior aceito) e fica no cache de 10 min. Oferta relâmpago disponível: o ML lista
+  com 3%, mas só aceita desconto ACIMA de 5% (medido 23/10/2026: 3% e 5% recusados, 6% aceito) — `precoRelampago` usa 6%.
 - Custos (`custos.js`): SKU do anúncio `KIT-407.408` = produtos 407 + 408 da tabela
   `produtos_custo` (importada colando a planilha na tela Empresa). `custos.origem` 'sku' é
   recalculado; 'manual' nunca é sobrescrito. Imposto da empresa = soma dos impostos cadastrados.

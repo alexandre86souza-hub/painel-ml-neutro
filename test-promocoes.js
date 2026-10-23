@@ -98,6 +98,13 @@ assert.strictEqual(P.promoNoFiltro(cand, 100, { lucroMin: 25 }), false);
 assert.strictEqual(P.promoNoFiltro({ ...cand, margem: null }, 100, { lucroMin: 5 }), false, 'sem lucro calculado não passa');
 assert.strictEqual(P.promoNoFiltro({ ...cand, status: 'started' }, 100, { descontoMax: 50 }), false, 'só as disponíveis');
 assert.strictEqual(P.promoNoFiltro({ status: 'candidate' }, 100, { descontoMax: 50 }), false, 'sem preço: desconto desconhecido');
+// oferta relâmpago: o ML lista com 3%, mas só aceita desconto acima de 5% (medido: 6% entra)
+assert.strictEqual(P.precoRelampago(255.24, 263.13), 247.34, 'os 3% listados viram 6%');
+assert.strictEqual(P.precoRelampago(90, 100), 90, 'desconto maior que 6% fica como está');
+assert.strictEqual(P.precoRelampago(null, 100), 94, 'sem preço listado: 6% do original');
+assert.strictEqual(P.precoRelampago(50, null), 50, 'sem original: não mexe');
+assert.strictEqual(P.promoNoFiltro({ status: 'candidate', preco: P.precoRelampago(97, 100), preco_original: 100 }, 100, { descontoMax: 5 }), false,
+  'relâmpago nunca cabe em "até 5%"');
 
 // ---------- dinheiro da devolução (pagamento real do Mercado Pago, 24/09/2026, resumido) ----------
 // O reembolso vem com source "bpp" mesmo no "não quero mais": sai da venda, não do ML.
