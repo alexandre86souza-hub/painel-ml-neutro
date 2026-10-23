@@ -33,20 +33,8 @@ function gastoAdsPorItem(linhas) {
   return out;
 }
 
-// Totais de uma classe da curva (ou da conta toda): margem de contribuição antes e depois do Ads. Anúncio sem lucro
-// calculado fica fora das duas margens (entra em sem_lucro), para a % não ficar inflada por faturamento sem custo.
-// Função pura: testada.
-function totaisABC(ls) {
-  const soma = (k, f = () => true) => ls.filter(f).reduce((s, l) => s + (l[k] || 0), 0);
-  const comLucro = (l) => l.lucro != null;
-  const fatLucro = soma('faturamento', comLucro);
-  const lucro = soma('lucro', comLucro), ads = soma('ads');
-  const posAds = lucro - soma('ads', comLucro);
-  return { anuncios: ls.length, faturamento: r2(soma('faturamento')), unidades: soma('unidades'), tarifa: r2(soma('tarifa')),
-    produto: r2(soma('produto')), frete: r2(soma('frete')), embalagem: r2(soma('embalagem')), imposto: r2(soma('imposto')),
-    ads: r2(ads), lucro: r2(lucro), margem: fatLucro > 0 ? lucro / fatLucro : null,
-    lucro_pos_ads: r2(posAds), margem_pos_ads: fatLucro > 0 ? posAds / fatLucro : null, sem_lucro: ls.filter((l) => !comLucro(l)).length };
-}
+// Totais de uma classe da curva (ou da conta toda), os mesmos das outras lojas.
+const { totaisABC } = require('./canais.js');
 const r2 = (v) => Math.round((v || 0) * 100) / 100;
 // Venda que saiu do armazém do ML: node_id do Full (BRSP04…), não o depósito do vendedor (BRP…).
 const ehFull = (origem) => !!origem && !/^BRP\d+$/.test(origem);

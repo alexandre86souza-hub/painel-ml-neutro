@@ -60,6 +60,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   ontem, máx. 90 dias, cache 10 min; `gastoAdsPorItem`) -> MC = lucro − Ads (`lucro_pos_ads`, `margem_pos_ads`). `lucro`/`margem`
   seguem ANTES do Ads (outras telas e o MCP usam). Totais por classe e da conta em `totaisABC` (margem só sobre quem tem lucro);
   `ads.sem_venda` = Ads gasto em anúncio que não vendeu no período. Só leitura do Ads (a AMG é da agência).
+  Shopee, Amazon, Leroy e Magalu: as mesmas colunas por SKU em `canais.js#abcDe` (partes do custo das linhas, ticket,
+  tendência com as linhas do período anterior `antes`, `ads` = { sku: gasto } quando houver; hoje nenhuma tem Ads por
+  anúncio: `adsInfo.motivo` diz por quê e a tela mostra só a MC). `totaisABC` mora em canais.js (o ML usa o mesmo).
   Tipo de envio (Performance): Full pela origem do estoque; Flex = `logistic_type`
   `self_service` de `/shipments/{id}`, uma consulta por envio guardada em `envio_logistica`.
 - Cliente da venda (busca em Pedidos e Devoluções): `vendas.comprador` (apelido, vem na lista

@@ -131,6 +131,18 @@ assert.strictEqual(s.margem, 0.4, 'margem só sobre o que tem custo');
 const abc = K.abcDe(ls, { dias: 30 });
 assert.deepStrictEqual(abc.linhas.map((l) => [l.id, l.classe]), [['S1', 'A'], ['S2', 'A']], 'S2 começa em 67% do acumulado: ainda A');
 assert.strictEqual(abc.linhas[1].lucro, null);
+// colunas da ABC: partes do custo, ticket, tendência contra o período anterior e MC por classe
+assert.deepStrictEqual([abc.linhas[0].tarifa, abc.linhas[0].produto, abc.linhas[0].imposto, abc.linhas[0].ticket], [20, 30, 10, 100]);
+assert.strictEqual(abc.linhas[0].tendencia, null, 'sem o período anterior: sem tendência');
+assert.strictEqual(abc.linhas[0].ads, null, 'canal sem Ads por anúncio: coluna vazia');
+assert.strictEqual(abc.linhas[0].lucro_pos_ads, 40);
+const ant = Array.from({ length: 4 }, (_, i) => ({ pedido: 'X' + i, valida: true, sku: 'S1', quantidade: 1, faturamento: 100, lucro: 10 }));
+const abcT = K.abcDe([...ls, ...Array.from({ length: 9 }, (_, i) => ({ ...ls[0], pedido: 'N' + i }))], { dias: 30, antes: ant, ads: { S1: 15 } });
+assert.strictEqual(abcT.linhas[0].tendencia, 'alta', '4 unidades antes, 10 agora');
+assert.strictEqual(abcT.linhas[0].ads, 15);
+assert.strictEqual(abcT.linhas[0].lucro_pos_ads, 385);
+assert.strictEqual(abcT.geral.margem, 0.4, 'margem geral só sobre quem tem lucro');
+assert.strictEqual(abcT.geral.sem_lucro, 1);
 const perf = K.performanceDe(ls, 7, '2026-09-21T03:00:00.000Z');
 assert.strictEqual(perf.atual.pedidos, 1); assert.strictEqual(perf.anterior.pedidos, 1);
 assert.strictEqual(K.janelaVendas(1, () => ({}), Date.parse('2026-10-02T15:00:00Z')).de, '2026-10-02T03:00:00.000Z');

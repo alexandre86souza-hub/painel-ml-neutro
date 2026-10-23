@@ -103,16 +103,38 @@ function performanceDe(linhas, dias, deAtual) {
     cai: mov.filter((x) => x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10) };
 }
 
-// Tela ABC por SKU. semVenda: itens com estoque que não venderam (o canal passa, se souber).
-function abcDe(linhas, { dias, de, ate, semVenda = [], ativos = 0 } = {}) {
+// Totais de uma classe da curva ABC (ou da conta toda): partes do custo e margem de contribuição antes e depois do Ads.
+// Anúncio sem lucro calculado fica fora das duas margens (entra em sem_lucro), para a % não ficar inflada por
+// faturamento sem custo. Usado também pelo ML (painel.js#abc). Função pura: testada.
+function totaisABC(ls) {
+  const soma = (k, f = () => true) => ls.filter(f).reduce((s, l) => s + (l[k] || 0), 0);
+  const comLucro = (l) => l.lucro != null;
+  const fatLucro = soma('faturamento', comLucro);
+  const lucro = soma('lucro', comLucro), ads = soma('ads');
+  const posAds = lucro - soma('ads', comLucro);
+  return { anuncios: ls.length, faturamento: r2(soma('faturamento')), unidades: soma('unidades'), tarifa: r2(soma('tarifa')),
+    produto: r2(soma('produto')), frete: r2(soma('frete')), embalagem: r2(soma('embalagem')), imposto: r2(soma('imposto')),
+    ads: r2(ads), lucro: r2(lucro), margem: fatLucro > 0 ? lucro / fatLucro : null,
+    lucro_pos_ads: r2(posAds), margem_pos_ads: fatLucro > 0 ? posAds / fatLucro : null, sem_lucro: ls.filter((l) => !comLucro(l)).length };
+}
+
+// Tela ABC por SKU. semVenda: itens com estoque que não venderam (o canal passa, se souber). antes: as linhas do mesmo
+// número de dias logo antes (tendência pelas unidades, A.tendencia). ads: { sku: gasto } quando o canal souber o Ads
+// por anúncio; sem ele a coluna fica vazia (ads_info diz por quê).
+function abcDe(linhas, { dias, de, ate, semVenda = [], ativos = 0, antes = null, ads = null, adsInfo = null } = {}) {
+  const PARTES = ['tarifa', 'frete', 'produto', 'embalagem', 'imposto'];
   const m = new Map();
   for (const l of linhas) {
     if (!l.valida || !l.sku) continue;
-    const x = m.get(l.sku) || { id: l.sku, titulo: l.titulo, foto: l.foto, faturamento: 0, unidades: 0, pedidos: new Set(), lucro: 0, sem_lucro: false, falta: new Set() };
+    const x = m.get(l.sku) || { id: l.sku, titulo: l.titulo, foto: l.foto, faturamento: 0, unidades: 0, pedidos: new Set(), lucro: 0, sem_lucro: false, falta: new Set(),
+      tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0 };
     x.faturamento += l.faturamento || 0; x.unidades += l.quantidade || 0; x.pedidos.add(l.pedido);
+    for (const k of PARTES) x[k] += l[k] || 0;
     if (l.lucro == null) { x.sem_lucro = true; for (const f of l.falta || []) x.falta.add(f); } else x.lucro += l.lucro;
     m.set(l.sku, x);
   }
+  const unAntes = new Map();
+  for (const l of antes || []) if (l.valida && l.sku) unAntes.set(l.sku, (unAntes.get(l.sku) || 0) + (l.quantidade || 0));
   const itens = [...m.values()];
   const curva = A.curvaABC(Object.fromEntries(itens.map((x) => [x.id, x.faturamento])));
   const total = itens.reduce((s, x) => s + x.faturamento, 0);
@@ -120,18 +142,23 @@ function abcDe(linhas, { dias, de, ate, semVenda = [], ativos = 0 } = {}) {
   const ls = itens.filter((x) => curva[x.id]).sort((a, b) => curva[a.id].ranking - curva[b.id].ranking).map((x) => {
     acum += x.faturamento;
     const lucro = x.sem_lucro ? null : r2(x.lucro);
+    const gasto = ads ? r2(ads[x.id] || 0) : null;
+    const t = antes ? A.tendencia(unAntes.get(x.id) || 0, x.unidades, A.MINIMO.vendas) : null;
     return { id: x.id, classe: curva[x.id].classe, ranking: curva[x.id].ranking, faturamento: r2(x.faturamento),
       participacao: curva[x.id].participacao, acumulado: total ? acum / total : 0, unidades: x.unidades, pedidos: x.pedidos.size,
+      ticket: x.pedidos.size ? r2(x.faturamento / x.pedidos.size) : null,
+      tarifa: r2(x.tarifa), produto: r2(x.produto), frete: r2(x.frete), embalagem: r2(x.embalagem), imposto: r2(x.imposto), ads: gasto,
       lucro, margem: lucro != null && x.faturamento > 0 ? lucro / x.faturamento : null, falta: [...x.falta],
+      lucro_pos_ads: lucro == null ? null : r2(lucro - (gasto || 0)),
+      margem_pos_ads: lucro == null || !(x.faturamento > 0) ? null : (lucro - (gasto || 0)) / x.faturamento,
+      tendencia: t?.direcao ?? null, tendencia_delta: t?.delta ?? null, unidades_antes: antes ? unAntes.get(x.id) || 0 : null,
       titulo: x.titulo, foto: x.foto, estoque: null, status: 'active' };
   });
   const classes = ['A', 'B', 'C'].map((k) => {
     const x = ls.filter((l) => l.classe === k);
-    const f = x.reduce((s, l) => s + l.faturamento, 0);
-    return { classe: k, anuncios: x.length, faturamento: r2(f), participacao: total ? f / total : 0,
-      lucro: r2(x.reduce((s, l) => s + (l.lucro || 0), 0)), sem_lucro: x.filter((l) => l.lucro == null).length };
+    return { classe: k, ...totaisABC(x), participacao: total ? x.reduce((s, l) => s + l.faturamento, 0) / total : 0 };
   });
-  return { dias, de, ate, total: r2(total), classes, linhas: ls,
+  return { dias, de, ate, total: r2(total), geral: totaisABC(ls), classes, ads: adsInfo, linhas: ls,
     sem_venda: { total: semVenda.length, ativos, ja_venderam: semVenda.filter((x) => x.vendidos_total > 0).length,
       nunca: semVenda.filter((x) => !x.vendidos_total).length, itens: semVenda } };
 }
@@ -172,4 +199,4 @@ function resumoDevolucoes(devs, vendidas) {
   por_produto: [...porSku.values()].map((x) => ({ ...x, devolvido: r2(x.devolvido), custo: r2(x.custo) })).sort((a, b) => b.casos - a.casos).slice(0, 30) };
 }
 
-module.exports = { resumoDevolucoes, janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, resumoGeral };
+module.exports = { resumoDevolucoes, janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, totaisABC, resumoGeral };

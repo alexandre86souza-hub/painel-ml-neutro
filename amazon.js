@@ -107,7 +107,7 @@ const valor = (m) => Number(m?.CurrencyAmount ?? m?.currencyAmount ?? m?.Amount 
 const dataIso = (d) => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
 const r2 = (v) => Math.round(v * 100) / 100;
 const CC = require('./campanhas-canais.js');
-const { janelaDoMes } = require('./canais.js');
+const { janelaDoMes, abcDe } = require('./canais.js');
 
 // Função pura: testada.
 // Pedido com 2+ unidades do mesmo item (FBA): a Amazon manda uma linha por unidade, com o MESMO
@@ -888,27 +888,11 @@ function criar({ D, janela, quem = () => null }) {
   async function abcAmazon(dias) {
     const j = janela(dias);
     const { linhas } = await linhasDePedidos(j.de, j.ate);
-    const A = require('./public/analise.js');
-    const m = new Map();
-    for (const l of linhas) {
-      if (!l.valida || !l.sku) continue;
-      const x = m.get(l.sku) || { id: l.sku, titulo: l.titulo, foto: l.foto, faturamento: 0, unidades: 0, pedidos: new Set(), lucro: 0, sem_lucro: false, falta: new Set() };
-      x.faturamento += l.faturamento; x.unidades += l.quantidade; x.pedidos.add(l.pedido);
-      if (l.lucro == null) { x.sem_lucro = true; for (const f of l.falta) x.falta.add(f); } else x.lucro += l.lucro;
-      m.set(l.sku, x);
-    }
-    const itens = [...m.values()];
-    const curva = A.curvaABC(Object.fromEntries(itens.map((x) => [x.id, x.faturamento])));
-    const total = itens.reduce((s, x) => s + x.faturamento, 0);
-    let acum = 0;
-    const ls = itens.filter((x) => curva[x.id]).sort((a, b) => curva[a.id].ranking - curva[b.id].ranking).map((x) => {
-      acum += x.faturamento;
-      const lucro = x.sem_lucro ? null : r2(x.lucro);
-      return { id: x.id, classe: curva[x.id].classe, ranking: curva[x.id].ranking, faturamento: r2(x.faturamento),
-        participacao: curva[x.id].participacao, acumulado: total ? acum / total : 0, unidades: x.unidades, pedidos: x.pedidos.size,
-        lucro, margem: lucro != null && x.faturamento > 0 ? lucro / x.faturamento : null, falta: [...x.falta],
-        titulo: x.titulo, foto: x.foto, estoque: null, status: 'active' };
-    });
+    // tendência: os mesmos dias logo antes (cópia local); a curva e as colunas são as das outras lojas (canais.js#abcDe)
+    const ra = await linhasDePedidos(new Date(Date.parse(j.de) - dias * 864e5).toISOString(), j.de).catch(() => null);
+    const base = abcDe(linhas, { dias, de: j.primeiro, ate: j.ultimo, antes: ra?.linhas || [],
+      adsInfo: { motivo: 'O Amazon Ads ainda está só conectado; o gasto por anúncio entra quando o painel ler as campanhas.' } });
+    const ls = base.linhas;
     // estoque FBA: quantidade de cada SKU e quem tem estoque sem ter vendido
     let semVenda = [], ativos = 0;
     try {
@@ -936,13 +920,7 @@ function criar({ D, janela, quem = () => null }) {
         ultima_venda: ultimas.get(e.sellerSku) || null }))
         .sort((a, b) => String(b.ultima_venda).localeCompare(String(a.ultima_venda)));
     } catch { /* sem estoque FBA: a curva sai igual */ }
-    const classes = ['A', 'B', 'C'].map((k) => {
-      const x = ls.filter((l) => l.classe === k);
-      const f = x.reduce((s, l) => s + l.faturamento, 0);
-      return { classe: k, anuncios: x.length, faturamento: r2(f), participacao: total ? f / total : 0,
-        lucro: r2(x.reduce((s, l) => s + (l.lucro || 0), 0)), sem_lucro: x.filter((l) => l.lucro == null).length };
-    });
-    return { dias, de: j.primeiro, ate: j.ultimo, total: r2(total), classes, linhas: ls,
+    return { ...base,
       sem_venda: { total: semVenda.length, ativos, ja_venderam: semVenda.filter((x) => x.vendidos_total > 0).length,
         nunca: semVenda.filter((x) => !x.vendidos_total).length, itens: semVenda } };
   }

@@ -40,7 +40,7 @@
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
     <p>Curva ABC pelo faturamento: <b>A</b> = os anúncios que somam os primeiros 80%, <b>B</b> os próximos 15%, <b>C</b> os últimos 5%.
-      No Mercado Livre, cada anúncio mostra as partes do custo, o Ads e a <b>margem de contribuição (MC)</b> = lucro − Ads.</p>
+      Cada anúncio mostra as partes do custo e a <b>margem de contribuição (MC)</b>; no Mercado Livre, também o Ads (MC = lucro − Ads).</p>
     <div class="seg" role="group" aria-label="Período" id="segDias">
       <button type="button" data-dias="15">15 dias</button>
       <button type="button" data-dias="30">30 dias</button>
@@ -129,12 +129,14 @@ function pintarLista(){
     && (!q || l.id.toLowerCase().includes(q) || (l.titulo || '').toLowerCase().includes(q)));
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nada por aqui.')); return; }
   const t = el('table'); const cab = el('tr');
-  // ML: as partes do custo, o Ads de cada anúncio e a margem de contribuição depois do Ads (MC).
-  const DETALHE = !NA_EXT && itens[0].ticket !== undefined;
+  // As partes do custo, o Ads de cada anúncio (quando a loja tem) e a margem de contribuição depois do Ads (MC).
+  const DETALHE = itens[0].ticket !== undefined;
+  const COM_ADS = DETALHE && itens.some((l) => l.ads != null);
   const cols = DETALHE
-    ? [['#'], ['Classe'], ['Anúncio'], ['Tendência', 'Unidades no período contra os mesmos dias logo antes (±15% = estável)'], ['Receita'], ['Unid.'],
-      ['Ticket', 'Faturamento ÷ pedidos'], ['Comissão', 'Tarifa de venda do Mercado Livre'], ['C. produto'], ['Frete'], ['Emb. + imposto'],
-      ['Ads', 'Investido no Mercado Ads neste anúncio no período (até ontem)'], ['Margem antes do Ads'], ['MC (depois do Ads)', 'Margem de contribuição: lucro − Ads'], ['Estoque']]
+    ? [['#'], ['Classe'], [NA_EXT ? 'Produto' : 'Anúncio'], ['Tendência', 'Unidades no período contra os mesmos dias logo antes (±15% = estável)'], ['Receita'], ['Unid.'],
+      ['Ticket', 'Faturamento ÷ pedidos'], ['Comissão', `Tarifas de venda ${NA_EXT ? 'do canal' : 'do Mercado Livre'}`], ['C. produto'], ['Frete'], ['Emb. + imposto'],
+      ...(COM_ADS ? [['Ads', 'Investido no Mercado Ads neste anúncio no período (até ontem)'], ['Margem antes do Ads'], ['MC (depois do Ads)', 'Margem de contribuição: lucro − Ads']]
+        : [['MC', 'Margem de contribuição: o que sobra depois de comissão, produto, frete, embalagem e imposto']]), ['Estoque']]
     : [['#'], ['Classe'], ['Anúncio'], ['Faturamento'], ['Part.'], ['Acumulado'], ['Unidades'], ['Lucro'], ['Margem'], ['Estoque']];
   for(const [h, dica] of cols){ const x = el('th', null, h); if(dica) x.title = dica; cab.appendChild(x); }
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
@@ -153,7 +155,8 @@ function pintarLista(){
       tr.append(el('td', 'esq', String(l.ranking)), tdC, prod, tdT, el('td', null, real(l.faturamento)), el('td', null, numero(l.unidades)),
         el('td', null, real(l.ticket)), el('td', null, real(l.tarifa)), el('td', null, real(l.produto)), el('td', null, real(l.frete)),
         el('td', null, l.embalagem == null ? '—' : real((l.embalagem || 0) + (l.imposto || 0))),
-        el('td', l.ads ? null : 'sub', l.ads ? real(l.ads) : '—'), mc(l.lucro, l.margem), mc(l.lucro_pos_ads, l.margem_pos_ads),
+        ...(COM_ADS ? [el('td', l.ads ? null : 'sub', l.ads ? real(l.ads) : '—'), mc(l.lucro, l.margem), mc(l.lucro_pos_ads, l.margem_pos_ads)]
+          : [mc(l.lucro, l.margem)]),
         el('td', null, numero(l.estoque)));
     } else {
       tr.append(el('td', 'esq', String(l.ranking)), tdC, prod,
@@ -180,11 +183,15 @@ async function carregar(){
       el('p', 'nota', `${numero(dados.linhas.length)} anúncios venderam`));
     box.appendChild(tot);
     // ML: margem de contribuição da conta e de cada classe, antes e depois do Ads
-    const comMC = (c) => c.lucro_pos_ads !== undefined && !NA_EXT;
+    const comMC = (c) => c.lucro_pos_ads !== undefined;
+    const temAds = !dados.ads?.motivo && !dados.ads?.erro && dados.ads != null;
     if(dados.geral && comMC(dados.geral)){
       const g = dados.geral; const k = el('div', 'cartao');
-      k.append(el('p', 'rotulo', 'MC total (depois do Ads)'), el('div', 'valor', `${real(g.lucro_pos_ads)} · ${pct(g.margem_pos_ads)}`),
-        el('p', 'nota', `antes do Ads ${real(g.lucro)} · ${pct(g.margem)} · Ads ${real(g.ads)}` + (g.sem_lucro ? ` · ${numero(g.sem_lucro)} sem custo/frete fora da conta` : '')));
+      const fora = g.sem_lucro ? ` · ${numero(g.sem_lucro)} sem custo/frete fora da conta` : '';
+      k.append(el('p', 'rotulo', temAds ? 'MC total (depois do Ads)' : 'MC total'),
+        el('div', 'valor', `${real(temAds ? g.lucro_pos_ads : g.lucro)} · ${pct(temAds ? g.margem_pos_ads : g.margem)}`),
+        el('p', 'nota', temAds ? `antes do Ads ${real(g.lucro)} · ${pct(g.margem)} · Ads ${real(g.ads)}${fora}`
+          : `comissão ${real(g.tarifa)} · produto ${real(g.produto)} · frete ${real(g.frete)}${fora}`));
       box.appendChild(k);
     }
     for(const c of dados.classes){
@@ -192,11 +199,11 @@ async function carregar(){
       const v = el('div', 'valor'); v.appendChild(el('span', 'classe ' + c.classe, c.classe)); v.appendChild(document.createTextNode(' ' + numero(c.anuncios) + ' anúncios'));
       k.append(el('p', 'rotulo', `Classe ${c.classe}`), v,
         el('p', 'nota', comMC(c)
-          ? `${real(c.faturamento)} (${pct(c.participacao, 0)}) · MC ${real(c.lucro_pos_ads)} (${pct(c.margem_pos_ads)}) · Ads ${real(c.ads)}`
+          ? `${real(c.faturamento)} (${pct(c.participacao, 0)}) · MC ${real(c.lucro_pos_ads)} (${pct(c.margem_pos_ads)})` + (temAds ? ` · Ads ${real(c.ads)}` : '')
           : `${real(c.faturamento)} (${pct(c.participacao, 0)}) · lucro ${real(c.lucro)}`));
       box.appendChild(k);
     }
-    if(!NA_EXT && dados.ads?.sem_venda?.gasto > 0){
+    if(dados.ads?.sem_venda?.gasto > 0){
       const k = el('div', 'cartao');
       k.append(el('p', 'rotulo', 'Ads em anúncios sem venda'), el('div', 'valor', real(dados.ads.sem_venda.gasto)),
         el('p', 'nota', `${numero(dados.ads.sem_venda.anuncios)} anúncio(s) com investimento e nenhuma venda no período · Ads total ${real(dados.ads.total)}`));

@@ -811,7 +811,10 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const dias = diasDe(url, [15, 30, 60, 90, 150]);
       const j = janela(dias);
       const r = await linhas(j.de, j.ate);
-      return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo });
+      // tendência: os mesmos dias logo antes (cópia local)
+      const ra = await linhas(new Date(Date.parse(j.de) - dias * 864e5).toISOString(), j.de).catch(() => null);
+      return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo, antes: ra?.linhas || [],
+        adsInfo: { motivo: 'A Magalu não tem Ads ligado ao painel.' } });
     },
     // Devoluções (pedidos com REFUND na análise financeira) das vendas dos últimos 30/60/90 dias.
     'GET /api/magalu/devolucoes': async (url) => {

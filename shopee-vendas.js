@@ -291,7 +291,10 @@ function criar({ D, daLoja, janela }) {
       const dias = diasDe(url, [15, 30, 60, 90, 150]);
       const j = janela(dias);
       const r = await linhas(shopId, j.de, j.ate);
-      return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo });
+      // tendência: os mesmos dias logo antes (cópia local)
+      const ra = await linhas(shopId, new Date(Date.parse(j.de) - dias * 864e5).toISOString(), j.de).catch(() => null);
+      return K.abcDe(r.linhas, { dias, de: j.primeiro, ate: j.ultimo, antes: ra?.linhas || [],
+        adsInfo: { motivo: 'O Ads da Shopee chega ao painel só pela loja toda (tela Ads), ainda não por anúncio.' } });
     },
     // "Todas as contas": hoje, período, por dia e produtos (somados no navegador, como a Amazon).
     'GET /api/shopee/vendas': async (url) => {
