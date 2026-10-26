@@ -2475,8 +2475,8 @@ async function putComEspera(id, corpo, contaId) {
     catch (e) { if (e.status === 429 && t < 4) { await esperar(3000 * (t + 1)); continue; } throw e; }
   }
 }
-async function enviarEstoqueMl(id, chaves, quem) {
-  const linhas = await linhasMl(id);
+async function enviarEstoqueMl(id, chaves, quem, linhasProntas = null) {
+  const linhas = linhasProntas || await linhasMl(id);
   const { enviar, fora } = planoEnvioMl(linhas, chaves);
   const porItem = new Map();
   for (const e of enviar) { if (!porItem.has(e.id)) porItem.set(e.id, []); porItem.get(e.id).push(e); }
@@ -2515,7 +2515,35 @@ routes['POST /api/estoque/anuncios/ml'] = async (_u, b) => {
 };
 routes['GET /api/estoque/anuncios/ml/envios'] = async (url) => {
   const id = Number(url.searchParams.get('conta'));
-  return { liberada: contasEstoqueMl().includes(id), envios: D.estoqueEnviosListar(`ml:${id}`, 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) };
+  return { liberada: contasEstoqueMl().includes(id), automatico: D.configLer(`ml_estoque_auto:${id}`) === '1', rodando: mlAutoRodando.has(id),
+    ultimo_automatico: D.configLer(`ml_estoque_auto_ultimo:${id}`), erro_automatico: D.configLer(`ml_estoque_auto_erro:${id}`),
+    envios: D.estoqueEnviosListar(`ml:${id}`, 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) };
+};
+// Automático do ML por conta liberada (desligado até o vendedor ligar; ml_estoque_auto:{id} = '1'): a cada 10 min lê os
+// anúncios uma vez e manda só os que ficaram fora da faixa (estoque.js#precisaEnviar), como a Leroy. A primeira rodada
+// depois de ligar pode levar vários minutos (um PUT + releitura por anúncio); a próxima só começa quando a anterior acaba.
+const mlAutoRodando = new Set();
+async function mlAuto(id) {
+  if (mlAutoRodando.has(id) || D.configLer(`ml_estoque_auto:${id}`) !== '1' || !D.configLer('estoque_inicio') || !contasEstoqueMl().includes(id)) return;
+  mlAutoRodando.add(id);
+  try {
+    const { precisaEnviar } = require('./estoque.js');
+    const linhas = await linhasMl(id);
+    const mudar = linhas.filter((l) => l.deveria != null && precisaEnviar(l.estoque, l.deveria)).map(chaveMl);
+    for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueMl(id, mudar.slice(i, i + 300), 'automático', linhas);
+    D.configGravar(`ml_estoque_auto_ultimo:${id}`, new Date().toISOString());
+    D.configGravar(`ml_estoque_auto_erro:${id}`, '');
+  } catch (e) { D.configGravar(`ml_estoque_auto_erro:${id}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
+  finally { mlAutoRodando.delete(id); }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { for (const id of contasEstoqueMl()) mlAuto(id).catch(() => null); }, 10 * 60e3).unref?.();
+routes['PUT /api/estoque/anuncios/ml/auto'] = async (_u, b) => {
+  const id = Number(b?.conta);
+  if (!contasEstoqueMl().includes(id)) throw Object.assign(new Error('Envio de estoque não liberado para esta conta do ML.'), { status: 400 });
+  if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
+  D.configGravar(`ml_estoque_auto:${id}`, b.ligado ? '1' : '0');
+  if (b.ligado) mlAuto(id).catch(() => null);
+  return { automatico: b.ligado };
 };
 routes['GET /api/estoque/anuncios'] = async (url) => {
   const recarregar = url?.searchParams.get('recarregar') === '1';

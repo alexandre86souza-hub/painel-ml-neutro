@@ -412,8 +412,22 @@ function pintarEnvioMl(conta, ls){
     }catch(e){ aviso(e.message); env.disabled = false; env.textContent = `Enviar estoque (${n0(eaMarcadas.size)})`; }
   };
   const ac = el('div', 'acoes'); ac.append(todas, limpar, env); box.appendChild(ac);
+  // automático (a cada 10 min, só o que saiu da faixa); só ligar depois de desligar a sincronização do UpSeller nesta conta
+  const au = el('label', null); au.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:6px;flex-wrap:wrap';
+  const ck = el('input'); ck.type = 'checkbox'; ck.disabled = true;
+  const info = el('small', null, '');
+  au.append(ck, document.createTextNode(' Envio automático a cada 10 minutos (junta as vendas da rodada e manda só o que mudou: com 20 peças ou menos, ao zerar ou com diferença acima de 10%)'), info);
+  ck.onchange = async () => {
+    const ligar = ck.checked;
+    if(ligar && !confirm('Ligar o envio automático nesta conta do ML?\n\nAntes, desligue a sincronização de estoque do UpSeller nesta conta (senão os dois ficam trocando os números).\n\nNa primeira rodada ele manda TODOS os anúncios que estão fora da faixa — pode levar de 15 a 30 minutos.')){ ck.checked = false; return; }
+    try{ await post('/api/estoque/anuncios/ml/auto', { conta, ligado: ligar }, 'PUT'); aviso(ligar ? 'Envio automático ligado: a primeira rodada já começou.' : 'Envio automático desligado.', 'ok'); }
+    catch(e){ ck.checked = !ligar; aviso(e.message); }
+  };
+  box.appendChild(au);
   const lista = el('div', 'tabela-rolagem'); box.appendChild(lista);
   api('/api/estoque/anuncios/ml/envios?conta=' + conta).then((d) => {
+    ck.checked = !!d.automatico; ck.disabled = false;
+    info.textContent = (d.rodando ? ' · enviando agora…' : '') + (d.ultimo_automatico ? ` · última rodada ${quando(d.ultimo_automatico)}` : '') + (d.erro_automatico ? ` · último erro: ${d.erro_automatico}` : '');
     if(!d.envios.length) return;
     lista.appendChild(tabela([['Último(s) envio(s)'], ['Quem'], ['Anúncios', 'n'], ['Resultado'], ['Exemplos']], d.envios.slice(0, 5).map((e) => {
       const tr = el('tr');
