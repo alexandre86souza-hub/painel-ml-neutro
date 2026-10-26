@@ -2086,6 +2086,34 @@ const estoqueEnviosListar = (canal, n = 50) => {
   db.prepare("DELETE FROM estoque_envios WHERE em < datetime('now', '-180 days')").run();
   return db.prepare('SELECT * FROM estoque_envios WHERE canal=? ORDER BY id DESC LIMIT ?').all(canal, n).map((r) => ({ ...r, linhas: JSON.parse(r.linhas || '[]') }));
 };
+// Metas e faturamento (metas.js): faturamento por dia e loja (fonte painel | planilha | manual), metas do total por mês e o
+// faturamento de um mês inteiro por CNPJ lançado à mão (histórico do RBT12 do Simples, quando o painel não tem os dias).
+db.exec(`CREATE TABLE IF NOT EXISTS fat_dia (dia TEXT NOT NULL, canal TEXT NOT NULL, valor REAL NOT NULL, fonte TEXT, atualizado_em TEXT NOT NULL, PRIMARY KEY (dia, canal));
+  CREATE TABLE IF NOT EXISTS metas_mes (ano INTEGER NOT NULL, mes INTEGER NOT NULL, valor REAL NOT NULL, PRIMARY KEY (ano, mes));
+  CREATE TABLE IF NOT EXISTS fat_mes_manual (mes TEXT NOT NULL, cnpj TEXT NOT NULL, valor REAL NOT NULL, PRIMARY KEY (mes, cnpj));`);
+function fatDiaGravar(linhas) {
+  const st = db.prepare('INSERT OR REPLACE INTO fat_dia (dia, canal, valor, fonte, atualizado_em) VALUES (?,?,?,?,?)');
+  db.exec('BEGIN');
+  try { for (const l of linhas) st.run(l.dia, l.canal, l.valor, l.fonte || null, agora()); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+// Os dias lidos do painel (de `de` até hoje) das lojas lidas: apaga e grava de novo (dia sem venda não fica com valor velho).
+function fatDiaSubstituir(de, canais, linhas) {
+  db.exec('BEGIN');
+  try {
+    const del = db.prepare("DELETE FROM fat_dia WHERE dia >= ? AND canal = ? AND canal <> 'shein'");
+    for (const c of canais) del.run(de, c);
+    const st = db.prepare("INSERT OR REPLACE INTO fat_dia (dia, canal, valor, fonte, atualizado_em) VALUES (?,?,?,'painel',?)");
+    for (const l of linhas) if (l.dia >= de) st.run(l.dia, l.canal, l.valor, agora());
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+const fatDiaPeriodo = (de, ate) => db.prepare('SELECT dia, canal, valor, fonte FROM fat_dia WHERE dia >= ? AND dia <= ? ORDER BY dia').all(de, ate);
+const metasListar = (ano) => db.prepare('SELECT mes, valor FROM metas_mes WHERE ano=? ORDER BY mes').all(ano);
+const metaGravar = (ano, mes, valor) => (valor == null ? db.prepare('DELETE FROM metas_mes WHERE ano=? AND mes=?').run(ano, mes)
+  : db.prepare('INSERT OR REPLACE INTO metas_mes (ano, mes, valor) VALUES (?,?,?)').run(ano, mes, valor));
+const fatMesManualListar = () => db.prepare('SELECT * FROM fat_mes_manual ORDER BY mes').all();
+const fatMesManualGravar = (mes, cnpj, valor) => (valor == null ? db.prepare('DELETE FROM fat_mes_manual WHERE mes=? AND cnpj=?').run(mes, cnpj)
+  : db.prepare('INSERT OR REPLACE INTO fat_mes_manual (mes, cnpj, valor) VALUES (?,?,?)').run(mes, cnpj, valor));
 // Estoque de segurança por produto (o que NÃO vai para os anúncios): sem linha = o padrão (estado estoque_seguranca_padrao, 3).
 db.exec('CREATE TABLE IF NOT EXISTS estoque_seguranca (numero INTEGER PRIMARY KEY, qtd INTEGER NOT NULL, atualizado_em TEXT NOT NULL)');
 const estoqueSegurancas = () => new Map(db.prepare('SELECT numero, qtd FROM estoque_seguranca').all().map((r) => [r.numero, r.qtd]));
@@ -2276,6 +2304,7 @@ module.exports = {
   magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
+  fatDiaGravar, fatDiaSubstituir, fatDiaPeriodo, metasListar, metaGravar, fatMesManualListar, fatMesManualGravar,
   estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
   estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido, compraAntesGravar, compraRecebimentoDesfazer,

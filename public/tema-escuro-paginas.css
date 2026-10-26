@@ -402,6 +402,22 @@ html[data-tema="escuro"][data-pagina="mensagens"] .modelos textarea{border:1px s
 html[data-tema="escuro"][data-pagina="mensagens"] .conta-car.passou{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="mensagens"] .modelo{border:1px solid var(--line);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="mensagens"] .modelo p{color:hsl(215,25%,72%)}
+/* metas.html */
+html[data-tema="escuro"][data-pagina="metas"] .abas button{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72);color:hsl(222,45%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .linha-ctl label{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="metas"] .linha-ctl select,
+html[data-tema="escuro"][data-pagina="metas"] .linha-ctl input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72);color:hsl(222,45%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .alerta-chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
+html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.atencao{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.ruim{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .legenda{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="metas"] tr.atual td{background:hsla(166,76%,60%,.14)}
+html[data-tema="escuro"][data-pagina="metas"] .cnpj{background:rgba(14,24,44,.72);border:1px solid hsla(217,30%,60%,.35)}
+html[data-tema="escuro"][data-pagina="metas"] .regua{background:hsla(218,31%,60%,.14)}
+html[data-tema="escuro"][data-pagina="metas"] .pequeno{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="metas"] input.meta{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72);color:hsl(222,45%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .config-cnpj fieldset{border:1px solid hsla(217,30%,60%,.35)}
 /* navegador.html */
 html[data-tema="escuro"][data-pagina="navegador"] input{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="navegador"] button.ghost{background:hsla(220,79%,60%,.14);color:hsl(216,76%,72%)}

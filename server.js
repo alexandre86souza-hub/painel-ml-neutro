@@ -2239,6 +2239,9 @@ const defeitoCanaisMod = require('./defeito-canais.js').criar({ D, aposGravar: (
   quem: () => CTX.atual()?.usuario?.login || null });
 defeitoCanaisMod.envolver(routes);
 Object.assign(routes, defeitoCanaisMod.rotas);
+// Metas e faturamento por CNPJ + Simples Nacional (metas.js; só o administrador: rotas fora de qualquer módulo de usuarios.js)
+const metasMod = require('./metas.js').criar({ D, routes, CTX });
+Object.assign(routes, metasMod.rotas);
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
 // Estoque (estoque.js): saldo, baixa automática das vendas, contagem, compras e relatórios.
 const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) => sincronizarVendas(c, dias), shopeeVendas: shopeeVendasMod,
@@ -3083,6 +3086,23 @@ async function tratarPainelNoContexto(req, res, online = false) {
         chunks.push(c);
       }
       const r = await estoqueMod.importar(Buffer.concat(chunks));
+      D.auditoriaGravar(quem.login, 'POST', url.pathname, 200);
+      return send(200, r);
+    } catch (e) {
+      return send(e.status || 500, { error: e.message });
+    }
+  }
+
+  // Importar a planilha de acompanhamento de vendas (.xlsx em bytes crus) para Metas e faturamento. Só o administrador.
+  if (req.method === 'POST' && url.pathname === '/api/metas/importar') {
+    try {
+      const chunks = []; let size = 0;
+      for await (const c of req) {
+        size += c.length;
+        if (size > 25 * 1024 * 1024) throw Object.assign(new Error('Planilha acima de 25 MB.'), { status: 413 });
+        chunks.push(c);
+      }
+      const r = metasMod.importar(Buffer.concat(chunks));
       D.auditoriaGravar(quem.login, 'POST', url.pathname, 200);
       return send(200, r);
     } catch (e) {

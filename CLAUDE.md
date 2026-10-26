@@ -319,6 +319,14 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   404), em segundo plano, 3 por vez, relidos a cada 6 h (`magalu_anuncios`). Vários anúncios usam um código numérico da
   Magalu no lugar do SKU: o vendedor digita o "SKU do painel" (`sku_vinculos`, canal `magalu`, `PUT /api/magalu/sku-vinculo`)
   e ele dá o custo nos Anúncios e nos Pedidos (`linhasDe` ctx.vinculos; `sku_magalu` guarda o código original).
+- Metas e faturamento (`metas.js`, tela `public/metas.html`, menu Visão geral, só o administrador): substitui a planilha
+  "Acompanhamento venda" do dono. Faturamento por dia e loja = vendas pela data da COMPRA, sem canceladas (ML `contas/resumo`
+  dias, Shopee `vendas` por_dia, Amazon/Leroy/Magalu `pedidos`; Leroy + frete_cliente, que vai na nota — medido: ML e Shopee
+  Primor batem com a planilha), relido nos últimos 60 dias (`fat_dia`, `fatDiaSubstituir`) e guardado; mais antigo = o lido
+  ou o importado da planilha (`POST /api/metas/importar`, bytes crus: abas "Base Anual" e "Metas"). Shein sem integração:
+  dia à mão. Meta do TOTAL por mês (`metas_mes`). CNPJs (`estado` metas_cnpjs: nome, anexo, lojas) e Simples Nacional
+  (`simples`: RBT12 = 12 meses ANTES do mês -> faixa, efetiva = (RBT12 × nominal − dedução) ÷ RBT12, Anexo I/II; meses sem
+  dados digitados por CNPJ em `fat_mes_manual`). Nada no MCP (tem Amazon).
 - Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
   VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon

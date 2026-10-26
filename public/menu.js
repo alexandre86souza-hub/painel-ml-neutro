@@ -4,6 +4,7 @@
   const ICONE = {
     dashboard: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
     geral: '<circle cx="12" cy="12" r="8"/><path d="M12 12V4M12 12l6.5 4.5M12 12l-6.5 4.5"/>',
+    metas: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/><path d="M15 9l5-5M17 4h3v3"/>',
     hoje: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     pedidos: '<path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
     performance: '<path d="M4 18 9 12l4 3 7-8"/><path d="M16 7h4v4"/>',
@@ -39,6 +40,7 @@
   const GRUPOS = [
     { nome: 'Visão geral', itens: [
       ['/geral.html', 'Todas as contas', 'geral'],
+      ['/metas.html', 'Metas e faturamento', 'metas'],
       ['/', 'Dashboard', 'dashboard'],
       ['/vendas.html?dias=1', 'Vendas hoje', 'hoje']] },
     { nome: 'Operação', itens: [
@@ -151,7 +153,7 @@
   };
   // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
   // fica na mesma tela, só com a loja escolhida na lista.
-  const DE_TODAS = ['/geral.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+  const DE_TODAS = ['/geral.html', '/metas.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
     '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);

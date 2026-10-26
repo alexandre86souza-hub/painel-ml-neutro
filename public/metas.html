@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metas e faturamento</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
+<style>
+  .cartao.destaque{background:linear-gradient(135deg,#0f766e,#14b8a6);border-color:transparent;color:#fff}
+  .cartao.destaque .rotulo,.cartao.destaque .nota{color:#dcfdf7}
+  .abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+  .abas button{font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:999px;border:1px solid #d5dbe5;background:#fff;color:#16213a;cursor:pointer}
+  .abas button[aria-selected="true"]{background:#0f766e;border-color:#0f766e;color:#fff}
+  .painel[hidden]{display:none}
+  .linha-ctl{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 14px}
+  .linha-ctl label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5f6b7f}
+  .linha-ctl select,.linha-ctl input{font:inherit;font-size:14px;padding:7px 9px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;color:#16213a;min-width:0}
+  .alerta-chip{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#eef1f6;color:#475569}
+  .alerta-chip.ok{background:#e6f4ea;color:#0b6b33}.alerta-chip.atencao{background:#fff4d6;color:#7a5600}.alerta-chip.ruim{background:#fde8e8;color:#b42318}
+  .grafico{width:100%;height:240px;display:block}
+  .grafico .real{fill:none;stroke:#0f766e;stroke-width:2.5}.grafico .plan{fill:none;stroke:#94a3b8;stroke-width:2;stroke-dasharray:5 4}
+  .grafico .barra{fill:#99f6e4}.grafico .eixo{stroke:#e3e8f0;stroke-width:1}.grafico text{font-size:11px;fill:#5f6b7f}
+  .legenda{display:flex;gap:14px;font-size:12px;color:#5f6b7f;margin:4px 0 0}.legenda i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:#0f766e}
+  .legenda i.plan{background:#94a3b8}
+  td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  tr.atual td{background:#f0fdfa;font-weight:600}
+  .cnpjs{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin:0 0 16px}
+  .cnpj{background:#fff;border:1px solid #e3e8f0;border-radius:14px;padding:16px}
+  .cnpj h3{margin:0 0 4px;font-size:17px}.cnpj .grande{font-size:26px;font-weight:700;margin:6px 0}
+  .regua{height:10px;border-radius:999px;background:#eef1f6;position:relative;overflow:hidden;margin:10px 0 4px}
+  .regua span{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#14b8a6,#f59e0b)}
+  .pequeno{display:block;font-size:12px;color:#5f6b7f}
+  input.meta{width:120px;text-align:right;font:inherit;padding:4px 6px;border:1px solid #d5dbe5;border-radius:6px;background:#fff;color:#16213a}
+  .config-cnpj{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  .config-cnpj fieldset{border:1px solid #e3e8f0;border-radius:12px;padding:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=28"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Metas e faturamento</h1>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <p class="sub" id="topo">Vendas de todas as lojas pela data da compra, sem as canceladas, somadas sozinhas a cada abertura. A meta é do total; o faturamento de cada CNPJ dá a faixa do Simples Nacional.</p>
+  <div class="linha-ctl">
+    <label>Ano <select id="selAno"></select></label>
+    <label>Mês <select id="selMes"></select></label>
+    <button type="button" class="bt" id="btAtualizar">Ler as lojas de novo</button>
+    <span class="pequeno" id="lido"></span>
+  </div>
+  <div class="abas" role="tablist">
+    <button type="button" role="tab" data-aba="mes" aria-selected="true">Mês</button>
+    <button type="button" role="tab" data-aba="ano" aria-selected="false">Ano</button>
+    <button type="button" role="tab" data-aba="simples" aria-selected="false">CNPJs e Simples Nacional</button>
+    <button type="button" role="tab" data-aba="config" aria-selected="false">Configuração</button>
+  </div>
+
+  <section class="painel" data-painel="mes">
+    <div class="cartoes" id="cMes"></div>
+    <section class="bloco"><h2>Acumulado do mês: realizado × meta</h2><div id="gMes"></div>
+      <div class="legenda"><span><i></i>Realizado acumulado</span><span><i class="plan"></i>Meta acumulada (por dia)</span></div></section>
+    <section class="bloco"><h2>Por loja e por CNPJ</h2><div class="tabela-rolagem" id="tMesCanais"></div></section>
+    <section class="bloco"><h2>Dia a dia</h2><div class="tabela-rolagem" id="tMesDias"></div></section>
+  </section>
+
+  <section class="painel" data-painel="ano" hidden>
+    <div class="cartoes" id="cAno"></div>
+    <section class="bloco"><h2>Mês a mês</h2><div id="gAno"></div>
+      <div class="legenda"><span><i style="background:#99f6e4;height:8px"></i>Realizado</span><span><i class="plan"></i>Meta</span></div></section>
+    <section class="bloco"><h2>Metas e resultado</h2><p class="sub">Digite a meta de cada mês e saia do campo para gravar.</p><div class="tabela-rolagem" id="tAno"></div></section>
+  </section>
+
+  <section class="painel" data-painel="simples" hidden>
+    <p class="sub">Simples Nacional: a alíquota de cada mês sai da receita bruta dos <b>12 meses anteriores</b> (RBT12). Alíquota efetiva = (RBT12 × alíquota da faixa − parcela a deduzir) ÷ RBT12. É uma estimativa para acompanhar: o valor do DAS é o que o contador apurar.</p>
+    <div class="cnpjs" id="cnpjs"></div>
+    <section class="bloco"><h2>Tabela do Simples Nacional</h2><div class="tabela-rolagem" id="tFaixas"></div></section>
+    <section class="bloco"><h2>Meses sem dados no painel</h2>
+      <p class="sub">O RBT12 precisa dos 12 meses anteriores. Meses que o painel não tem (antes da planilha e das lojas ligadas) podem ser digitados aqui, por CNPJ, com o faturamento do mês inteiro.</p>
+      <div class="tabela-rolagem" id="tManuais"></div></section>
+  </section>
+
+  <section class="painel" data-painel="config" hidden>
+    <section class="bloco"><h2>CNPJs e lojas</h2><div class="config-cnpj" id="cfgCnpjs"></div>
+      <div class="acoes" style="margin-top:10px"><button type="button" class="bt forte" id="btSalvarCfg">Salvar configuração</button></div></section>
+    <section class="bloco"><h2>Shein (sem integração)</h2><p class="sub">Valor vendido no dia, digitado à mão.</p>
+      <div class="linha-ctl"><label>Dia <input type="date" id="sheinDia"></label><label>Valor (R$) <input type="number" step="0.01" min="0" id="sheinValor"></label>
+        <button type="button" class="bt" id="btShein">Gravar</button></div><div class="tabela-rolagem" id="tShein"></div></section>
+    <section class="bloco"><h2>Importar a planilha de acompanhamento</h2>
+      <p class="sub">A aba "Base Anual" (vendas por dia e canal) e a aba "Metas". Os últimos 60 dias ficam com o que o painel lê das lojas; os dias mais antigos vêm da planilha. Metas já gravadas aqui não são trocadas.</p>
+      <div class="linha-ctl"><input type="file" id="arquivo" accept=".xlsx"><button type="button" class="bt" id="btImportar">Importar</button></div></section>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=8"></script>
+<script>
+// Metas e faturamento (GET /api/metas; metas.js). Só o administrador. Nada desta tela vai para o MCP.
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const hoje = new Date(Date.now() - 3 * 3600e3);
+let ano = hoje.getUTCFullYear(), mes = hoje.getUTCMonth() + 1, dados = null, aba = 'mes';
+for(let a = ano + 1; a >= 2025; a--){ const o = el('option', null, a); o.value = a; o.selected = a === ano; $('selAno').appendChild(o); }
+MESES.forEach((m, i) => { const o = el('option', null, m); o.value = i + 1; o.selected = i + 1 === mes; $('selMes').appendChild(o); });
+const td = (t, c) => el('td', c, t);
+function tabela(cab, linhas){ const t = el('table'), h = el('tr'); for(const [x, c] of cab) h.appendChild(el('th', c, x)); const th = el('thead'); th.appendChild(h); t.appendChild(th);
+  const tb = el('tbody'); for(const l of linhas) tb.appendChild(l); t.appendChild(tb); return t; }
+function cartao(box, rot, valor, nota, destaque){ const c = el('div', 'cartao' + (destaque ? ' destaque' : '')); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); box.appendChild(c); }
+const chipAlerta = (a) => el('span', 'alerta-chip ' + ({ 'META ATINGIDA': 'ok', 'NO RITMO': 'ok', 'FORA DO RITMO': 'atencao', 'ABAIXO DA META': 'ruim' }[a] || ''), a ? a.toLowerCase() : '—');
+const post = async (caminho, corpo, metodo = 'POST') => api(caminho, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+const nomeLoja = (k) => dados?.lojas.find((l) => l.canal === k)?.nome || k;
+const dataBR = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+
+// gráfico de linhas (acumulado) ou barras + linha (ano), em SVG
+function svgLinhas(pontos, W = 900, H = 240){
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.classList.add('grafico'); svg.setAttribute('role', 'img');
+  const max = Math.max(1, ...pontos.flatMap((p) => [p.real ?? 0, p.plan ?? 0])), esq = 60, base = H - 22, alto = base - 10;
+  const x = (i) => esq + (W - esq - 10) * (pontos.length > 1 ? i / (pontos.length - 1) : 0), y = (v) => base - alto * v / max;
+  for(const f of [0, 0.5, 1]){ const l = document.createElementNS(ns, 'line'); l.setAttribute('x1', esq); l.setAttribute('x2', W - 10); l.setAttribute('y1', y(max * f)); l.setAttribute('y2', y(max * f)); l.classList.add('eixo'); svg.appendChild(l);
+    const t = document.createElementNS(ns, 'text'); t.setAttribute('x', 4); t.setAttribute('y', y(max * f) + 4); t.textContent = (max * f / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil'; svg.appendChild(t); }
+  const linha = (k, cls) => { const p = pontos.map((pt, i) => pt[k] == null ? null : `${x(i)},${y(pt[k])}`).filter(Boolean); if(!p.length) return;
+    const pl = document.createElementNS(ns, 'polyline'); pl.setAttribute('points', p.join(' ')); pl.classList.add(cls); svg.appendChild(pl); };
+  linha('plan', 'plan'); linha('real', 'real');
+  pontos.forEach((pt, i) => { if(i % Math.ceil(pontos.length / 12) === 0 || i === pontos.length - 1){ const t = document.createElementNS(ns, 'text'); t.setAttribute('x', x(i) - 8); t.setAttribute('y', H - 6); t.textContent = pt.rot; svg.appendChild(t); } });
+  return svg;
+}
+function svgBarras(meses, W = 900, H = 240){
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.classList.add('grafico');
+  const max = Math.max(1, ...meses.flatMap((m) => [m.realizado, m.meta || 0, m.projecao])), esq = 60, base = H - 22, alto = base - 10, larg = (W - esq - 10) / 12;
+  const y = (v) => base - alto * v / max;
+  for(const f of [0, 0.5, 1]){ const l = document.createElementNS(ns, 'line'); l.setAttribute('x1', esq); l.setAttribute('x2', W - 10); l.setAttribute('y1', y(max * f)); l.setAttribute('y2', y(max * f)); l.classList.add('eixo'); svg.appendChild(l);
+    const t = document.createElementNS(ns, 'text'); t.setAttribute('x', 4); t.setAttribute('y', y(max * f) + 4); t.textContent = (max * f / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil'; svg.appendChild(t); }
+  meses.forEach((m, i) => { const r = document.createElementNS(ns, 'rect'); r.setAttribute('x', esq + i * larg + larg * 0.18); r.setAttribute('width', larg * 0.64);
+    r.setAttribute('y', y(m.realizado)); r.setAttribute('height', Math.max(0, base - y(m.realizado))); r.classList.add('barra'); svg.appendChild(r);
+    const t = document.createElementNS(ns, 'text'); t.setAttribute('x', esq + i * larg + larg * 0.3); t.setAttribute('y', H - 6); t.textContent = MESES[i].slice(0, 3); svg.appendChild(t); });
+  const p = meses.map((m, i) => m.meta ? `${esq + i * larg + larg / 2},${y(m.meta)}` : null).filter(Boolean);
+  if(p.length){ const pl = document.createElementNS(ns, 'polyline'); pl.setAttribute('points', p.join(' ')); pl.classList.add('plan'); svg.appendChild(pl); }
+  return svg;
+}
+
+function pintarMes(){
+  const m = dados.escolhido, c = $('cMes'); c.innerHTML = '';
+  cartao(c, `Realizado em ${MESES[mes - 1]}/${ano}`, real(m.realizado), m.meta ? `${pct(m.pct_meta)} da meta de ${real(m.meta)}` : 'sem meta no mês', true);
+  cartao(c, 'Projeção de fechamento', real(m.projecao), m.meta ? `${pct(m.pct_projecao)} da meta` : `média de ${real(m.ritmo_atual)} por dia`);
+  cartao(c, 'Ritmo por dia', real(m.ritmo_atual), m.ritmo_necessario != null ? `precisa de ${real(m.ritmo_necessario)}/dia nos ${numero(m.dias_mes - m.dias_passados)} dia(s) que faltam` : '');
+  const ca = el('div', 'cartao'); ca.append(el('p', 'rotulo', 'Situação'), el('div', 'valor'), el('p', 'nota', m.saldo ? `faltam ${real(m.saldo)} para a meta` : ''));
+  ca.querySelector('.valor').appendChild(chipAlerta(m.alerta)); c.appendChild(ca);
+  $('gMes').innerHTML = ''; $('gMes').appendChild(svgLinhas(m.dias.map((d, i) => ({ rot: d.dia.slice(8, 10), real: i < m.dias_passados ? d.acumulado : null, plan: d.planejado }))));
+  // por loja, agrupado pelo CNPJ
+  const pc = dados.por_canal, linhas = [];
+  for(const c of dados.config.cnpjs){
+    let soma = 0;
+    for(const k of c.canais){ const v = pc[k] || 0; soma += v; const tr = el('tr'); tr.append(td(nomeLoja(k)), td(c.nome), td(real(v), 'n'), td(m.realizado ? pct(v / m.realizado) : '—', 'n')); linhas.push(tr); }
+    const tr = el('tr', 'atual'); tr.append(td('Total ' + c.nome), td(''), td(real(soma), 'n'), td(m.realizado ? pct(soma / m.realizado) : '—', 'n')); linhas.push(tr);
+  }
+  $('tMesCanais').innerHTML = ''; $('tMesCanais').appendChild(tabela([['Loja'], ['CNPJ'], ['Vendido no mês', 'n'], ['% do mês', 'n']], linhas));
+  const dl = m.dias.slice(0, Math.max(m.dias_passados, 1)).map((d) => { const tr = el('tr'); const dif = d.planejado != null ? d.acumulado - d.planejado : null;
+    tr.append(td(dataBR(d.dia)), td(real(d.valor), 'n'), td(real(d.acumulado), 'n'), td(d.planejado != null ? real(d.planejado) : '—', 'n'), td(dif != null ? (dif >= 0 ? '+' : '') + real(dif) : '—', 'n')); return tr; }).reverse();
+  $('tMesDias').innerHTML = ''; $('tMesDias').appendChild(tabela([['Dia'], ['Vendido', 'n'], ['Acumulado', 'n'], ['Meta acumulada', 'n'], ['Diferença', 'n']], dl));
+}
+function pintarAno(){
+  const ms = dados.meses, c = $('cAno'); c.innerHTML = '';
+  const realizado = ms.reduce((s, m) => s + m.realizado, 0), proj = ms.reduce((s, m) => s + m.projecao, 0), meta = dados.meta_anual;
+  cartao(c, `Realizado em ${ano}`, real(realizado), meta ? `${pct(realizado / meta)} da meta anual de ${real(meta)}` : 'sem metas no ano', true);
+  cartao(c, 'Projeção do ano', real(proj), meta ? `${pct(proj / meta)} da meta` : '');
+  cartao(c, 'Meses com a meta batida', numero(ms.filter((m) => m.alerta === 'META ATINGIDA').length), `de ${numero(ms.filter((m) => m.meta).length)} mês(es) com meta`);
+  $('gAno').innerHTML = ''; $('gAno').appendChild(svgBarras(ms));
+  const linhas = ms.map((m, i) => { const tr = el('tr', i + 1 === mes ? 'atual' : '');
+    const tm = el('td', 'n'); const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '1000'; inp.min = '0'; inp.value = m.meta ?? ''; inp.setAttribute('aria-label', 'Meta de ' + MESES[i]);
+    inp.onchange = async () => { try{ await post('/api/metas/meta', { ano, mes: i + 1, valor: inp.value === '' ? null : Number(inp.value) }, 'PUT'); carregar(); }catch(e){ erroTela(e.message); } };
+    tm.appendChild(inp);
+    const ta = el('td'); ta.appendChild(chipAlerta(m.alerta));
+    tr.append(td(MESES[i]), tm, td(real(m.realizado), 'n'), td(real(m.projecao), 'n'), td(m.meta ? pct(m.pct_meta) : '—', 'n'), td(m.meta ? pct(m.pct_projecao) : '—', 'n'),
+      td(m.dias_passados ? real(m.ritmo_atual) : '—', 'n'), td(m.ritmo_necessario != null && m.dias_passados < m.dias_mes ? real(m.ritmo_necessario) : '—', 'n'), ta);
+    return tr; });
+  const tot = el('tr', 'atual'); tot.append(td('Total'), td(real(meta), 'n'), td(real(realizado), 'n'), td(real(proj), 'n'), td(meta ? pct(realizado / meta) : '—', 'n'), td(meta ? pct(proj / meta) : '—', 'n'), td(''), td(''), td('')); linhas.push(tot);
+  $('tAno').innerHTML = ''; $('tAno').appendChild(tabela([['Mês'], ['Meta', 'n'], ['Realizado', 'n'], ['Projeção', 'n'], ['% meta', 'n'], ['% projetado', 'n'], ['Ritmo/dia', 'n'], ['Precisa/dia', 'n'], ['Situação']], linhas));
+}
+function pintarSimples(){
+  const box = $('cnpjs'); box.innerHTML = '';
+  for(const c of dados.cnpjs){
+    const s = c.simples, d = el('div', 'cnpj');
+    d.append(el('h3', null, c.nome), el('span', 'pequeno', `${dados.anexos[c.anexo]?.nome || c.anexo} · ${c.canais.map(nomeLoja).join(', ')}`));
+    d.append(el('span', 'pequeno', `Faturamento dos 12 meses antes de ${MESES[mes - 1]}/${ano} (RBT12)`), el('div', 'grande', real(c.rbt12)));
+    if(s.acima_teto){ d.appendChild(el('p', 'mm-erro', 'Acima de R$ 4,8 milhões: sai do Simples Nacional.')); }
+    else{
+      const reg = el('div', 'regua'); const sp = el('span'); sp.style.width = Math.min(100, c.rbt12 / 4800000 * 100) + '%'; reg.appendChild(sp); d.appendChild(reg);
+      d.appendChild(el('span', 'pequeno', `${pct(c.rbt12 / 4800000)} do teto de R$ 4,8 milhões`));
+      const t = el('table'); const lin = (a, b) => { const tr = el('tr'); tr.append(td(a), td(b, 'n')); t.appendChild(tr); };
+      lin('Faixa', `${s.faixa}ª (até ${real(s.ate)})`); lin('Alíquota da faixa', pct(s.nominal, 2)); lin('Parcela a deduzir', real(s.deducao));
+      lin('Alíquota efetiva aproximada', pct(s.efetiva, 2)); lin(`Faturado em ${MESES[mes - 1]}`, real(c.faturamento_mes)); lin('Imposto estimado no mês', real(c.imposto_mes));
+      if(s.proxima) lin(`Falta para a ${s.proxima.faixa}ª faixa (${pct(s.proxima.nominal, 1)})`, real(s.falta_proxima));
+      d.appendChild(t);
+      if(s.sublimite_icms) d.appendChild(el('p', 'pequeno', 'Acima de R$ 3,6 milhões: o ICMS sai do DAS e é recolhido à parte.'));
+    }
+    if(c.meses_sem_dados.length) d.appendChild(el('p', 'pequeno', `Sem dados em ${c.meses_sem_dados.length} dos 12 meses (${c.meses_sem_dados.join(', ')}): o RBT12 está menor que o real. Digite esses meses abaixo.`));
+    box.appendChild(d);
+  }
+  // tabela das faixas, marcando a de cada CNPJ
+  const an = dados.config.cnpjs[0]?.anexo || 'I', fx = dados.anexos[an].faixas;
+  const linhas = fx.map(([teto, nom, ded], i) => { const tr = el('tr', dados.cnpjs.some((c) => c.simples.faixa === i + 1) ? 'atual' : '');
+    const quem = dados.cnpjs.filter((c) => c.simples.faixa === i + 1).map((c) => c.nome).join(', ');
+    const efMin = i ? (fx[i - 1][0] * nom - ded) / fx[i - 1][0] : nom, efMax = (teto * nom - ded) / teto;
+    tr.append(td(`${i + 1}ª`), td(`${real(i ? fx[i - 1][0] + 0.01 : 0)} a ${real(teto)}`), td(pct(nom, 2), 'n'), td(real(ded), 'n'), td(`${pct(efMin, 2)} a ${pct(efMax, 2)}`, 'n'), td(quem || '')); return tr; });
+  $('tFaixas').innerHTML = ''; $('tFaixas').appendChild(tabela([['Faixa'], ['Receita bruta em 12 meses'], ['Alíquota', 'n'], ['Parcela a deduzir', 'n'], ['Efetiva na faixa', 'n'], ['CNPJ aqui']], linhas));
+  $('tFaixas').appendChild(el('p', 'pequeno', `${dados.anexos[an].nome} (Lei Complementar 123/2006, com a LC 155/2016).`));
+  // meses sem dados: valor do mês por CNPJ
+  const ls = dados.meses_rbt12.map((k) => { const tr = el('tr'); tr.appendChild(td(k.slice(5) + '/' + k.slice(0, 4)));
+    for(const c of dados.cnpjs){ const t = el('td', 'n'); const sem = c.meses_sem_dados.includes(k);
+      const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.placeholder = sem ? 'sem dados' : 'do painel'; inp.setAttribute('aria-label', `${c.nome} em ${k}`);
+      inp.onchange = async () => { try{ await post('/api/metas/manual', { mes: k, cnpj: c.id, valor: inp.value === '' ? null : Number(inp.value) }, 'PUT'); carregar(); }catch(e){ erroTela(e.message); } };
+      t.appendChild(inp); tr.appendChild(t); }
+    return tr; });
+  $('tManuais').innerHTML = ''; $('tManuais').appendChild(tabela([['Mês'], ...dados.cnpjs.map((c) => [c.nome + ' (R$)', 'n'])], ls));
+}
+function pintarConfig(){
+  const box = $('cfgCnpjs'); box.innerHTML = '';
+  for(const c of dados.config.cnpjs){
+    const f = el('fieldset'); f.dataset.id = c.id; f.appendChild(el('legend', null, 'CNPJ ' + c.id));
+    const ln = el('label'); ln.append(document.createTextNode('Nome '), Object.assign(el('input'), { value: c.nome, className: 'nome' })); f.appendChild(ln);
+    const la = el('label'); const sa = el('select'); sa.className = 'anexo'; for(const [k, a] of Object.entries(dados.anexos)){ const o = el('option', null, a.nome); o.value = k; o.selected = k === c.anexo; sa.appendChild(o); }
+    la.append(document.createTextNode(' Anexo '), sa); f.appendChild(la);
+    box.appendChild(f);
+  }
+  // cada loja escolhe o CNPJ
+  const f = el('fieldset'); f.appendChild(el('legend', null, 'Lojas'));
+  for(const l of dados.lojas){ const lb = el('label'); lb.style.cssText = 'display:flex;justify-content:space-between;gap:8px;margin:4px 0';
+    const s = el('select'); s.dataset.canal = l.canal; s.className = 'loja';
+    for(const c of dados.config.cnpjs){ const o = el('option', null, c.nome); o.value = c.id; o.selected = c.canais.includes(l.canal); s.appendChild(o); }
+    const o = el('option', null, '(fora)'); o.value = ''; o.selected = !dados.config.cnpjs.some((c) => c.canais.includes(l.canal)); s.appendChild(o);
+    lb.append(document.createTextNode(l.nome), s); f.appendChild(lb); }
+  box.appendChild(f);
+  const sh = dados.shein.map((x) => { const tr = el('tr'); tr.append(td(dataBR(x.dia)), td(real(x.valor), 'n')); return tr; });
+  $('tShein').innerHTML = ''; if(sh.length) $('tShein').appendChild(tabela([['Dia'], ['Valor', 'n']], sh));
+}
+$('btSalvarCfg').onclick = async () => {
+  const cnpjs = [...document.querySelectorAll('#cfgCnpjs fieldset[data-id]')].map((f) => ({ id: f.dataset.id, nome: f.querySelector('.nome').value, anexo: f.querySelector('.anexo').value,
+    canais: [...document.querySelectorAll('#cfgCnpjs select.loja')].filter((s) => s.value === f.dataset.id).map((s) => s.dataset.canal) }));
+  try{ await post('/api/metas/config', { cnpjs }, 'PUT'); erroTela(''); const m = $('msg'); m.className = 'ok'; m.textContent = 'Configuração salva.'; m.style.display = 'block'; carregar(); }catch(e){ erroTela(e.message); }
+};
+$('btShein').onclick = async () => {
+  if(!$('sheinDia').value) return erroTela('Escolha o dia.');
+  try{ await post('/api/metas/manual', { dia: $('sheinDia').value, valor: Number($('sheinValor').value) || 0 }, 'PUT'); $('sheinValor').value = ''; carregar(); }catch(e){ erroTela(e.message); }
+};
+$('btImportar').onclick = async () => {
+  const f = $('arquivo').files[0]; if(!f) return erroTela('Escolha a planilha (.xlsx).');
+  $('btImportar').disabled = true;
+  try{ const r = await api('/api/metas/importar', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f });
+    const m = $('msg'); m.className = 'ok'; m.textContent = `Planilha importada: ${numero(r.dias)} lançamento(s) de dia por loja (${r.de ? dataBR(r.de) + '/' + r.de.slice(0, 4) : '—'} a ${r.ate ? dataBR(r.ate) + '/' + r.ate.slice(0, 4) : '—'}) e ${numero(r.metas)} meta(s). ${numero(r.ignorados_do_painel)} dia(s) recentes ficaram com o que o painel leu das lojas.`; m.style.display = 'block';
+    carregar(); }catch(e){ erroTela(e.message); }
+  $('btImportar').disabled = false;
+};
+
+function abrir(qual){ aba = qual; for(const b of document.querySelectorAll('.abas button')) b.setAttribute('aria-selected', String(b.dataset.aba === qual));
+  for(const p of document.querySelectorAll('.painel')) p.hidden = p.dataset.painel !== qual; if(dados) pintar(); try{ localStorage.setItem('metas_aba', qual); }catch{} }
+for(const b of document.querySelectorAll('.abas button')) b.onclick = () => abrir(b.dataset.aba);
+function pintar(){ ({ mes: pintarMes, ano: pintarAno, simples: pintarSimples, config: pintarConfig })[aba](); }
+async function carregar(recarregar){
+  try{
+    if(!dados) $('cMes').appendChild(el('p', 'carregando', 'Lendo as vendas de todas as lojas…'));
+    dados = await api(`/api/metas?ano=${ano}&mes=${mes}` + (recarregar ? '&recarregar=1' : ''));
+    $('lido').textContent = dados.atualizado_em ? 'Lojas lidas em ' + new Date(dados.atualizado_em).toLocaleString('pt-BR') : '';
+    if(dados.erros) erroTela('Não consegui ler: ' + dados.erros);
+    pintar();
+  }catch(e){ erroTela(e.message); }
+}
+$('selAno').onchange = () => { ano = Number($('selAno').value); carregar(); };
+$('selMes').onchange = () => { mes = Number($('selMes').value); carregar(); };
+$('btAtualizar').onclick = () => carregar(true);
+try{ const a = localStorage.getItem('metas_aba'); if(['mes', 'ano', 'simples', 'config'].includes(a)) abrir(a); }catch{}
+carregar();
+</script>
+<script src="/sino.js?v=4" defer></script>
+</body>
+</html>

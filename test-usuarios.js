@@ -62,7 +62,7 @@ for (const m of U.MODULOS) {
   }
 }
 // toda tela do painel está num módulo ou é de administrador (de propósito)
-const ADMIN = ['/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/navegador.html', '/usuarios.html'];
+const ADMIN = ['/metas.html', '/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/navegador.html', '/usuarios.html'];
 for (const f of fs.readdirSync(path.join(__dirname, 'public')).filter((x) => x.endsWith('.html'))) {
   const pg = '/' + f;
   assert.ok(ADMIN.includes(pg) || U.MODULOS.some((m) => m.paginas.includes(pg)), `${pg}: ponha num módulo de usuarios.js ou na lista de administrador`);
