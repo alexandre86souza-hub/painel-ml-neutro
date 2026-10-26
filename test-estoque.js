@@ -363,6 +363,24 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
   console.log('estoque de segurança: ok');
 }
 
+// envio ao ML: um número por user_product (tradicional + catálogo dividem o estoque), no tradicional
+{
+  const ls = [
+    { id: 'MLB1', var_id: null, up: 'UP1', catalogo: false, deveria: 23, estoque: 30, situacao: 'loja_mais' },
+    { id: 'MLB2', var_id: null, up: 'UP1', catalogo: true, deveria: 23, estoque: 30, situacao: 'loja_mais' },
+    { id: 'MLB3', var_id: null, up: 'UP3', catalogo: false, deveria: 10, estoque: 5, situacao: 'loja_menos' },
+    { id: 'MLB4', var_id: null, up: 'UP3', catalogo: true, deveria: 12, estoque: 5, situacao: 'loja_menos' },
+    { id: 'MLB5', var_id: 77, up: 'UP5', catalogo: false, deveria: 4, estoque: 9, situacao: 'loja_mais' },
+    { id: 'MLB6', var_id: null, up: null, catalogo: false, deveria: null, estoque: 9, situacao: 'sem_produto' },
+  ];
+  const p = E.planoEnvioMl(ls, ['MLB2', 'MLB1', 'MLB3', 'MLB5:77', 'MLB6', 'MLB9']);
+  assert.deepStrictEqual(p.enviar.map((e) => [E.chaveMl(e), e.quantidade, e.junto]), [['MLB1', 23, ['MLB2']], ['MLB5:77', 4, []]],
+    'catálogo marcado vai pelo tradicional, uma vez só; variação pela chave id:variação');
+  assert.deepStrictEqual(p.fora.map((f) => f.chave), ['MLB3', 'MLB6', 'MLB9'], 'par com números diferentes, sem produto e inexistente ficam de fora');
+  assert.match(p.fora[0].motivo, /divide o estoque com MLB4/);
+  console.log('envio de estoque ao ML (catálogo): ok');
+}
+
 // faixa do envio automático: pouco estoque ou zerar = manda; estoque alto só com diferença acima de 10%
 {
   assert.strictEqual(E.precisaEnviar(1972, 1965), false, 'alto e perto: espera');

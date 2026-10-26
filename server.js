@@ -2262,7 +2262,7 @@ async function montarEstoqueAnuncios() {
         const full = it.shipping?.logistic_type === 'fulfillment';
         const { base, variacoes } = C.skusDoAnuncio(it);
         const loja = `Mercado Livre · ${c.nickname}`, link = it.permalink || null;
-        if (variacoes.length) variacoes.forEach((v, i) => anuncios.push({ canal: 'ml', loja, id: it.id, variacao: v.nome, titulo: it.title, sku: v.sku || base,
+        if (variacoes.length) variacoes.forEach((v, i) => anuncios.push({ canal: 'ml', loja, id: it.id, variacao: v.nome, var_id: it.variations?.[i]?.id ?? null, titulo: it.title, sku: v.sku || base,
           estoque: it.variations?.[i]?.available_quantity ?? null, status: it.status, full, link }));
         else anuncios.push({ canal: 'ml', loja, id: it.id, variacao: null, titulo: it.title, sku: base, estoque: it.available_quantity ?? null, status: it.status, full, link });
       }
@@ -2435,6 +2435,84 @@ routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
       divididos: divididos.map(([up, s]) => ({ up, anuncios: [...s].map((iid) => ({ id: iid, sku: C.skusDoAnuncio(porId.get(iid) || {}).base || null,
         titulo: porId.get(iid)?.title || null, estoque: porId.get(iid)?.available_quantity ?? null, ...(extra.get(iid) || {}) })) })) };
   });
+};
+// Envio de estoque ao ML (por conta liberada em ml_estoque_contas; começa só pela Primor — as outras ficam com o UpSeller).
+// Medido na Primor em 26/10/2026: um depósito só (selling_address), sem Full, 4 anúncios com variações e 131 pares
+// tradicional + catálogo que dividem o mesmo user_product (mudar um muda o outro). Por isso o envio é UM número por
+// user_product: manda no tradicional, e o par fica de fora se os dois calcularem números diferentes. Anúncio com variações:
+// o PUT leva TODAS as variações (as que ficam fora do corpo seriam apagadas), cada uma com o número novo ou o de hoje.
+const contasEstoqueMl = () => String(D.configLer('ml_estoque_contas') || '227586866').split(',').map(Number).filter(Boolean);
+const { chaveMl, planoEnvioMl } = require('./estoque.js');
+async function linhasMl(id) {
+  const C = require('./custos.js');
+  const c = D.contaObter(id);
+  return CTX.comConta(id, async () => {
+    const its = (await custosMod.anuncios(c)).filter((it) => ['active', 'paused'].includes(it.status) && it.shipping?.logistic_type !== 'fulfillment');
+    const ups = new Map();
+    for (let i = 0; i < its.length; i += 20) {
+      const r = await ml(`/items?ids=${its.slice(i, i + 20).map((it) => it.id).join(',')}&attributes=id,user_product_id,variations,catalog_listing`).catch(() => []);
+      for (const x of r || []) { const b = x.body || {}; if (b.id) ups.set(b.id, { up: b.user_product_id || null, catalogo: !!b.catalog_listing, vars: new Map((b.variations || []).map((v) => [v.id, v.user_product_id || null])) }); }
+    }
+    const anuncios = [], loja = `Mercado Livre · ${c.nickname}`;
+    for (const it of its) {
+      const { base, variacoes } = C.skusDoAnuncio(it);
+      const u = ups.get(it.id) || {};
+      const comum = { canal: 'ml', loja, id: it.id, titulo: it.title, status: it.status, full: false, link: it.permalink || null, catalogo: !!u.catalogo };
+      if (variacoes.length) variacoes.forEach((v, i) => { const vv = it.variations?.[i];
+        anuncios.push({ ...comum, variacao: v.nome, var_id: vv?.id ?? null, up: (vv && u.vars?.get(vv.id)) || null, sku: v.sku || base, estoque: vv?.available_quantity ?? null }); });
+      else anuncios.push({ ...comum, variacao: null, var_id: null, up: u.up || null, sku: base, estoque: it.available_quantity ?? null });
+    }
+    return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
+  });
+}
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function putComEspera(id, corpo, contaId) {
+  for (let t = 0; ; t++) {
+    try { return await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify(corpo) }, contaId); }
+    catch (e) { if (e.status === 429 && t < 4) { await esperar(3000 * (t + 1)); continue; } throw e; }
+  }
+}
+async function enviarEstoqueMl(id, chaves, quem) {
+  const linhas = await linhasMl(id);
+  const { enviar, fora } = planoEnvioMl(linhas, chaves);
+  const porItem = new Map();
+  for (const e of enviar) { if (!porItem.has(e.id)) porItem.set(e.id, []); porItem.get(e.id).push(e); }
+  const res = [];
+  for (const [itemId, es] of porItem) {
+    try {
+      if (es.some((e) => e.var_id)) {
+        const it = await ml(`/items/${itemId}?attributes=id,variations`, {}, id);
+        const novo = new Map(es.map((e) => [e.var_id, e.quantidade]));
+        await putComEspera(itemId, { variations: (it.variations || []).map((v) => ({ id: v.id, available_quantity: novo.has(v.id) ? novo.get(v.id) : v.available_quantity })) }, id);
+      } else await putComEspera(itemId, { available_quantity: es[0].quantidade }, id);
+      // confere relendo o anúncio
+      const v = await ml(`/items/${itemId}?attributes=id,available_quantity,variations`, {}, id).catch(() => null);
+      for (const e of es) {
+        const agora = e.var_id ? v?.variations?.find((x) => x.id === e.var_id)?.available_quantity : v?.available_quantity;
+        res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora ?? null, ok: agora === e.quantidade, junto: e.junto });
+      }
+    } catch (err) { for (const e of es) res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message }); }
+    await esperar(250);
+  }
+  const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
+  const envio = res.length ? D.estoqueEnvioGravar({ canal: `ml:${id}`, quem, import_id: null, linhas: res }) : null;
+  if (envio) D.estoqueEnvioAtualizar(envio, { situacao: ruins.length ? (ok ? 'COMPLETE' : 'FAILED') : 'COMPLETE', ok, com_erro: ruins.length,
+    erros: ruins.length ? ['erros', ...ruins.slice(0, 20).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`)].join('\n') : null });
+  estAnuncios = null;
+  return { enviadas: res, ok, com_erro: ruins.length, fora };
+}
+routes['POST /api/estoque/anuncios/ml'] = async (_u, b) => {
+  const id = Number(b?.conta);
+  if (!contasEstoqueMl().includes(id)) throw Object.assign(new Error('Envio de estoque não liberado para esta conta do ML (ela segue com o UpSeller).'), { status: 400 });
+  const chaves = [...new Set((Array.isArray(b?.chaves) ? b.chaves : []).map((s) => String(s ?? '').trim()).filter((s) => /^MLB\d+(:\d+)?$/.test(s)))];
+  if (!chaves.length || chaves.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 anúncios.'), { status: 400 });
+  const r = await enviarEstoqueMl(id, chaves, CTX.atual()?.usuario?.login || 'admin');
+  if (!r.enviadas.length) throw Object.assign(new Error('Nenhum anúncio enviado: ' + r.fora.map((f) => `${f.chave} (${f.motivo})`).join(', ')), { status: 400 });
+  return r;
+};
+routes['GET /api/estoque/anuncios/ml/envios'] = async (url) => {
+  const id = Number(url.searchParams.get('conta'));
+  return { liberada: contasEstoqueMl().includes(id), envios: D.estoqueEnviosListar(`ml:${id}`, 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) };
 };
 routes['GET /api/estoque/anuncios'] = async (url) => {
   const recarregar = url?.searchParams.get('recarregar') === '1';

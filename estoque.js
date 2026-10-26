@@ -262,6 +262,27 @@ function estoqueDosAnuncios(anuncios, saldos, cat, seguranca = () => 0) {
 // Faixa do envio automático (pedido do dono, 22/10/2026): com estoque alto, 1.972 ou 1.965 na loja não muda nada para o
 // cliente e economiza chamada; manda quando a loja ou o painel estão com pouco (≤ baixo), quando vai zerar, ou quando a
 // diferença passa de pct do que o painel calcula. Igual nunca manda. Função pura: testada.
+// Envio ao ML: anúncio tradicional e o de catálogo do mesmo produto dividem o user_product (o estoque). Manda UM número por
+// user_product, no tradicional; se os que dividem calculam números diferentes (composições diferentes), fica de fora.
+// chave = id do anúncio ou "id:variação". Função pura: testada.
+const chaveMl = (l) => (l.var_id ? `${l.id}:${l.var_id}` : l.id);
+function planoEnvioMl(linhas, chaves) {
+  const porChave = new Map(linhas.map((l) => [chaveMl(l), l]));
+  const grupo = new Map();
+  for (const l of linhas) if (l.up) { if (!grupo.has(l.up)) grupo.set(l.up, []); grupo.get(l.up).push(l); }
+  const enviar = new Map(), fora = [];
+  for (const k of chaves) {
+    const l = porChave.get(k);
+    if (!l) { fora.push({ chave: k, motivo: 'anúncio não encontrado (finalizado ou do Full?)' }); continue; }
+    if (l.deveria == null) { fora.push({ chave: k, motivo: l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' }); continue; }
+    const g = (l.up && grupo.get(l.up)) || [l];
+    const numeros = new Set(g.map((x) => x.deveria));
+    if (numeros.size > 1) { fora.push({ chave: k, motivo: `divide o estoque com ${g.filter((x) => x !== l).map((x) => x.id).join(', ')}, que calcula outro número (${[...numeros].join(' / ')})` }); continue; }
+    const alvo = g.find((x) => !x.catalogo) || l;
+    enviar.set(chaveMl(alvo), { ...alvo, quantidade: l.deveria, junto: g.filter((x) => x !== alvo).map((x) => x.id) });
+  }
+  return { enviar: [...enviar.values()], fora };
+}
 function precisaEnviar(naLoja, deveria, { pct = 0.1, baixo = 20 } = {}) {
   if (deveria == null || naLoja == null || naLoja === deveria) return false;
   if (deveria === 0 || deveria <= baixo || naLoja <= baixo) return true;
@@ -804,4 +825,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, custoMovel, TIPO_NOME };
+module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, planoEnvioMl, chaveMl, custoMovel, TIPO_NOME };
