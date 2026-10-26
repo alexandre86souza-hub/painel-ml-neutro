@@ -2380,6 +2380,38 @@ routes['PUT /api/estoque/anuncios/leroy/auto'] = async (_u, b) => {
   if (b.ligado) leroyAuto().catch(() => null);
   return { automatico: b.ligado };
 };
+// Etapa 2, próxima loja: o ML de UMA conta (?conta=). Antes de mandar estoque, ver como a conta guarda o estoque (só leitura):
+// por anúncio (amostra) o available_quantity do item/variações, o user_product_id e os locais do /user-products/{id}/stock
+// (selling_address = um depósito; seller_warehouse = multi-origem, que NÃO aceita o PUT do item; meli_facility = Full).
+routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
+  const id = Number(url.searchParams.get('conta'));
+  if (!D.contasListar().some((c) => c.ml_user_id === id)) throw Object.assign(new Error('Conta do ML não conectada.'), { status: 400 });
+  const n = Math.min(40, Math.max(1, Number(url.searchParams.get('n')) || 20));
+  return CTX.comConta(id, async () => {
+    const todos = (await custosMod.anuncios(D.contaObter(id))).filter((it) => it.status === 'active');
+    const resumo = { ativos: todos.length, full: 0, com_variacoes: 0, tipos_local: {}, amostra: 0 };
+    for (const it of todos) { if (it.shipping?.logistic_type === 'fulfillment') resumo.full++; if ((it.variations || []).length) resumo.com_variacoes++; }
+    const fora = todos.filter((it) => it.shipping?.logistic_type !== 'fulfillment');
+    // amostra: metade com variação, metade sem
+    const amostra = [...fora.filter((it) => (it.variations || []).length).slice(0, Math.ceil(n / 2)), ...fora.filter((it) => !(it.variations || []).length)].slice(0, n);
+    const itens = [];
+    for (const it of amostra) {
+      const det = await ml(`/items/${it.id}?attributes=id,available_quantity,user_product_id,variations,shipping,channels,status,catalog_listing,family_name`).catch((e) => ({ erro: e.message }));
+      const ups = [...new Set([det.user_product_id, ...(det.variations || []).map((v) => v.user_product_id)].filter(Boolean))];
+      const locais = [];
+      for (const up of ups.slice(0, 6)) {
+        const s = await ml(`/user-products/${up}/stock`).catch((e) => ({ erro: e.message }));
+        for (const l of s.locations || []) { locais.push({ up, tipo: l.type, store_id: l.store_id || null, qtd: l.quantity ?? null }); resumo.tipos_local[l.type] = (resumo.tipos_local[l.type] || 0) + 1; }
+        if (s.erro) locais.push({ up, erro: s.erro });
+      }
+      itens.push({ id: it.id, titulo: it.title, disponivel: det.available_quantity ?? null, user_product_id: det.user_product_id || null, familia: !!det.family_name,
+        catalogo: !!det.catalog_listing, canais: det.channels || null, logistica: det.shipping?.logistic_type || null,
+        variacoes: (det.variations || []).map((v) => ({ id: v.id, disponivel: v.available_quantity ?? null, user_product_id: v.user_product_id || null })), locais, erro: det.erro || null });
+    }
+    resumo.amostra = itens.length;
+    return { conta: id, resumo, itens };
+  });
+};
 routes['GET /api/estoque/anuncios'] = async (url) => {
   const recarregar = url?.searchParams.get('recarregar') === '1';
   if (!estAnuncios || (recarregar && !estAnuncios.rodando) || (!estAnuncios.rodando && Date.now() - estAnuncios.em > 10 * 60e3)) {
