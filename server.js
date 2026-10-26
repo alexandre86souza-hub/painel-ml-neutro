@@ -2409,7 +2409,27 @@ routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
         variacoes: (det.variations || []).map((v) => ({ id: v.id, disponivel: v.available_quantity ?? null, user_product_id: v.user_product_id || null })), locais, erro: det.erro || null });
     }
     resumo.amostra = itens.length;
-    return { conta: id, resumo, itens };
+    // anúncios que dividem o MESMO user_product (família) dividem o estoque: o envio tem de ser um número por user_product
+    const grupos = new Map();
+    for (let i = 0; i < fora.length; i += 20) {
+      const lote = fora.slice(i, i + 20).map((it) => it.id);
+      const r = await ml(`/items?ids=${lote.join(',')}&attributes=id,user_product_id,variations`).catch(() => []);
+      for (const x of r || []) {
+        const b = x.body || {};
+        const ups = [b.user_product_id, ...(b.variations || []).map((v) => v.user_product_id)].filter(Boolean);
+        if (!ups.length) { resumo.sem_user_product = (resumo.sem_user_product || 0) + 1; continue; }
+        for (const up of ups) { if (!grupos.has(up)) grupos.set(up, new Set()); grupos.get(up).add(b.id); }
+      }
+    }
+    const porId = new Map(fora.map((it) => [it.id, it]));
+    const C = require('./custos.js');
+    const divididos = [...grupos.entries()].filter(([, s]) => s.size > 1);
+    resumo.user_products = grupos.size;
+    resumo.user_products_divididos = divididos.length;
+    const skusDiferentes = divididos.filter(([, s]) => new Set([...s].map((iid) => C.skusDoAnuncio(porId.get(iid) || {}).base || '')).size > 1);
+    resumo.divididos_com_sku_diferente = skusDiferentes.length;
+    return { conta: id, resumo, itens,
+      divididos: divididos.slice(0, 30).map(([up, s]) => ({ up, anuncios: [...s].map((iid) => ({ id: iid, sku: C.skusDoAnuncio(porId.get(iid) || {}).base || null, titulo: porId.get(iid)?.title || null })) })) };
   });
 };
 routes['GET /api/estoque/anuncios'] = async (url) => {
