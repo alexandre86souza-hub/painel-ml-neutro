@@ -2410,12 +2410,13 @@ routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
     }
     resumo.amostra = itens.length;
     // anúncios que dividem o MESMO user_product (família) dividem o estoque: o envio tem de ser um número por user_product
-    const grupos = new Map();
+    const grupos = new Map(), extra = new Map();
     for (let i = 0; i < fora.length; i += 20) {
       const lote = fora.slice(i, i + 20).map((it) => it.id);
-      const r = await ml(`/items?ids=${lote.join(',')}&attributes=id,user_product_id,variations`).catch(() => []);
+      const r = await ml(`/items?ids=${lote.join(',')}&attributes=id,user_product_id,variations,catalog_listing,catalog_product_id,listing_type_id,permalink`).catch(() => []);
       for (const x of r || []) {
         const b = x.body || {};
+        if (b.id) extra.set(b.id, { catalogo: !!b.catalog_listing, produto_catalogo: b.catalog_product_id || null, tipo: b.listing_type_id || null, link: b.permalink || null });
         const ups = [b.user_product_id, ...(b.variations || []).map((v) => v.user_product_id)].filter(Boolean);
         if (!ups.length) { resumo.sem_user_product = (resumo.sem_user_product || 0) + 1; continue; }
         for (const up of ups) { if (!grupos.has(up)) grupos.set(up, new Set()); grupos.get(up).add(b.id); }
@@ -2428,8 +2429,11 @@ routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
     resumo.user_products_divididos = divididos.length;
     const skusDiferentes = divididos.filter(([, s]) => new Set([...s].map((iid) => C.skusDoAnuncio(porId.get(iid) || {}).base || '')).size > 1);
     resumo.divididos_com_sku_diferente = skusDiferentes.length;
+    // anúncio de catálogo = o "irmão" do tradicional (opt-in no catálogo): mesmo user_product, mesmo estoque
+    resumo.divididos_com_catalogo = divididos.filter(([, s]) => [...s].some((iid) => extra.get(iid)?.catalogo)).length;
     return { conta: id, resumo, itens,
-      divididos: divididos.slice(0, 30).map(([up, s]) => ({ up, anuncios: [...s].map((iid) => ({ id: iid, sku: C.skusDoAnuncio(porId.get(iid) || {}).base || null, titulo: porId.get(iid)?.title || null })) })) };
+      divididos: divididos.map(([up, s]) => ({ up, anuncios: [...s].map((iid) => ({ id: iid, sku: C.skusDoAnuncio(porId.get(iid) || {}).base || null,
+        titulo: porId.get(iid)?.title || null, estoque: porId.get(iid)?.available_quantity ?? null, ...(extra.get(iid) || {}) })) })) };
   });
 };
 routes['GET /api/estoque/anuncios'] = async (url) => {
