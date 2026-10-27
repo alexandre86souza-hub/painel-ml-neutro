@@ -2485,8 +2485,8 @@ async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
   const { enviar, fora } = planoEnvioMl(linhas, chaves);   // sem user_product: cada anúncio/variação por si
   const porItem = new Map();
   for (const e of enviar) { if (!porItem.has(e.id)) porItem.set(e.id, []); porItem.get(e.id).push(e); }
-  const res = [];
   const dl = (c, p, corpo) => shopeeMod.daLoja(loja, c, p, corpo);
+  // 1) manda tudo (a Shopee aceita na hora, mas a leitura só mostra o número novo alguns segundos depois — medido 27/10/2026)
   for (const [itemId, es] of porItem) {
     try {
       for (let i = 0; i < es.length; i += 50) {
@@ -2495,22 +2495,27 @@ async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
         const falhas = new Map((r.response?.failure_list || []).map((f) => [Number(f.model_id) || 0, f.failed_reason || 'recusado']));
         for (const e of lote) if (falhas.has(Number(e.var_id) || 0)) e.erro = falhas.get(Number(e.var_id) || 0);
       }
-      // confere relendo na Shopee
-      const lido = new Map();
-      if (es.some((e) => e.var_id)) {
-        const m = await dl('/api/v2/product/get_model_list', { item_id: Number(itemId) }).catch(() => null);
-        for (const x of m?.response?.model || []) lido.set(Number(x.model_id), x.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
-      } else {
-        const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: [Number(itemId)] }).catch(() => null);
-        lido.set(0, b?.response?.item_list?.[0]?.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
-      }
-      for (const e of es) {
-        const agora = lido.get(Number(e.var_id) || 0) ?? null;
-        if (agora != null) D.shopeeEstoqueGravar(Number(itemId), Number(e.var_id) || 0, agora);
-        res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora, ok: !e.erro && agora === e.quantidade, ...(e.erro ? { erro: e.erro } : {}) });
-      }
-    } catch (err) { for (const e of es) res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message }); }
-    await esperar(150);
+    } catch (err) { for (const e of es) e.erro = err.message; }
+    await esperar(120);
+  }
+  // 2) espera e confere relendo em lote (base_info 50 por chamada; variações pelo get_model_list)
+  await esperar(6000);
+  const lido = new Map();   // "item:model" -> estoque do vendedor
+  const ids = [...porItem.keys()].map(Number);
+  const semModelo = ids.filter((id) => !porItem.get(String(id)).some((e) => e.var_id));
+  for (let i = 0; i < semModelo.length; i += 50) {
+    const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: semModelo.slice(i, i + 50) }).catch(() => null);
+    for (const it of b?.response?.item_list || []) lido.set(`${it.item_id}:0`, it.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+  }
+  for (const id of ids.filter((x) => !semModelo.includes(x))) {
+    const m = await dl('/api/v2/product/get_model_list', { item_id: id }).catch(() => null);
+    for (const x of m?.response?.model || []) lido.set(`${id}:${x.model_id}`, x.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+  }
+  const res = [];
+  for (const [itemId, es] of porItem) for (const e of es) {
+    const agora = lido.get(`${itemId}:${Number(e.var_id) || 0}`) ?? null;
+    if (agora != null) D.shopeeEstoqueGravar(Number(itemId), Number(e.var_id) || 0, agora);
+    res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora, ok: !e.erro && agora === e.quantidade, ...(e.erro ? { erro: e.erro } : {}) });
   }
   const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
   const envio = res.length ? D.estoqueEnvioGravar({ canal: `shopee:${loja}`, quem, import_id: null, linhas: res }) : null;
