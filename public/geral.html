@@ -96,6 +96,12 @@
   .atencao .ic.am{background:#fff4d6;color:#7a5600}
   .atencao .ic.ok{background:#dcfce7;color:#15803d}
   .atencao li b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .atencao .envio-erros{margin-left:auto;flex:none;font:inherit;font-weight:700;font-size:12px;padding:4px 9px;border-radius:8px;cursor:pointer;
+    border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;white-space:nowrap}
+  .atencao .envio-erros.corrigidos{border-color:#bbf7d0;background:#dcfce7;color:#15803d}
+  .atencao .envio-det{display:grid;gap:6px;margin:2px 0 8px 34px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:12px}
+  .atencao .envio-linha .sub{color:#b91c1c}
+  .atencao .envio-linha.ok .sub{color:#15803d}
   .canais div{display:grid;grid-template-columns:118px 1fr 46px;gap:10px;align-items:center;font-size:13px;color:var(--muted);margin:9px 0}
   .canais .barra{height:8px;border-radius:99px;background:#eef1f6;overflow:hidden}
   .canais .barra i{display:block;height:100%;border-radius:99px}
@@ -245,13 +251,34 @@ function pintarDestaques(r){
     const ul = el('ul', 'atencao');
     const hora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
     for(const x of atencao.envios_estoque){
-      const ruim = x.erros_hoje > 0 || x.erro, parado = !x.automatico || x.atrasado;
+      // erro corrigido por um envio depois não deixa a loja vermelha
+      const abertos = x.erros_abertos ?? x.erros_hoje;
+      const ruim = abertos > 0 || x.erro, parado = !x.automatico || x.atrasado;
       const li = el('li'); const a = el('a'); a.href = '/estoque.html#anuncios';
       const txt = el('span'); txt.append(el('span', null, x.nome), el('br'),
         el('small', 'sub', !x.automatico ? 'automático desligado' : x.rodando ? 'enviando agora…' : `última rodada ${hora(x.ultimo)}${x.atrasado ? ' · atrasado' : ''}`
           + ` · hoje ${numero(x.anuncios_hoje)} anúncio(s) em ${numero(x.envios_hoje)} envio(s)` + (x.erro ? ` · erro: ${x.erro.slice(25, 120)}` : '')));
-      a.append(el('span', 'ic' + (ruim ? '' : parado ? ' am' : ' ok'), ruim ? '!' : parado ? '?' : '✓'), txt, el('b', null, x.erros_hoje ? `${numero(x.erros_hoje)} erro(s)` : ''));
-      li.appendChild(a); ul.appendChild(li);
+      const lista = x.erros_lista || [];
+      const bErro = lista.length
+        ? el('button', 'envio-erros' + (abertos ? '' : ' corrigidos'), abertos ? `${numero(abertos)} erro(s) ▾` : `${numero(lista.length)} erro(s) corrigido(s) ▾`)
+        : el('b', null, x.erros_hoje ? `${numero(x.erros_hoje)} erro(s)` : '');
+      a.append(el('span', 'ic' + (ruim ? '' : parado ? ' am' : ' ok'), ruim ? '!' : parado ? '?' : '✓'), txt, bErro);
+      li.appendChild(a);
+      if(lista.length){
+        bErro.type = 'button'; bErro.title = 'Ver os erros de hoje';
+        const det = el('div', 'envio-det'); det.hidden = true;
+        for(const e of lista){
+          const d = el('div', 'envio-linha' + (e.resolvido ? ' ok' : ''));
+          d.append(el('b', null, e.sku ? `Anúncio ${e.sku}` : 'Envio inteiro'),
+            el('span', null, ` · ${hora(e.em)}${e.quem ? ` (${e.quem})` : ''}` + (e.antes != null || e.depois != null ? ` · ${e.antes ?? '—'} → ${e.depois ?? '—'}` : '')),
+            el('div', 'sub', e.erro + (e.resolvido ? ' · ✓ resolvido' : '')));
+          det.appendChild(d);
+        }
+        bErro.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); det.hidden = !det.hidden;
+          bErro.textContent = bErro.textContent.replace(/[▾▴]$/, det.hidden ? '▾' : '▴'); };
+        li.appendChild(det);
+      }
+      ul.appendChild(li);
     }
     s.appendChild(ul);
   }

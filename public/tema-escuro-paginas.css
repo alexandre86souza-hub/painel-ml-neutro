@@ -328,6 +328,10 @@ html[data-tema="escuro"][data-pagina="geral"] .mini-part{background:hsla(218,31%
 html[data-tema="escuro"][data-pagina="geral"] .atencao .ic{background:hsla(0,90%,60%,.14);color:hsl(0,74%,72%)}
 html[data-tema="escuro"][data-pagina="geral"] .atencao .ic.am{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="geral"] .atencao .ic.ok{background:hsla(141,84%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .envio-erros{border:1px solid hsla(0,90%,60%,.35);background:hsla(0,90%,60%,.14);color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .envio-erros.corrigidos{border-color:hsla(141,79%,60%,.35);background:hsla(141,84%,60%,.14);color:hsl(142,72%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .envio-linha .sub{color:hsl(0,74%,72%)}
+html[data-tema="escuro"][data-pagina="geral"] .atencao .envio-linha.ok .sub{color:hsl(142,72%,72%)}
 html[data-tema="escuro"][data-pagina="geral"] .canais .barra{background:hsla(218,31%,60%,.14)}
 /* inicio.html */
 html[data-tema="escuro"][data-pagina="inicio"] .chip{background:rgba(125,211,252,.06);color:var(--ink)}

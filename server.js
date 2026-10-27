@@ -2781,10 +2781,32 @@ function resumoEnviosEstoque(agora = Date.now()) {
   const deHoje = (e) => new Date(Date.parse(e.em) - 3 * 3600e3).toISOString().slice(0, 10) === hoje;
   const linha = (nome, canal, auto, ultimo, erro, rodando) => {
     const es = D.estoqueEnviosListar(canal, 60).filter(deHoje);
+    // os erros de hoje, um por anúncio; "resolvido" = um envio DEPOIS acertou o mesmo anúncio (a lista vem do mais novo)
+    const certosDepois = new Map(), erros = [];
+    for (const e of [...es].reverse()) {
+      for (const l of e.linhas || []) {
+        if (l.ok === false || l.erro) erros.push({ em: e.em, quem: e.quem || null, sku: l.sku, titulo: l.titulo || null, antes: l.antes ?? null,
+          depois: l.depois ?? null, lido: l.lido ?? null, erro: l.erro || (l.lido != null && l.lido !== l.depois ? `a loja ficou com ${l.lido} em vez de ${l.depois}` : 'não confirmado') });
+        else if (l.ok) certosDepois.set(l.sku, e.em);
+      }
+      if (e.situacao === 'FAILED' && !e.com_erro) erros.push({ em: e.em, quem: e.quem || null, sku: null, erro: e.erro || 'o envio todo foi recusado pela loja' });
+    }
+    // Shopee: a loja às vezes mostra o número novo só segundos depois da conferência; a cópia local (relida a cada rodada) diz se ficou
+    const naShopee = (sku) => {
+      if (!/^shopee:/.test(canal) || !sku) return null;
+      const [item, model] = String(sku).split(':');
+      return D.db.prepare('SELECT estoque FROM shopee_anuncios WHERE item_id=? AND model_id=?').get(Number(item), Number(model) || 0)?.estoque ?? null;
+    };
+    for (const x of erros) {
+      x.resolvido = !!(x.sku && certosDepois.has(x.sku) && Date.parse(certosDepois.get(x.sku)) > Date.parse(x.em));
+      const agoraNaLoja = x.resolvido ? null : naShopee(x.sku);
+      if (agoraNaLoja != null && agoraNaLoja === x.depois) { x.resolvido = true; x.erro += ` (a loja mostra ${agoraNaLoja} agora)`; }
+    }
     return { nome, canal, automatico: auto, rodando: !!rodando, ultimo: ultimo || null, erro: erro || null,
       atrasado: auto && !rodando && (!ultimo || agora - Date.parse(ultimo) > 40 * 60e3),
       envios_hoje: es.length, anuncios_hoje: es.reduce((s, e) => s + (e.linhas?.length || 0), 0),
       erros_hoje: es.reduce((s, e) => s + (e.com_erro || 0) + (e.situacao === 'FAILED' && !e.com_erro ? 1 : 0), 0),
+      erros_abertos: erros.filter((x) => !x.resolvido).length, erros_lista: erros.reverse().slice(0, 50),
       ultimo_envio: es[0]?.em || D.estoqueEnviosListar(canal, 1)[0]?.em || null };
   };
   const out = [];
