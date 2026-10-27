@@ -55,8 +55,17 @@ function mesResumo({ ano, mes, meta, porDia }, hoje = hojeBR()) {
   const necessario = meta ? (restantes > 0 ? saldo / restantes : 0) : null;
   const alerta = !meta ? null : realizado >= meta ? 'META ATINGIDA' : passados === 0 ? 'NÃO COMEÇOU'
     : restantes === 0 ? 'ABAIXO DA META' : ritmo >= necessario ? 'NO RITMO' : 'FORA DO RITMO';
+  // Quanto vender por dia para bater a meta, contando HOJE (o dia ainda em andamento): o que faltava até ontem ÷ hoje + os dias
+  // que faltam. Mês que ainda não começou: a meta ÷ os dias do mês; mês fechado: null.
+  let porDiaComHoje = null, diasComHoje = 0;
+  if (meta && passados < nd) {
+    const ateOntem = passados > 0 ? dias[passados - 2]?.acumulado ?? 0 : 0;
+    diasComHoje = passados > 0 ? nd - passados + 1 : nd;
+    porDiaComHoje = r2(Math.max(0, meta - ateOntem) / diasComHoje);
+  }
   return { ano, mes, meta: meta ?? null, realizado, projecao, pct_meta: meta ? realizado / meta : null, pct_projecao: meta ? projecao / meta : null,
-    dias_mes: nd, dias_passados: passados, ritmo_atual: r2(ritmo), ritmo_necessario: necessario == null ? null : r2(necessario), saldo: saldo == null ? null : r2(saldo), alerta, dias };
+    dias_mes: nd, dias_passados: passados, ritmo_atual: r2(ritmo), ritmo_necessario: necessario == null ? null : r2(necessario), saldo: saldo == null ? null : r2(saldo), alerta,
+    precisa_por_dia: porDiaComHoje, dias_para_vender: diasComHoje, vendido_hoje: passados > 0 && passados <= nd && pref === mesHoje ? r2(dias[passados - 1].valor) : null, dias };
 }
 
 // Planilha do vendedor -> dias por canal (aba "Base Anual": Data | ML 1 | ML 2 | Amazon | Shopee 1 | Shopee 2 | Shein | Leroy | Magalu)

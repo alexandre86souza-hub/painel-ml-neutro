@@ -25,6 +25,10 @@ const M = require('./metas.js');
   assert.deepStrictEqual({ r: m.realizado, p: m.projecao, d: m.dias_passados, falta: m.saldo }, { r: 18000, p: 55800, d: 10, falta: 212000 });
   assert.strictEqual(m.ritmo_necessario, r2(212000 / 21));
   assert.strictEqual(m.alerta, 'FORA DO RITMO');
+  assert.deepStrictEqual({ p: m.precisa_por_dia, d: m.dias_para_vender, h: m.vendido_hoje }, { p: r2(216000 / 22), d: 22, h: 4000 },
+    'precisa por dia conta hoje: (meta − vendido até ontem) ÷ (hoje + dias que faltam)');
+  assert.strictEqual(M.mesResumo({ ano: 2026, mes: 11, meta: 230000, porDia: {} }, '2026-10-10').precisa_por_dia, r2(230000 / 30), 'mês que não começou: meta ÷ dias');
+  assert.strictEqual(M.mesResumo({ ano: 2026, mes: 9, meta: 230000, porDia: {} }, '2026-10-10').precisa_por_dia, null, 'mês fechado: nada');
   assert.strictEqual(m.dias[9].acumulado, 18000);
   assert.strictEqual(m.dias[30].planejado, 230000, 'planejado acumulado fecha na meta');
   const fechado = M.mesResumo({ ano: 2026, mes: 8, meta: 230000, porDia: { '2026-08-05': 240000 } }, '2026-10-10');

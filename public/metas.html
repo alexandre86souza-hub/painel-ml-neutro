@@ -154,8 +154,14 @@ function svgBarras(meses, W = 900, H = 240){
 function pintarMes(){
   const m = dados.escolhido, c = $('cMes'); c.innerHTML = '';
   cartao(c, `Realizado em ${MESES[mes - 1]}/${ano}`, real(m.realizado), m.meta ? `${pct(m.pct_meta)} da meta de ${real(m.meta)}` : 'sem meta no mês', true);
+  if(m.precisa_por_dia != null && m.realizado < (m.meta || 0)){
+    const falta = m.precisa_por_dia - m.ritmo_atual;
+    cartao(c, 'Precisa vender por dia', real(m.precisa_por_dia),
+      `${m.dias_passados ? 'contando hoje, ' : ''}nos ${numero(m.dias_para_vender)} dia(s) que faltam` + (m.dias_passados ? ` · hoje já vendeu ${real(m.vendido_hoje)}` : '')
+        + (m.dias_passados ? (falta > 0 ? ` · ${real(falta)}/dia acima da média atual` : ' · a média atual já basta') : ''), false);
+  } else if(m.meta && m.realizado >= m.meta) cartao(c, 'Precisa vender por dia', real(0), 'meta do mês já batida');
   cartao(c, 'Projeção de fechamento', real(m.projecao), m.meta ? `${pct(m.pct_projecao)} da meta` : `média de ${real(m.ritmo_atual)} por dia`);
-  cartao(c, 'Ritmo por dia', real(m.ritmo_atual), m.ritmo_necessario != null ? `precisa de ${real(m.ritmo_necessario)}/dia nos ${numero(m.dias_mes - m.dias_passados)} dia(s) que faltam` : '');
+  cartao(c, 'Média por dia', real(m.ritmo_atual), m.dias_passados ? `nos ${numero(m.dias_passados)} dia(s) do mês até hoje` : '');
   const ca = el('div', 'cartao'); ca.append(el('p', 'rotulo', 'Situação'), el('div', 'valor'), el('p', 'nota', m.saldo ? `faltam ${real(m.saldo)} para a meta` : ''));
   ca.querySelector('.valor').appendChild(chipAlerta(m.alerta)); c.appendChild(ca);
   $('gMes').innerHTML = ''; $('gMes').appendChild(svgLinhas(m.dias.map((d, i) => ({ rot: d.dia.slice(8, 10), real: i < m.dias_passados ? d.acumulado : null, plan: d.planejado }))));
@@ -184,7 +190,7 @@ function pintarAno(){
     tm.appendChild(inp);
     const ta = el('td'); ta.appendChild(chipAlerta(m.alerta));
     tr.append(td(MESES[i]), tm, td(real(m.realizado), 'n'), td(real(m.projecao), 'n'), td(m.meta ? pct(m.pct_meta) : '—', 'n'), td(m.meta ? pct(m.pct_projecao) : '—', 'n'),
-      td(m.dias_passados ? real(m.ritmo_atual) : '—', 'n'), td(m.ritmo_necessario != null && m.dias_passados < m.dias_mes ? real(m.ritmo_necessario) : '—', 'n'), ta);
+      td(m.dias_passados ? real(m.ritmo_atual) : '—', 'n'), td(m.precisa_por_dia != null && m.realizado < (m.meta || 0) ? real(m.precisa_por_dia) : '—', 'n'), ta);
     return tr; });
   const tot = el('tr', 'atual'); tot.append(td('Total'), td(real(meta), 'n'), td(real(realizado), 'n'), td(real(proj), 'n'), td(meta ? pct(realizado / meta) : '—', 'n'), td(meta ? pct(proj / meta) : '—', 'n'), td(''), td(''), td('')); linhas.push(tot);
   $('tAno').innerHTML = ''; $('tAno').appendChild(tabela([['Mês'], ['Meta', 'n'], ['Realizado', 'n'], ['Projeção', 'n'], ['% meta', 'n'], ['% projetado', 'n'], ['Ritmo/dia', 'n'], ['Precisa/dia', 'n'], ['Situação']], linhas));
