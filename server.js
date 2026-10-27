@@ -2758,6 +2758,22 @@ routes['GET /api/estoque/anuncios'] = async (url) => {
   await Promise.race([new Promise((ok) => { const t = setInterval(() => { if (!estAnuncios.rodando) { clearInterval(t); ok(); } }, 300); }), new Promise((ok) => setTimeout(ok, 20000))]);
   return { pronto: !estAnuncios.rodando, erro: estAnuncios.erro, ...(estAnuncios.dados || {}) };
 };
+// Tela Produtos, "Produtos escolhidos no painel": os anúncios de cada SKU com composição (ML, Shopee, Magalu, Leroy, Amazon),
+// com o link, para o vendedor abrir e conferir os produtos. Usa a mesma leitura de "Estoque nos anúncios" (cache de 10 min).
+// A chave da composição é o SKU do canal, o id do anúncio do ML sem SKU ou o código da Magalu.
+routes['GET /api/produtos/composicoes/anuncios'] = async () => {
+  const r = await routes['GET /api/estoque/anuncios'](new URL('/api/estoque/anuncios', 'http://painel'));
+  const chaves = new Set(D.skuVinculos('composicao').keys()), out = {};
+  for (const l of r.linhas || []) {
+    for (const k of new Set([l.sku, l.id].filter((x) => x && chaves.has(String(x))))) {
+      const lista = (out[k] ||= []);
+      // a oferta da Leroy (Mirakl) não traz o endereço do produto: busca pelo título no site
+      const link = l.link || (l.canal === 'leroy' && l.titulo ? `https://www.leroymerlin.com.br/search?term=${encodeURIComponent(l.titulo)}` : null);
+      if (!lista.some((x) => x.canal === l.canal && x.id === l.id && x.loja === l.loja)) lista.push({ canal: l.canal, loja: l.loja, id: l.id, titulo: l.titulo || null, link, busca: !l.link && !!link });
+    }
+  }
+  return { pronto: r.pronto !== false, anuncios: out };
+};
 const comandasMod = require('./comandas.js').criar({ D, ml, daLoja: shopeeMod.daLoja, leroy: leroyMod, magalu: magaluMod, amazon: amazonMod,
   estoque: estoqueMod });
 Object.assign(routes, comandasMod.rotas);

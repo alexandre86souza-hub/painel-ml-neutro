@@ -41,6 +41,8 @@
   td input.custo{text-align:right;width:100px}
   tr.sujo td{background:#f3f7ff}
   .sku{font-weight:700;white-space:nowrap}
+  .comp-links{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:12px;font-weight:400;white-space:normal;max-width:260px}
+  a.comp-sku{text-decoration:underline}
   .chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11px;background:#eef1f6;color:#3c4659;white-space:nowrap}
   .chip.amarelo{background:#fff4d6;color:#7a5600}
   .chip.cinza{background:#eef1f6;color:#6b7589}
@@ -279,7 +281,7 @@ function pintar(){
   });
   if(!lista.length){ box.appendChild(el('p', 'sub', 'Nenhum produto com esse filtro.')); $('btMais').hidden = true; return; }
   const t = el('table'); const cab = el('tr');
-  for(const h of ['SKU', 'Produto', 'Custo (R$)', 'Situação', 'Fornecedor', 'Anúncios', 'Estoque no ML', ''])
+  for(const h of ['SKU', 'Produto', 'Custo (R$)', 'Situação', 'Fornecedor', 'Anúncios', 'Estoque', ''])
     cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
@@ -343,8 +345,10 @@ function linha(p){
   }
   tdAc.append(el('br'), salvo);
   const td = (x) => { const c = el('td'); c.appendChild(x); return c; };
-  tr.append(tdSku, td(nome), tdC, td(sit), td(forn), tdUso,
-    el('td', 'num', p.uso.ativos ? `${numero(p.uso.estoque)} un.` : '—'), tdAc);
+  // saldo real (tela Estoque); a soma dos anúncios do ML fica só na dica (o mesmo estoque aparece em cada anúncio/kit)
+  const tdEst = el('td', 'num', p.saldo != null ? `${numero(p.saldo)} un.` : '—');
+  tdEst.title = 'Saldo no estoque do painel (tela Estoque).' + (p.uso.ativos ? ` Soma do estoque dos ${numero(p.uso.ativos)} anúncios ativos do ML com este produto: ${numero(p.uso.estoque)} (cada anúncio/kit mostra o mesmo estoque, por isso a soma é maior).` : '');
+  tr.append(tdSku, td(nome), tdC, td(sit), td(forn), tdUso, tdEst, tdAc);
   return tr;
 }
 
@@ -785,6 +789,33 @@ async function carregarSemCusto(){
   }
   t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); box.appendChild(rol);
 }
+// anúncios de cada SKU com composição (link para abrir e conferir); lidos uma vez, depois que a lista aparece
+let anunciosComp = null;
+function pintarLinksComp(){
+  if(!anunciosComp) return;
+  for(const td of document.querySelectorAll('#compLista td.sku[data-sku]')){
+    const lista = anunciosComp[td.dataset.sku] || [];
+    const box = td.querySelector('.comp-links'); box.innerHTML = '';
+    if(!lista.length){ box.appendChild(el('span', 'sub', 'anúncio não encontrado nas lojas')); continue; }
+    for(const a of lista.slice(0, 6)){
+      const t = `${a.loja}${a.titulo ? ': ' + a.titulo : ''}`;
+      const x = a.link ? el('a', null, a.loja + (a.busca ? ' (busca)' : '')) : el('span', 'sub', a.loja + ' (sem link)');
+      if(a.link){ x.href = a.link; x.target = '_blank'; x.rel = 'noopener'; }
+      x.title = t; box.appendChild(x);
+    }
+    if(lista.length > 6) box.appendChild(el('span', 'sub', `+${lista.length - 6}`));
+    const prim = lista.find((a) => a.link);
+    const nome = td.querySelector('.comp-sku');
+    if(prim && nome.tagName !== 'A'){ const a = el('a', 'comp-sku', nome.textContent); a.href = prim.link; a.target = '_blank'; a.rel = 'noopener'; a.title = 'Abrir o anúncio: ' + (prim.titulo || prim.id); nome.replaceWith(a); }
+  }
+}
+async function lerAnunciosComp(){
+  // leitura das lojas ainda em andamento (logo depois de o painel ligar): segue "procurando…" e tenta de novo
+  try{ const r = await api('/api/produtos/composicoes/anuncios');
+    if(r.pronto === false){ setTimeout(lerAnunciosComp, 15000); return; }
+    anunciosComp = r.anuncios || {}; pintarLinksComp(); }
+  catch{ for(const b of document.querySelectorAll('#compLista .comp-links')) b.textContent = ''; }
+}
 async function carregarComposicoes(){
   let r; try{ r = await api('/api/produtos/composicoes'); }catch{ return; }
   $('compN').textContent = numero(r.composicoes.length);
@@ -804,10 +835,13 @@ async function carregarComposicoes(){
     };
     const edt = editorProdutos(c.produtos.map((p) => p.sku), async (lista) => { await gravarComposicao(c.sku, lista); aviso('Produtos de ' + c.sku + ' salvos.', 'ok'); carregarComposicoes(); }, 'Salvar');
     const tdEd = el('td'); tdEd.appendChild(edt); const tdRem = el('td'); tdRem.appendChild(rem);
-    tr.append(el('td', 'sku', c.sku), tdEd, el('td', 'num', custo), tdRem);
+    const tdSku = el('td', 'sku'); tdSku.dataset.sku = c.sku;
+    tdSku.append(el('span', 'comp-sku', c.sku), el('div', 'comp-links', anunciosComp ? '' : 'procurando o anúncio…'));
+    tr.append(tdSku, tdEd, el('td', 'num', custo), tdRem);
     tb.appendChild(tr);
   }
   t.appendChild(tb); const rol = el('div', 'tabela-rolagem'); rol.appendChild(t); box.appendChild(rol);
+  if(anunciosComp) pintarLinksComp(); else lerAnunciosComp();
 }
 
 $('formNovo').onsubmit = async (ev) => {

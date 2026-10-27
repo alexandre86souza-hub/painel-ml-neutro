@@ -500,9 +500,13 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           }
         }
       } catch { uso = new Map(); }   // sem ML, a tabela ainda abre (sem a contagem)
+      // saldo real do produto (tela Estoque), depois da 1ª contagem. uso.estoque é a SOMA dos anúncios do ML: o mesmo
+      // estoque físico aparece em cada anúncio/kit que usa o produto (30 anúncios de 125 = 3.750), não é peça na prateleira.
+      const saldos = D.configLer('estoque_inicio') ? D.estoqueSaldos() : null;
       return {
         resumo: D.catalogoResumo(),
-        produtos: produtos.map((p) => ({ ...p, uso: uso.get(p.numero) || { anuncios: 0, ativos: 0, estoque: 0 } })),
+        produtos: produtos.map((p) => ({ ...p, uso: uso.get(p.numero) || { anuncios: 0, ativos: 0, estoque: 0 },
+          saldo: saldos ? (saldos.get(p.numero) ?? 0) : null })),
       };
     },
 
