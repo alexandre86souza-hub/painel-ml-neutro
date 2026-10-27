@@ -2519,6 +2519,8 @@ async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
   }
   const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
   const envio = res.length ? D.estoqueEnvioGravar({ canal: `shopee:${loja}`, quem, import_id: null, linhas: res }) : null;
+  if (envio && ruins.length) avisoEstoque(`estoque_shopee:${envio}`, `Envio de estoque à Shopee ${D.shopeeLojaObter(loja)?.nome || loja}: ${ruins.length} anúncio(s) não ficaram`,
+    ruins.slice(0, 4).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`).join(' | '));
   if (envio) D.estoqueEnvioAtualizar(envio, { situacao: ruins.length ? (ok ? 'COMPLETE' : 'FAILED') : 'COMPLETE', ok, com_erro: ruins.length,
     erros: ruins.length ? ['erros', ...ruins.slice(0, 20).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`)].join('\n') : null });
   estAnuncios = null;
@@ -2552,7 +2554,10 @@ async function shopeeAuto(loja) {
     for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueShopee(loja, mudar.slice(i, i + 300), 'automático', linhas);
     D.configGravar(`shopee_estoque_auto_ultimo:${loja}`, new Date().toISOString());
     D.configGravar(`shopee_estoque_auto_erro:${loja}`, '');
-  } catch (e) { D.configGravar(`shopee_estoque_auto_erro:${loja}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
+  } catch (e) {
+    D.configGravar(`shopee_estoque_auto_erro:${loja}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300));
+    avisoEstoque(`estoque_auto:shopee:${loja}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque à Shopee ${D.shopeeLojaObter(loja)?.nome || loja} parou com erro`, e.message);
+  }
   finally { shopeeAutoRodando.delete(loja); }
 }
 if (!process.env.PAINEL_TESTE) setInterval(() => { for (const l of lojasEstoqueShopee()) shopeeAuto(l).catch(() => null); }, 10 * 60e3).unref?.();
@@ -2624,6 +2629,8 @@ async function enviarEstoqueMl(id, chaves, quem, linhasProntas = null) {
   }
   const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
   const envio = res.length ? D.estoqueEnvioGravar({ canal: `ml:${id}`, quem, import_id: null, linhas: res }) : null;
+  if (envio && ruins.length) avisoEstoque(`estoque_ml:${envio}`, `Envio de estoque ao ML ${D.contaObter(id)?.nickname || id}: ${ruins.length} anúncio(s) não ficaram`,
+    ruins.slice(0, 4).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`).join(' | '));
   if (envio) D.estoqueEnvioAtualizar(envio, { situacao: ruins.length ? (ok ? 'COMPLETE' : 'FAILED') : 'COMPLETE', ok, com_erro: ruins.length,
     erros: ruins.length ? ['erros', ...ruins.slice(0, 20).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`)].join('\n') : null });
   estAnuncios = null;
@@ -2658,7 +2665,10 @@ async function mlAuto(id) {
     for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueMl(id, mudar.slice(i, i + 300), 'automático', linhas);
     D.configGravar(`ml_estoque_auto_ultimo:${id}`, new Date().toISOString());
     D.configGravar(`ml_estoque_auto_erro:${id}`, '');
-  } catch (e) { D.configGravar(`ml_estoque_auto_erro:${id}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
+  } catch (e) {
+    D.configGravar(`ml_estoque_auto_erro:${id}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300));
+    avisoEstoque(`estoque_auto:ml:${id}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque ao ML ${D.contaObter(id)?.nickname || id} parou com erro`, e.message);
+  }
   finally { mlAutoRodando.delete(id); }
 }
 if (!process.env.PAINEL_TESTE) setInterval(() => { for (const id of contasEstoqueMl()) mlAuto(id).catch(() => null); }, 10 * 60e3).unref?.();
@@ -2694,8 +2704,32 @@ routes['GET /api/contas/atencao'] = async () => {
   const [estoque, comandas] = await Promise.all([
     limite(Promise.resolve().then(() => { const v = estoqueMod.visao(); return v.inicio ? { ...v.resumo, inicio: v.inicio } : { inicio: null, ativos: v.resumo.ativos }; }), 5000),
     limite(comandasMod.resumoFila(), 9000)]);
-  return { estoque, comandas };
+  let envios = null; try { envios = resumoEnviosEstoque(); } catch { /* sem o cartão */ }
+  return { estoque, comandas, envios_estoque: envios };
 };
+// Cartão "Envio de estoque" (Todas as contas, para acompanhar de fora do escritório): por loja com envio pelo painel, o
+// automático, a última rodada (parada há mais de 40 min = atrasado), os envios e os erros de hoje (dia de Brasília).
+function resumoEnviosEstoque(agora = Date.now()) {
+  const hoje = new Date(agora - 3 * 3600e3).toISOString().slice(0, 10);
+  const deHoje = (e) => new Date(Date.parse(e.em) - 3 * 3600e3).toISOString().slice(0, 10) === hoje;
+  const linha = (nome, canal, auto, ultimo, erro, rodando) => {
+    const es = D.estoqueEnviosListar(canal, 60).filter(deHoje);
+    return { nome, canal, automatico: auto, rodando: !!rodando, ultimo: ultimo || null, erro: erro || null,
+      atrasado: auto && !rodando && (!ultimo || agora - Date.parse(ultimo) > 40 * 60e3),
+      envios_hoje: es.length, anuncios_hoje: es.reduce((s, e) => s + (e.linhas?.length || 0), 0),
+      erros_hoje: es.reduce((s, e) => s + (e.com_erro || 0) + (e.situacao === 'FAILED' && !e.com_erro ? 1 : 0), 0),
+      ultimo_envio: es[0]?.em || D.estoqueEnviosListar(canal, 1)[0]?.em || null };
+  };
+  const out = [];
+  if (leroyMod.config()?.api_key) out.push(linha('Leroy Merlin', 'leroy', D.configLer('leroy_estoque_auto') === '1', D.configLer('leroy_estoque_auto_ultimo'), D.configLer('leroy_estoque_auto_erro'), leroyAutoRodando));
+  for (const id of contasEstoqueMl()) { const c = D.contaObter(id); if (c) out.push(linha(`Mercado Livre · ${c.nickname}`, `ml:${id}`, D.configLer(`ml_estoque_auto:${id}`) === '1', D.configLer(`ml_estoque_auto_ultimo:${id}`), D.configLer(`ml_estoque_auto_erro:${id}`), mlAutoRodando.has(id))); }
+  for (const l of lojasEstoqueShopee()) { const s = D.shopeeLojaObter(l); if (s) out.push(linha(`Shopee · ${s.nome || l}`, `shopee:${l}`, D.configLer(`shopee_estoque_auto:${l}`) === '1', D.configLer(`shopee_estoque_auto_ultimo:${l}`), D.configLer(`shopee_estoque_auto_erro:${l}`), shopeeAutoRodando.has(l))); }
+  return out;
+}
+// Aviso no sino de todas as contas quando um envio de estoque ao ML/Shopee volta com erro ou o automático para com erro.
+function avisoEstoque(chave, titulo, texto) {
+  for (const c of D.contasListar()) D.avisoCriar(c.ml_user_id, { tipo: 'estoque_envio', chave, titulo, texto: String(texto || '').slice(0, 400), link: '/estoque.html#anuncios' });
+}
 // Devoluções do ML de cada conta (o mesmo cálculo da tela Devoluções, uma conta de cada vez), para a margem de
 // "Todas as contas" depois das devoluções: a venda devolvida no ML vira cancelada e sai das vendas, e o custo dela só
 // existe aqui. Nos outros canais o reembolso já está na venda. Só os totais (sem cliente). Fora do MCP.
