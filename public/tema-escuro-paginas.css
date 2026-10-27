@@ -416,6 +416,9 @@ html[data-tema="escuro"][data-pagina="metas"] .alerta-chip{background:hsla(218,3
 html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.atencao{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="metas"] .alerta-chip.ruim{background:hsla(0,84%,60%,.14);color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .g-mes .dica{background:rgba(14,24,44,.72);border:1px solid hsla(217,30%,60%,.35);color:hsl(222,45%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .g-mes .dica .pos{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="metas"] .g-mes .dica .neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="metas"] .legenda{color:var(--muted)}
 html[data-tema="escuro"][data-pagina="metas"] tr.atual td{background:hsla(166,76%,60%,.14)}
 html[data-tema="escuro"][data-pagina="metas"] .cnpj{background:rgba(14,24,44,.72);border:1px solid hsla(217,30%,60%,.35)}

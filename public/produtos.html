@@ -816,11 +816,22 @@ async function lerAnunciosComp(){
     anunciosComp = r.anuncios || {}; pintarLinksComp(); }
   catch{ for(const b of document.querySelectorAll('#compLista .comp-links')) b.textContent = ''; }
 }
+// Revisão: "Salvar" grava e marca o SKU como conferido — ele sai da lista, que fica só com o que falta conferir.
+let verConferidas = false, compTotal = 0, compFaltam = 0;
+const contarComp = () => { $('compN').textContent = compFaltam ? `faltam ${numero(compFaltam)} de ${numero(compTotal)}` : `${numero(compTotal)}, todos conferidos`; };
+const marcarConferida = (sku, conferida = true) => enviar('PUT', '/api/produtos/composicoes/conferida', { sku, conferida });
 async function carregarComposicoes(){
   let r; try{ r = await api('/api/produtos/composicoes'); }catch{ return; }
-  $('compN').textContent = numero(r.composicoes.length);
+  compTotal = r.composicoes.length; compFaltam = r.composicoes.filter((c) => !c.conferida_em).length; contarComp();
   const box = $('compLista'); box.innerHTML = '';
   if(!r.composicoes.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio com produtos escolhidos no painel.')); return; }
+  const barra = el('p', 'sub');
+  const tg = el('button', 'bt', verConferidas ? 'Mostrar só os que faltam' : `Mostrar os conferidos (${numero(compTotal - compFaltam)})`); tg.type = 'button';
+  tg.onclick = () => { verConferidas = !verConferidas; carregarComposicoes(); };
+  barra.append(document.createTextNode(verConferidas ? 'Conferidos: ' : 'Confira cada anúncio (clique no SKU para abrir) e clique em Salvar: ele sai desta lista. '), tg);
+  box.appendChild(barra);
+  r.composicoes = r.composicoes.filter((c) => verConferidas ? c.conferida_em : !c.conferida_em);
+  if(!r.composicoes.length){ box.appendChild(el('p', 'sub', verConferidas ? 'Nenhum conferido ainda.' : '✓ Todos conferidos.')); return; }
   const t = el('table'); const cab = el('tr');
   for(const h of ['SKU no marketplace', 'Produtos no painel', 'Custo', '']) cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
@@ -833,8 +844,17 @@ async function carregarComposicoes(){
       if(!confirm('Apagar os produtos escolhidos para ' + c.sku + '? O painel volta a ler os produtos pelo SKU do anúncio.')) return;
       try{ await gravarComposicao(c.sku, []); aviso('Pronto: ' + c.sku + ' volta a usar o SKU.', 'ok'); carregarComposicoes(); }catch(e){ aviso(e.message); }
     };
-    const edt = editorProdutos(c.produtos.map((p) => p.sku), async (lista) => { await gravarComposicao(c.sku, lista); aviso('Produtos de ' + c.sku + ' salvos.', 'ok'); carregarComposicoes(); }, 'Salvar');
+    const edt = editorProdutos(c.produtos.map((p) => p.sku), async (lista) => {
+      await gravarComposicao(c.sku, lista);
+      if(!c.conferida_em){ await marcarConferida(c.sku); compFaltam--; contarComp(); tr.remove(); }
+      aviso('Produtos de ' + c.sku + ' salvos' + (c.conferida_em ? '.' : ' e conferidos.'), 'ok');
+    }, 'Salvar');
     const tdEd = el('td'); tdEd.appendChild(edt); const tdRem = el('td'); tdRem.appendChild(rem);
+    if(c.conferida_em){
+      const des = el('button', 'bt', 'Voltar para a lista'); des.type = 'button'; des.title = 'Conferido em ' + new Date(c.conferida_em).toLocaleString('pt-BR');
+      des.onclick = async () => { try{ await marcarConferida(c.sku, false); compFaltam++; contarComp(); tr.remove(); }catch(e){ aviso(e.message); } };
+      tdRem.append(' ', des);
+    }
     const tdSku = el('td', 'sku'); tdSku.dataset.sku = c.sku;
     tdSku.append(el('span', 'comp-sku', c.sku), el('div', 'comp-links', anunciosComp ? '' : 'procurando o anúncio…'));
     tr.append(tdSku, tdEd, el('td', 'num', custo), tdRem);

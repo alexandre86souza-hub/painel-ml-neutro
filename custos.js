@@ -386,6 +386,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     }
     return out;
   }
+  // SKUs da lista de composições já conferidos pelo vendedor: { sku: quando }
+  const conferidas = () => { try { return JSON.parse(D.configLer('composicoes_conferidas') || '{}'); } catch { return {}; } };
   const descreverComposicao = (sku, mapa = catalogoMapa()) => {
     const painel = composicaoDe(sku);
     if (!painel) return null;
@@ -408,8 +410,17 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   const rotas = {
     // Composições escolhidas no painel (SKU do canal -> produtos), com nome e custo de cada produto.
     'GET /api/produtos/composicoes': async () => {
-      const mapa = catalogoMapa();
-      return { composicoes: [...D.skuVinculos('composicao').keys()].sort().map((sku) => ({ sku, ...descreverComposicao(sku, mapa) })) };
+      const mapa = catalogoMapa(), conf = conferidas();
+      return { composicoes: [...D.skuVinculos('composicao').keys()].sort().map((sku) => ({ sku, ...descreverComposicao(sku, mapa), conferida_em: conf[sku] || null })) };
+    },
+    // Revisão da lista "Produtos escolhidos no painel": o vendedor confere anúncio por anúncio; o conferido sai da lista.
+    'PUT /api/produtos/composicoes/conferida': async (_u, body) => {
+      const sku = String(body?.sku ?? '').trim();
+      if (!sku || !D.skuVinculos('composicao').has(sku)) throw erro('SKU sem produtos escolhidos no painel.');
+      const conf = conferidas();
+      if (body?.conferida === false) delete conf[sku]; else conf[sku] = new Date().toISOString();
+      D.configGravar('composicoes_conferidas', JSON.stringify(conf));
+      return { sku, conferida_em: conf[sku] || null };
     },
     // Os produtos que valem hoje para um SKU (a escolha do painel ou o que está escrito no SKU), para o botão
     // "Produtos" das telas de anúncios de todos os canais (public/composicao.js).
@@ -430,6 +441,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const fora = numeros.filter((n) => !mapa.has(n));
       if (fora.length) throw erro(`Produto fora da tabela: ${fora.map((n) => String(n).padStart(3, '0')).join(', ')}. Cadastre-o primeiro (Cadastrar produto).`);
       gravarComposicao(sku, numeros);
+      if (!numeros.length) { const conf = conferidas(); if (conf[sku]) { delete conf[sku]; D.configGravar('composicoes_conferidas', JSON.stringify(conf)); } }
       // recalcula o custo dos anúncios do ML (custos origem 'sku') de cada conta, em segundo plano
       (async () => { for (const c of D.contasListar()) { try { cacheAnuncios = null; await aplicarCatalogo(D.contaObter(c.ml_user_id)); } catch {} } })();
       return { sku, composicao: descreverComposicao(sku, mapa) };

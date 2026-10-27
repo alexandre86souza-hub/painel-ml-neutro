@@ -24,6 +24,38 @@
   .alerta-chip{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#eef1f6;color:#475569}
   .alerta-chip.ok{background:#e6f4ea;color:#0b6b33}.alerta-chip.atencao{background:#fff4d6;color:#7a5600}.alerta-chip.ruim{background:#fde8e8;color:#b42318}
   .grafico{width:100%;height:240px;display:block}
+  /* acumulado do mês */
+  .g-mes{position:relative}
+  .g-mes svg{width:100%;height:300px;display:block;overflow:visible}
+  .g-mes .grade{stroke:#e8edf3;stroke-width:1}
+  .g-mes .eixo-t{font-size:11px;fill:#7b8798}
+  .g-mes .area{fill:url(#gradReal)}
+  .g-mes .l-real{fill:none;stroke:#0d9488;stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+  .g-mes .l-meta{fill:none;stroke:#94a3b8;stroke-width:2;stroke-dasharray:6 5}
+  .g-mes .l-proj{fill:none;stroke:#f59e0b;stroke-width:2;stroke-dasharray:2 5;stroke-linecap:round}
+  .g-mes .hoje{stroke:#0d9488;stroke-width:1;stroke-dasharray:3 3;opacity:.6}
+  .g-mes .ponto{fill:#0d9488;stroke:#fff;stroke-width:2.5}
+  .g-mes .ponto.meta{fill:#94a3b8}.g-mes .ponto.proj{fill:#f59e0b}
+  .g-mes .rot{font-size:12px;font-weight:700}
+  .g-mes .rot.real{fill:#0f766e}.g-mes .rot.meta{fill:#64748b}.g-mes .rot.proj{fill:#b45309}
+  .g-mes .guia{stroke:#475569;stroke-width:1;opacity:.35}
+  .g-mes .dica{position:absolute;pointer-events:none;background:#fff;border:1px solid #e3e8f0;border-radius:10px;padding:8px 10px;font-size:12px;
+    box-shadow:0 6px 20px rgba(15,23,42,.12);white-space:nowrap;line-height:1.5;color:#16213a}
+  .g-mes .dica b{display:block;font-size:13px;margin-bottom:2px}
+  .g-mes .dica .pos{color:#0b6b33}.g-mes .dica .neg{color:#b42318}
+  @media screen{
+    html[data-tema="escuro"] .g-mes .grade{stroke:#1f2b40}
+    html[data-tema="escuro"] .g-mes .eixo-t{fill:#8a97ab}
+    html[data-tema="escuro"] .g-mes .l-real{stroke:#2dd4bf}
+    html[data-tema="escuro"] .g-mes .ponto{fill:#2dd4bf;stroke:#0b1220}
+    html[data-tema="escuro"] .g-mes .ponto.meta{fill:#94a3b8}html[data-tema="escuro"] .g-mes .ponto.proj{fill:#fbbf24}
+    html[data-tema="escuro"] .g-mes .hoje{stroke:#2dd4bf}
+    html[data-tema="escuro"] .g-mes .rot.real{fill:#5eead4}html[data-tema="escuro"] .g-mes .rot.meta{fill:#a5b4c8}html[data-tema="escuro"] .g-mes .rot.proj{fill:#fbbf24}
+    html[data-tema="escuro"] .g-mes .guia{stroke:#cbd5e1}
+    html[data-tema="escuro"] .g-mes .dica{background:#111a2c!important;border-color:#26344d;color:#e2e8f0;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+    html[data-tema="escuro"] .g-mes .dica .pos{color:#4ade80}html[data-tema="escuro"] .g-mes .dica .neg{color:#f87171}
+  }
+  .legenda i.proj{background:repeating-linear-gradient(90deg,#f59e0b 0 3px,transparent 3px 7px)}
   .grafico .real{fill:none;stroke:#0f766e;stroke-width:2.5}.grafico .plan{fill:none;stroke:#94a3b8;stroke-width:2;stroke-dasharray:5 4}
   .grafico .barra{fill:#99f6e4}.grafico .eixo{stroke:#e3e8f0;stroke-width:1}.grafico text{font-size:11px;fill:#5f6b7f}
   .legenda{display:flex;gap:14px;font-size:12px;color:#5f6b7f;margin:4px 0 0}.legenda i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:#0f766e}
@@ -71,7 +103,7 @@
   <section class="painel" data-painel="mes">
     <div class="cartoes" id="cMes"></div>
     <section class="bloco"><h2>Acumulado do mês: realizado × meta</h2><div id="gMes"></div>
-      <div class="legenda"><span><i></i>Realizado acumulado</span><span><i class="plan"></i>Meta acumulada (por dia)</span></div></section>
+      <div class="legenda"><span><i></i>Realizado acumulado</span><span><i class="plan"></i>Meta acumulada (por dia)</span><span><i class="proj"></i>Projeção no ritmo atual</span></div></section>
     <section class="bloco"><h2>Por loja e por CNPJ</h2><div class="tabela-rolagem" id="tMesCanais"></div></section>
     <section class="bloco"><h2>Dia a dia</h2><div class="tabela-rolagem" id="tMesDias"></div></section>
   </section>
@@ -136,6 +168,77 @@ function svgLinhas(pontos, W = 900, H = 240){
   pontos.forEach((pt, i) => { if(i % Math.ceil(pontos.length / 12) === 0 || i === pontos.length - 1){ const t = document.createElementNS(ns, 'text'); t.setAttribute('x', x(i) - 8); t.setAttribute('y', H - 6); t.textContent = pt.rot; svg.appendChild(t); } });
   return svg;
 }
+// Acumulado do mês: área do realizado, meta tracejada, projeção no ritmo atual até o fim do mês, marca de hoje
+// e dica com os valores do dia ao passar o mouse (ou o dedo). Largura = a do bloco (sem faixas vazias dos lados).
+function graficoMes(box, m){
+  box.innerHTML = ''; box.classList.add('g-mes');
+  const ns = 'http://www.w3.org/2000/svg', mk = (t, a = {}, cls) => { const e = document.createElementNS(ns, t); for(const k in a) e.setAttribute(k, a[k]); if(cls) e.setAttribute('class', cls); return e; };
+  const W = Math.max(320, box.clientWidth || 900), H = 300, esq = 64, dir = 96, topo = 16, base = H - 28;
+  const n = m.dias.length, dp = Math.min(m.dias_passados, n);
+  const reais = m.dias.slice(0, dp).map((d) => d.acumulado);
+  const proj = dp > 0 && dp < n ? m.projecao : null;
+  const max = Math.max(1, ...m.dias.map((d) => d.planejado || 0), ...reais, proj || 0, m.meta || 0) * 1.06;
+  const passo = [5e3, 1e4, 2e4, 25e3, 5e4, 1e5, 2e5, 25e4, 5e5, 1e6].find((p) => max / p <= 5) || 1e6;
+  const x = (i) => esq + (W - esq - dir) * (n > 1 ? i / (n - 1) : 0), y = (v) => base - (base - topo) * v / max;
+  const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Realizado acumulado contra a meta do mês' });
+  const defs = mk('defs'), g = mk('linearGradient', { id: 'gradReal', x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(mk('stop', { offset: '0%', 'stop-color': '#14b8a6', 'stop-opacity': '.35' }), mk('stop', { offset: '100%', 'stop-color': '#14b8a6', 'stop-opacity': '0' }));
+  defs.appendChild(g); svg.appendChild(defs);
+  const mil = (v) => v >= 1e6 ? (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : Math.round(v / 1e3).toLocaleString('pt-BR') + ' mil';
+  for(let v = 0; v <= max; v += passo){ svg.appendChild(mk('line', { x1: esq, x2: W - dir, y1: y(v), y2: y(v) }, 'grade'));
+    const t = mk('text', { x: esq - 10, y: y(v) + 4, 'text-anchor': 'end' }, 'eixo-t'); t.textContent = 'R$ ' + mil(v); svg.appendChild(t); }
+  const cada = n > 20 ? 3 : 1;
+  m.dias.forEach((d, i) => { if(i % cada === 0 || i === n - 1){ const t = mk('text', { x: x(i), y: H - 8, 'text-anchor': 'middle' }, 'eixo-t'); t.textContent = d.dia.slice(8, 10); svg.appendChild(t); } });
+  const caminho = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
+  const pMeta = m.dias.map((d, i) => d.planejado != null ? [x(i), y(d.planejado)] : null).filter(Boolean);
+  if(pMeta.length) svg.appendChild(mk('path', { d: caminho(pMeta) }, 'l-meta'));
+  const pReal = reais.map((v, i) => [x(i), y(v)]);
+  if(pReal.length){
+    svg.appendChild(mk('path', { d: caminho(pReal) + `L${pReal[pReal.length - 1][0]},${base}L${pReal[0][0]},${base}Z` }, 'area'));
+    if(proj != null) svg.appendChild(mk('path', { d: caminho([pReal[pReal.length - 1], [x(n - 1), y(proj)]]) }, 'l-proj'));
+    svg.appendChild(mk('path', { d: caminho(pReal) }, 'l-real'));
+    const [hx, hy] = pReal[pReal.length - 1];
+    if(dp < n) svg.appendChild(mk('line', { x1: hx, x2: hx, y1: topo, y2: base }, 'hoje'));
+    svg.appendChild(mk('circle', { cx: hx, cy: hy, r: 5.5 }, 'ponto'));
+    const tr = mk('text', { x: hx + (dp < n ? -10 : 10), y: hy - 12, 'text-anchor': dp < n ? 'end' : 'start' }, 'rot real'); tr.textContent = 'R$ ' + mil(reais[reais.length - 1]); svg.appendChild(tr);
+  }
+  // rótulos no fim: meta do mês e projeção (afastados se ficarem perto)
+  const fim = [];
+  if(m.meta) fim.push({ v: m.meta, cls: 'meta', txt: 'Meta ' + mil(m.meta) });
+  if(proj != null) fim.push({ v: proj, cls: 'proj', txt: 'Proj. ' + mil(proj) });
+  fim.sort((a, b) => b.v - a.v).forEach((f, i, a) => { let yy = y(f.v); if(i && Math.abs(yy - a[i - 1].yy) < 16) yy = a[i - 1].yy + 16; f.yy = yy;
+    svg.appendChild(mk('circle', { cx: x(n - 1), cy: y(f.v), r: 4 }, 'ponto ' + f.cls));
+    const t = mk('text', { x: x(n - 1) + 9, y: yy + 4 }, 'rot ' + f.cls); t.textContent = f.txt; svg.appendChild(t); });
+  // dica ao passar o mouse
+  const guia = mk('line', { y1: topo, y2: base, visibility: 'hidden' }, 'guia'), alvo = mk('circle', { r: 5, visibility: 'hidden' }, 'ponto');
+  svg.append(guia, alvo);
+  const dica = el('div', 'dica'); dica.hidden = true;
+  const mover = (ev) => {
+    const r = svg.getBoundingClientRect(), px = (ev.touches?.[0]?.clientX ?? ev.clientX) - r.left;
+    const i = Math.max(0, Math.min(n - 1, Math.round((px * W / r.width - esq) / ((W - esq - dir) / Math.max(1, n - 1)))));
+    const d = m.dias[i], gx = x(i);
+    guia.setAttribute('x1', gx); guia.setAttribute('x2', gx); guia.setAttribute('visibility', 'visible');
+    const temReal = i < dp;
+    if(temReal){ alvo.setAttribute('cx', gx); alvo.setAttribute('cy', y(d.acumulado)); alvo.setAttribute('visibility', 'visible'); } else alvo.setAttribute('visibility', 'hidden');
+    const dif = temReal && d.planejado != null ? d.acumulado - d.planejado : null;
+    dica.innerHTML = '';
+    dica.append(el('b', null, `${dataBR(d.dia)}${i === dp - 1 && dp < n ? ' (hoje)' : ''}`));
+    if(temReal) dica.append(el('div', null, `Vendido no dia: ${real(d.valor)}`), el('div', null, `Acumulado: ${real(d.acumulado)}`));
+    if(d.planejado != null) dica.append(el('div', null, `Meta até o dia: ${real(d.planejado)}`));
+    if(dif != null) dica.append(el('div', dif >= 0 ? 'pos' : 'neg', `${dif >= 0 ? 'Acima' : 'Abaixo'} da meta: ${real(Math.abs(dif))}`));
+    if(!temReal && proj != null) dica.append(el('div', null, `Projeção no fim do mês: ${real(proj)}`));
+    dica.hidden = false;
+    const bx = gx * r.width / W, larg = dica.offsetWidth;
+    dica.style.left = Math.max(0, Math.min(r.width - larg, bx + 14 - (bx > r.width * 0.6 ? larg + 28 : 0))) + 'px'; dica.style.top = '8px';
+  };
+  const sair = () => { dica.hidden = true; guia.setAttribute('visibility', 'hidden'); alvo.setAttribute('visibility', 'hidden'); };
+  svg.addEventListener('mousemove', mover); svg.addEventListener('touchstart', mover, { passive: true }); svg.addEventListener('touchmove', mover, { passive: true });
+  svg.addEventListener('mouseleave', sair); svg.addEventListener('touchend', sair);
+  box.append(svg, dica);
+}
+let tmGrafico = null;
+window.addEventListener('resize', () => { clearTimeout(tmGrafico); tmGrafico = setTimeout(() => { if(dados?.escolhido && aba === 'mes') graficoMes($('gMes'), dados.escolhido); }, 150); });
+
 function svgBarras(meses, W = 900, H = 240){
   const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.classList.add('grafico');
@@ -164,7 +267,7 @@ function pintarMes(){
   cartao(c, 'Média por dia', real(m.ritmo_atual), m.dias_passados ? `nos ${numero(m.dias_passados)} dia(s) do mês até hoje` : '');
   const ca = el('div', 'cartao'); ca.append(el('p', 'rotulo', 'Situação'), el('div', 'valor'), el('p', 'nota', m.saldo ? `faltam ${real(m.saldo)} para a meta` : ''));
   ca.querySelector('.valor').appendChild(chipAlerta(m.alerta)); c.appendChild(ca);
-  $('gMes').innerHTML = ''; $('gMes').appendChild(svgLinhas(m.dias.map((d, i) => ({ rot: d.dia.slice(8, 10), real: i < m.dias_passados ? d.acumulado : null, plan: d.planejado }))));
+  graficoMes($('gMes'), m);
   // por loja, agrupado pelo CNPJ
   const pc = dados.por_canal, linhas = [];
   for(const c of dados.config.cnpjs){
