@@ -130,6 +130,32 @@ function criar({ D, daLoja }) {
       }).sort((a, b) => (b.vendas_30 - a.vendas_30) || ((b.vendas_total || 0) - (a.vendas_total || 0)));
       return { loja: shopId, itens, imposto_pct: C.impostoTotal(empresa), lendo: lendo.has(shopId), lido_em: D.configLer(`shopee_anuncios_lido_em:${shopId}`) };
     },
+    // Tira do ar (unlist) ou volta (relist) anúncios da Shopee em massa: product/unlist_item, até 50 por chamada. O anúncio
+    // inteiro (todas as variações). Escrita na conta: só por ordem do vendedor. Confere relendo o item_status.
+    'POST /api/shopee/anuncios/status': async (_u, body) => {
+      const shopId = exigeLoja(body?.loja);
+      const unlist = body?.tirar !== false;
+      const ids = [...new Set((Array.isArray(body?.item_ids) ? body.item_ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
+      if (!ids.length || ids.length > 500) throw erro('Escolha de 1 a 500 anúncios.');
+      const falhas = new Map();
+      for (let i = 0; i < ids.length; i += 50) {
+        const lote = ids.slice(i, i + 50);
+        try {
+          const r = await daLoja(shopId, '/api/v2/product/unlist_item', {}, { item_list: lote.map((item_id) => ({ item_id, unlist })) });
+          for (const f of r.response?.failure_list || []) falhas.set(Number(f.item_id), f.failed_reason || 'recusado');
+        } catch (e) { for (const id of lote) falhas.set(id, e.message); }
+      }
+      // confere (a Shopee mostra a situação nova em alguns segundos)
+      await new Promise((ok) => setTimeout(ok, 5000));
+      const st = new Map();
+      for (let i = 0; i < ids.length; i += 50) {
+        const b = await daLoja(shopId, '/api/v2/product/get_item_base_info', { item_id_list: ids.slice(i, i + 50) }).catch(() => null);
+        for (const it of b?.response?.item_list || []) st.set(it.item_id, it.item_status);
+      }
+      const esperado = unlist ? 'UNLIST' : 'NORMAL';
+      const resultado = ids.map((id) => ({ item_id: id, status: st.get(id) || null, ok: !falhas.has(id) && st.get(id) === esperado, erro: falhas.get(id) || null }));
+      return { tirar: unlist, pedidos: ids.length, alterados: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => !r.ok), resultado };
+    },
     // Muda o preço na Shopee (escrita na conta: só pela tela, com confirmação).
     'POST /api/shopee/anuncios/preco': async (_u, body) => {
       const shopId = exigeLoja(body?.loja);
