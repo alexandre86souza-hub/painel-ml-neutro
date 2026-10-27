@@ -1295,6 +1295,37 @@ const routes = {
       falhas: resultado.filter((x) => !x.ok), resultado };
   },
 
+  // EXCLUI anúncios do ML (pedido do dono, 27/10/2026, notificação da Dexco): o ML só exclui anúncio encerrado, então o que
+  // estiver ativo/pausado é encerrado antes (status closed) e depois vai {deleted: "true"}. Não tem volta. Exige confirmar:
+  // "EXCLUIR". Confere relendo: sub_status com "deleted".
+  'POST /api/items/excluir': async (_u, body) => {
+    const conta = contaOuErro();
+    if (body?.confirmar !== 'EXCLUIR') throw erro400('Para excluir, mande confirmar: "EXCLUIR" (não tem volta).');
+    const ids = [...new Set(Array.isArray(body?.ids) ? body.ids : [])];
+    if (!ids.length || ids.length > 300) throw erro400('Escolha de 1 a 300 anúncios.');
+    ids.forEach(exigeItemId);
+    const resultado = await emLotes(ids, 3, async (id) => {
+      for (let tentativa = 0; ; tentativa++) {
+      try {
+        let it = await ml(`/items/${id}?attributes=id,status,sub_status,seller_id`);
+        if (String(it.seller_id) !== String(conta.ml_user_id)) return { id, ok: false, erro: 'anúncio de outra conta' };
+        if ((it.sub_status || []).includes('deleted')) return { id, ok: true, ja: true };
+        if (it.status !== 'closed') await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'closed' }) });
+        await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify({ deleted: 'true' }) });
+        it = await ml(`/items/${id}?attributes=id,status,sub_status`);
+        const ok = (it.sub_status || []).includes('deleted');
+        return { id, ok, status: it.status, erro: ok ? null : 'o Mercado Livre não marcou como excluído' };
+      } catch (e) {
+        // limite de chamadas do ML (429 local_rate_limited): espera e tenta de novo, até 3 vezes
+        if (/rate_limited|429/.test(e.message) && tentativa < 3) { await new Promise((ok) => setTimeout(ok, 2000 * (tentativa + 1))); continue; }
+        return { id, ok: false, erro: e.message };
+      }
+      }
+    });
+    idsCache.clear();
+    return { pedidos: ids.length, excluidos: resultado.filter((x) => x.ok).length, falhas: resultado.filter((x) => !x.ok), resultado };
+  },
+
   // Vendas, curva ABC, tendência e lucro do período para os anúncios da página.
   // A curva ABC é da conta inteira: o anúncio é A por faturar muito entre TODOS, não na página.
   'GET /api/periodo': async (url) => {
