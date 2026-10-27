@@ -43,8 +43,24 @@ function textoDoAviso(x, margemMinPct) {
     } else if (x.lucro_erro) partes.push(x.lucro_erro);
   } else partes.push('o preço sozinho não ganha');
   if (x.falta?.length) partes.push(`o ganhador tem: ${x.falta.join(', ')}`);
+  if (x.concorrentes?.length) partes.push(`concorrentes: ${textoConcorrentes(x.concorrentes)}`);
   return partes.join(' · ');
 }
+
+// Concorrentes do produto de catálogo (`/products/{id}/items`): preço e vantagens de cada um, sem os anúncios da própria
+// conta, do mais barato para o mais caro. Função pura: testada.
+function concorrentesDe(r, contaId) {
+  const lista = Array.isArray(r?.results) ? r.results : [];
+  return lista.filter((x) => String(x?.seller_id) !== String(contaId) && x?.price != null).map((x) => ({
+    item_id: x.item_id || null, vendedor: x.seller_id ?? null, preco: x.price,
+    full: x.shipping?.logistic_type === 'fulfillment', frete_gratis: !!x.shipping?.free_shipping,
+    loja_oficial: x.official_store_id != null, tipo: x.listing_type_id || null,
+  })).sort((a, b) => a.preco - b.preco);
+}
+// `nossa` = anúncio de outra conta conectada (AMG x Primor disputando o mesmo catálogo)
+const textoConcorrentes = (cs) => cs.slice(0, 4).map((c) => `${real(c.preco)}${c.full ? ' Full' : c.frete_gratis ? ' frete grátis' : ''}${c.nossa ? ` (sua conta ${c.nossa})` : ''}`).join(' · ')
+  + (cs.length > 4 ? ` (+${cs.length - 4})` : '')
+  + (cs.length && cs.every((c) => c.nossa) ? ' — a disputa é só com a sua outra conta' : '');
 
 // Avisos de uma leitura nova contra a anterior: só quem PASSOU a perder (ou apareceu já perdendo). Pura: testada.
 function quemPassouAPerder(antes, agora) {
@@ -68,7 +84,7 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
       const lotes = []; for (let i = 0; i < ids.length; i += 20) lotes.push(ids.slice(i, i + 20));
       const cat = [];
       await emLotes(lotes, 3, async (l) => {
-        const r = await ml(`/items?ids=${l.join(',')}&attributes=id,title,price,catalog_listing,status`).catch(() => []);
+        const r = await ml(`/items?ids=${l.join(',')}&attributes=id,title,price,catalog_listing,catalog_product_id,status`).catch(() => []);
         for (const x of r || []) if (x.body?.catalog_listing && x.body.status === 'active') cat.push(x.body);
       });
       const antes = salvo?.itens || null, agora = {}, min = margemMin();
@@ -90,6 +106,18 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
           }
           x.veredito = veredito(x.margem_ganhar, min);
         }
+        // perdendo: quem está no mesmo catálogo e por quanto (relido a cada leitura: o preço deles muda)
+        const prod = r.catalog_product_id || it.catalog_product_id;
+        if (x.situacao === 'competing' && prod) {
+          const c = await ml(`/products/${prod}/items?limit=20`).catch((e) => ({ erro: e.message }));
+          if (c?.erro) x.concorrentes_erro = String(c.erro).slice(0, 120);
+          else {
+            const nossas = new Map(D.contasListar().map((ct) => [String(ct.ml_user_id), ct.nickname || String(ct.ml_user_id)]));
+            x.concorrentes = concorrentesDe(c, id).slice(0, 10).map((k) => (nossas.has(String(k.vendedor)) ? { ...k, nossa: nossas.get(String(k.vendedor)) } : k));
+            // o botão está com a outra conta da empresa: baixar o preço só passaria a venda de uma conta para a outra
+            if (x.concorrentes.length && x.concorrentes.every((k) => k.nossa)) x.veredito = 'nossa';
+          }
+        }
         agora[it.id] = x;
       });
       const novo = { em: new Date().toISOString(), margem_min: min, itens: agora };
@@ -97,6 +125,7 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
       const dia = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
       for (const iid of quemPassouAPerder(antes, agora)) {
         const x = agora[iid];
+        if (x.veredito === 'nossa') continue;   // AMG x Primor: não é concorrente, sem aviso (o resumo das 7h30 conta à parte)
         D.avisoCriar(id, { tipo: 'catalogo', chave: `catalogo:${iid}:${dia}`,
           titulo: `Perdendo no catálogo${x.veredito === 'vale' ? ': vale baixar' : x.veredito === 'nao_compensa' ? ': não compensa baixar' : ''}`,
           texto: `${x.titulo || iid} (${iid}) · ${textoDoAviso(x, min)}`, link: `/anuncios.html?q=${encodeURIComponent(iid)}` });
@@ -112,10 +141,11 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
     const itens = Object.entries(s.itens || {}).map(([iid, x]) => ({ id: iid, ...x, situacao_txt: SITUACAO[x.situacao] || (x.erro ? 'erro na leitura' : x.situacao) }));
     const conta = {}; for (const x of itens) conta[x.situacao || 'erro'] = (conta[x.situacao || 'erro'] || 0) + 1;
     const ordem = { vale: 0, nao_compensa: 1 };
-    const perdendo = itens.filter((x) => x.situacao === 'competing')
+    const contra_nossa = itens.filter((x) => x.situacao === 'competing' && x.veredito === 'nossa').length;
+    const perdendo = itens.filter((x) => x.situacao === 'competing' && x.veredito !== 'nossa')
       .sort((a, b) => (ordem[a.veredito] ?? 2) - (ordem[b.veredito] ?? 2) || (b.margem_ganhar ?? -9) - (a.margem_ganhar ?? -9));
     return { em: s.em, margem_min: s.margem_min, total: itens.length, ganhando: conta.winning || 0, dividindo: conta.sharing_first_place || 0,
-      perdendo: conta.competing || 0, sem_disputa: conta.listed || 0, erros: conta.erro || 0, lista_perdendo: perdendo };
+      perdendo: (conta.competing || 0) - contra_nossa, contra_nossa, sem_disputa: conta.listed || 0, erros: conta.erro || 0, lista_perdendo: perdendo };
   }
 
   const rotas = {
@@ -129,4 +159,4 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
   return { rotas, verificar, resumo };
 }
 
-module.exports = { criar, leitura, veredito, textoDoAviso, quemPassouAPerder, MARGEM_MIN_PADRAO };
+module.exports = { criar, leitura, veredito, textoDoAviso, quemPassouAPerder, concorrentesDe, textoConcorrentes, MARGEM_MIN_PADRAO };

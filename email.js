@@ -174,9 +174,12 @@ function criar({ D, routes, estoqueMod, comandasMod, resumoEnviosEstoque, resumo
       const r = (() => { try { return resumoCatalogo(ct.ml_user_id); } catch { return null; } })();
       if (!r?.total) continue;
       catHtml += `<p style="font-size:13px;margin:${catHtml ? '12px' : '0'} 0 6px"><b>${esc(ct.nickname || ct.ml_user_id)}</b>: ${r.total} anúncio(s) de catálogo · ganhando <b>${r.ganhando}</b>`
-        + ` · dividindo ${r.dividindo} · perdendo <b style="color:${r.perdendo ? '#b42318' : 'inherit'}">${r.perdendo}</b></p>`;
-      if (r.lista_perdendo.length) catHtml += tabela(['Anúncio', 'Preço', 'Para ganhar', 'Margem nesse preço', 'Decisão'], r.lista_perdendo.slice(0, 12).map((x) => [
-        `${esc(String(x.titulo || '').slice(0, 48))}<br><span style="color:#5f6b7f;font-size:11px">${esc(x.id)}</span>`, real(x.preco), real(x.preco_ganhar),
+        + ` · dividindo ${r.dividindo} · perdendo <b style="color:${r.perdendo ? '#b42318' : 'inherit'}">${r.perdendo}</b>`
+        + (r.contra_nossa ? ` · ${r.contra_nossa} com o botão na sua outra conta (sem concorrente de fora)` : '') + '</p>';
+      if (r.lista_perdendo.length) catHtml += tabela(['Anúncio', 'Preço', 'Concorrente mais barato', 'Para ganhar', 'Margem nesse preço', 'Decisão'], r.lista_perdendo.slice(0, 12).map((x) => [
+        `${esc(String(x.titulo || '').slice(0, 48))}<br><span style="color:#5f6b7f;font-size:11px">${esc(x.id)}</span>`, real(x.preco),
+        x.concorrentes?.length ? `${real(x.concorrentes[0].preco)}${x.concorrentes[0].full ? ' Full' : ''}<br><span style="color:#5f6b7f;font-size:11px">${x.concorrentes[0].nossa ? `sua conta ${esc(x.concorrentes[0].nossa)}` : `${x.concorrentes.length} concorrente(s)`}</span>` : '—',
+        real(x.preco_ganhar),
         x.margem_ganhar != null ? pct(x.margem_ganhar) : esc(x.lucro_erro ? 'sem custo/frete' : '—'),
         x.veredito === 'vale' ? '<b style="color:#0b6b33">vale baixar</b>' : x.veredito === 'nao_compensa' ? '<span style="color:#b42318">não compensa</span>' : '—']));
     }

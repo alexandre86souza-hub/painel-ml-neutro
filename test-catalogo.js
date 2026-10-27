@@ -25,6 +25,18 @@ assert.strictEqual(C.veredito(null, 15), null);
   assert.match(C.textoDoAviso({ preco: 100, preco_ganhar: 95, lucro_erro: 'sem custo' }, 15), /sem custo/);
 }
 {
+  const cs = C.concorrentesDe({ results: [
+    { item_id: 'MLB2', seller_id: 9, price: 130, shipping: { free_shipping: true } },
+    { item_id: 'MLB1', seller_id: 7, price: 124, shipping: { logistic_type: 'fulfillment', free_shipping: true } },
+    { item_id: 'MLB3', seller_id: 102366556, price: 128.6, shipping: {} },
+  ] }, '102366556');
+  assert.deepStrictEqual(cs.map((c) => c.item_id), ['MLB1', 'MLB2'], 'sem o próprio anúncio, do mais barato');
+  assert.ok(cs[0].full && cs[1].frete_gratis && !cs[1].full);
+  assert.match(C.textoConcorrentes(cs), /^R\$\s?124,00 Full · R\$\s?130,00 frete grátis$/);
+  assert.match(C.textoDoAviso({ preco: 128.6, preco_ganhar: 124, concorrentes: cs }, 15), /concorrentes: R\$\s?124,00 Full/);
+  assert.match(C.textoConcorrentes([{ preco: 129.73, frete_gratis: true, nossa: 'PRIMOR METAIS' }]), /\(sua conta PRIMOR METAIS\) — a disputa é só com a sua outra conta$/);
+}
+{
   const agora = { A: { situacao: 'competing' }, B: { situacao: 'competing' }, D: { situacao: 'winning' }, N: { situacao: 'competing' } };
   assert.deepStrictEqual(C.quemPassouAPerder(null, agora), [], '1ª leitura só vira a base');
   assert.deepStrictEqual(C.quemPassouAPerder({ A: { situacao: 'winning' }, B: { situacao: 'competing' }, D: { situacao: 'competing' } }, agora), ['A', 'N'],
