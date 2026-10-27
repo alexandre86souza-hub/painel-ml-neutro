@@ -22,6 +22,7 @@ function leitura(r) {
     situacao: r?.status || null, preco: r?.current_price ?? null, preco_ganhar: r?.price_to_win ?? null,
     vencedor_preco: r?.winner?.price ?? null, dividem: r?.competitors_sharing_first_place ?? null,
     visitas: r?.visit_share || null, falta, motivos: Array.isArray(r?.reason) ? r.reason.slice(0, 5) : [],
+    produto: r?.catalog_product_id || null,   // produto de catálogo (MLB + 8 dígitos), para achar o anúncio pelo catálogo
   };
 }
 

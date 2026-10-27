@@ -10,7 +10,7 @@ const E = require('./email.js');
     winner: { item_id: 'MLB9', price: 109.9 }, boosts: [{ id: 'free_shipping', status: 'boosted' }, { id: 'fulfillment', status: 'opportunity' }, { id: 'xyz_abc', status: 'opportunity' }],
     reason: ['item_not_opted_in'] });
   assert.deepStrictEqual(l, { situacao: 'competing', preco: 120, preco_ganhar: 109.9, vencedor_preco: 109.9, dividem: 0, visitas: 'minimum',
-    falta: ['Full', 'xyz abc'], motivos: ['item_not_opted_in'] });
+    falta: ['Full', 'xyz abc'], motivos: ['item_not_opted_in'], produto: null });
   assert.strictEqual(C.leitura({}).situacao, null, 'resposta vazia não quebra');
 }
 assert.strictEqual(C.veredito(0.15, 15), 'vale');

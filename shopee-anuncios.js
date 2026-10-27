@@ -156,6 +156,27 @@ function criar({ D, daLoja }) {
       const resultado = ids.map((id) => ({ item_id: id, status: st.get(id) || null, ok: !falhas.has(id) && st.get(id) === esperado, erro: falhas.get(id) || null }));
       return { tirar: unlist, pedidos: ids.length, alterados: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => !r.ok), resultado };
     },
+    // EXCLUI anúncios da Shopee (product/delete_item, um por chamada; não tem volta: o link deixa de abrir). Pedido do dono,
+    // 27/10/2026 (notificação da Dexco). Exige confirmar: "EXCLUIR". Confere relendo: excluído = SELLER_DELETE ou some da loja.
+    'POST /api/shopee/anuncios/excluir': async (_u, body) => {
+      const shopId = exigeLoja(body?.loja);
+      if (body?.confirmar !== 'EXCLUIR') throw erro('Para excluir, mande confirmar: "EXCLUIR" (não tem volta).');
+      const ids = [...new Set((Array.isArray(body?.item_ids) ? body.item_ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
+      if (!ids.length || ids.length > 100) throw erro('Escolha de 1 a 100 anúncios.');
+      const falhas = new Map();
+      for (const item_id of ids) {
+        try { await daLoja(shopId, '/api/v2/product/delete_item', {}, { item_id }); } catch (e) { falhas.set(item_id, e.message); }
+      }
+      await new Promise((ok) => setTimeout(ok, 5000));
+      const st = new Map();
+      for (let i = 0; i < ids.length; i += 50) {
+        const b = await daLoja(shopId, '/api/v2/product/get_item_base_info', { item_id_list: ids.slice(i, i + 50) }).catch(() => null);
+        for (const it of b?.response?.item_list || []) st.set(it.item_id, it.item_status);
+      }
+      const excluido = (id) => !st.has(id) || /DELETE/.test(st.get(id) || '');
+      const resultado = ids.map((id) => ({ item_id: id, status: st.get(id) || 'não aparece mais', ok: excluido(id), erro: falhas.get(id) || null }));
+      return { pedidos: ids.length, excluidos: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => !r.ok), resultado };
+    },
     // Muda o preço na Shopee (escrita na conta: só pela tela, com confirmação).
     'POST /api/shopee/anuncios/preco': async (_u, body) => {
       const shopId = exigeLoja(body?.loja);
