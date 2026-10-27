@@ -146,11 +146,15 @@
   .nova-campanha input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:8px}
   .excluir-campanha{align-self:flex-start;margin-top:6px;font-size:12px;color:#b91c1c;text-decoration:underline;cursor:pointer}
   .itens.por-anuncio .chip{justify-self:start}
+  /* caixinha da adesão em massa: coluna própria; as linhas sem ela ficam alinhadas pelo recuo */
+  .itens.por-anuncio li.com-check{grid-template-columns:22px 96px minmax(0,1fr) auto}
+  .itens.por-anuncio li:not(.com-check){padding-left:34px}
   @media (max-width:700px){
     .destaques{grid-template-columns:1fr}
     .itens li{grid-template-columns:40px minmax(0,1fr)}
     .itens img{width:40px;height:40px}
     .acoes{grid-column:1/-1;justify-content:flex-start}
+    .itens.por-anuncio li.com-check{grid-template-columns:22px 96px minmax(0,1fr)}
   }
   .filtros-esc{display:inline-flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;margin-right:10px}
   .filtros-esc label{display:flex;align-items:center;gap:6px;color:var(--muted,#5f6b7f)}
