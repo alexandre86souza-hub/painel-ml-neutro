@@ -299,6 +299,13 @@
       <button class="bt primario">Filtrar</button>
       <button type="button" class="bt" id="paRecarregar">Atualizar do Mercado Livre</button>
     </form>
+    <div class="lote pa-lote" id="paLote">
+      <label class="marcar-todos"><input type="checkbox" id="paTodos"> Marcar todos desta página</label>
+      <span id="paQtd" class="lote-qtd">0 marcada(s)</span>
+      <label class="pa-num" title="Oferta relâmpago: quantas unidades separar para a oferta (dentro do mínimo e máximo do ML)">Unidades na relâmpago
+        <input id="paUnid" type="number" min="1" step="1" value="10" inputmode="numeric"></label>
+      <button type="button" class="bt primario" id="paAderir" disabled>Aderir às marcadas</button>
+    </div>
     <div id="paLista"><p class="carregando">Clique em Filtrar para carregar.</p></div>
     <div class="pa-nav" id="paNav" hidden>
       <button type="button" class="bt" id="paAnt">← anteriores</button><span id="paPag"></span>
@@ -936,6 +943,18 @@ function cartaoAnuncio(a, promocoes){
       p.vendedor_pct != null ? `você paga ${p.vendedor_pct}%, o ML ${p.ml_pct}%` : ''].filter(Boolean).join(' · ');
     li.querySelector('img').replaceWith(el('span', 'chip ' + ({ started:'verde', pending:'azul', candidate:'amarelo' }[p.status] || ''),
       { started:'Ativa', pending:'Agendada', candidate:'Pode entrar' }[p.status] || p.status));
+    // adesão em massa: uma promoção por anúncio (marcar outra do mesmo anúncio desmarca a anterior)
+    if(p.status === 'candidate' && !a._busca){
+      const ck = el('input', 'ck-pa'); ck.type = 'checkbox'; ck.setAttribute('aria-label', `Marcar ${a.id} em ${p.nome}`);
+      ck.onchange = () => {
+        if(ck.checked){
+          for(const outro of card.querySelectorAll('input.ck-pa')) if(outro !== ck && outro.checked){ outro.checked = false; }
+          paMarcadas.set(a.id, { p: { ...p, preco_original: p.preco_original ?? a.preco }, li });
+        }else if(paMarcadas.get(a.id)?.li === li) paMarcadas.delete(a.id);
+        atualizarPaLote();
+      };
+      li.classList.add('com-check'); li.prepend(ck);
+    }
     ul.appendChild(li);
   }
   card.appendChild(ul);
@@ -1011,7 +1030,7 @@ async function carregarPorAnuncio(recarregar){
       for(const p of r.promocoes){ const o = el('option', null, `${p.nome} (${p.tipo_nome})`); o.value = p.id; $('paPromo').appendChild(o); }
       paPromosCarregadas = true;
     }
-    box.innerHTML = '';
+    box.innerHTML = ''; paMarcadas.clear(); atualizarPaLote();
     if(!r.itens.length){
       box.appendChild(el('p', 'vazio', 'Nenhum anúncio com esse filtro.'));
       return;
@@ -1024,6 +1043,78 @@ async function carregarPorAnuncio(recarregar){
     $('paProx').disabled = r.pagina + 1 >= paginas;
   }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
 }
+// ---------- adesão em massa (por anúncio) ----------
+// Promoções "Pode entrar" marcadas na lista por anúncio: item_id -> { p, li }. Preço = o sugerido pelo ML (o mesmo do
+// "Aderir" de cada um; oferta relâmpago já vem com 6%), dentro do mínimo/máximo; relâmpago com as unidades do campo.
+const paMarcadas = new Map();
+function atualizarPaLote(){
+  const n = paMarcadas.size;
+  $('paQtd').textContent = `${numero(n)} marcada(s)`;
+  $('paAderir').disabled = !n;
+  $('paAderir').textContent = n ? `Aderir às ${numero(n)} marcada(s)` : 'Aderir às marcadas';
+  const cards = [...$('paLista').querySelectorAll('.pa-card')].filter((c) => c.querySelector('input.ck-pa:not(:disabled)'));
+  $('paTodos').checked = cards.length > 0 && cards.every((c) => c.querySelector('input.ck-pa:checked'));
+}
+// Marcar todos: em cada anúncio da página, a 1ª promoção disponível (as que o filtro de desconto/lucro deixou).
+$('paTodos').onchange = () => {
+  const marcar = $('paTodos').checked;
+  for(const c of $('paLista').querySelectorAll('.pa-card')){
+    const cks = [...c.querySelectorAll('input.ck-pa:not(:disabled)')];
+    if(marcar){ if(cks.length && !cks.some((k) => k.checked)){ cks[0].checked = true; cks[0].onchange(); } }
+    else for(const k of cks) if(k.checked){ k.checked = false; k.onchange(); }
+  }
+  atualizarPaLote();
+};
+function precoSugerido(p){
+  let v = p.preco_sugerido || p.preco || p.preco_max;
+  if(!v) return null;
+  if(p.preco_max && v > p.preco_max) v = p.preco_max;
+  if(p.preco_min && v < p.preco_min) v = p.preco_min;
+  return Math.floor(v * 100) / 100;
+}
+$('paAderir').onclick = async () => {
+  const unid = Math.floor(Number($('paUnid').value));
+  const planos = [...paMarcadas.entries()].map(([id, s]) => ({ id, s, preco: s.p.precisa_preco ? precoSugerido(s.p) : null }));
+  if(!planos.length) return;
+  const fora = planos.filter((x) => (x.s.p.precisa_preco && x.preco == null) || x.s.p.precisa_datas);
+  const temRelampago = planos.some((x) => x.s.p.precisa_estoque);
+  if(temRelampago && !(unid > 0)){ aviso('Informe as unidades da oferta relâmpago.', 'erro'); return; }
+  const nomes = [...new Set(planos.map((x) => x.s.p.nome))];
+  if(!confirm(`Colocar ${planos.length} anúncio(s) nas promoções marcadas (${nomes.slice(0, 4).join(', ')}${nomes.length > 4 ? '…' : ''}) com o preço sugerido pelo Mercado Livre?`
+    + (temRelampago ? `\n\nOferta relâmpago: ${unid} unidade(s) em cada (dentro do mínimo e máximo do ML).` : '')
+    + (fora.length ? `\n\n${fora.length} ficarão de fora (sem preço sugerido ou pedem datas: use o "Aderir" de cada um).` : '')
+    + '\n\nIsso muda o preço de venda no Mercado Livre.')) return;
+  $('paAderir').disabled = true; limparAviso();
+  let ok = 0, falhas = 0;
+  for(const pl of planos){
+    const p = pl.s.p;
+    const alvo = pl.s.li.querySelector('.acoes');
+    const marca = el('span', 'res-lote', 'enviando…');
+    alvo.replaceChildren(marca);
+    const ck = pl.s.li.querySelector('input.ck-pa');
+    paMarcadas.delete(pl.id);
+    if((p.precisa_preco && pl.preco == null) || p.precisa_datas){
+      marca.className = 'res-lote falha'; marca.textContent = p.precisa_datas ? 'pede datas: use o Aderir' : 'sem preço sugerido'; falhas++;
+      if(ck) ck.checked = false; continue;
+    }
+    const corpo = { promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id, preco_original: p.preco_original };
+    if(pl.preco != null) corpo.preco = pl.preco;
+    if(p.precisa_estoque) corpo.estoque = Math.max(p.estoque_min || 1, p.estoque_max ? Math.min(unid, p.estoque_max) : unid);
+    try{
+      await post(`/api/promocoes/anuncio/${pl.id}/aderir`, corpo);
+      marca.className = 'res-lote ok'; marca.textContent = '✓ aderiu' + (pl.preco ? ` por ${real(pl.preco)}` : '') + (corpo.estoque ? ` · ${corpo.estoque} un.` : '');
+      ok++;
+      // o anúncio já entrou: as outras promoções dele saem da marcação
+      for(const k of pl.s.li.closest('.pa-card').querySelectorAll('input.ck-pa')){ k.checked = false; k.disabled = true; }
+    }catch(e){ marca.className = 'res-lote falha'; marca.textContent = 'recusado: ' + e.message; falhas++; if(ck) ck.checked = false; }
+    atualizarPaLote();
+  }
+  atualizarPaLote();
+  aviso(`Pronto: ${ok} anúncio(s) entraram na promoção` + (falhas ? `, ${falhas} ficaram de fora ou foram recusados (veja em cada anúncio).` : '.')
+    + ' O Mercado Livre pode levar alguns minutos para mostrar os preços novos.', falhas && !ok ? 'erro' : 'ok', false);
+  carregarPromos().catch(() => null);
+};
+
 $('formPA').onsubmit = (ev) => {
   ev.preventDefault();
   // código MLB exato: busca direto no ML (pega também promoções que não aparecem nas listas, como o desconto próprio)
@@ -1044,7 +1135,8 @@ async function verAnuncio(id){
     const r = await api(`/api/promocoes/anuncio/${id}`);
     box.innerHTML = '';
     const ordem = { started: 0, pending: 1, candidate: 2 };
-    box.appendChild(cartaoAnuncio({ ...r.item }, r.promocoes.sort((a, b) => (ordem[a.status] ?? 3) - (ordem[b.status] ?? 3))));
+    paMarcadas.clear(); atualizarPaLote();
+    box.appendChild(cartaoAnuncio({ ...r.item, _busca: true }, r.promocoes.sort((a, b) => (ordem[a.status] ?? 3) - (ordem[b.status] ?? 3))));
   }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
 }
 
