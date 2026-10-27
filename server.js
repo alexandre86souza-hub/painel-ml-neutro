@@ -2439,6 +2439,30 @@ routes['GET /api/estoque/anuncios/ml/diagnostico'] = async (url) => {
         titulo: porId.get(iid)?.title || null, estoque: porId.get(iid)?.available_quantity ?? null, ...(extra.get(iid) || {}) })) })) };
   });
 };
+// Shopee, antes de mandar estoque (só leitura): por anúncio/modelo o stock_info_v2 inteiro (summary_info, seller_stock com
+// location_id, shopee_stock = armazém da Shopee) e os armazéns da loja (shop/get_warehouse_detail, multi-armazém).
+routes['GET /api/estoque/anuncios/shopee/diagnostico'] = async (url) => {
+  const loja = Number(url.searchParams.get('loja'));
+  if (!D.shopeeLojaObter(loja)) throw Object.assign(new Error('Loja da Shopee não conectada.'), { status: 400 });
+  const n = Math.min(30, Math.max(1, Number(url.searchParams.get('n')) || 12));
+  const dl = (c, p) => shopeeMod.daLoja(loja, c, p);
+  const armazens = await dl('/api/v2/shop/get_warehouse_detail', {}).then((r) => r.response ?? r).catch((e) => ({ erro: e.message }));
+  const ids = ((await dl('/api/v2/product/get_item_list', { offset: 0, page_size: 100, item_status: 'NORMAL' })).response?.item || []).map((x) => x.item_id);
+  const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: ids.slice(0, 50) });
+  const lista = b.response?.item_list || [];
+  // amostra: metade com variação, metade sem
+  const amostra = [...lista.filter((i) => i.has_model).slice(0, Math.ceil(n / 2)), ...lista.filter((i) => !i.has_model)].slice(0, n);
+  const itens = [];
+  for (const it of amostra) {
+    let modelos = null;
+    if (it.has_model) {
+      const m = await dl('/api/v2/product/get_model_list', { item_id: it.item_id }).catch((e) => ({ erro: e.message }));
+      modelos = (m.response?.model || []).slice(0, 4).map((x) => ({ model_id: x.model_id, sku: x.model_sku || null, stock_info_v2: x.stock_info_v2 || null }));
+    }
+    itens.push({ item_id: it.item_id, sku: it.item_sku || null, status: it.item_status, tem_modelo: !!it.has_model, stock_info_v2: it.has_model ? null : it.stock_info_v2 || null, modelos });
+  }
+  return { loja, armazens, ativos_lidos: ids.length, itens };
+};
 // Envio de estoque ao ML (por conta liberada em ml_estoque_contas; começa só pela Primor — as outras ficam com o UpSeller).
 // Medido na Primor em 26/10/2026: um depósito só (selling_address), sem Full, 4 anúncios com variações e 131 pares
 // tradicional + catálogo que dividem o mesmo user_product (mudar um muda o outro). Por isso o envio é UM número por
