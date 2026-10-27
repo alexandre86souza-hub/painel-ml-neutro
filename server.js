@@ -330,6 +330,13 @@ async function ml(pathname, opts = {}, contaId = null) {
 
   let res = await call(conta);
   if (res.status === 401) { conta = await renovar(conta); res = await call(conta); }
+  // limite de chamadas do ML (429 "local_rate_limited", medido 27/10/2026 com o envio automático da Primor + comandas + relatórios
+  // ao mesmo tempo): leitura espera e tenta de novo (1,5 s e 4 s) antes de virar erro na tela. Escrita não repete aqui.
+  for (const ms of [1500, 4000]) {
+    if (res.status !== 429 || (opts.method && opts.method !== 'GET')) break;
+    await new Promise((ok) => setTimeout(ok, ms));
+    res = await call(conta);
+  }
   const body = await res.text();
   const json = body ? JSON.parse(body) : null;
   if (!res.ok) throw Object.assign(new Error(mensagemDoML(json, res.statusText)), { status: res.status, body: json });
