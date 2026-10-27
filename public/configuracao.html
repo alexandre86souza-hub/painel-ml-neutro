@@ -221,6 +221,22 @@ document.addEventListener('DOMContentLoaded',()=>{
         <article class="cfg-security-row" aria-labelledby="t6"><div><span class="cfg-security-icon">●</span><div><h4 id="t6">Verificação em duas etapas</h4><p id="mfaInfo">Todo login pede a senha e o código de 6 dígitos do aplicativo autenticador do celular.</p></div></div><details><summary class="cfg-security-action">Trocar de celular</summary><form id="formMfa" novalidate class="cfg-password-form"><p class="sub">Confirme a senha e o código do celular atual. Em seguida o painel mostra uma chave nova para cadastrar no celular novo.</p><label for="mfaSenha">Senha do painel</label><input id="mfaSenha" type="password" autocomplete="current-password" required><label for="mfaCodigo">Código do aplicativo (celular atual)</label><input id="mfaCodigo" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required><div class="acoes"><button type="submit">Trocar de celular</button></div><p class="sub">Perdeu o celular? No computador do painel, rode <code>npm run desativar-2fa</code>.</p></form><div id="mfaStatus"></div></details></article>
       </section>
 
+      <section class="cfg-section" id="email" aria-labelledby="cfg-mail-title">
+        <div class="cfg-section-head"><div><span class="cfg-kicker">04 · E-MAIL</span><h3 id="cfg-mail-title">E-mail de alertas e relatório</h3><p>O painel manda por e-mail os alertas (estoque, envios, reclamações, segurança) na hora e, todo dia às 7h30, o relatório do dia anterior: vendas, meta, estoque, pendências e acessos ao painel.</p></div><div class="cfg-status-chip" id="mailChip"><i></i> —</div></div>
+        <article class="cfg-security-row"><div><span class="cfg-security-icon">●</span><div><h4>Conta que manda os e-mails</h4><p id="mailInfo">No Gmail: ative a verificação em duas etapas da conta Google e crie uma "senha de app" (myaccount.google.com → Segurança → Senhas de app). Use essa senha aqui, não a senha da conta.</p></div></div>
+          <details open><summary class="cfg-security-action">Configurar</summary>
+            <form id="formMail" novalidate class="cfg-password-form">
+              <label for="mailUsuario">E-mail que manda (Gmail)</label><input id="mailUsuario" type="email" autocomplete="off" placeholder="alertas.painel@gmail.com">
+              <label for="mailSenha">Senha de app (16 letras)</label><input id="mailSenha" type="password" autocomplete="new-password" placeholder="deixe vazio para manter a atual">
+              <label for="mailPara">Quem recebe (até 5, separados por vírgula)</label><input id="mailPara" type="text" autocomplete="off">
+              <label for="mailHost">Servidor (porta 465)</label><input id="mailHost" type="text" value="smtp.gmail.com">
+              <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="mailAlertas" checked style="width:auto"> Alertas na hora</label>
+              <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="mailRelatorio" checked style="width:auto"> Relatório do dia anterior às 7h30</label>
+              <div class="acoes"><button type="submit">Salvar</button><button type="button" class="ghost" id="btnMailTeste">Mandar e-mail de teste</button><button type="button" class="ghost" id="btnMailRelatorio">Mandar o relatório agora</button></div>
+            </form><div id="mailStatus"></div>
+          </details></article>
+      </section>
+
       
 
     </div>
@@ -241,6 +257,30 @@ async function api(path, opts){
   return j;
 }
 const post = (path, body) => api(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {}) });
+
+// E-mail de alertas e relatório (email.js): configuração, teste e o relatório na hora
+async function carregarEmail(){
+  try{
+    const c = await api('/api/email/config');
+    $('mailUsuario').value = c.usuario || ''; $('mailPara').value = c.para || ''; $('mailHost').value = c.host || 'smtp.gmail.com';
+    $('mailAlertas').checked = c.alertas; $('mailRelatorio').checked = c.relatorio;
+    const pronto = c.usuario && c.tem_senha && c.para;
+    $('mailChip').innerHTML = pronto ? '<i></i> Ligado' : '<i></i> Não configurado';
+    $('mailChip').className = 'cfg-status-chip' + (pronto ? ' cfg-status-safe' : '');
+    $('mailStatus').textContent = (c.ultimo_relatorio ? `Último relatório: ${new Date(c.ultimo_relatorio).toLocaleString('pt-BR')}. ` : '') + (c.erro ? `Último erro: ${c.erro.slice(25)}` : '');
+  }catch(e){ $('mailStatus').textContent = e.message; }
+}
+$('formMail').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try{
+    await api('/api/email/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: $('mailUsuario').value.trim(), senha: $('mailSenha').value,
+      para: $('mailPara').value, host: $('mailHost').value.trim() || 'smtp.gmail.com', porta: 465, alertas: $('mailAlertas').checked, relatorio: $('mailRelatorio').checked }) });
+    $('mailSenha').value = ''; await carregarEmail(); $('mailStatus').textContent = 'Salvo. Clique em "Mandar e-mail de teste" para conferir.';
+  }catch(e){ $('mailStatus').textContent = e.message; }
+};
+$('btnMailTeste').onclick = async () => { $('mailStatus').textContent = 'Mandando…'; try{ await post('/api/email/teste'); $('mailStatus').textContent = 'E-mail de teste enviado: confira a caixa de entrada (e o spam).'; }catch(e){ $('mailStatus').textContent = e.message; } };
+$('btnMailRelatorio').onclick = async () => { $('mailStatus').textContent = 'Montando e mandando o relatório…'; try{ const r = await post('/api/email/relatorio'); $('mailStatus').textContent = `Relatório enviado: "${r.assunto}".`; }catch(e){ $('mailStatus').textContent = e.message; } };
+carregarEmail();
 
 // Caixa de mensagem montada só com textContent: tudo que vem do servidor ou do ML é dado.
 function caixa(tipo, titulo, linhas = []){

@@ -327,6 +327,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   dia à mão. Meta do TOTAL por mês (`metas_mes`). CNPJs (`estado` metas_cnpjs: nome, anexo, lojas) e Simples Nacional
   (`simples`: RBT12 = 12 meses ANTES do mês -> faixa, efetiva = (RBT12 × nominal − dedução) ÷ RBT12, Anexo I/II; meses sem
   dados digitados por CNPJ em `fat_mes_manual`). Nada no MCP (tem Amazon).
+- E-mail (`email.js`, bloco "04 · E-mail" em `public/configuracao.html`, só o administrador): SMTP sem biblioteca (TLS direto 465,
+  AUTH LOGIN; Gmail = "senha de app", cifrada em `estado` email_senha). Alertas de 5 em 5 min = avisos do sino dos tipos `TIPOS_EMAIL`
+  (estoque_leroy, estoque_envio, seguranca, alerta, reclamacao; venda/mensagem ficam só no sino) a partir de `email_avisos_ultimo_id`,
+  + verificações próprias (estoque negativo, comandas com prazo vencido, tipo `alerta`, uma por dia). Relatório do dia anterior às
+  7h30 Brasília (`relatorioDiario`, `email_relatorio_dia`): vendas por loja (`fat_dia`) contra o mesmo dia da semana anterior, meta
+  (`GET /api/metas`, precisa por dia), envios de estoque por loja, repor/negativos, pendências e SEGURANÇA. Segurança: cada login
+  grava `acessos` (IP, ok, motivo; `ip_novo` = entrada certa pela internet de IP não usado pelo login em 120 dias) em
+  `server.js#registrarAcesso`, e vira aviso `seguranca` (IP novo, IP bloqueado, login online bloqueado, senha trocada, 2FA ativado).
+  Amazon só como total do dia; nenhum dado de cliente no e-mail. Nada no MCP (`test-email.js`).
 - Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
   VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon

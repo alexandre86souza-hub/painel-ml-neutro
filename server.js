@@ -112,6 +112,25 @@ function contarErro(chave, limite) {
   tentativas.set(chave, t);
 }
 
+// Segurança (pedido do dono, 27/10/2026): cada login vira uma linha em `acessos` (com o IP) e o que pode ser invasão vira
+// aviso "seguranca" no sino de todas as contas — o email.js manda por e-mail: entrada de IP novo, IP bloqueado por tentativas,
+// login pela internet todo bloqueado, senha trocada e 2FA ativado.
+function avisoSeguranca(chave, titulo, texto) {
+  for (const c of D.contasListar()) D.avisoCriar(c.ml_user_id, { tipo: 'seguranca', chave, titulo, texto, link: '/usuarios.html' });
+}
+function registrarAcesso(req, online, quem, ok, motivo) {
+  const ip = online ? ipDoCliente(req) : 'local';
+  let r = { ip_novo: false };
+  try { r = D.acessoGravar({ quem, ip, onde: online ? 'internet' : 'local', ok, motivo }); } catch { /* não derruba o login */ }
+  const hora = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13);
+  if (ok && r.ip_novo) avisoSeguranca(`acesso_novo:${quem}:${ip}`, `Entrada no painel de um endereço novo (${quem})`,
+    `O login "${quem}" entrou pela internet do IP ${ip}, que não tinha sido usado antes. Se não foi você (ou alguém do escritório), troque a senha e o 2FA agora.`);
+  if (!ok && online && minutosBloqueado(`ip:${ip}`) > 0) avisoSeguranca(`bloqueio_ip:${ip}:${hora}`, 'Tentativas de senha erradas: um endereço foi bloqueado',
+    `O IP ${ip} errou a senha ou o código 5 vezes (último login tentado: "${quem}") e ficou bloqueado por 15 minutos.`);
+  if (!ok && online && minutosBloqueado('online') > 0) avisoSeguranca(`bloqueio_online:${hora}`, 'Muitas tentativas erradas: o login pela internet foi bloqueado',
+    'Mais de 30 tentativas erradas em 15 minutos, de vários endereços. O login pela internet ficou bloqueado por 15 minutos (no computador do painel continua funcionando).');
+}
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -2243,6 +2262,15 @@ Object.assign(routes, defeitoCanaisMod.rotas);
 // Metas e faturamento por CNPJ + Simples Nacional (metas.js; só o administrador: rotas fora de qualquer módulo de usuarios.js)
 const metasMod = require('./metas.js').criar({ D, routes, CTX });
 Object.assign(routes, metasMod.rotas);
+// E-mail: alertas de 5 em 5 min e o relatório do dia anterior às 7h30 (email.js; rotas só do administrador)
+// estoqueMod e comandasMod são criados mais abaixo: o e-mail chama por eles só na hora de mandar
+const emailMod = require('./email.js').criar({ D, routes, resumoEnviosEstoque: () => resumoEnviosEstoque(),
+  estoqueMod: { visao: () => estoqueMod.visao() }, comandasMod: { resumoFila: () => comandasMod.resumoFila() } });
+Object.assign(routes, emailMod.rotas);
+if (!process.env.PAINEL_TESTE) {
+  setInterval(() => { emailMod.alertas().catch(() => null); }, 5 * 60e3).unref?.();
+  setInterval(() => { emailMod.relatorioDiario().catch(() => null); }, 60e3).unref?.();
+}
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.
 // Estoque (estoque.js): saldo, baixa automática das vendas, contagem, compras e relatórios.
 const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) => sincronizarVendas(c, dias), shopeeVendas: shopeeVendasMod,
@@ -3110,6 +3138,7 @@ async function tratarPainelNoContexto(req, res, online = false) {
       const chaveIp = `ip:${ipDoCliente(req)}`;
       const espera = online ? Math.max(minutosBloqueado(chaveIp), minutosBloqueado('online')) : 0;
       if (espera) {
+        registrarAcesso(req, online, '?', false, 'bloqueado');
         return enviarHtml(res, PAGINA_LOGIN(`Muitas tentativas erradas. Tente de novo em ${espera} min `
           + '(ou entre pelo computador onde o painel está instalado).', 429));
       }
@@ -3122,32 +3151,39 @@ async function tratarPainelNoContexto(req, res, online = false) {
         const confere = u ? D.usuarioSenhaConfere(u.id, enviada) : (D.senhaConfere(enviada + '\u0000'), false);   // mesmo tempo de quem existe
         if (!u || !u.ativo || !confere) {
           errou(); D.auditoriaGravar(login.slice(0, 30), 'LOGIN', online ? 'internet' : 'local', 401);
+          registrarAcesso(req, online, login.slice(0, 30), false, 'senha');
           return enviarHtml(res, PAGINA_LOGIN('Usuário ou senha incorretos.'));
         }
         if (temporariaVencida(u)) return enviarHtml(res, PAGINA_LOGIN(`A senha temporária vale ${U.TEMPORARIA_HORAS} horas e venceu. Peça outra ao administrador.`));
         if (u.mfa_ativo && !SEG.codigoConfere(D.usuarioMfa(u.id).segredo, f.get('codigo'))) {
           errou(); D.auditoriaGravar(u.login, 'LOGIN', online ? 'internet' : 'local', 401);
+          registrarAcesso(req, online, u.login, false, 'codigo');
           return enviarHtml(res, PAGINA_LOGIN('Código de verificação incorreto ou vencido. Confira o horário do celular e tente de novo.'));
         }
         if (online) tentativas.delete(chaveIp);
         D.usuarioAcessou(u.id);
         D.auditoriaGravar(u.login, 'LOGIN', online ? 'internet' : 'local', 200);
+        registrarAcesso(req, online, u.login, true);
         return redirecionar(res, U.primeiraPagina({ ...u, admin: false }), { 'Set-Cookie': cookieSessao(D.sessaoCriar(undefined, u.id), undefined, online) });
       }
       if (!D.senhaConfere(enviada)) {
         D.auditoriaGravar('admin', 'LOGIN', online ? 'internet' : 'local', 401);
         if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); }
+        registrarAcesso(req, online, 'admin', false, 'senha');
         return enviarHtml(res, PAGINA_LOGIN('Senha incorreta.'));
       }
       // código errado conta como tentativa errada, igual à senha
       if (mfaAtivo() && !SEG.codigoConfere(D.configLer('painel_2fa_segredo'), f.get('codigo'))) {
         if (online) { contarErro(chaveIp, LIMITES_SENHA.ip); contarErro('online', LIMITES_SENHA.online); }
+        D.auditoriaGravar('admin', 'LOGIN', online ? 'internet' : 'local', 401);
+        registrarAcesso(req, online, 'admin', false, 'codigo');
         return enviarHtml(res, PAGINA_LOGIN('Código de verificação incorreto ou vencido. Confira o horário do celular e tente de novo.'));
       }
       // senha criada antes da política atual: entra, mas vai direto trocar
       if (SEG.problemaSenha(enviada)) D.configGravar('painel_senha_fraca', '1');
       if (online) tentativas.delete(chaveIp);
       D.auditoriaGravar('admin', 'LOGIN', online ? 'internet' : 'local', 200);
+      registrarAcesso(req, online, 'admin', true);
       const destino = D.contasListar().length ? '/' : '/configuracao.html';
       return redirecionar(res, destino, { 'Set-Cookie': cookieSessao(D.sessaoCriar(), undefined, online) });
     }
@@ -3180,6 +3216,7 @@ async function tratarPainelNoContexto(req, res, online = false) {
       if (nova === atual) return enviarHtml(res, PAGINA_TROCAR_SENHA('A senha nova precisa ser diferente da atual.', motivo));
       seg.senhaDefinir(nova);   // derruba as sessões dessa pessoa: esta ganha uma nova
       D.auditoriaGravar(quem.login, 'SENHA', 'trocou a própria senha', 200);
+      avisoSeguranca(`senha:${quem.login}:${Date.now()}`, `Senha do painel trocada (${quem.login})`, `O login "${quem.login}" trocou a senha. Se não foi você, entre pelo computador do painel e troque de novo.`);
       return redirecionar(res, U.primeiraPagina(quem), { 'Set-Cookie': cookieSessao(D.sessaoCriar(undefined, quem.id), undefined, online) });
     }
     return enviarHtml(res, PAGINA_TROCAR_SENHA(null, seg.pendencia() === 'senha' ? seg.motivo() : 'pedido'));
@@ -3197,6 +3234,7 @@ async function tratarPainelNoContexto(req, res, online = false) {
       }
       seg.mfaGravar({ segredo: pend, pendente: null });
       D.auditoriaGravar(quem.login, '2FA', 'ativou a verificação em duas etapas', 200);
+      avisoSeguranca(`2fa:${quem.login}:${Date.now()}`, `Verificação em duas etapas ativada (${quem.login})`, `O login "${quem.login}" ativou (ou trocou) o código de duas etapas. Se não foi você, troque a senha agora.`);
       return redirecionar(res, U.primeiraPagina(quem));
     }
     return enviarHtml(res, PAGINA_ATIVAR_2FA(pend, null, quem));

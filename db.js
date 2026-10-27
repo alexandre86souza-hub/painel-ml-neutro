@@ -823,6 +823,8 @@ const avisoCriar = (mlUserId, a) => db.prepare(`INSERT OR IGNORE INTO avisos (ml
   .run(mlUserId, a.tipo, a.chave, a.titulo, a.texto ?? null, a.link ?? null, a.criado_em || agora()).changes > 0;
 const avisosListar = (mlUserId, limite = 50) =>
   db.prepare('SELECT * FROM avisos WHERE ml_user_id=? ORDER BY id DESC LIMIT ?').all(mlUserId, limite);
+const avisosUltimoId = () => db.prepare('SELECT IFNULL(MAX(id), 0) AS n FROM avisos').get().n;
+const avisosDepoisDe = (id) => db.prepare('SELECT * FROM avisos WHERE id > ? ORDER BY id LIMIT 200').all(id);
 const avisosNaoLidos = (mlUserId) =>
   db.prepare('SELECT COUNT(*) AS n FROM avisos WHERE ml_user_id=? AND lido=0').get(mlUserId).n;
 const avisosMarcarLidos = (mlUserId, ids) => (ids && ids.length
@@ -1619,7 +1621,7 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
 const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
   'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token', 'leroy_api_key',
-  'magalu_client_secret', 'magalu_refresh_token', 'magalu_acesso']);
+  'magalu_client_secret', 'magalu_refresh_token', 'magalu_acesso', 'email_senha']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;
@@ -1745,6 +1747,25 @@ function auditoriaGravar(quem, metodo, caminho, status) {
   if (Math.random() < 0.01) db.prepare('DELETE FROM auditoria WHERE em < ?').run(new Date(Date.now() - 366 * 864e5).toISOString());
 }
 const auditoriaListar = (n = 300) => db.prepare('SELECT em, quem, metodo, caminho, status FROM auditoria ORDER BY id DESC LIMIT ?').all(n);
+// Dia de Brasília (AAAA-MM-DD) -> [início, fim) em UTC.
+const janelaDoDiaBR = (dia) => [`${dia}T03:00:00.000Z`, new Date(Date.parse(`${dia}T03:00:00.000Z`) + 864e5).toISOString()];
+const auditoriaDoDia = (dia) => db.prepare('SELECT em, quem, metodo, caminho, status FROM auditoria WHERE em >= ? AND em < ? ORDER BY id').all(...janelaDoDiaBR(dia));
+// Acessos ao painel (login certo/errado/bloqueado) com o IP, para os alertas e o relatório de segurança (email.js).
+// ip_novo = entrada CERTA pela internet de um IP que aquele login não usou nos últimos 120 dias.
+db.exec(`CREATE TABLE IF NOT EXISTS acessos (id INTEGER PRIMARY KEY AUTOINCREMENT, em TEXT NOT NULL, quem TEXT NOT NULL, ip TEXT,
+  onde TEXT NOT NULL, ok INTEGER NOT NULL, motivo TEXT, ip_novo INTEGER NOT NULL DEFAULT 0);
+  CREATE INDEX IF NOT EXISTS acessos_em ON acessos(em);`);
+function acessoGravar({ quem, ip, onde, ok, motivo }) {
+  const desde = new Date(Date.now() - 120 * 864e5).toISOString();
+  const conhecido = ok && onde === 'internet' && ip ? db.prepare('SELECT 1 FROM acessos WHERE quem=? AND ip=? AND ok=1 AND em >= ? LIMIT 1').get(quem, ip, desde) : true;
+  const primeiro = !db.prepare("SELECT 1 FROM acessos WHERE ok=1 AND onde='internet' LIMIT 1").get();   // o 1º registro não é "novo"
+  const ipNovo = ok && onde === 'internet' && !conhecido && !primeiro ? 1 : 0;
+  db.prepare('INSERT INTO acessos (em, quem, ip, onde, ok, motivo, ip_novo) VALUES (?,?,?,?,?,?,?)').run(agora(), String(quem).slice(0, 40), ip || null, onde, ok ? 1 : 0, motivo || null, ipNovo);
+  if (Math.random() < 0.01) db.prepare('DELETE FROM acessos WHERE em < ?').run(new Date(Date.now() - 366 * 864e5).toISOString());
+  return { ip_novo: !!ipNovo };
+}
+const acessosDoDia = (dia) => db.prepare('SELECT * FROM acessos WHERE em >= ? AND em < ? ORDER BY id').all(...janelaDoDiaBR(dia)).map((a) => ({ ...a, ok: !!a.ok, ip_novo: !!a.ip_novo }));
+const acessosErrosDesde = (desde) => db.prepare('SELECT COUNT(*) n FROM acessos WHERE ok=0 AND em >= ?').get(desde).n;
 
 function sessaoValida(token) {
   if (!TOKEN.test(token || '')) return false;
@@ -2286,7 +2307,7 @@ module.exports = {
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
   custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
-  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, devAcompGravar, devAcompListar, creditoManualGravar, creditosManuais,
+  avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, avisosUltimoId, avisosDepoisDe, acessoGravar, acessosDoDia, acessosErrosDesde, auditoriaDoDia, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, devAcompGravar, devAcompListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,
   adsCampanhasVistas, adsCampanhaGravar, adsMudancaGravar, adsMudancas, adsHistoricoDesde,
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
