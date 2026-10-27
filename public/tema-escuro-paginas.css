@@ -248,6 +248,7 @@ html[data-tema="escuro"][data-pagina="empresa"] .salvo{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="estoque"] .abas button{background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="estoque"] tr.alerta td{background:hsla(17,84%,60%,.14)}
 html[data-tema="escuro"][data-pagina="estoque"] .cartao{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="estoque"] .cartao.atalho:hover{border-color:hsla(212,90%,60%,.35)}
 html[data-tema="escuro"][data-pagina="estoque"] .cartao.alerta b{color:hsl(15,71%,72%)}
 html[data-tema="escuro"][data-pagina="estoque"] .filtros input,
 html[data-tema="escuro"][data-pagina="estoque"] .filtros select,

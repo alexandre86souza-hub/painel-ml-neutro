@@ -34,6 +34,8 @@
   #msg.fixo{position:fixed;top:max(12px, env(safe-area-inset-top, 0px));right:16px;left:auto;max-width:min(560px, calc(100vw - 32px));z-index:60;margin:0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .cartoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
   .cartao{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .cartao.atalho{cursor:pointer}.cartao.atalho:hover{border-color:#93c5fd}
+  .cartao.atalho.ativo{border-color:#2563eb;box-shadow:0 0 0 2px #bfdbfe}
   .cartao small{display:block;font-size:12px;color:var(--muted)}
   .cartao b{font-size:22px}
   .cartao.alerta b{color:#b4441e}
@@ -624,18 +626,26 @@ async function carregarSaldo(recarregar){
     + (visao.erros?.length ? ' Não consegui ler: ' + visao.erros.join(' · ') : '');
   sb.appendChild(caixa);
   const r = visao.resumo, cs = $('cartoes'); cs.innerHTML = '';
-  const cartao = (rot, val, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
-  cartao('Produtos ativos', n0(r.ativos)); cartao('Repor agora', n0(r.repor), r.repor > 0); cartao('Próximos de repor', n0(r.proximo));
+  // cartão com status (string; '' = todos os ativos) vira atalho: filtra a lista por ele e rola até ela
+  const filtrarPor = (status) => { $('sStatus').value = status; $('sAtivos').checked = true; $('sDescEst').checked = false; pintarSaldo(); marcarCartoes(); $('sLista').scrollIntoView({ behavior: 'smooth' }); };
+  const cartao = (rot, val, alerta, status) => {
+    const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val));
+    if(status != null){ c.classList.add('atalho'); c.dataset.status = status; c.tabIndex = 0; c.setAttribute('role', 'button'); c.title = 'Clique para ver só estes na lista';
+      c.onclick = c.onkeydown = (ev) => { if(ev.type === 'keydown' && ev.key !== 'Enter') return; filtrarPor(status); }; }
+    cs.appendChild(c);
+  };
+  cartao('Produtos ativos', n0(r.ativos), false, ''); cartao('Repor agora', n0(r.repor), r.repor > 0, 'Repor agora'); cartao('Próximos de repor', n0(r.proximo), false, 'Próximo de repor');
   if(r.vender_restante){
     const c = el('div', 'cartao liquidar'); c.tabIndex = 0; c.setAttribute('role', 'button');
     c.title = 'Descontinuados que ainda têm estoque: vender o que sobrou e não comprar mais. Clique para ver.';
     c.append(el('small', null, 'Vender o restante'), el('b', null, n0(r.vender_restante)), el('small', null, `${n0(r.vender_restante_pecas)} peças · ${real(r.vender_restante_valor)}`));
-    c.onclick = c.onkeydown = (ev) => { if(ev.type === 'keydown' && ev.key !== 'Enter') return; $('sStatus').value = 'Vender o restante'; pintarSaldo(); $('sLista').scrollIntoView({ behavior: 'smooth' }); };
+    c.classList.add('atalho'); c.dataset.status = 'Vender o restante';
+    c.onclick = c.onkeydown = (ev) => { if(ev.type === 'keydown' && ev.key !== 'Enter') return; filtrarPor('Vender o restante'); };
     cs.appendChild(c);
   }
-  if(r.nao_repor) cartao('Não repor (fornecedor descontinuado)', n0(r.nao_repor));
+  if(r.nao_repor) cartao('Não repor (fornecedor descontinuado)', n0(r.nao_repor), false, 'Não repor');
   cartao('Peças em estoque', n0(r.unidades)); cartao('Valor em estoque', real(r.valor)); if(r.negativos) cartao('Saldo negativo', n0(r.negativos), true);
-  pintarSaldo();
+  pintarSaldo(); marcarCartoes();
   const pb = $('pendBox');
   pb.classList.toggle('escondido', !visao.total_pendentes);
   if(visao.total_pendentes){
@@ -682,7 +692,12 @@ function pintarSaldo(){
       return tr;
     })));
 }
-for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos', 'sDescEst']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => visao && pintarSaldo());
+for(const id of ['sBusca', 'sStatus', 'sForn', 'sAtivos', 'sDescEst']) $(id).addEventListener(id === 'sBusca' ? 'input' : 'change', () => { if(visao){ pintarSaldo(); marcarCartoes(); } });
+// o cartão do status escolhido fica destacado (o filtro que está valendo)
+function marcarCartoes(){
+  const st = $('sStatus').value, so = $('sAtivos').checked && !$('sDescEst').checked;
+  for(const c of document.querySelectorAll('#cartoes .cartao.atalho')) c.classList.toggle('ativo', so && c.dataset.status === st);
+}
 $('sSegPadrao').onchange = async () => {
   const v = $('sSegPadrao').value.trim(); if(v === '') return;
   if(!confirm(`Estoque de segurança padrão = ${v} peça(s) para todo produto sem valor próprio?`)){ $('sSegPadrao').value = visao?.seguranca_padrao ?? 3; return; }
