@@ -336,6 +336,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   grava `acessos` (IP, ok, motivo; `ip_novo` = entrada certa pela internet de IP não usado pelo login em 120 dias) em
   `server.js#registrarAcesso`, e vira aviso `seguranca` (IP novo, IP bloqueado, login online bloqueado, senha trocada, 2FA ativado).
   Amazon só como total do dia; nenhum dado de cliente no e-mail. Nada no MCP (`test-email.js`).
+  Avisos do sino em SEGUNDO PLANO (`server.js#avisosEmSegundoPlano`, 5 em 5 min por conta, `painel.js#gerarAvisos` com trava por conta):
+  o e-mail não depende do painel aberto. Pausa: `painel.js#motivoDaPausa` — o ML pausou/revisão = tipo `pausa_ml` (vai por e-mail, com o
+  sub_status traduzido); sem estoque ou pelo vendedor = `pausa` (só sino); pausado PELO PAINEL (status-em-massa, PUT do item) não avisa
+  (`pausas_painel:{conta}`, 3 dias).
+- Disputa do catálogo do ML (`catalogo.js`, "volte a ganhar da concorrência"): anúncios ATIVOS de catálogo, `/items/{id}/price_to_win?version=v2`
+  de 30 em 30 min por conta (no segundo plano dos avisos), estado em `estado` catalogo_comp:{conta}. Passou a perder (ou anúncio novo já
+  perdendo) = aviso `catalogo` no sino com o lucro e a margem no preço para ganhar (`precos.js#lucroNosPrecos`) e "vale baixar" (margem ≥
+  `catalogo_margem_min`, padrão 15%) ou "não compensa"; a 1ª leitura só vira a base. Só sino + resumo no relatório das 7h30 (pedido do dono).
+  `GET /api/catalogo/competicao[?recarregar=1]` (só leitura, administrador). Nunca muda preço sozinho. Nada no MCP (`test-catalogo.js`).
 - Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
   VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon

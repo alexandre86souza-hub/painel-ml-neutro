@@ -1275,13 +1275,14 @@ const routes = {
   // Pausar ou reativar vários anúncios de uma vez. Um PUT por anúncio (o ML não tem lote);
   // o que o ML recusar volta com o motivo, sem derrubar os outros.
   'POST /api/items/status-em-massa': async (_u, body) => {
-    contaOuErro();
+    const conta = contaOuErro();
     const status = body?.status;
     if (!['active', 'paused'].includes(status)) throw erro400('Informe status: "paused" (pausar) ou "active" (reativar).');
     const ids = [...new Set(Array.isArray(body?.ids) ? body.ids : [])];
     if (!ids.length) throw erro400('Escolha pelo menos um anúncio.');
     if (ids.length > 300) throw erro400('No máximo 300 anúncios por vez.');
     ids.forEach(exigeItemId);
+    if (status === 'paused') marcarPausaPainel(conta.ml_user_id, ids);
     const resultado = await emLotes(ids, 4, async (id) => {
       try {
         const item = await ml(`/items/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
@@ -1935,6 +1936,7 @@ const rotasParam = [
   { m: 'PUT', re: /^\/api\/items\/([A-Z]{3}\d+)$/, fn: async ([id], body) => {
     const conta = contaOuErro();
     const mudancas = buildEdicao(body);
+    if (mudancas.status === 'paused') marcarPausaPainel(conta.ml_user_id, [id]);
     const item = await ml(`/items/${exigeItemId(id)}`, { method: 'PUT', body: JSON.stringify(mudancas) });
     D.produtoSincronizar(conta.ml_user_id, item);
     return { id: item.id, ...mudancas, status: item.status, permalink: item.permalink };
@@ -2107,6 +2109,7 @@ const rotasParam = [
 // passam pelo mesmo despachar() (sessão, origem e MCP iguais às outras).
 let custosMod = null;   // composição do kit e filtro por produto, usados em GET /api/items
 let devolucoesMod = null;   // devoluções do ML: a baixa do estoque devolve o que chegou sem defeito
+let painelMod = null, precosMod = null;   // avisos em segundo plano; lucro no preço para ganhar o catálogo
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
@@ -2115,6 +2118,19 @@ for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), req
   rotasParam.push(...m.rotasParam);
   if (m.composicao) custosMod = m;
   if (m.atualizarDevolucoes) devolucoesMod = m;
+  if (m.gerarAvisos) painelMod = m;
+  if (m.lucroNosPrecos) precosMod = m;
+}
+// Disputa do catálogo do ML ("volte a ganhar da concorrência"; catalogo.js): aviso no sino e resumo no e-mail. Só leitura.
+const catalogoMod = require('./catalogo.js').criar({ ml, D, emLotes, idsDaConta, contaOuErro, lucroNosPrecos: (...a) => precosMod.lucroNosPrecos(...a) });
+Object.assign(routes, catalogoMod.rotas);
+// Anúncio pausado pelo painel: não vira aviso de "pausado" (foi o vendedor). painel.js#pausasDoPainel lê.
+function marcarPausaPainel(conta, ids) {
+  let m = {}; try { m = JSON.parse(D.configLer(`pausas_painel:${conta}`) || '{}'); } catch { /* vazio */ }
+  const agora = Date.now();
+  for (const [k, t] of Object.entries(m)) if (agora - t > 3 * 864e5) delete m[k];
+  for (const id of ids) m[id] = agora;
+  D.configGravar(`pausas_painel:${conta}`, JSON.stringify(m));
 }
 // Filtro "Produto no kit" ao escolher anúncios de uma promoção do ML (módulo campanhas): ids da conta com o produto no SKU
 routes['GET /api/promocoes/com-produto'] = async (url) => ({ ids: await custosMod.idsComProduto(contaOuErro(), url.searchParams.get('produto')) });
@@ -2272,10 +2288,25 @@ Object.assign(routes, metasMod.rotas);
 // E-mail: alertas de 5 em 5 min e o relatório do dia anterior às 7h30 (email.js; rotas só do administrador)
 // estoqueMod e comandasMod são criados mais abaixo: o e-mail chama por eles só na hora de mandar
 const emailMod = require('./email.js').criar({ D, routes, resumoEnviosEstoque: () => resumoEnviosEstoque(),
-  estoqueMod: { visao: () => estoqueMod.visao() }, comandasMod: { resumoFila: () => comandasMod.resumoFila() } });
+  estoqueMod: { visao: () => estoqueMod.visao() }, comandasMod: { resumoFila: () => comandasMod.resumoFila() },
+  resumoCatalogo: (id) => catalogoMod.resumo(id) });
 Object.assign(routes, emailMod.rotas);
+// Avisos do sino (vendas, pausas…) e a disputa do catálogo em segundo plano, por conta: o e-mail não depende do painel aberto.
+let avisosFundo = false;
+async function avisosEmSegundoPlano() {
+  if (avisosFundo) return;
+  avisosFundo = true;
+  try {
+    for (const c of D.contasListar()) {
+      await CTX.comConta(c.ml_user_id, async () => {
+        await painelMod.gerarAvisos(c).catch(() => null);
+        await catalogoMod.verificar(c).catch(() => null);
+      });
+    }
+  } finally { avisosFundo = false; }
+}
 if (!process.env.PAINEL_TESTE) {
-  setInterval(() => { emailMod.alertas().catch(() => null); }, 5 * 60e3).unref?.();
+  setInterval(() => { avisosEmSegundoPlano().catch(() => null); emailMod.alertas().catch(() => null); }, 5 * 60e3).unref?.();
   setInterval(() => { emailMod.relatorioDiario().catch(() => null); }, 60e3).unref?.();
 }
 // Comandas de separação (comandas.js): envios pendentes de todas as contas, por categoria, para imprimir.

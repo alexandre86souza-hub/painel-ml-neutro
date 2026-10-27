@@ -87,6 +87,25 @@ function cobertura(estoque, vendidas, dias) {
   return { media_dia: media, dias: media > 0 ? Math.floor(estoque / media) : null };
 }
 
+// Por que o anúncio ficou pausado, pelo status/sub_status do ML. pelo_ml = o Mercado Livre pausou ou mandou para revisão
+// (vai por e-mail); sem estoque ou pausado pelo vendedor fica só no sino. Função pura: testada.
+const SUB_STATUS = { forbidden: 'proibido pelo Mercado Livre', held: 'retido pelo Mercado Livre', waiting_for_patch: 'aguardando correção',
+  under_review: 'em revisão', suspended: 'suspenso', freezed: 'congelado', moderation_penalty: 'penalidade de moderação',
+  picture_download_pending: 'fotos pendentes', poor_quality_thumbnail: 'foto de capa ruim', expired: 'expirado' };
+function motivoDaPausa(it) {
+  const sub = Array.isArray(it?.sub_status) ? it.sub_status : [];
+  const detalhe = sub.filter((s) => s !== 'out_of_stock').map((s) => SUB_STATUS[s] || s.replace(/_/g, ' ')).join(', ');
+  if (sub.includes('out_of_stock') && !detalhe) return { pelo_ml: false, titulo: 'sem estoque', detalhe: '' };
+  if (it?.status === 'under_review' || sub.some((s) => /moderat|waiting_for_patch|held|forbidden|suspend|freez|penalt/.test(s)))
+    return { pelo_ml: true, titulo: 'pelo Mercado Livre', detalhe };
+  return { pelo_ml: false, titulo: '', detalhe };
+}
+// Anúncios pausados pelo painel nos últimos 3 dias (server.js grava em `pausas_painel:{conta}`): não viram aviso.
+function pausasDoPainel(D, conta) {
+  let m = {}; try { m = JSON.parse(D.configLer(`pausas_painel:${conta}`) || '{}'); } catch { /* vazio */ }
+  return new Set(Object.entries(m).filter(([, t]) => Date.now() - t < 3 * 864e5).map(([id]) => id));
+}
+
 function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela, idsDaConta, baixarPedidos, linhasDoPedido, D, vendasDaConta, adsDaJanela }) {
   // Vendas baixadas antes de o painel guardar a origem do estoque (Full x depósito): baixa a
   // janela de novo uma vez, como a tela Vendas faz com o SKU.
@@ -373,11 +392,12 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
   // Gerados quando a tela pergunta (a cada minuto, com o painel aberto): vendas novas da
   // cópia local, mensagens não lidas e anúncios que ficaram pausados. Na primeira vez só
   // marca o que já existe, para não despejar centenas de avisos antigos.
-  let ultimaVerificacao = 0;
+  // Também roda em segundo plano (server.js, de 5 em 5 min por conta): o e-mail de alertas não depende do painel aberto.
+  const ultimaVerificacao = new Map();   // por conta
   async function gerarAvisos(conta) {
-    if (Date.now() - ultimaVerificacao < 45e3) return;
-    ultimaVerificacao = Date.now();
     const id = conta.ml_user_id;
+    if (Date.now() - (ultimaVerificacao.get(id) || 0) < 45e3) return;
+    ultimaVerificacao.set(id, Date.now());
     const primeira = !D.configLer(`avisos_inicio:${id}`);
     const inicio = D.configLer(`avisos_inicio:${id}`) || new Date().toISOString();
     if (primeira) D.configGravar(`avisos_inicio:${id}`, inicio);
@@ -429,14 +449,14 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
     const novosP = relidoEm || !todos ? agora.filter((x) => !conhecidos.has(x)) : [];
     if (novosP.length && !primeira) {
       const det = await infoItens(novosP, 'id,title,status,sub_status');
+      // pausados pelo próprio painel (um a um ou em massa) não avisam: foi o vendedor
+      const doPainel = pausasDoPainel(D, id);
       for (const x of novosP) {
-        const it = det[x]; if (!it) continue;
-        const sub = it.sub_status || [];
-        const motivo = sub.includes('out_of_stock') ? 'sem estoque'
-          : it.status === 'under_review' || sub.some((s) => /moderat|waiting_for_patch|held|forbidden/.test(s)) ? 'pelo Mercado Livre (revisão/moderação)'
-            : 'pausado';
-        D.avisoCriar(id, { tipo: 'pausa', chave: `pausa:${x}:${new Date().toISOString().slice(0, 10)}`,
-          titulo: `Anúncio pausado ${motivo}`, texto: it.title || x,
+        const it = det[x]; if (!it || doPainel.has(x)) continue;
+        const p = motivoDaPausa(it);
+        D.avisoCriar(id, { tipo: p.pelo_ml ? 'pausa_ml' : 'pausa', chave: `pausa:${x}:${new Date().toISOString().slice(0, 10)}`,
+          titulo: `Anúncio ${it.status === 'under_review' ? 'em revisão' : 'pausado'} ${p.titulo}`,
+          texto: `${it.title || x} (${x})${p.detalhe ? ` · ${p.detalhe}` : ''}${p.pelo_ml ? ' · Veja o que corrigir em Anúncios do Mercado Livre (Central de vendedores).' : ''}`,
           link: `/anuncios.html?q=${encodeURIComponent(x)}` });
       }
     }
@@ -592,7 +612,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
     },
   };
 
-  return { rotas, rotasParam: [] };
+  return { rotas, rotasParam: [], gerarAvisos };
 }
 
-module.exports = { criar, lerQualidade, cobertura, ehFull, canalDe, porCanal, gastoAdsPorItem, totaisABC };
+module.exports = { criar, lerQualidade, cobertura, ehFull, canalDe, porCanal, gastoAdsPorItem, totaisABC, motivoDaPausa };

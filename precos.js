@@ -366,7 +366,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, janela, fret
     } },
   ];
 
-  return { rotas, rotasParam };
+  return { rotas, rotasParam, lucroNosPrecos };
 }
 
 module.exports = { criar, precoPara, quebra, gtinValido, faixasAtacado, corpoAtacado, lerAtacado, resumoAtacado };

@@ -13,7 +13,8 @@ const pct = (v) => (v == null ? '—' : (v * 100).toLocaleString('pt-BR', { maxi
 const hojeBR = (agora = Date.now()) => new Date(agora - 3 * 3600e3).toISOString().slice(0, 10);
 const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 // Tipos de aviso do sino que também vão por e-mail (venda nova, pergunta, mensagem… ficam só no sino).
-const TIPOS_EMAIL = new Set(['estoque_leroy', 'estoque_envio', 'seguranca', 'alerta', 'reclamacao']);
+// pausa_ml = o Mercado Livre pausou ou mandou para revisão; a disputa do catálogo (catalogo) vai só no relatório das 7h30.
+const TIPOS_EMAIL = new Set(['estoque_leroy', 'estoque_envio', 'seguranca', 'alerta', 'reclamacao', 'pausa_ml']);
 
 // Mensagem MIME (texto + HTML, UTF-8 em base64). Função pura: testada.
 function mensagemMime({ de, para, assunto, html, texto }, agora = new Date(), id = Math.random().toString(36).slice(2)) {
@@ -69,7 +70,7 @@ function smtpEnviar(cfg, msg) {
   });
 }
 
-function criar({ D, routes, estoqueMod, comandasMod, resumoEnviosEstoque }) {
+function criar({ D, routes, estoqueMod, comandasMod, resumoEnviosEstoque, resumoCatalogo = () => null }) {
   const config = () => ({
     host: D.configLer('email_host') || 'smtp.gmail.com', porta: Number(D.configLer('email_porta')) || 465,
     usuario: D.configLer('email_usuario') || '', senha: D.configLer('email_senha') || '',
@@ -167,6 +168,20 @@ function criar({ D, routes, estoqueMod, comandasMod, resumoEnviosEstoque }) {
     if (est?.inicio) estHtml += `<p style="font-size:13px;margin:8px 0 0">Produtos para repor agora: <b>${est.resumo.repor}</b> · próximos de repor: ${est.resumo.proximo}`
       + ` · com estoque negativo: <b style="color:${est.resumo.negativos ? '#b42318' : 'inherit'}">${est.resumo.negativos}</b></p>`;
     if (estHtml) partes.push(bloco('Estoque', estHtml));
+    // disputa do catálogo do ML: por conta, quantos ganham/dividem/perdem e os que estão perdendo ("vale baixar" primeiro)
+    let catHtml = '';
+    for (const ct of D.contasListar()) {
+      const r = (() => { try { return resumoCatalogo(ct.ml_user_id); } catch { return null; } })();
+      if (!r?.total) continue;
+      catHtml += `<p style="font-size:13px;margin:${catHtml ? '12px' : '0'} 0 6px"><b>${esc(ct.nickname || ct.ml_user_id)}</b>: ${r.total} anúncio(s) de catálogo · ganhando <b>${r.ganhando}</b>`
+        + ` · dividindo ${r.dividindo} · perdendo <b style="color:${r.perdendo ? '#b42318' : 'inherit'}">${r.perdendo}</b></p>`;
+      if (r.lista_perdendo.length) catHtml += tabela(['Anúncio', 'Preço', 'Para ganhar', 'Margem nesse preço', 'Decisão'], r.lista_perdendo.slice(0, 12).map((x) => [
+        `${esc(String(x.titulo || '').slice(0, 48))}<br><span style="color:#5f6b7f;font-size:11px">${esc(x.id)}</span>`, real(x.preco), real(x.preco_ganhar),
+        x.margem_ganhar != null ? pct(x.margem_ganhar) : esc(x.lucro_erro ? 'sem custo/frete' : '—'),
+        x.veredito === 'vale' ? '<b style="color:#0b6b33">vale baixar</b>' : x.veredito === 'nao_compensa' ? '<span style="color:#b42318">não compensa</span>' : '—']));
+    }
+    if (catHtml) partes.push(bloco('Catálogo do Mercado Livre (disputa pelo botão de compra)', catHtml
+      + `<p style="font-size:12px;color:#5f6b7f;margin:6px 0 0">"Vale baixar" = no preço para ganhar a margem fica em ${D.configLer('catalogo_margem_min') || 15}% ou mais. O painel não muda preço sozinho.</p>`));
     // pendências
     const fila = await comandasMod.resumoFila().catch(() => null);
     const pendLinhas = [];
