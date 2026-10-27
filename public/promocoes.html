@@ -146,6 +146,7 @@
   .nova-campanha input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d5d7db;border-radius:8px}
   .excluir-campanha{align-self:flex-start;margin-top:6px;font-size:12px;color:#b91c1c;text-decoration:underline;cursor:pointer}
   .itens.por-anuncio .chip{justify-self:start}
+  .pa-card .pa-produtos{font-weight:600;color:var(--ink,inherit);cursor:help}
   /* caixinha da adesão em massa: coluna própria; as linhas sem ela ficam alinhadas pelo recuo */
   .itens.por-anuncio li.com-check{grid-template-columns:22px 96px minmax(0,1fr) auto}
   .itens.por-anuncio li:not(.com-check){padding-left:34px}
@@ -922,7 +923,14 @@ function cartaoAnuncio(a, promocoes){
   const t = el('div');
   const nome = el('b'); const ln = el('a', null, a.titulo || a.id); ln.href = a.link || '#'; ln.target = '_blank'; ln.rel = 'noopener';
   nome.appendChild(ln);
-  t.append(nome, el('span', null, `${a.id} · ${real(a.preco)} · estoque ${a.estoque ?? '—'}`
+  t.append(nome);
+  // produtos que compõem o anúncio (SKU KIT-407.408 = 407 + 408); variações com kits diferentes, um por kit
+  if(a.produtos?.length){
+    const pr = el('span', 'pa-produtos', 'Produtos: ' + a.produtos.map((k) => k.numeros).join(' | '));
+    pr.title = a.produtos.map((k) => `${k.sku || ''}: ${k.nomes.join(' + ')}`).join('\n');
+    t.appendChild(pr);
+  }
+  t.appendChild(el('span', null, `${a.id} · ${real(a.preco)} · estoque ${a.estoque ?? '—'}`
     + (a.vendas_90 != null ? ` · ${numero(a.vendas_90)} vendido(s) em 90 dias` : '')));
   const uv = a.ultimas_vendas || (a.ultima_venda ? [a.ultima_venda] : []);
   t.appendChild(el('span', 'ultimas' + (uv.length ? '' : ' parado'), uv.length

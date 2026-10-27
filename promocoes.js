@@ -209,7 +209,7 @@ function corpoCampanha({ nome, inicio, fim }, hoje = new Date()) {
     start_date: `${inicio}T00:00:00`, finish_date: `${fim}T00:00:00` };
 }
 
-function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela, freteDoItem, idsDaConta, D }) {
+function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela, freteDoItem, idsDaConta, D, composicaoDe }) {
   const promocoesDaConta = async (conta) =>
     (await ml(`/seller-promotions/users/${conta.ml_user_id}?${V2}`)).results || [];
 
@@ -231,6 +231,31 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
           + 'available_quantity,status,category_id,listing_type_id,site_id,shipping');
         for (const x of r) if (x.code === 200) out[x.body.id] = x.body;
       } catch { /* título e foto são enfeite */ }
+    });
+    return out;
+  }
+
+  // Produtos que compõem cada anúncio (SKU KIT-407.408 = 407 + 408, ou a composição do painel), para a tela mostrar
+  // abaixo do título. Variações com kits diferentes: um grupo por kit. Enfeite: falha não derruba a lista.
+  async function produtosDosItens(ids) {
+    const out = {};
+    if (!composicaoDe) return out;
+    const lotes = [];
+    for (let i = 0; i < ids.length; i += 20) lotes.push(ids.slice(i, i + 20));
+    await emLotes(lotes, 3, async (lote) => {
+      try {
+        const r = await ml(`/items?ids=${lote.join(',')}&attributes=id,seller_custom_field,attributes,variations`);
+        for (const x of r) {
+          if (x.code !== 200) continue;
+          const kits = new Map();
+          for (const l of composicaoDe(x.body)) {
+            if (!l.produtos?.length) continue;
+            const k = l.produtos.map((p) => p.numero).join('.');
+            if (!kits.has(k)) kits.set(k, { numeros: k, sku: l.sku, nomes: l.produtos.map((p) => `${p.numero} ${p.nome || ''}`.trim()) });
+          }
+          out[x.body.id] = [...kits.values()];
+        }
+      } catch { /* sem a composição, a tela segue */ }
     });
     return out;
   }
@@ -519,8 +544,9 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
             estoque: it.available_quantity, status: it.status, ultima_venda: ult[a.id]?.[0] || null });
         }
       }
+      const prods = await produtosDosItens(fatia.map((a) => a.id));
       return { total: lista.length, pagina, por_pagina: porPagina, gerado_em: cachePorAnuncio?.em || null,
-        promocoes: cachePorAnuncio?.promocoes || [], itens: fatia };
+        promocoes: cachePorAnuncio?.promocoes || [], itens: fatia.map((a) => ({ ...a, produtos: prods[a.id] || null })) };
     },
 
     // Cria uma campanha do vendedor. Os anúncios entram depois, pela lista da campanha
@@ -562,13 +588,14 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
     { m: 'GET', re: /^\/api\/promocoes\/anuncio\/([A-Z]{3}\d+)$/, fn: async ([id]) => {
       contaOuErro();
       exigeItemId(id);
-      const [lista, info] = await Promise.all([
+      const [lista, info, prods] = await Promise.all([
         ml(`/seller-promotions/items/${id}?${V2}`),
         infoItens([id]),
+        produtosDosItens([id]),
       ]);
       const it = info[id] || {};
       return {
-        item: { id, titulo: it.title || null, foto: it.thumbnail || null, link: it.permalink || null,
+        item: { id, titulo: it.title || null, foto: it.thumbnail || null, link: it.permalink || null, produtos: prods[id] || null,
           preco: it.price ?? null, estoque: it.available_quantity ?? null, status: it.status || null,
           ultimas_vendas: D.ultimasVendas([id], 5)[id] || [] },
         promocoes: (Array.isArray(lista) ? lista : []).map((p) => ({

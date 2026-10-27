@@ -2113,7 +2113,8 @@ let painelMod = null, precosMod = null;   // avisos em segundo plano; lucro no p
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
-    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D, vendasDaConta: (...a) => custosMod.vendasDaConta(...a), adsDaJanela });
+    baixarPedidos, idsDaConta, freteDoItem, linhasDoPedido, D, vendasDaConta: (...a) => custosMod.vendasDaConta(...a), adsDaJanela,
+    composicaoDe: (it) => custosMod.composicao(it) });
   Object.assign(routes, m.rotas);
   rotasParam.push(...m.rotasParam);
   if (m.composicao) custosMod = m;
