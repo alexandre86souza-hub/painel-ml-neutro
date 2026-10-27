@@ -2190,7 +2190,8 @@ rotasParam.push(...shopeeMod.rotasParam);
 const shopeeVendasMod = require('./shopee-vendas.js').criar({ D, daLoja: shopeeMod.daLoja, janela });
 Object.assign(routes, shopeeVendasMod.rotas);
 // Anúncios da Shopee (shopee-anuncios.js): lista e troca de preço.
-Object.assign(routes, require('./shopee-anuncios.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
+const shopeeAnunciosMod = require('./shopee-anuncios.js').criar({ D, daLoja: shopeeMod.daLoja });
+Object.assign(routes, shopeeAnunciosMod.rotas);
 // Ads da Shopee (shopee-ads.js): saldo e desempenho diário da loja.
 Object.assign(routes, require('./shopee-ads.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
 Object.assign(routes, require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja, vendas: shopeeVendasMod.linhas }).rotas);
@@ -2274,7 +2275,7 @@ async function montarEstoqueAnuncios() {
   for (const l of D.shopeeLojasListar()) {
     for (const a of D.shopeeAnuncios(l.shop_id)) {
       if (a.status && !/NORMAL|UNLIST/i.test(a.status)) continue;
-      anuncios.push({ canal: 'shopee', loja: `Shopee · ${l.nome || l.shop_id}`, id: String(a.item_id), variacao: a.variacao || null, titulo: a.nome, sku: a.sku,
+      anuncios.push({ canal: 'shopee', loja: `Shopee · ${l.nome || l.shop_id}`, shop: l.shop_id, id: String(a.item_id), variacao: a.variacao || null, var_id: a.model_id || null, titulo: a.nome, sku: a.sku,
         estoque: a.estoque ?? null, status: a.status, full: false, link: `https://shopee.com.br/product/${l.shop_id}/${a.item_id}` });
     }
   }
@@ -2462,6 +2463,101 @@ routes['GET /api/estoque/anuncios/shopee/diagnostico'] = async (url) => {
     itens.push({ item_id: it.item_id, sku: it.item_sku || null, status: it.item_status, tem_modelo: !!it.has_model, stock_info_v2: it.has_model ? null : it.stock_info_v2 || null, modelos });
   }
   return { loja, armazens, ativos_lidos: ids.length, itens };
+};
+// Envio de estoque à Shopee (loja liberada em shopee_estoque_lojas; começa só pela Primor 717079477 — as outras ficam com o
+// UpSeller). Medido em 27/10/2026 na Primor: um armazém só (seller_stock location_id "BRZ", fora do multi-armazém), sem estoque
+// em armazém da Shopee. product/update_stock por anúncio (stock_list: model_id 0 sem variação, seller_stock [{ stock }]), relido
+// no get_item_base_info/get_model_list para conferir; a cópia shopee_anuncios é relida inteira antes de cada rodada automática.
+const lojasEstoqueShopee = () => String(D.configLer('shopee_estoque_lojas') || '717079477').split(',').map(Number).filter(Boolean);
+async function linhasShopee(loja, fresco = false) {
+  if (fresco) await shopeeAnunciosMod.ler(loja);
+  const l = D.shopeeLojaObter(loja);
+  const anuncios = [];
+  for (const a of D.shopeeAnuncios(loja)) {
+    if (a.status && !/NORMAL|UNLIST/i.test(a.status)) continue;
+    anuncios.push({ canal: 'shopee', loja: `Shopee · ${l?.nome || loja}`, id: String(a.item_id), variacao: a.variacao || null, var_id: a.model_id || null,
+      titulo: a.nome, sku: a.sku, estoque: a.estoque ?? null, status: a.status, full: false });
+  }
+  return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
+}
+async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
+  const linhas = linhasProntas || await linhasShopee(loja);
+  const { enviar, fora } = planoEnvioMl(linhas, chaves);   // sem user_product: cada anúncio/variação por si
+  const porItem = new Map();
+  for (const e of enviar) { if (!porItem.has(e.id)) porItem.set(e.id, []); porItem.get(e.id).push(e); }
+  const res = [];
+  const dl = (c, p, corpo) => shopeeMod.daLoja(loja, c, p, corpo);
+  for (const [itemId, es] of porItem) {
+    try {
+      for (let i = 0; i < es.length; i += 50) {
+        const lote = es.slice(i, i + 50);
+        const r = await dl('/api/v2/product/update_stock', {}, { item_id: Number(itemId), stock_list: lote.map((e) => ({ model_id: Number(e.var_id) || 0, seller_stock: [{ stock: e.quantidade }] })) });
+        const falhas = new Map((r.response?.failure_list || []).map((f) => [Number(f.model_id) || 0, f.failed_reason || 'recusado']));
+        for (const e of lote) if (falhas.has(Number(e.var_id) || 0)) e.erro = falhas.get(Number(e.var_id) || 0);
+      }
+      // confere relendo na Shopee
+      const lido = new Map();
+      if (es.some((e) => e.var_id)) {
+        const m = await dl('/api/v2/product/get_model_list', { item_id: Number(itemId) }).catch(() => null);
+        for (const x of m?.response?.model || []) lido.set(Number(x.model_id), x.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+      } else {
+        const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: [Number(itemId)] }).catch(() => null);
+        lido.set(0, b?.response?.item_list?.[0]?.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+      }
+      for (const e of es) {
+        const agora = lido.get(Number(e.var_id) || 0) ?? null;
+        if (agora != null) D.shopeeEstoqueGravar(Number(itemId), Number(e.var_id) || 0, agora);
+        res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora, ok: !e.erro && agora === e.quantidade, ...(e.erro ? { erro: e.erro } : {}) });
+      }
+    } catch (err) { for (const e of es) res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message }); }
+    await esperar(150);
+  }
+  const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
+  const envio = res.length ? D.estoqueEnvioGravar({ canal: `shopee:${loja}`, quem, import_id: null, linhas: res }) : null;
+  if (envio) D.estoqueEnvioAtualizar(envio, { situacao: ruins.length ? (ok ? 'COMPLETE' : 'FAILED') : 'COMPLETE', ok, com_erro: ruins.length,
+    erros: ruins.length ? ['erros', ...ruins.slice(0, 20).map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`)].join('\n') : null });
+  estAnuncios = null;
+  return { enviadas: res, ok, com_erro: ruins.length, fora };
+}
+routes['POST /api/estoque/anuncios/shopee'] = async (_u, b) => {
+  const loja = Number(b?.loja);
+  if (!lojasEstoqueShopee().includes(loja)) throw Object.assign(new Error('Envio de estoque não liberado para esta loja da Shopee (ela segue com o UpSeller).'), { status: 400 });
+  const chaves = [...new Set((Array.isArray(b?.chaves) ? b.chaves : []).map((s) => String(s ?? '').trim()).filter((s) => /^\d+(:\d+)?$/.test(s)))];
+  if (!chaves.length || chaves.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 anúncios.'), { status: 400 });
+  const r = await enviarEstoqueShopee(loja, chaves, CTX.atual()?.usuario?.login || 'admin');
+  if (!r.enviadas.length) throw Object.assign(new Error('Nenhum anúncio enviado: ' + r.fora.map((f) => `${f.chave} (${f.motivo})`).join(', ')), { status: 400 });
+  return r;
+};
+const shopeeAutoRodando = new Set();
+routes['GET /api/estoque/anuncios/shopee/envios'] = async (url) => {
+  const loja = Number(url.searchParams.get('loja'));
+  return { liberada: lojasEstoqueShopee().includes(loja), automatico: D.configLer(`shopee_estoque_auto:${loja}`) === '1', rodando: shopeeAutoRodando.has(loja),
+    ultimo_automatico: D.configLer(`shopee_estoque_auto_ultimo:${loja}`), erro_automatico: D.configLer(`shopee_estoque_auto_erro:${loja}`),
+    envios: D.estoqueEnviosListar(`shopee:${loja}`, 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) };
+};
+// Automático da Shopee por loja liberada (shopee_estoque_auto:{loja} = '1'): a cada 10 min relê a loja (≈ 1 min) e manda só o
+// que saiu da faixa (estoque.js#precisaEnviar), como o ML e a Leroy.
+async function shopeeAuto(loja) {
+  if (shopeeAutoRodando.has(loja) || D.configLer(`shopee_estoque_auto:${loja}`) !== '1' || !D.configLer('estoque_inicio') || !lojasEstoqueShopee().includes(loja)) return;
+  shopeeAutoRodando.add(loja);
+  try {
+    const { precisaEnviar } = require('./estoque.js');
+    const linhas = await linhasShopee(loja, true);
+    const mudar = linhas.filter((l) => l.deveria != null && precisaEnviar(l.estoque, l.deveria)).map(chaveMl);
+    for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueShopee(loja, mudar.slice(i, i + 300), 'automático', linhas);
+    D.configGravar(`shopee_estoque_auto_ultimo:${loja}`, new Date().toISOString());
+    D.configGravar(`shopee_estoque_auto_erro:${loja}`, '');
+  } catch (e) { D.configGravar(`shopee_estoque_auto_erro:${loja}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
+  finally { shopeeAutoRodando.delete(loja); }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { for (const l of lojasEstoqueShopee()) shopeeAuto(l).catch(() => null); }, 10 * 60e3).unref?.();
+routes['PUT /api/estoque/anuncios/shopee/auto'] = async (_u, b) => {
+  const loja = Number(b?.loja);
+  if (!lojasEstoqueShopee().includes(loja)) throw Object.assign(new Error('Envio de estoque não liberado para esta loja da Shopee.'), { status: 400 });
+  if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
+  D.configGravar(`shopee_estoque_auto:${loja}`, b.ligado ? '1' : '0');
+  if (b.ligado) shopeeAuto(loja).catch(() => null);
+  return { automatico: b.ligado };
 };
 // Envio de estoque ao ML (por conta liberada em ml_estoque_contas; começa só pela Primor — as outras ficam com o UpSeller).
 // Medido na Primor em 26/10/2026: um depósito só (selling_address), sem Full, 4 anúncios com variações e 131 pares

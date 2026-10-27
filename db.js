@@ -1142,6 +1142,7 @@ function shopeeAnunciosGravar(shopId, linhas) {
 const shopeeAnunciosLimparAntes = (shopId, quando) => db.prepare('DELETE FROM shopee_anuncios WHERE shop_id=? AND lido_em < ?').run(shopId, quando);
 const shopeeSkuGravar = (itemId, modelId, sku) => db.prepare('UPDATE shopee_anuncios SET sku=? WHERE item_id=? AND model_id=?').run(sku, itemId, modelId || 0);
 const shopeeAnuncios = (shopId) => db.prepare('SELECT * FROM shopee_anuncios WHERE shop_id=? ORDER BY item_id, model_id').all(shopId);
+const shopeeEstoqueGravar = (itemId, modelId, estoque) => db.prepare('UPDATE shopee_anuncios SET estoque=? WHERE item_id=? AND model_id=?').run(estoque, itemId, modelId || 0);
 const shopeePrecoGravar = (itemId, modelId, preco, original) =>
   db.prepare(`UPDATE shopee_anuncios SET preco=?, subiu_em=CASE WHEN ? > IFNULL(preco_original, 1e12) + 0.009 THEN ? ELSE subiu_em END, preco_original=?
     WHERE item_id=? AND model_id=?`).run(preco, original, agora(), original, itemId, modelId || 0);
@@ -2291,7 +2292,7 @@ module.exports = {
   atacadoGravar, atacadoDaConta, atacadoEsquecer,
   shopeeLojaSalvar, shopeeTokensGravar, shopeeLojaNomear, shopeeLojaObter, shopeeLojasListar, shopeeLojaRemover,
   shopeePedidosGravar, shopeeSemDetalhe, shopeeDetalheGravar, shopeeSemEscrow, shopeeEscrowGravar, shopeeVendasPeriodo, shopeePendentes,
-  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeePrecoGravar, shopeeRecusaGravar, shopeeRecusaLimpar,
+  shopeeAnunciosGravar, shopeeAnunciosLimparAntes, shopeeAnuncios, shopeeSkuGravar, shopeeEstoqueGravar, shopeePrecoGravar, shopeeRecusaGravar, shopeeRecusaLimpar,
   amazonLancGravar, amazonLancPeriodo, amazonLancApagar, amazonFotoGravar, amazonFotos,
   amazonPedidosGravar, amazonPedidosSemItens, amazonItensGravar, amazonDevManualGravar, amazonDevManuais, amazonDevManualApagar, amazonItensDoPedido, amazonVendasPeriodo, amazonUltimoPrecoPorSku, amazonItensSemFoto, amazonUnidadesPorSku,
   amazonConcGravar, amazonConcorrencia, amazonVendedorNomear, amazonVendedoresNomes,

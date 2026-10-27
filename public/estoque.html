@@ -356,7 +356,11 @@ function pintarEstAnuncios(){
   if(!ls.length){ box.appendChild(el('p', 'vazio', 'Nada com esse filtro.')); return; }
   // Leroy ou conta do ML liberada escolhida: caixinhas e o botão para mandar o estoque (as outras lojas ficam com o UpSeller)
   const leroy = loja === 'Leroy Merlin';
-  const contaMl = eaContasMl?.get(loja) || null;
+  const contaMl = eaContasMl?.get(loja) || null;   // { tipo: 'ml' | 'shopee', id }
+  if(loja.startsWith('Shopee · ') && eaContasMl && !eaContasMl.has(loja) && !eaShopeeVisto.has(loja) && ls[0]?.shop){
+    eaShopeeVisto.add(loja);
+    api('/api/estoque/anuncios/shopee/envios?loja=' + ls[0].shop).then((r) => { if(r?.liberada){ eaContasMl.set(loja, { tipo: 'shopee', id: ls[0].shop }); pintarEstAnuncios(); } }).catch(() => null);
+  }
   if(eaLojaMarcada !== loja){ eaMarcadas.clear(); eaLojaMarcada = loja; }
   pintarEnvioLeroy(leroy, ls);
   pintarEnvioMl(contaMl, ls);
@@ -382,31 +386,34 @@ const eaMarcadas = new Set();
 let eaLojaMarcada = null;
 // contas do ML liberadas para o envio (ml_estoque_contas no servidor): "Mercado Livre · APELIDO" -> ml_user_id
 let eaContasMl = null;
+const eaShopeeVisto = new Set();   // lojas da Shopee já perguntadas (liberada para o envio?)
 (async () => {
   try{
     const { contas } = await api('/api/accounts'); const m = new Map();
-    for(const c of contas || []){ const r = await api('/api/estoque/anuncios/ml/envios?conta=' + c.ml_user_id).catch(() => null); if(r?.liberada) m.set('Mercado Livre · ' + c.nickname, c.ml_user_id); }
+    for(const c of contas || []){ const r = await api('/api/estoque/anuncios/ml/envios?conta=' + c.ml_user_id).catch(() => null); if(r?.liberada) m.set('Mercado Livre · ' + c.nickname, { tipo: 'ml', id: c.ml_user_id }); }
     eaContasMl = m; if(ea?.linhas) pintarEstAnuncios();
   }catch{ eaContasMl = new Map(); }
 })();
-// envio de estoque ao ML: um número por estoque (o anúncio de catálogo vai pelo tradicional), relido no anúncio para conferir
-function pintarEnvioMl(conta, ls){
-  const box = $('eaEnvioMl'); box.hidden = !conta; if(!conta) return;
+// envio de estoque ao ML (um número por estoque: o anúncio de catálogo vai pelo tradicional) e à Shopee, relido no anúncio para conferir
+function pintarEnvioMl(alvo, ls){
+  const box = $('eaEnvioMl'); box.hidden = !alvo; if(!alvo) return;
+  const ml = alvo.tipo === 'ml', base = ml ? '/api/estoque/anuncios/ml' : '/api/estoque/anuncios/shopee';
+  const qs = ml ? 'conta=' + alvo.id : 'loja=' + alvo.id, dono = ml ? { conta: alvo.id } : { loja: alvo.id }, nomeCanal = ml ? 'Mercado Livre' : 'Shopee';
   box.innerHTML = '';
   const marcadas = ls.filter((x) => eaMarcadas.has(x.var_id ? `${x.id}:${x.var_id}` : x.id));
-  box.append(el('span', null, `${$('eaLoja').value}: ${n0(eaMarcadas.size)} anúncio(s) marcado(s). O painel manda o saldo − segurança, calculado na hora (só o estoque). Anúncio de catálogo divide o estoque com o tradicional: vai um número só.`));
+  box.append(el('span', null, `${$('eaLoja').value}: ${n0(eaMarcadas.size)} anúncio(s) marcado(s). O painel manda o saldo − segurança, calculado na hora (só o estoque).${ml ? ' Anúncio de catálogo divide o estoque com o tradicional: vai um número só.' : ''}`));
   const todas = el('button', 'bt', 'Marcar todos da lista'); todas.type = 'button';
   todas.onclick = () => { for(const x of ls) if(x.deveria != null) eaMarcadas.add(x.var_id ? `${x.id}:${x.var_id}` : x.id); pintarEstAnuncios(); };
   const limpar = el('button', 'bt', 'Desmarcar'); limpar.type = 'button'; limpar.onclick = () => { eaMarcadas.clear(); pintarEstAnuncios(); };
   const env = el('button', 'bt forte', `Enviar estoque (${n0(eaMarcadas.size)})`); env.type = 'button'; env.disabled = !eaMarcadas.size;
   env.onclick = async () => {
     const prev = marcadas.slice(0, 8).map((x) => `${x.id}${x.variacao ? ' (' + x.variacao + ')' : ''}: ${n0(x.estoque)} → ${n0(x.deveria)}`).join('\n');
-    if(!confirm(`Mandar o estoque de ${eaMarcadas.size} anúncio(s) para o Mercado Livre?\n\n${prev}${eaMarcadas.size > 8 ? '\n…' : ''}\n\nSe o UpSeller estiver ligado nesta conta, ele pode trocar o número de novo.`)) return;
+    if(!confirm(`Mandar o estoque de ${eaMarcadas.size} anúncio(s) para ${ml ? 'o' : 'a'} ${nomeCanal}?\n\n${prev}${eaMarcadas.size > 8 ? '\n…' : ''}\n\nSe o UpSeller estiver ligado nesta loja, ele pode trocar o número de novo.`)) return;
     env.disabled = true; env.textContent = 'Enviando…';
     try{
-      const r = await post('/api/estoque/anuncios/ml', { conta, chaves: [...eaMarcadas] });
+      const r = await post(base, { ...dono, chaves: [...eaMarcadas] });
       const ruins = r.enviadas.filter((e) => !e.ok);
-      aviso(`Mercado Livre: ${n0(r.ok)} anúncio(s) com o estoque novo, conferido no anúncio` + (ruins.length ? `; ${n0(ruins.length)} não ficaram (${ruins.slice(0, 3).map((e) => e.sku + ': ' + (e.erro || `leu ${e.lido}`)).join(', ')})` : '')
+      aviso(`${nomeCanal}: ${n0(r.ok)} anúncio(s) com o estoque novo, conferido no anúncio` + (ruins.length ? `; ${n0(ruins.length)} não ficaram (${ruins.slice(0, 3).map((e) => e.sku + ': ' + (e.erro || `leu ${e.lido}`)).join(', ')})` : '')
         + (r.fora?.length ? `; ${n0(r.fora.length)} ficaram de fora (${r.fora.slice(0, 3).map((f) => f.chave + ': ' + f.motivo).join(', ')})` : '') + '.', ruins.length ? '' : 'ok');
       eaMarcadas.clear(); carregarEstAnuncios(true);
     }catch(e){ aviso(e.message); env.disabled = false; env.textContent = `Enviar estoque (${n0(eaMarcadas.size)})`; }
@@ -419,13 +426,13 @@ function pintarEnvioMl(conta, ls){
   au.append(ck, document.createTextNode(' Envio automático a cada 10 minutos (junta as vendas da rodada e manda só o que mudou: com 20 peças ou menos, ao zerar ou com diferença acima de 10%)'), info);
   ck.onchange = async () => {
     const ligar = ck.checked;
-    if(ligar && !confirm('Ligar o envio automático nesta conta do ML?\n\nAntes, desligue a sincronização de estoque do UpSeller nesta conta (senão os dois ficam trocando os números).\n\nNa primeira rodada ele manda TODOS os anúncios que estão fora da faixa — pode levar de 15 a 30 minutos.')){ ck.checked = false; return; }
-    try{ await post('/api/estoque/anuncios/ml/auto', { conta, ligado: ligar }, 'PUT'); aviso(ligar ? 'Envio automático ligado: a primeira rodada já começou.' : 'Envio automático desligado.', 'ok'); }
+    if(ligar && !confirm('Ligar o envio automático nesta loja?\n\nAntes, desligue a sincronização de estoque do UpSeller nesta loja (senão os dois ficam trocando os números).\n\nNa primeira rodada ele manda TODOS os anúncios que estão fora da faixa — pode levar de 15 a 30 minutos.')){ ck.checked = false; return; }
+    try{ await post(base + '/auto', { ...dono, ligado: ligar }, 'PUT'); aviso(ligar ? 'Envio automático ligado: a primeira rodada já começou.' : 'Envio automático desligado.', 'ok'); }
     catch(e){ ck.checked = !ligar; aviso(e.message); }
   };
   box.appendChild(au);
   const lista = el('div', 'tabela-rolagem'); box.appendChild(lista);
-  api('/api/estoque/anuncios/ml/envios?conta=' + conta).then((d) => {
+  api(base + '/envios?' + qs).then((d) => {
     ck.checked = !!d.automatico; ck.disabled = false;
     info.textContent = (d.rodando ? ' · enviando agora…' : '') + (d.ultimo_automatico ? ` · última rodada ${quando(d.ultimo_automatico)}` : '') + (d.erro_automatico ? ` · último erro: ${d.erro_automatico}` : '');
     if(!d.envios.length) return;

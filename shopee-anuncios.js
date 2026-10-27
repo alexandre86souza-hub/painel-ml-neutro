@@ -156,7 +156,7 @@ function criar({ D, daLoja }) {
         conferido: !!atual && Math.abs((atual.original_price ?? 0) - preco) < 0.01 };
     },
   };
-  return { rotas, rotasParam: [] };
+  return { rotas, rotasParam: [], ler };
 }
 
 module.exports = { criar, registrosDe, taxasPorSku };
