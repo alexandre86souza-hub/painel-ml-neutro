@@ -14,8 +14,13 @@
     .sino svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
     .sino .bolha{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
       background:#dc2626;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
-    .sino .painel-avisos{position:absolute;right:0;top:44px;width:min(380px,92vw);max-height:70vh;overflow:auto;z-index:60;
+    .sino .painel-avisos{position:absolute;right:0;top:44px;width:min(380px,92vw);max-height:70vh;overflow:auto;z-index:1000;
       background:#fff;border:1px solid #e3e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(16,24,40,.22);padding:8px}
+    /* celular: o sino fica à esquerda e o painel preso à direita dele saía da tela — ocupa a largura, logo abaixo do sino */
+    @media (max-width:760px){
+      .sino .painel-avisos{position:fixed;left:8px;right:8px;width:auto;top:var(--sino-topo,64px);max-height:calc(100vh - var(--sino-topo,64px) - 16px);
+        -webkit-overflow-scrolling:touch}
+    }
     .painel-avisos .topo{display:flex;justify-content:space-between;align-items:center;padding:6px 8px 8px;font-size:13px}
     .painel-avisos .topo b{font-size:14px}
     .painel-avisos .topo button{font:inherit;font-size:12px;background:none;border:0;color:#2563eb;cursor:pointer;padding:0}
@@ -110,6 +115,8 @@
 
   botao.onclick = () => {
     painel.hidden = !painel.hidden;
+    // no celular o painel fica fixo na tela, logo abaixo do sino (onde quer que a página esteja rolada)
+    painel.style.setProperty('--sino-topo', Math.max(8, Math.round(botao.getBoundingClientRect().bottom + 8)) + 'px');
     botao.setAttribute('aria-expanded', String(!painel.hidden));
     if (!painel.hidden) pintar();
   };
