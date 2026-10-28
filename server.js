@@ -332,13 +332,17 @@ async function ml(pathname, opts = {}, contaId = null) {
   if (res.status === 401) { conta = await renovar(conta); res = await call(conta); }
   // limite de chamadas do ML (429 "local_rate_limited", medido 27/10/2026 com o envio automático da Primor + comandas + relatórios
   // ao mesmo tempo): leitura espera e tenta de novo (1,5 s e 4 s) antes de virar erro na tela. Escrita não repete aqui.
+  // Erro interno do ML (500/502/503/504 "Oops! Something went wrong...", medido 27 e 28/10/2026 no envio automático da
+  // Primor, uma rodada sim e a seguinte não): leitura também tenta de novo.
+  const repete = (s) => s === 429 || (s >= 500 && s <= 504);
   for (const ms of [1500, 4000]) {
-    if (res.status !== 429 || (opts.method && opts.method !== 'GET')) break;
+    if (!repete(res.status) || (opts.method && opts.method !== 'GET')) break;
     await new Promise((ok) => setTimeout(ok, ms));
     res = await call(conta);
   }
   const body = await res.text();
-  const json = body ? JSON.parse(body) : null;
+  let json = null;
+  try { json = body ? JSON.parse(body) : null; } catch { if (res.ok) throw new Error('O Mercado Livre respondeu fora do formato esperado.'); }
   if (!res.ok) throw Object.assign(new Error(mensagemDoML(json, res.statusText)), { status: res.status, body: json });
   return json;
 }
@@ -2652,9 +2656,12 @@ async function shopeeAuto(loja) {
     for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueShopee(loja, mudar.slice(i, i + 300), 'automático', linhas);
     D.configGravar(`shopee_estoque_auto_ultimo:${loja}`, new Date().toISOString());
     D.configGravar(`shopee_estoque_auto_erro:${loja}`, '');
+    D.configGravar(`shopee_estoque_auto_falhas:${loja}`, '0');
   } catch (e) {
     D.configGravar(`shopee_estoque_auto_erro:${loja}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300));
-    avisoEstoque(`estoque_auto:shopee:${loja}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque à Shopee ${D.shopeeLojaObter(loja)?.nome || loja} parou com erro`, e.message);
+    const falhas = (Number(D.configLer(`shopee_estoque_auto_falhas:${loja}`)) || 0) + 1;   // só 2 rodadas seguidas viram aviso
+    D.configGravar(`shopee_estoque_auto_falhas:${loja}`, String(falhas));
+    if (falhas >= 2) avisoEstoque(`estoque_auto:shopee:${loja}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque à Shopee ${D.shopeeLojaObter(loja)?.nome || loja} parou com erro`, e.message);
   }
   finally { shopeeAutoRodando.delete(loja); }
 }
@@ -2763,9 +2770,13 @@ async function mlAuto(id) {
     for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueMl(id, mudar.slice(i, i + 300), 'automático', linhas);
     D.configGravar(`ml_estoque_auto_ultimo:${id}`, new Date().toISOString());
     D.configGravar(`ml_estoque_auto_erro:${id}`, '');
+    D.configGravar(`ml_estoque_auto_falhas:${id}`, '0');
   } catch (e) {
     D.configGravar(`ml_estoque_auto_erro:${id}`, `${new Date().toISOString()} ${e.message}`.slice(0, 300));
-    avisoEstoque(`estoque_auto:ml:${id}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque ao ML ${D.contaObter(id)?.nickname || id} parou com erro`, e.message);
+    // uma rodada que falha e a seguinte volta ao normal (erro passageiro do ML) não vira aviso nem e-mail: só 2 seguidas
+    const falhas = (Number(D.configLer(`ml_estoque_auto_falhas:${id}`)) || 0) + 1;
+    D.configGravar(`ml_estoque_auto_falhas:${id}`, String(falhas));
+    if (falhas >= 2) avisoEstoque(`estoque_auto:ml:${id}:${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 13)}`, `Envio automático de estoque ao ML ${D.contaObter(id)?.nickname || id} parou com erro`, `${falhas} rodadas seguidas sem conseguir: ${e.message}`);
   }
   finally { mlAutoRodando.delete(id); }
 }
