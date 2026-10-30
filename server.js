@@ -535,6 +535,12 @@ function buildItem(form, { userProduct = false } = {}) {
   };
 }
 
+// Anúncio de conta multi-origem: sem available_quantity (o ML recusa), com o estoque no depósito. Função pura: testada.
+function corpoMultiOrigem(payload, loja) {
+  const { available_quantity: quantity, ...resto } = payload;
+  return { ...resto, channels: ['marketplace'], stock_locations: [{ store_id: String(loja.id), network_node_id: loja.network_node_id, quantity }] };
+}
+
 // Campos que a API do ML aceita num PUT /items — LISTA FECHADA, medida contra a API real
 // (ver README). Fora daqui o PUT aceita coisa que quebra o anúncio em silêncio.
 // price e available_quantity só passam com o anúncio ATIVO; listing_type_id nunca passa
@@ -1671,8 +1677,17 @@ const routes = {
     const conta = contaOuErro();
     const me = await ml('/users/me').catch(() => null);
     const userProduct = (me?.tags || []).includes('user_product_seller');
-    const payload = buildItem(body, { userProduct });
-    const item = await ml('/items', { method: 'POST', body: JSON.stringify(payload) })
+    let payload = buildItem(body, { userProduct });
+    // Conta multi-origem (tag warehouse_management): o POST /items aceita, mas o anúncio nasce sem estoque e sem depósito
+    // (medido na AMG em 30/10/2026: pausado, out_of_stock, "stock-locations not found"). O certo é /items/multiwarehouse.
+    const multi = (me?.tags || []).includes('warehouse_management');
+    if (multi) {
+      const r = await ml(`/users/${conta.ml_user_id}/stores/search?tags=stock_location&limit=50`);
+      const lojas = (r?.results || []).filter((l) => l.network_node_id);
+      if (lojas.length !== 1) throw Object.assign(new Error(`A conta tem ${lojas.length} depósitos: o painel só cria anúncio com um depósito.`), { status: 400 });
+      payload = corpoMultiOrigem(payload, lojas[0]);
+    }
+    const item = await ml(multi ? '/items/multiwarehouse' : '/items', { method: 'POST', body: JSON.stringify(payload) })
       .catch(async (e) => { throw await explicarRecusa(e, payload.category_id, payload); });
     const desc = String(body.description || '').trim();
     let description_ok = null;
@@ -3573,4 +3588,4 @@ if (require.main === module) {
 // `ml` sai daqui para o mcp.js fazer o repasse à API do Mercado Livre com o token da conta
 // ativa. De propósito NÃO existe rota HTTP de repasse: pela porta pública ela viraria
 // "faça qualquer coisa na conta do vendedor" para quem descobrisse a URL do túnel.
-module.exports = { agendarBackup: () => backupMod.agendar(), buildItem, buildEdicao, iniciar, situacaoAtual, resumoConfig, despachar, temRota, ml, comparativoAds, mudancasDaCampanha, validarMarca };
+module.exports = { agendarBackup: () => backupMod.agendar(), buildItem, corpoMultiOrigem, buildEdicao, iniciar, situacaoAtual, resumoConfig, despachar, temRota, ml, comparativoAds, mudancasDaCampanha, validarMarca };

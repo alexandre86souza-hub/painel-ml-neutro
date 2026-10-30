@@ -25,6 +25,12 @@ assert.strictEqual(ok.family_name, undefined, 'conta comum manda title, nunca fa
 const up = buildItem(base, { userProduct: true });
 assert.strictEqual(up.family_name, 'Camiseta Preta');
 assert.ok(!('title' in up), 'com family_name, title não pode ir junto');
+// conta multi-origem: o estoque vai no depósito, nunca em available_quantity
+const { corpoMultiOrigem } = require('./server.js');
+const mo = corpoMultiOrigem(up, { id: 100, network_node_id: 'BRP1' });
+assert.ok(!('available_quantity' in mo), 'multi-origem não aceita available_quantity');
+assert.deepStrictEqual(mo.stock_locations, [{ store_id: '100', network_node_id: 'BRP1', quantity: up.available_quantity }]);
+assert.deepStrictEqual(mo.channels, ['marketplace']);
 assert.deepStrictEqual(ok.pictures, [{id:'ML-1'},{id:'ML-2'},{source:'https://a.com/9.jpg'}]); // ids primeiro, vazio descartado
 assert.deepStrictEqual(ok.attributes, [{id:'BRAND',value_name:'Nike'},{id:'COLOR',value_name:'Preto'}]); // vazio descartado, valor trimado
 assert.strictEqual(ok.shipping.free_shipping, true);
