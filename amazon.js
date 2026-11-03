@@ -803,6 +803,21 @@ function criar({ D, janela, quem = () => null }) {
     if (semFoto.size) buscarFotosPorAsin(semFoto).catch(() => null);
     return { linhas, impostoPct, erroLeitura, pendentes: D.amazonPedidosSemItens(100000).length };
   }
+  // Foto de um SKU pelo ASIN, na hora (a comanda nova da Amazon: o SKU vendido pela 1ª vez ainda não tem foto guardada, e a
+  // leitura em segundo plano só chega depois — a comanda saía sem foto, 03/11/2026). Falha recente (6 h) não tenta de novo.
+  async function fotoDoAsin(sku, asin) {
+    const f = D.amazonFotos().get(sku);
+    if (f?.foto) return f.foto;
+    if (!sku || !asin || (f && f.asin === asin && Date.now() - Date.parse(f.lido_em) < 6 * 3600e3)) return null;
+    let foto = null;
+    try {
+      const cat = await sp(`/catalog/2022-04-01/items/${encodeURIComponent(asin)}`, { marketplaceIds: BR, includedData: 'images' });
+      const imgs = (cat.images || []).flatMap((g) => g.images || []).filter((i) => i.variant === 'MAIN');
+      foto = (imgs.filter((i) => i.width >= 200).sort((a, b) => a.width - b.width)[0] || imgs[0])?.link || null;
+    } catch { return null; }
+    D.amazonFotoGravar(sku, asin, foto);
+    return foto;
+  }
   async function buscarFotosPorAsin(skuAsin) {
     if (buscandoFotos) return;
     buscandoFotos = true;
@@ -1443,7 +1458,7 @@ function criar({ D, janela, quem = () => null }) {
     return dados;
   }
 
-  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon, mudarEstoque, estoqueAgora, estoqueDiagnostico, repasses };
+  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon, mudarEstoque, estoqueAgora, estoqueDiagnostico, repasses, fotoDoAsin };
 }
 
 module.exports = { repassesAmazonDe, criar, devolucoesDe, comManuais, validarDevManual, MOTIVOS_DEV, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,

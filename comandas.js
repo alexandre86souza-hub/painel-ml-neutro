@@ -252,11 +252,18 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       const id = o.AmazonOrderId;
       if (!itensAmazon.has(id)) {
         try { itensAmazon.set(id, ((await amazon.sp(`/orders/v0/orders/${encodeURIComponent(id)}/orderItems`)).payload?.OrderItems || [])
-          .map((i) => ({ qtd: Number(i.QuantityOrdered) || 0, sku: i.SellerSKU || null, titulo: i.Title || null, variacao: null }))); } catch { /* tenta na próxima */ }
+          .map((i) => ({ qtd: Number(i.QuantityOrdered) || 0, sku: i.SellerSKU || null, asin: i.ASIN || null, titulo: i.Title || null, variacao: null }))); } catch { /* tenta na próxima */ }
       }
       out.push({ chave: `amazon:${id}`, canal: 'amazon', loja: D.configLer('amazon_vendedor') || 'Amazon', pedido: id, ...cat, cliente: null,
         prazo: o.LatestShipDate || null, comprado_em: o.PurchaseDate || null, etapa: o.OrderStatus,
         itens: (itensAmazon.get(id) || []).map((i) => ({ ...i, foto: fotosAmazon.get(i.sku)?.foto || null })) });
+    }
+    // SKU sem foto guardada (vendido pela 1ª vez): busca pelo ASIN do pedido na hora, até 6 por leitura (Catalog: 2/s)
+    let buscas = 0;
+    for (const c of out) for (const i of c.itens) {
+      if (i.foto || !i.asin || !amazon.fotoDoAsin || buscas >= 6) continue;
+      buscas++;
+      i.foto = await amazon.fotoDoAsin(i.sku, i.asin).catch(() => null);
     }
     return out;
   }
