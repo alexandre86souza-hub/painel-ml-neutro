@@ -404,16 +404,26 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, sincronizarVendas, janela
 
     // vendas novas (depois do início dos avisos)
     await sincronizarVendas(conta, 7).catch(() => null);
+    // só as vendas que ainda não viraram aviso: antes vinham todas desde o início dos avisos e o título era lido só dos 40
+    // primeiros anúncios — o resto saía só com o MLB (visto 03/11/2026)
     const novas = D.db.prepare(`SELECT order_id, MIN(data) AS data, SUM(quantidade) AS q, SUM(quantidade*preco_unit) AS t,
-        MIN(item_id) AS item, MIN(origem) AS origem FROM vendas WHERE ml_user_id=? AND data > ? AND status IN ('paid','partially_refunded')
+        MIN(item_id) AS item, MIN(sku) AS sku, MIN(origem) AS origem FROM vendas v WHERE ml_user_id=? AND data > ? AND status IN ('paid','partially_refunded')
+        AND NOT EXISTS (SELECT 1 FROM avisos a WHERE a.ml_user_id = v.ml_user_id AND a.chave = 'venda:' || v.order_id)
         GROUP BY order_id ORDER BY data`).all(id, inicio);
-    const info = novas.length ? await infoItens([...new Set(novas.map((n) => n.item))].slice(0, 40), 'id,title') : {};
+    // avisos dos últimos 7 dias que saíram só com o MLB: ganham o título agora
+    const semTitulo = D.db.prepare(`SELECT id, texto FROM avisos WHERE ml_user_id=? AND tipo='venda' AND criado_em > ? AND texto GLOB '* un. · MLB[0-9]*'`)
+      .all(id, new Date(Date.now() - 7 * 864e5).toISOString()).slice(0, 200);
+    const mlbDe = (t) => (/· (MLB\d+)/.exec(t || '') || [])[1];
+    const ids = [...new Set([...novas.map((n) => n.item), ...semTitulo.map((a) => mlbDe(a.texto))].filter(Boolean))];
+    const info = ids.length ? await infoItens(ids, 'id,title') : {};
     for (const n of novas) {
       D.avisoCriar(id, { tipo: 'venda', chave: `venda:${n.order_id}`, criado_em: n.data,
         titulo: `Nova venda: ${Number(n.t).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
-        texto: `${n.q} un. · ${info[n.item]?.title || n.item}${ehFull(n.origem) ? ' · Full' : ''}`,
+        texto: `${n.q} un. · ${info[n.item]?.title || n.sku || n.item}${ehFull(n.origem) ? ' · Full' : ''}`,
         link: `https://www.mercadolivre.com.br/vendas/${n.order_id}/detalhe` });
     }
+    const corrige = D.db.prepare('UPDATE avisos SET texto=? WHERE id=?');
+    for (const a of semTitulo) { const m = mlbDe(a.texto); if (info[m]?.title) corrige.run(a.texto.replace(m, info[m].title), a.id); }
 
     // mensagens não lidas do pós-venda
     const msg = await ml(`/messages/unread?role=seller&tag=post_sale`).catch(() => null);

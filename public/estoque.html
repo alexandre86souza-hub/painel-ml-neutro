@@ -24,6 +24,9 @@
   .def-recolher input[type=number]{width:70px}
   .def-extra{margin-top:12px}.def-extra summary{cursor:pointer;font-weight:600}
   tr.alerta td{background:#fdeee8}
+  /* cabeçalho da tabela sempre visível: a lista rola dentro da caixa (altura da tela) e o cabeçalho fica preso no topo */
+  main .tabela-rolagem{max-height:calc(100vh - 130px);overflow:auto}
+  main .tabela-rolagem thead th{position:sticky;top:0;z-index:3;background:var(--card-solido, var(--card))}
   .massa{position:sticky;bottom:max(12px, env(safe-area-inset-bottom, 0px));z-index:25;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
     background:#1f2937;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .massa label{display:flex;gap:6px;align-items:center;font-size:13px}
