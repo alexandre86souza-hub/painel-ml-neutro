@@ -190,7 +190,9 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
         if (u) nomesVendedor.set(v, { nome: u.nickname || null, medalha: u.seller_reputation?.power_seller_status || null });
       });
       const nossas = new Map(D.contasListar().map((ct) => [String(ct.ml_user_id), ct.nickname || String(ct.ml_user_id)]));
-      const ganhador = p?.buy_box_winner?.item_id || w?.winner?.item_id || null;
+      // o price_to_win é lido na hora; o buy_box_winner do /products demora a mudar (03/11/2026: price_to_win "winning" e o
+      // /products ainda com o concorrente) — vale o price_to_win, o /products só quando não há disputa lida
+      const ganhador = (w?.status === 'winning' ? item : w?.winner?.item_id) || p?.buy_box_winner?.item_id || null;
       return { item, catalogo: true, produto: prod, nome: p?.name || null, link: p?.permalink || null, meu_anuncio_de_catalogo: !!it.catalog_listing,
         situacao: w?.status || null, preco_para_ganhar: w?.price_to_win ?? null, ganhador,
         ofertas: ofertasDe(c, { meuItem: item, ganhador, nomes: nomesVendedor, nossas }) };
