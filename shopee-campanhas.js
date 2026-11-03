@@ -203,6 +203,19 @@ function criar({ D, daLoja, vendas }) {
   };
 
   const iso = (s) => (s ? new Date(s * 1000).toISOString() : null);
+  // Preço original de cada anúncio em cada desconto lido (loja -> [{ id, nome, inicio, fim, orig: { "item:model" | "item:*": preço } }]),
+  // guardado junto com a leitura da rota: o Placar de promoções e Ads (gestao.js) liga as vendas ao desconto do dia.
+  const precosDescontos = new Map();
+  const precosDe = (itens) => {
+    const o = {};
+    for (const i of itens) for (const m of (i.model_list?.length ? i.model_list : [{ model_id: 0, model_original_price: i.item_original_price }])) {
+      const v = Number(m.model_original_price ?? i.item_original_price);
+      if (!(v > 0)) continue;
+      o[`${i.item_id}:${m.model_id || 0}`] = v;
+      if (o[`${i.item_id}:*`] == null) o[`${i.item_id}:*`] = v;
+    }
+    return o;
+  };
   // Desconto: vendas dos itens no período com o desconto dado ao cliente = unidades × (preço original do
   // desconto − preço pago), por variação (model) e, sem ela, pelo item. Também a faixa de % do desconto.
   const vendasDoDesconto = (shopId, itens, de, ate) => {
@@ -250,7 +263,7 @@ function criar({ D, daLoja, vendas }) {
         // (medido em 06/10/2026: 30 descontos com até 4 páginas cada, um por um, levavam 67 s).
         const recente = Date.now() / 1000 - 60 * 86400;
         const escolhidos = descontos.sort((a, b) => b.start_time - a.start_time).slice(0, 60);
-        const lista = new Array(escolhidos.length);
+        const lista = new Array(escolhidos.length), precos = [];
         // anúncios que já estão num desconto em andamento ou agendado (fim no futuro): item_id -> nome do desconto.
         // A Shopee aceita até 1.000 por desconto e um anúncio num desconto por vez: a tela de criar deixa esses de fora.
         const emCampanha = {};
@@ -272,6 +285,7 @@ function criar({ D, daLoja, vendas }) {
             }
             const ids = itens ? [...new Set(itens.map((i) => Number(i.item_id)))] : null;
             if (ids && d.end_time > agoraS) for (const i of ids) emCampanha[i] = d.discount_name || `desconto ${d.discount_id}`;
+            if (itens?.length) precos.push({ id: String(d.discount_id), nome: d.discount_name || `Desconto ${d.discount_id}`, inicio: iso(d.start_time), fim: iso(d.end_time), orig: precosDe(itens) });
             lista[k] = { tipo: 'Desconto', id: String(d.discount_id), nome: d.discount_name || null, status: d.status || null,
               inicio: iso(d.start_time), fim: iso(d.end_time), itens: ids ? ids.length : null,
               exemplos: (itens || []).slice(0, 3).map((i) => ({ nome: i.item_name || null, preco_original: i.item_original_price ?? i.model_list?.[0]?.model_original_price ?? null,
@@ -280,6 +294,7 @@ function criar({ D, daLoja, vendas }) {
           }
         };
         await Promise.all([trabalhar(), trabalhar(), trabalhar(), trabalhar()]);
+        precosDescontos.set(shopId, precos);
         // ofertas relâmpago da loja (1 = em andamento, 2 = agendadas, 3 = encerradas)
         for (const type of [1, 2, 3]) {
           try {
@@ -468,7 +483,13 @@ function criar({ D, daLoja, vendas }) {
       });
     },
   };
-  return { rotas, rotasParam: [] };
+  // Descontos da loja com o preço original de cada anúncio (lê a lista de campanhas, guardada 30 min).
+  async function descontosDaLoja(shopId) {
+    await rotas['GET /api/shopee/campanhas'](new URL(`/api/shopee/campanhas?loja=${shopId}`, 'http://painel'));
+    if (!precosDescontos.has(shopId)) await rotas['GET /api/shopee/campanhas'](new URL(`/api/shopee/campanhas?loja=${shopId}&recarregar=1`, 'http://painel'));
+    return precosDescontos.get(shopId) || [];
+  }
+  return { rotas, rotasParam: [], descontosDaLoja };
 }
 
 module.exports = { criar, itensDoDesconto, devolucaoDe, resumoDevolucoes, MOTIVOS, periodoValido, agruparItens, itensDesconto, itensRelampago, corpoCupom, metricasDe };

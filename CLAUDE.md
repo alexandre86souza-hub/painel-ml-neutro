@@ -458,7 +458,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   rateado pelo faturamento) e ponto de equilíbrio (`dreDe`).
   Promoções e Ads (`public/placar.html`, módulo vendas, `GET /api/placar?dias=7|15|30`): ML = `/api/promocoes/resultado` + anúncios em
   promoção em andamento sem venda no período (`promocoes.js#emPromocao`) + Ads (historico); Leroy/Magalu/Amazon = promoções que vêm nas
-  vendas (`resultadoPromocoes`; Amazon pela PromotionList dos lançamentos); Shopee = só Ads (a venda não diz o desconto). ROAS, TACOS e
+  vendas (`resultadoPromocoes`; Amazon pela PromotionList dos lançamentos); Shopee = venda ligada ao desconto da loja em andamento na data
+  (`placarShopeeDe`: preço original do anúncio/variação no desconto > preço pago, de `shopee-campanhas.js#descontosDaLoja`) + cupom da loja
+  (cupom_vendedor do repasse); campanhas da própria Shopee (10.10, 11.11) não têm API. ROAS, TACOS e
   lucro depois do Ads (`placarAdsDe`).
 - Compras e capital parado (`public/compras.html`, módulo estoque, `GET /api/estoque/capital`, `estoque.js#comprasDe` sobre `visao()`):
   pedido por fornecedor = sugestão da reposição × custo médio ("Copiar pedido"), sem saída há 60/90 dias (R$ parado) e estoque acima de

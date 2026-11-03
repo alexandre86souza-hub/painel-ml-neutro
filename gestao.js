@@ -201,6 +201,29 @@ function placarPromocoesDe(linhas, resultado) {
     top: resultado.slice().sort((a, b) => b.faturamento - a.faturamento).slice(0, 5)
       .map((p) => ({ nome: p.nome || p.id || 'Promoção', pedidos: p.pedidos, faturamento: p.faturamento, desconto: p.desconto, lucro: p.sem_lucro ? null : p.lucro })) };
 }
+// Shopee: a venda não diz qual desconto foi usado. Liga cada venda ao desconto da loja em andamento na data dela (preço
+// original do anúncio/variação no desconto > preço pago: desconto = (original − pago) × unidades) e ao cupom da loja
+// (cupom_vendedor do repasse, já rateado na linha). descontos = shopee-campanhas.js#descontosDaLoja. Campanhas da própria
+// Shopee (10.10, 11.11) e "Leve 2" não aparecem na API. Função pura: testada.
+function placarShopeeDe(linhas, descontos) {
+  const porNome = new Map();
+  const original = (d, l) => d.orig[`${l.shopee_item}:${l.shopee_model || 0}`] ?? d.orig[`${l.shopee_item}:*`];
+  const marcadas = linhas.filter((l) => l.valida).map((l) => {
+    const q = n(l.quantidade), pago = n(l.preco_unit), promos = [];
+    const d = descontos.find((x) => (!x.inicio || l.data >= x.inicio) && (!x.fim || l.data < x.fim) && original(x, l) > pago);
+    if (d) promos.push({ id: d.id, nome: d.nome, valor: r2((original(d, l) - pago) * q) });
+    if (n(l.cupom) > 0) promos.push({ id: 'cupom', nome: 'Cupom da loja', valor: n(l.cupom) });
+    return { ...l, promocoes: promos };
+  });
+  for (const l of marcadas) for (const p of l.promocoes) {
+    const x = porNome.get(p.id) || { id: p.id, nome: p.nome, pedidos: new Set(), faturamento: 0, desconto: 0, lucro: 0, sem_lucro: 0 };
+    x.pedidos.add(l.pedido); x.faturamento += n(l.faturamento); x.desconto += p.valor;
+    if (l.lucro == null) x.sem_lucro++; else x.lucro += l.lucro;
+    porNome.set(p.id, x);
+  }
+  const resultado = [...porNome.values()].map((x) => ({ ...x, pedidos: x.pedidos.size, faturamento: r2(x.faturamento), desconto: r2(x.desconto), lucro: r2(x.lucro) }));
+  return placarPromocoesDe(marcadas, resultado);
+}
 // Promoções do ML (promocoes.js#montarResultado): linhas com tipo = com promoção. Função pura: testada.
 function placarPromocoesMl(linhas) {
   const com = linhas.filter((l) => l.tipo);
@@ -223,7 +246,7 @@ function placarAdsDe(ads, vendas) {
 // ---------- rotas ----------
 // deps: D, routes, CTX, vendasEmCache(dias) -> { promessa, dados: { grupos, erros } } (as vendas de todas as lojas, server.js),
 // amazon (repasses), shopeeVendas (sincronizar), emPromocao() (ids do ML em promoção, na conta do contexto), leroy/magaluConectada.
-function criar({ D, routes, CTX, vendasEmCache, amazon, shopeeVendas, emPromocao, leroyConectada, magaluConectada }) {
+function criar({ D, routes, CTX, vendasEmCache, amazon, shopeeVendas, shopeeCampanhas, emPromocao, leroyConectada, magaluConectada }) {
   const u = (p) => new URL(p, 'http://painel');
   const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
   // Leitura em segundo plano guardada por 10 min (como a Margem baixa): a tela pergunta de novo até ficar pronta.
@@ -375,7 +398,9 @@ function criar({ D, routes, CTX, vendasEmCache, amazon, shopeeVendas, emPromocao
         if (h?.habilitado) ads = { gasto: h.total?.investimento, vendas: h.total?.receita };
         else if (h) adsNota = 'sem anunciante no Mercado Ads';
       } else if (sh) {
-        promoNota = 'a Shopee não diz na venda qual desconto foi usado: o resultado por campanha está em Campanhas';
+        const ds = await tenta(erros, `${g.loja} (descontos)`, () => shopeeCampanhas.descontosDaLoja(Number(sh[1])));
+        if (ds) promo = placarShopeeDe(g.linhas, ds);
+        promoNota = 'descontos e cupons da loja; campanhas da própria Shopee (10.10, 11.11) não aparecem na API';
         const h = await tenta(erros, `${g.loja} (Ads)`, () => routes['GET /api/shopee/ads'](u(`/api/shopee/ads?dias=${dias}&loja=${sh[1]}`)));
         if (h) ads = { gasto: h.total?.gasto, vendas: h.total?.vendas };
       } else {
@@ -428,4 +453,4 @@ function criar({ D, routes, CTX, vendasEmCache, amazon, shopeeVendas, emPromocao
 }
 
 module.exports = { criar, caixaShopeeDe, caixaMagaluDe, caixaLeroyDe, proximaSegunda, totaisCaixa, janelaMes, somaDoMes, custosDoMes, dreDe, validarCustos,
-  placarPromocoesDe, placarPromocoesMl, placarAdsDe };
+  placarPromocoesDe, placarPromocoesMl, placarShopeeDe, placarAdsDe };

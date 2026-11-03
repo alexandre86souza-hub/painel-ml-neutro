@@ -2294,7 +2294,8 @@ const shopeeAnunciosMod = require('./shopee-anuncios.js').criar({ D, daLoja: sho
 Object.assign(routes, shopeeAnunciosMod.rotas);
 // Ads da Shopee (shopee-ads.js): saldo e desempenho diário da loja.
 Object.assign(routes, require('./shopee-ads.js').criar({ D, daLoja: shopeeMod.daLoja }).rotas);
-Object.assign(routes, require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja, vendas: shopeeVendasMod.linhas }).rotas);
+const shopeeCampMod = require('./shopee-campanhas.js').criar({ D, daLoja: shopeeMod.daLoja, vendas: shopeeVendasMod.linhas });
+Object.assign(routes, shopeeCampMod.rotas);
 
 // ---------- Amazon Ads: conexão da conta de anúncios (amazon-ads.js) ----------
 // Retorno da autorização em /amazon-ads/callback, pela porta pública (ver tratarPublico).
@@ -3388,7 +3389,7 @@ routes['PUT /api/margem/minimo'] = async (_u, b) => {
   return { min: v };
 };
 // Caixa a receber, DRE do mês e Placar de promoções e Ads de todas as lojas (gestao.js). Só leitura; fora do MCP.
-Object.assign(routes, require('./gestao.js').criar({ D, routes, CTX, vendasEmCache, amazon: amazonMod, shopeeVendas: shopeeVendasMod,
+Object.assign(routes, require('./gestao.js').criar({ D, routes, CTX, vendasEmCache, amazon: amazonMod, shopeeVendas: shopeeVendasMod, shopeeCampanhas: shopeeCampMod,
   emPromocao: () => promocoesMod.emPromocao(contaOuErro()), leroyConectada: () => !!leroyMod.config()?.api_key,
   magaluConectada: () => !!magaluMod.config()?.refresh }).rotas);
 // Dashboard das outras lojas (?conta=amazon|leroy|magalu|shopee-{loja}): a tela do ML com as vendas da loja — hoje, ontem,

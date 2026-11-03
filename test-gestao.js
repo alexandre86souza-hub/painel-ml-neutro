@@ -95,6 +95,12 @@ assert.throws(() => G.validarCustos({ fixos: [{ valor: 5 }] }), /nome/);
   assert.strictEqual(p.top[0].nome, 'P1');
   const ml = G.placarPromocoesMl([{ tipo: null, faturamento: 600, pedidos: 6 }, { tipo: 'DEAL', tipo_nome: 'Oferta do dia', nome: '11.11', faturamento: 400, pedidos: 4, desconto_vendedor: 40, desconto_ml: 10, retorno: 10 }]);
   assert.deepStrictEqual([ml.faturamento, ml.participacao, ml.pedidos, ml.desconto, ml.desconto_ml, ml.top[0].nome], [400, 0.4, 4, 40, 10, '11.11']);
+  const ds = [{ id: '7', nome: 'Desconto 11.11', inicio: '2026-10-01T00:00:00Z', fim: '2026-11-12T00:00:00Z', orig: { '10:1': 120, '10:*': 120, '10:2': 90, '20:0': 50, '20:*': 50 } }];
+  const sl = (pedido, item, model, preco, q, extra = {}) => ({ pedido, valida: true, data: '2026-10-20T12:00:00Z', shopee_item: item, shopee_model: model, preco_unit: preco,
+    quantidade: q, faturamento: preco * q, lucro: preco * q * 0.2, cupom: null, ...extra });
+  const s = G.placarShopeeDe([sl('A', 10, 1, 100, 2), sl('B', 10, 2, 90, 1), sl('C', 20, 0, 40, 1, { data: '2026-09-20T12:00:00Z' }), sl('D', 30, 0, 60, 1, { cupom: 5 })], ds);
+  assert.deepStrictEqual([s.faturamento, s.pedidos, s.desconto, s.top.map((x) => x.nome)], [260, 2, 45, ['Desconto 11.11', 'Cupom da loja']],
+    'Shopee: 2 × (120 − 100) no desconto; variação no preço original e venda fora do período não contam; cupom da loja conta');
   const ads = G.placarAdsDe({ gasto: 100, vendas: 800 }, { faturamento: 2000, lucro: 500 });
   assert.deepStrictEqual([ads.roas, ads.acos, ads.tacos, ads.lucro_pos_ads, ads.margem_pos_ads], [8, 0.125, 0.05, 400, 0.2]);
   assert.strictEqual(G.placarAdsDe(null, {}), null);

@@ -148,7 +148,7 @@ function linhasDe(rows, ctx) {
       const x = (v) => (v == null ? null : r2(v));
       out.push({ pedido: sn, data: p.data, status: p.status, valida, sku: i.sku, item_id: i.sku || String(i.item_id || sn),
         titulo: cs.componentes.map((c) => c.nome).filter(Boolean).join(' + ') || i.nome || i.sku, foto: i.imagem || null,
-        quantidade: q, preco_unit: x(precoDe(p, i)), full: false, canal: 'shopee', shopee_item: i.item_id ?? null,
+        quantidade: q, preco_unit: x(precoDe(p, i)), full: false, canal: 'shopee', shopee_item: i.item_id ?? null, shopee_model: i.model_id ?? null,
         componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), custo: c.custo })), faltando: cs.faltando,
         custo_unit: cs.custo, embalagem_pedido: ctx.embalagem_pedido || 0,
         faturamento: x(fat), tarifa: x(tarifa), frete: x(frete), produto: x(produto), embalagem: x(embalagem), imposto: x(imposto),
