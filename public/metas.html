@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .cartao.destaque{background:linear-gradient(135deg,#0f766e,#14b8a6);border-color:transparent;color:#fff}
@@ -78,7 +78,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=28"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -137,7 +137,7 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script>
 // Metas e faturamento (GET /api/metas; metas.js). Só o administrador. Nada desta tela vai para o MCP.
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -150,6 +150,8 @@ function tabela(cab, linhas){ const t = el('table'), h = el('tr'); for(const [x,
   const tb = el('tbody'); for(const l of linhas) tb.appendChild(l); t.appendChild(tb); return t; }
 function cartao(box, rot, valor, nota, destaque){ const c = el('div', 'cartao' + (destaque ? ' destaque' : '')); c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), el('p', 'nota', nota || '')); box.appendChild(c); }
 const chipAlerta = (a) => el('span', 'alerta-chip ' + ({ 'META ATINGIDA': 'ok', 'NO RITMO': 'ok', 'FORA DO RITMO': 'atencao', 'ABAIXO DA META': 'ruim' }[a] || ''), a ? a.toLowerCase() : '—');
+// Usuário só com "Visualizar": sem a aba Configuração e sem os campos de digitar (o servidor também recusa a escrita).
+let soVer = false;
 const post = async (caminho, corpo, metodo = 'POST') => api(caminho, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
 const nomeLoja = (k) => dados?.lojas.find((l) => l.canal === k)?.nome || k;
 const dataBR = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
@@ -288,7 +290,7 @@ function pintarAno(){
   cartao(c, 'Meses com a meta batida', numero(ms.filter((m) => m.alerta === 'META ATINGIDA').length), `de ${numero(ms.filter((m) => m.meta).length)} mês(es) com meta`);
   $('gAno').innerHTML = ''; $('gAno').appendChild(svgBarras(ms));
   const linhas = ms.map((m, i) => { const tr = el('tr', i + 1 === mes ? 'atual' : '');
-    const tm = el('td', 'n'); const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '1000'; inp.min = '0'; inp.value = m.meta ?? ''; inp.setAttribute('aria-label', 'Meta de ' + MESES[i]);
+    const tm = el('td', 'n'); const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '1000'; inp.min = '0'; inp.value = m.meta ?? ''; inp.disabled = soVer; inp.setAttribute('aria-label', 'Meta de ' + MESES[i]);
     inp.onchange = async () => { try{ await post('/api/metas/meta', { ano, mes: i + 1, valor: inp.value === '' ? null : Number(inp.value) }, 'PUT'); carregar(); }catch(e){ erroTela(e.message); } };
     tm.appendChild(inp);
     const ta = el('td'); ta.appendChild(chipAlerta(m.alerta));
@@ -329,7 +331,7 @@ function pintarSimples(){
   // meses sem dados: valor do mês por CNPJ
   const ls = dados.meses_rbt12.map((k) => { const tr = el('tr'); tr.appendChild(td(k.slice(5) + '/' + k.slice(0, 4)));
     for(const c of dados.cnpjs){ const t = el('td', 'n'); const sem = c.meses_sem_dados.includes(k);
-      const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.placeholder = sem ? 'sem dados' : 'do painel'; inp.setAttribute('aria-label', `${c.nome} em ${k}`);
+      const inp = el('input', 'meta'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.placeholder = sem ? 'sem dados' : 'do painel'; inp.disabled = soVer; inp.setAttribute('aria-label', `${c.nome} em ${k}`);
       inp.onchange = async () => { try{ await post('/api/metas/manual', { mes: k, cnpj: c.id, valor: inp.value === '' ? null : Number(inp.value) }, 'PUT'); carregar(); }catch(e){ erroTela(e.message); } };
       t.appendChild(inp); tr.appendChild(t); }
     return tr; });
@@ -390,7 +392,11 @@ $('selAno').onchange = () => { ano = Number($('selAno').value); carregar(); };
 $('selMes').onchange = () => { mes = Number($('selMes').value); carregar(); };
 $('btAtualizar').onclick = () => carregar(true);
 try{ const a = localStorage.getItem('metas_aba'); if(['mes', 'ano', 'simples', 'config'].includes(a)) abrir(a); }catch{}
-carregar();
+fetch('/api/eu', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((eu) => {
+  soVer = !!eu && !eu.admin && !(eu.modulos || []).includes('metas_editar');
+  if(soVer){ const c = document.querySelector('[data-aba="config"]'); if(c.getAttribute('aria-selected') === 'true') abrir('mes'); c.hidden = true; }
+  carregar();
+});
 </script>
 <script src="/sino.js?v=5" defer></script>
 </body>

@@ -69,8 +69,22 @@ function quemPassouAPerder(antes, agora) {
   return Object.entries(agora).filter(([id, x]) => x.situacao === 'competing' && antes[id]?.situacao !== 'competing').map(([id]) => id);
 }
 
+// Ofertas do produto de catálogo para a tela (todas, a nossa também), do mais barato para o mais caro. Pura: testada.
+// nomes = Map(seller_id -> { nome, medalha }); nossas = Map(seller_id -> apelido da conta conectada); ganhador = item_id.
+function ofertasDe(r, { meuItem = null, ganhador = null, nomes = new Map(), nossas = new Map() } = {}) {
+  const lista = Array.isArray(r?.results) ? r.results : [];
+  return lista.filter((x) => x?.price != null).map((x) => {
+    const v = String(x.seller_id ?? '');
+    return { item_id: x.item_id || null, vendedor: x.seller_id ?? null, nome: nomes.get(v)?.nome || null, medalha: nomes.get(v)?.medalha || null,
+      preco: x.price, full: x.shipping?.logistic_type === 'fulfillment', frete_gratis: !!x.shipping?.free_shipping,
+      loja_oficial: x.official_store_id != null, tipo: x.listing_type_id || null, parcelas: x.sale_terms?.find?.((t) => t.id === 'INSTALLMENTS')?.value_name || null,
+      nossa: nossas.get(v) || null, eu: !!meuItem && x.item_id === meuItem, ganhador: !!ganhador && x.item_id === ganhador };
+  }).sort((a, b) => a.preco - b.preco);
+}
+
 function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
   const margemMin = () => Number(D.configLer('catalogo_margem_min')) || MARGEM_MIN_PADRAO;
+  const nomesVendedor = new Map();   // seller_id -> { nome, medalha }, em memória (o apelido quase nunca muda)
   const ler = (id) => { try { return JSON.parse(D.configLer(`catalogo_comp:${id}`) || 'null'); } catch { return null; } };
   const rodando = new Set();
 
@@ -116,7 +130,10 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
             const nossas = new Map(D.contasListar().map((ct) => [String(ct.ml_user_id), ct.nickname || String(ct.ml_user_id)]));
             x.concorrentes = concorrentesDe(c, id).slice(0, 10).map((k) => (nossas.has(String(k.vendedor)) ? { ...k, nossa: nossas.get(String(k.vendedor)) } : k));
             // o botão está com a outra conta da empresa: baixar o preço só passaria a venda de uma conta para a outra
-            if (x.concorrentes.length && x.concorrentes.every((k) => k.nossa)) x.veredito = 'nossa';
+            // outro anúncio da MESMA conta no catálogo (concorrentesDe tira a própria conta da lista): sem nenhum vendedor de fora,
+            // quem está com o botão é anúncio nosso (29/10/2026: anúncio avisado perdendo para outro anúncio da mesma conta)
+            const mesmaConta = (c?.results || []).some((k) => String(k?.seller_id) === id && k.item_id !== it.id);
+            if (x.concorrentes.length ? x.concorrentes.every((k) => k.nossa) : mesmaConta) x.veredito = 'nossa';
           }
         }
         agora[it.id] = x;
@@ -150,6 +167,34 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
   }
 
   const rotas = {
+    // Quem vende no MESMO catálogo do anúncio (Anúncios -> Detalhes; o aviso "Perdendo no catálogo" abre ele): preço, envio,
+    // vendedor e quem está com o botão de compra, lidos agora. Só leitura.
+    'GET /api/catalogo/ofertas': async (url) => {
+      const ativa = contaOuErro();
+      const item = String(url.searchParams.get('item') || '');
+      if (!/^MLB\d+$/.test(item)) throw Object.assign(new Error('Anúncio inválido.'), { status: 400 });
+      // o anúncio pode ser da outra conta conectada (o aviso é de uma conta, a tela pode estar na outra): lê com a dona
+      let it = null, dona = ativa.ml_user_id;
+      for (const ct of [ativa, ...D.contasListar().filter((x) => x.ml_user_id !== ativa.ml_user_id)]) {
+        try { it = await ml(`/items/${item}?attributes=id,catalog_product_id,catalog_listing,price`, {}, ct.ml_user_id); dona = ct.ml_user_id; break; }
+        catch (e) { if (e.status !== 403 && e.status !== 401) throw e; }
+      }
+      if (!it) throw Object.assign(new Error('Este anúncio não é de nenhuma conta conectada.'), { status: 404 });
+      const prod = it.catalog_product_id;
+      if (!prod) return { item, catalogo: false };
+      const [p, c, w] = await Promise.all([ml(`/products/${prod}`, {}, dona).catch(() => null), ml(`/products/${prod}/items?limit=50`, {}, dona),
+        it.catalog_listing ? ml(`/items/${item}/price_to_win?version=v2`, {}, dona).catch(() => null) : null]);
+      const ids = [...new Set((c?.results || []).map((x) => String(x.seller_id)).filter((v) => v && !nomesVendedor.has(v)))].slice(0, 30);
+      await emLotes(ids, 5, async (v) => {
+        const u = await ml(`/users/${v}`, {}, dona).catch(() => null);
+        if (u) nomesVendedor.set(v, { nome: u.nickname || null, medalha: u.seller_reputation?.power_seller_status || null });
+      });
+      const nossas = new Map(D.contasListar().map((ct) => [String(ct.ml_user_id), ct.nickname || String(ct.ml_user_id)]));
+      const ganhador = p?.buy_box_winner?.item_id || w?.winner?.item_id || null;
+      return { item, catalogo: true, produto: prod, nome: p?.name || null, link: p?.permalink || null, meu_anuncio_de_catalogo: !!it.catalog_listing,
+        situacao: w?.status || null, preco_para_ganhar: w?.price_to_win ?? null, ganhador,
+        ofertas: ofertasDe(c, { meuItem: item, ganhador, nomes: nomesVendedor, nossas }) };
+    },
     // Disputa do catálogo da conta escolhida (?recarregar=1 lê de novo agora). Só leitura.
     'GET /api/catalogo/competicao': async (url) => {
       const conta = contaOuErro();
@@ -160,4 +205,4 @@ function criar({ ml, D, emLotes, idsDaConta, lucroNosPrecos, contaOuErro }) {
   return { rotas, verificar, resumo };
 }
 
-module.exports = { criar, leitura, veredito, textoDoAviso, quemPassouAPerder, concorrentesDe, textoConcorrentes, MARGEM_MIN_PADRAO };
+module.exports = { criar, ofertasDe, leitura, veredito, textoDoAviso, quemPassouAPerder, concorrentesDe, textoConcorrentes, MARGEM_MIN_PADRAO };

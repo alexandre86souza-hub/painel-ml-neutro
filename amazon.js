@@ -415,6 +415,24 @@ function ofertasDe(p, eu) {
     menor_outro: outros[0] || null, em: new Date().toISOString() };
 }
 
+// Repasses da Amazon (finances/v0/financialEventGroups, sem dado de comprador): cada grupo é um ciclo de pagamento. Aberto
+// (ProcessingStatus Open) = o saldo que está juntando para o próximo depósito; fechado e ainda não transferido = a caminho do
+// banco; transferido = pago (FundTransferDate). Valor = OriginalTotal (líquido do ciclo). Função pura: testada.
+function repassesAmazonDe(grupos, agora = Date.now()) {
+  const g = (grupos || []).map((x) => ({ id: x.FinancialEventGroupId || null, aberto: x.ProcessingStatus === 'Open',
+    transferencia: x.FundTransferStatus || null, valor: r2(valor(x.OriginalTotal)), inicio: x.FinancialEventGroupStart || null,
+    fim: x.FinancialEventGroupEnd || null, pago_em: x.FundTransferDate || null }));
+  const pago = (x) => !x.aberto && !!x.pago_em && /^(Succeeded|Transferred|Completed)$/i.test(x.transferencia || 'Succeeded');
+  const abertos = g.filter((x) => x.aberto), caminho = g.filter((x) => !x.aberto && !pago(x));
+  const pagos = g.filter(pago).sort((a, b) => String(b.pago_em).localeCompare(String(a.pago_em)));
+  const desde30 = new Date(agora - 30 * 864e5).toISOString();
+  return { abertos, a_caminho: caminho, pagos: pagos.slice(0, 12),
+    acumulando: r2(abertos.reduce((s, x) => s + x.valor, 0)), a_caminho_valor: r2(caminho.reduce((s, x) => s + x.valor, 0)),
+    pago_30: r2(pagos.filter((x) => x.pago_em >= desde30).reduce((s, x) => s + x.valor, 0)),
+    // o próximo depósito: o ciclo aberto fecha em ~14 dias a partir do início
+    proximo: abertos[0]?.inicio ? new Date(Date.parse(abertos[0].inicio) + 14 * 864e5).toISOString() : null };
+}
+
 function criar({ D, janela, quem = () => null }) {
   const C = require('./custos.js');
   const config = () => ({
@@ -1015,16 +1033,30 @@ function criar({ D, janela, quem = () => null }) {
   async function anunciosAmazon(recarregar) {
     if (!recarregar && cacheAnuncios && Date.now() - cacheAnuncios.em < 10 * 60e3) return cacheAnuncios.dados;
     const vendedor = await idVendedor();
-    const lista = [];
-    let params = { marketplaceIds: BR, includedData: 'summaries,offers,fulfillmentAvailability,attributes', pageSize: 20 };
-    for (let p = 0; p < 200; p++) {
-      const r = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}`, params);
-      lista.push(...(r.items || []));
-      const prox = r.pagination?.nextToken;
-      if (!prox) break;
-      params = { ...params, pageToken: prox };
-      await new Promise((ok) => setTimeout(ok, 250));
+    // A busca entrega no máximo 1.000 anúncios por consulta (medido 28/10/2026: parou em 1.000 exatos). Em ordem de
+    // criação: chegou ao teto, a próxima consulta começa na data de criação do último (createdAfter) e o repetido sai.
+    const porSku = new Map();
+    let desde = null;
+    for (let janela = 0; janela < 30; janela++) {
+      let params = { marketplaceIds: BR, includedData: 'summaries,offers,fulfillmentAvailability,attributes', pageSize: 20,
+        sortBy: 'createdDate', sortOrder: 'ASC', ...(desde ? { createdAfter: desde } : {}) };
+      let vieram = 0, ultimo = null, cortou = false;
+      for (let p = 0; p < 50; p++) {
+        const r = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}`, params);
+        for (const it of r.items || []) {
+          porSku.set(it.sku, it); vieram++;
+          ultimo = (it.summaries || []).map((x) => x.createdDate).filter(Boolean).sort().pop() || ultimo;
+        }
+        const prox = r.pagination?.nextToken;
+        if (!prox) break;
+        if (p === 49) cortou = true;
+        params = { ...params, pageToken: prox };
+        await new Promise((ok) => setTimeout(ok, 250));
+      }
+      if ((!cortou && vieram < 1000) || !ultimo || ultimo === desde) break;
+      desde = ultimo;
     }
+    const lista = [...porSku.values()];
     const { empresa } = empresaAmazon();
     const impostoPct = C.impostoTotal(empresa);
     const mapa = new Map(D.catalogoListar().map((p) => [p.numero, p]));
@@ -1052,6 +1084,7 @@ function criar({ D, janela, quem = () => null }) {
         asin: s.asin || null, titulo: cs.componentes.map((x) => x.nome).filter(Boolean).join(' + ') || s.itemName || it.sku,
         nome_amazon: s.itemName || null, foto: s.mainImage?.link || fotos.get(it.sku)?.foto || null, status: s.status || [],
         tipo_produto: s.productType || null, preco: oferta?.price?.amount != null ? Number(oferta.price.amount) : null, cheio, desconto,
+        minimo: po?.minimum_seller_allowed_price?.[0]?.schedule?.[0]?.value_with_tax != null ? Number(po.minimum_seller_allowed_price[0].schedule[0].value_with_tax) : null,
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',
         vendas_30: v30.get(it.sku)?.u || 0, faturamento_30: r2(v30.get(it.sku)?.f || 0),
         custo_unit: cs.custo, tarifa_pct: m?.tarifa_pct ?? null, fixa_un: m?.fixa_un ?? null, frete_un: m?.frete_un ?? null, armazem_un: m?.armazem_un ?? 0,
@@ -1075,6 +1108,8 @@ function criar({ D, janela, quem = () => null }) {
   }
   // Muda a oferta ao consumidor de um SKU (lida na hora): mudar(oferta) devolve a nova; sem oferta
   // ao consumidor, usa `nova` (ou recusa, se null). Mínimo/máximo e a oferta B2B ficam como estão.
+  // Valor do 1º schedule de um campo de preço da oferta (our_price, discounted_price, minimum/maximum_seller_allowed_price).
+  const valorDe = (campo) => { const v = campo?.[0]?.schedule?.[0]?.value_with_tax; return v == null ? null : Number(v); };
   async function mudarOferta(sku, mudar, nova = null) {
     const vendedor = await idVendedor();
     const caminho = `/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`;
@@ -1087,7 +1122,16 @@ function criar({ D, janela, quem = () => null }) {
     const valor = ofertas.map((o) => {
       if (o.marketplace_id !== BR || !ehConsumidor(o) || mudou) return o;
       mudou = true;
-      return mudar(o);
+      const nova = mudar(o);
+      // Preço (cheio ou promocional) abaixo do mínimo cadastrado na oferta: a Amazon DESATIVA a oferta como "erro de
+      // preço" (e-mail de 28/10/2026, SKU KIT-851.781.747.678). Recusa antes de mandar.
+      const min = valorDe(o.minimum_seller_allowed_price), max = valorDe(o.maximum_seller_allowed_price);
+      for (const [nome, v] of [['preço', valorDe(nova.our_price)], ['preço promocional', valorDe(nova.discounted_price)]]) {
+        if (v == null) continue;
+        if (min != null && v < min) throw erro(`${sku}: o ${nome} (R$ ${v.toFixed(2)}) fica abaixo do preço mínimo cadastrado na Amazon (R$ ${min.toFixed(2)}).`, 409);
+        if (max != null && v > max) throw erro(`${sku}: o ${nome} (R$ ${v.toFixed(2)}) passa do preço máximo cadastrado na Amazon (R$ ${max.toFixed(2)}).`, 409);
+      }
+      return nova;
     });
     if (!mudou) { if (!nova) throw erro(`${sku}: a Amazon não tem oferta ao consumidor para este SKU.`, 409); valor.push(nova); }
     const r = await spEscrever('PATCH', caminho, { marketplaceIds: BR }, {
@@ -1098,6 +1142,44 @@ function criar({ D, janela, quem = () => null }) {
       throw erro('A Amazon recusou: ' + ((problemas[0] || r.issues?.[0])?.message || r.status || 'sem detalhe'), 422);
     }
     return { status: r.status, envio: r.submissionId || null, avisos: (r.issues || []).map((i) => i.message).slice(0, 5) };
+  }
+
+  // Estoque do envio próprio (MFN) de um SKU: PATCH de /attributes/fulfillment_availability lido na hora, trocando só a
+  // quantity da linha DEFAULT (prazo de manuseio e o resto ficam). FBA é recusado (o estoque é o do armazém da Amazon).
+  // A Amazon aceita (ACCEPTED) e aplica em segundo plano: quem chama relê depois para conferir.
+  async function mudarEstoque(sku, quantidade) {
+    const q = Math.round(Number(quantidade));
+    if (!Number.isInteger(q) || q < 0 || q > 100000) throw erro(`${sku}: quantidade inválida.`);
+    const vendedor = await idVendedor();
+    const caminho = `/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`;
+    const atual = await sp(caminho, { marketplaceIds: BR, includedData: 'summaries,attributes,fulfillmentAvailability' });
+    const tipo = (atual.summaries || []).find((x) => x.marketplaceId === BR)?.productType || atual.summaries?.[0]?.productType;
+    if (!tipo) throw erro(`${sku}: a Amazon não informou o tipo de produto.`, 502);
+    if ((atual.fulfillmentAvailability || []).some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT')) throw erro(`${sku}: é FBA (o estoque é o do armazém da Amazon).`, 409);
+    const fa = atual.attributes?.fulfillment_availability || [];
+    const proprio = fa.find((x) => !x.fulfillment_channel_code || x.fulfillment_channel_code === 'DEFAULT');
+    const valor = proprio ? fa.map((x) => (x === proprio ? { ...x, quantity: q } : x)) : [...fa, { fulfillment_channel_code: 'DEFAULT', quantity: q }];
+    const r = await spEscrever('PATCH', caminho, { marketplaceIds: BR }, {
+      productType: tipo, patches: [{ op: 'replace', path: '/attributes/fulfillment_availability', value: valor }] });
+    const problemas = (r.issues || []).filter((i) => i.severity === 'ERROR');
+    if (r.status !== 'ACCEPTED' || problemas.length) throw erro('A Amazon recusou: ' + ((problemas[0] || r.issues?.[0])?.message || r.status || 'sem detalhe'), 422);
+    const it = cacheAnuncios?.dados?.itens?.find((x) => x.sku === sku);
+    if (it) it.estoque = q;   // a lista guardada mostra o número enviado até a próxima leitura
+    return { status: r.status, envio: r.submissionId || null };
+  }
+  // Diagnóstico do estoque de um SKU (só leitura, sem dado de comprador): a linha gravada, o que a Amazon mostra e os problemas do anúncio.
+  async function estoqueDiagnostico(sku) {
+    const vendedor = await idVendedor();
+    const a = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`, { marketplaceIds: BR, includedData: 'attributes,fulfillmentAvailability,issues,summaries' });
+    return { atributo: a.attributes?.fulfillment_availability || null, disponivel: a.fulfillmentAvailability || null, problemas: (a.issues || []).slice(0, 8).map((i) => ({ codigo: i.code, nivel: i.severity, msg: i.message })),
+      status: (a.summaries || [])[0]?.status || null, atualizado: (a.summaries || [])[0]?.lastUpdatedDate || null };
+  }
+  // Estoque do envio próprio lido agora (para conferir um envio); null = sem linha DEFAULT.
+  async function estoqueAgora(sku) {
+    const vendedor = await idVendedor();
+    const atual = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`, { marketplaceIds: BR, includedData: 'fulfillmentAvailability' });
+    const d = (atual.fulfillmentAvailability || []).find((x) => !x.fulfillmentChannelCode || x.fulfillmentChannelCode === 'DEFAULT');
+    return d ? Number(d.quantity) || 0 : null;
   }
 
   // Concorrentes de um ASIN (Product Pricing API, getItemOffers): até 20 ofertas novas, com
@@ -1228,7 +1310,18 @@ function criar({ D, janela, quem = () => null }) {
       const resultados = [];
       for (const sku of skus) {
         try {
-          const r = await mudarOferta(sku, (o) => { const { discounted_price, ...resto } = o; return resto; });
+          // Tirar o campo NÃO tira o desconto: a Amazon junta o que veio com o que já havia (medido 28-29/10/2026: 39 SKUs
+          // "ACCEPTED" seguiram com o promocional abaixo do mínimo e foram desativados). Manda o desconto ENCERRADO agora,
+          // com valor nunca abaixo do mínimo da oferta.
+          const r = await mudarOferta(sku, (o) => {
+            const sched = o.discounted_price?.[0]?.schedule?.[0];
+            if (!sched) return o;
+            const agora = new Date(Date.now() - 60e3).toISOString();
+            const min = valorDe(o.minimum_seller_allowed_price);
+            const valor = Math.max(Number(sched.value_with_tax) || 0, min ?? 0) || valorDe(o.our_price);
+            const inicio = sched.start_at && sched.start_at < agora ? sched.start_at : new Date(Date.now() - 120e3).toISOString();
+            return { ...o, discounted_price: [{ schedule: [{ start_at: inicio, end_at: agora, value_with_tax: valor }] }] };
+          });
           resultados.push({ sku, ok: true, ...r });
         } catch (e) { resultados.push({ sku, ok: false, erro: e.message }); }
         await new Promise((ok) => setTimeout(ok, 250));
@@ -1332,8 +1425,26 @@ function criar({ D, janela, quem = () => null }) {
     },
   });
 
-  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon };
+  // Repasses (financialEventGroups dos últimos 90 dias), guardados 1 h: a tela Caixa a receber chama.
+  let repassesCache = null;
+  async function repasses(forcar = false) {
+    if (!forcar && repassesCache && Date.now() - repassesCache.em < 3600e3) return repassesCache.dados;
+    const grupos = [];
+    let next = null;
+    const desde = new Date(Date.now() - 90 * 864e5).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    for (let i = 0; i < 10; i++) {
+      const j = await sp('/finances/v0/financialEventGroups', next ? { NextToken: next } : { MaxResultsPerPage: 100, FinancialEventGroupStartedAfter: desde });
+      grupos.push(...(j?.payload?.FinancialEventGroupList || []));
+      next = j?.payload?.NextToken;
+      if (!next) break;
+    }
+    const dados = repassesAmazonDe(grupos);
+    repassesCache = { em: Date.now(), dados };
+    return dados;
+  }
+
+  return { rotas, rotasParam: [], sp, idVendedor, sincronizar, sincronizarPedidos, lerItens, anuncios: anunciosAmazon, mudarEstoque, estoqueAgora, estoqueDiagnostico, repasses };
 }
 
-module.exports = { criar, devolucoesDe, comManuais, validarDevManual, MOTIVOS_DEV,validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
+module.exports = { repassesAmazonDe, criar, devolucoesDe, comManuais, validarDevManual, MOTIVOS_DEV, validarConfig, semPessoais, forma, vocabulario, listasCheias, lancamentosDe, servicosDe, comEtiquetas, contaDoLancamento, resumoAmazon,
   pedidoDe, itemDe, janelaVendas, taxasDosLancamentos, linhaDoPedido, ofertasDe, BR, HOST };

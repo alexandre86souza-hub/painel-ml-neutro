@@ -40,7 +40,7 @@ const ID = 'https://id.magalu.com';
 const API = 'https://api.magalu.com';
 const ESCOPOS = ['open:order-order-seller:read', 'open:order-financial-report-seller:read', 'open:order-invoice-seller:read',
   'open:order-delivery-seller:read', 'open:portfolio-skus-seller:read', 'open:portfolio-prices-seller:read',
-  'open:portfolio-prices-seller:write', 'open:portfolio-stocks-seller:read', 'open:promotion-promotions-seller:read',
+  'open:portfolio-prices-seller:write', 'open:portfolio-stocks-seller:read', 'open:portfolio-stocks-seller:write', 'open:promotion-promotions-seller:read',
   'open:promotion-promotions-seller:write', 'open:promotion-skus-seller:read', 'open:promotion-skus-seller:write',
   'open:promotion-subscriptions-seller:read', 'open:promotion-subscriptions-seller:write', 'open:promotion-subscriptions-seller:delete',
   'open:tickets-seller:read', 'open:ticket-returns-seller:read', 'services:questions-seller:read', 'services:conversations-seller:read'];
@@ -380,6 +380,30 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     D.magaluPrecoGravar(sku, preco, lista, estoque);
     return preco;
   }
+  // Estoque de UM SKU (etapa 2 do estoque nos anúncios). Doc: PATCH /seller/v1/portfolios/stocks/:sku (SKU até 32 caracteres), corpo
+  // type AVAILABLE, quantity, channel {id} e branch {id}; responde 202 (assíncrono). Escopo open:portfolio-stocks-seller:write.
+  const caminhoEstoque = (sku) => `/seller/v1/portfolios/stocks/${encodeURIComponent(sku)}`;
+  const disponiveis = (r) => (r.results || []).filter((x) => !x.type || x.type === 'AVAILABLE');
+  async function estoqueAgora(sku) {
+    const l = disponiveis(await mg(caminhoEstoque(sku)));
+    const q = l.length ? l.reduce((a, x) => a + n(x.quantity), 0) : null;
+    D.magaluEstoqueGravar(sku, q);
+    return q;
+  }
+  async function mudarEstoque(sku, quantidade) {
+    const q = Math.round(Number(quantidade));
+    if (!Number.isInteger(q) || q < 0 || q > 100000) throw erro(`${sku}: quantidade inválida.`);
+    if (String(sku).length > 32) throw erro(`${sku}: a Magalu aceita SKU de até 32 caracteres.`);
+    const l = disponiveis(await mg(caminhoEstoque(sku)));
+    // SKU que nunca teve estoque na Magalu não tem registro: cria (POST, channel obrigatório)
+    if (!l.length) return mg(caminhoEstoque(sku), {}, { metodo: 'POST', corpo: { type: 'AVAILABLE', quantity: q, channel: { id: CANAL_MAGALU.id } } });
+    if (l.length !== 1) throw erro(`${sku}: a Magalu devolveu ${l.length} registros de estoque (o envio só trata 1).`, 409);
+    const atual = l[0];
+    const corpo = { type: 'AVAILABLE', quantity: q };
+    if (atual.channel?.id) corpo.channel = { id: String(atual.channel.id) };
+    if (atual.branch?.id) corpo.branch = { id: String(atual.branch.id) };
+    return mg(caminhoEstoque(sku), {}, { metodo: 'PATCH', corpo });
+  }
   // preço enviado e ainda não aplicado: relê aquele SKU depois de 3, 8, 15 e 30 min (medido 14/10/2026: o site mudou em
   // minutos e a leitura da API ainda mais tarde); para quando o preço lido for o enviado
   function conferirDepois(sku, alvo) {
@@ -479,12 +503,14 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   });
   // Sem filtro de data a Magalu põe sozinha start_date entre AGORA e +30 dias (medido em 09/10/2026 no
   // meta.links.self): as promoções JÁ em andamento ficavam de fora e a lista vinha vazia. O painel manda o
-  // período: começou até 180 dias atrás (ou começa nos próximos 120) e ainda não terminou.
+  // período: começou até 60 dias atrás (ou começa nos próximos 29) e ainda não terminou. A Magalu recusa start_at
+  // com mais de 90 dias entre gte e lte, e cada gte exige o lte (400, medidos 28/10/2026; antes aceitava 180 + 120 e
+  // end_at__gte sozinho): término entre hoje e +89 dias.
   // Com os filtros da doc a Magalu respondeu 500 (09/10/2026): se a consulta com período falhar no servidor
   // dela, repete sem filtro (o comportamento de antes). O botão do log testa as variações para achar a certa.
   const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const filtroPromocoes = (agora = Date.now()) => ({ start_at__gte: iso(agora - 180 * 864e5),
-    start_at__lte: iso(agora + 120 * 864e5), end_at__gte: iso(agora) });
+  const filtroPromocoes = (agora = Date.now()) => ({ start_at__gte: iso(agora - 60 * 864e5),
+    start_at__lte: iso(agora + 29 * 864e5), end_at__gte: iso(agora), end_at__lte: iso(agora + 89 * 864e5) });
   async function promocoesDaLoja() {
     const ler = async (filtro) => {
       const todas = [];
@@ -535,10 +561,9 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
       const agora = Date.now(), f = filtroPromocoes(agora);
       const variacoes = [
         ['sem filtro', {}],
-        ['início a partir de 180 dias atrás (start_at__gte)', { start_at__gte: f.start_at__gte }],
-        ['término a partir de hoje (end_at__gte)', { end_at__gte: f.end_at__gte }],
-        ['início entre −180 e +120 dias (start_at__gte + start_at__lte)', { start_at__gte: f.start_at__gte, start_at__lte: f.start_at__lte }],
-        ['os três filtros', f],
+        ['término entre hoje e +89 dias (end_at__gte + end_at__lte)', { end_at__gte: f.end_at__gte, end_at__lte: f.end_at__lte }],
+        ['início entre −60 e +29 dias (start_at__gte + start_at__lte)', { start_at__gte: f.start_at__gte, start_at__lte: f.start_at__lte }],
+        ['os quatro filtros', f],
         ['nomes do link da Magalu (start_date_gte + start_date_lte)', { start_date_gte: f.start_at__gte, start_date_lte: f.start_at__lte }],
       ];
       const resumo = [];
@@ -935,7 +960,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     } catch (e) { return falha('A Magalu não entregou o acesso', e.message, 502); }
   }
 
-  return { rotas, rotasParam: [], callback, mg, config, sincronizar };
+  return { rotas, rotasParam: [], callback, mg, config, sincronizar, estoqueAgora, mudarEstoque, estoqueDiagnostico: (sku) => mg(caminhoEstoque(sku)) };
 }
 
 module.exports = { criar, fretePctDe, devolucoesDe, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };

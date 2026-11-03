@@ -45,12 +45,32 @@ function reclamacaoPendente(claim, mensagens, contaId, detalhe = null) {
   if (!vendedor || Number(vendedor.user_id) !== Number(contaId) || !destinosDe(claim).length) return false;
   const ms = [...(mensagens || [])].sort((a, b) => String(a.message_date || a.date_created).localeCompare(String(b.message_date || b.date_created)));
   const ultima = ms[ms.length - 1];
-  if (ultima && ultima.sender_role !== 'respondent') return true;
+  // o comprador falou por último: espera resposta. O ML (mediador) falou por último: só se o detail disser que a vez é
+  // do vendedor — o mais comum é aviso ("pedi a devolução, acompanhe a entrega"), que não pede resposta.
+  if (ultima && ultima.sender_role === 'complainant') return true;
+  if (ultima && ultima.sender_role === 'mediator') return detalhe?.action_responsible === 'respondent';
   return detalhe?.action_responsible === 'respondent' && !(ultima && ultima.sender_role === 'respondent');
 }
 
 // Conversa da Shopee esperando o vendedor: o comprador falou por último. Função pura: testada.
 const chatPendente = (c) => c.latest_message_from_id != null && Number(c.latest_message_from_id) === Number(c.to_id);
+
+// Mensagem da mediação do ML vem em HTML (<p>, <span>, <a>, &nbsp;): vira texto, com os parágrafos em linhas e o
+// endereço do link entre parênteses. Texto sem tag passa igual. Função pura: testada.
+function textoDeHtml(v) {
+  const s = String(v ?? '');
+  if (!/<[a-z!/][^>]*>|&(nbsp|amp|lt|gt|quot|#\d+);/i.test(s)) return s;
+  const ent = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+  return s
+    .replace(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, txt) => {
+      const t = txt.replace(/<[^>]*>/g, '').trim();
+      return t && href && !t.includes(href) ? `${t} (${href})` : t || href;
+    })
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d)>/gi, '\n').replace(/<li\b[^>]*>/gi, '• ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#\d+|[a-z]+);/gi, (m, e) => (e[0] === '#' ? String.fromCharCode(Number(e.slice(1))) : ent[e.toLowerCase()] ?? m))
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 // Texto de uma mensagem da Shopee (texto, ou o tipo quando é cartão de produto/pedido/imagem). Função pura: testada.
 function textoShopee(tipo, conteudo) {
@@ -135,7 +155,7 @@ function criar({ D, ml, emLotes, daLoja }) {
       const acoes = (c.players.find((x) => x.role === 'respondent')?.available_actions || []);
       const prazo = acoes.map((a) => a.due_date).filter(Boolean).sort()[0] || null;
       out.push({ canal: 'ml', conta: String(conta.ml_user_id), conta_nome: conta.nickname, tipo: 'reclamacao', id: String(c.id),
-        texto: ultima?.message || det?.problem || det?.title || 'Reclamação aberta', data: dataDe(ultima?.message_date || c.last_updated),
+        texto: textoDeHtml(ultima?.message) || det?.problem || det?.title || 'Reclamação aberta', data: dataDe(ultima?.message_date || c.last_updated),
         situacao: [det?.title, det?.description].filter(Boolean).join(' — ') || null, destinos: destinosDe(c),
         de: ultima?.sender_role === 'mediator' ? 'Mercado Livre' : 'comprador', etapa: c.stage === 'dispute' ? 'mediação' : 'reclamação',
         prazo: dataDe(det?.action_responsible === 'respondent' ? det.due_date : prazo), produto: p.titulo || null, pedido: String(c.resource_id), comprador: p.comprador || null,
@@ -245,7 +265,7 @@ function criar({ D, ml, emLotes, daLoja }) {
         const papel = { complainant: 'comprador', respondent: 'voce', mediator: 'Mercado Livre' };
         return { limite: LIMITE.reclamacao, destinos: cl ? destinosDe(cl) : ['complainant'],
           situacao: det ? [det.title, det.description, det.problem && `Problema: ${det.problem}`].filter(Boolean).join(' — ') : null, mensagens: ms.slice().sort((a, b) => String(a.message_date).localeCompare(String(b.message_date)))
-          .map((m) => ({ de: papel[m.sender_role] || m.sender_role, texto: m.message, data: dataDe(m.message_date), anexos: (m.attachments || []).length })) };
+          .map((m) => ({ de: papel[m.sender_role] || m.sender_role, texto: textoDeHtml(m.message), data: dataDe(m.message_date), anexos: (m.attachments || []).length })) };
       }
       if (tipo === 'mensagem') {
         const r = await ml(`/messages/packs/${id}/sellers/${c.ml_user_id}?tag=post_sale&mark_as_read=false`, {}, c.ml_user_id);
@@ -323,4 +343,4 @@ function criar({ D, ml, emLotes, daLoja }) {
   return { rotas, rotasParam: [] };
 }
 
-module.exports = { criar, dataDe, reclamacaoPendente, destinosDe, chatPendente, textoShopee, preencher, textoValido, LIMITE };
+module.exports = { criar, textoDeHtml, dataDe, reclamacaoPendente, destinosDe, chatPendente, textoShopee, preencher, textoValido, LIMITE };

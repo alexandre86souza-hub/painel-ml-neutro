@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
@@ -72,7 +72,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -283,7 +283,8 @@
 <datalist id="listaForn"></datalist>
 <div id="impressaoPedido" aria-hidden="true"></div>
 
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
+<script src="/composicao.js?v=3"></script>
 <script>
 // Na aba Compras a tela fica parada onde estava (pedido do dono, 22/10/2026): o aviso fica preso no topo da tela em vez de rolar até ele.
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none';
@@ -325,7 +326,9 @@ $('abas').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abrir
 
 // ---------- ESTOQUE NOS ANÚNCIOS (só comparação) ----------
 let ea = null, eaLendo = false;
-const EA_SIT = { igual: 'Igual', loja_mais: 'Loja com mais', loja_menos: 'Loja com menos', sem_produto: 'SKU sem produto', full: 'Full / FBA', sem_estoque_loja: 'Loja sem estoque informado' };
+const EA_SIT = { igual: 'Igual', loja_mais: 'Loja com mais', loja_menos: 'Loja com menos', sem_produto: 'SKU sem produto', salvo: 'Produtos salvos (entra na próxima leitura)', full: 'Full / FBA', sem_estoque_loja: 'Loja sem estoque informado', zerado: 'Sempre zero (fora de linha)' };
+// SKUs que ganharam produtos nesta tela: a comparação do servidor só muda na próxima leitura (até 10 min)
+const eaSalvos = new Set();
 async function carregarEstAnuncios(recarregar){
   if(eaLendo) return; eaLendo = true;
   const st = $('eaSituacao'); st.innerHTML = '';
@@ -345,6 +348,7 @@ async function carregarEstAnuncios(recarregar){
 }
 function pintarEstAnuncios(){
   if(!ea?.linhas) return;
+  for(const x of ea.linhas) if(x.situacao === 'sem_produto' && eaSalvos.has(x.sku || x.id)){ x.situacao = 'salvo'; ea.resumo.sem_produto--; }
   const r = ea.resumo, cs = $('eaCartoes'); cs.innerHTML = '';
   const cartao = (rot, val, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); cs.appendChild(c); };
   cartao('Anúncios comparados', n0(r.anuncios - r.full - r.sem_produto)); cartao('Iguais', n0(r.iguais));
@@ -363,6 +367,14 @@ function pintarEstAnuncios(){
     eaShopeeVisto.add(loja);
     api('/api/estoque/anuncios/shopee/envios?loja=' + ls[0].shop).then((r) => { if(r?.liberada){ eaContasMl.set(loja, { tipo: 'shopee', id: ls[0].shop }); pintarEstAnuncios(); } }).catch(() => null);
   }
+  if(loja === 'Amazon' && eaContasMl && !eaContasMl.has(loja) && !eaShopeeVisto.has(loja)){
+    eaShopeeVisto.add(loja);
+    api('/api/estoque/anuncios/amazon/envios').then((r) => { if(r?.liberada){ eaContasMl.set(loja, { tipo: 'amazon', id: null }); pintarEstAnuncios(); } }).catch(() => null);
+  }
+  if(loja === 'Magalu' && eaContasMl && !eaContasMl.has(loja) && !eaShopeeVisto.has(loja)){
+    eaShopeeVisto.add(loja);
+    api('/api/estoque/anuncios/magalu/envios').then((r) => { if(r?.liberada){ eaContasMl.set(loja, { tipo: 'magalu', id: null }); pintarEstAnuncios(); } }).catch(() => null);
+  }
   if(eaLojaMarcada !== loja){ eaMarcadas.clear(); eaLojaMarcada = loja; }
   pintarEnvioLeroy(leroy, ls);
   pintarEnvioMl(contaMl, ls);
@@ -377,7 +389,12 @@ function pintarEstAnuncios(){
     t1.append(nome, el('span', 'pequeno', [x.id, x.variacao, x.status].filter(Boolean).join(' · ')));
     const lim = x.limita ? `${x.limita.sku}: saldo ${n0(x.limita.saldo)}${x.limita.seguranca ? ` − ${n0(x.limita.seguranca)} de segurança` : ''}${x.limita.vezes > 1 ? ` (${x.limita.vezes} por kit)` : ''}` : '—';
     const dif = x.diferenca == null ? '—' : (x.diferenca > 0 ? '+' : '') + n0(x.diferenca);
-    tr.append(td(x.loja), t1, td(x.sku || '—'), td(n0(x.estoque), 'n'), td(n0(x.deveria), 'n'), td(dif, 'n'), td(lim), td(EA_SIT[x.situacao] || x.situacao));
+    const tSku = td(x.sku || '—');
+    if(x.situacao === 'sem_produto'){
+      const chaveSku = x.sku || x.id;
+      tSku.append(document.createElement('br'), Composicao.botao(chaveSku, { titulo: x.titulo, rotulo: 'Adicionar produtos', aoSalvar: () => { eaSalvos.add(chaveSku); pintarEstAnuncios(); } }));
+    }
+    tr.append(td(x.loja), t1, tSku, td(n0(x.estoque), 'n'), td(n0(x.deveria), 'n'), td(dif, 'n'), td(lim), td(EA_SIT[x.situacao] || x.situacao));
     if(x.situacao === 'loja_mais' && x.deveria === 0) tr.className = 'alerta';
     return tr;
   })));
@@ -399,8 +416,8 @@ const eaShopeeVisto = new Set();   // lojas da Shopee já perguntadas (liberada 
 // envio de estoque ao ML (um número por estoque: o anúncio de catálogo vai pelo tradicional) e à Shopee, relido no anúncio para conferir
 function pintarEnvioMl(alvo, ls){
   const box = $('eaEnvioMl'); box.hidden = !alvo; if(!alvo) return;
-  const ml = alvo.tipo === 'ml', base = ml ? '/api/estoque/anuncios/ml' : '/api/estoque/anuncios/shopee';
-  const qs = ml ? 'conta=' + alvo.id : 'loja=' + alvo.id, dono = ml ? { conta: alvo.id } : { loja: alvo.id }, nomeCanal = ml ? 'Mercado Livre' : 'Shopee';
+  const ml = alvo.tipo === 'ml', amz = alvo.tipo === 'amazon' || alvo.tipo === 'magalu', base = '/api/estoque/anuncios/' + alvo.tipo;
+  const qs = ml ? 'conta=' + alvo.id : amz ? '' : 'loja=' + alvo.id, dono = ml ? { conta: alvo.id } : amz ? {} : { loja: alvo.id }, nomeCanal = ml ? 'Mercado Livre' : alvo.tipo === 'amazon' ? 'Amazon' : alvo.tipo === 'magalu' ? 'Magalu' : 'Shopee';
   box.innerHTML = '';
   const marcadas = ls.filter((x) => eaMarcadas.has(x.var_id ? `${x.id}:${x.var_id}` : x.id));
   box.append(el('span', null, `${$('eaLoja').value}: ${n0(eaMarcadas.size)} anúncio(s) marcado(s). O painel manda o saldo − segurança, calculado na hora (só o estoque).${ml ? ' Anúncio de catálogo divide o estoque com o tradicional: vai um número só.' : ''}`));
@@ -414,8 +431,8 @@ function pintarEnvioMl(alvo, ls){
     env.disabled = true; env.textContent = 'Enviando…';
     try{
       const r = await post(base, { ...dono, chaves: [...eaMarcadas] });
-      const ruins = r.enviadas.filter((e) => !e.ok);
-      aviso(`${nomeCanal}: ${n0(r.ok)} anúncio(s) com o estoque novo, conferido no anúncio` + (ruins.length ? `; ${n0(ruins.length)} não ficaram (${ruins.slice(0, 3).map((e) => e.sku + ': ' + (e.erro || `leu ${e.lido}`)).join(', ')})` : '')
+      const ruins = r.enviadas.filter((e) => !e.ok && !e.pendente);
+      aviso(`${nomeCanal}: ${n0(r.ok)} anúncio(s) com o estoque novo, conferido no anúncio` + (r.pendentes ? `; ${n0(r.pendentes)} enviado(s), a loja ainda vai mostrar (o painel confere sozinho)` : '') + (ruins.length ? `; ${n0(ruins.length)} não ficaram (${ruins.slice(0, 3).map((e) => e.sku + ': ' + (e.erro || `leu ${e.lido}`)).join(', ')})` : '')
         + (r.fora?.length ? `; ${n0(r.fora.length)} ficaram de fora (${r.fora.slice(0, 3).map((f) => f.chave + ': ' + f.motivo).join(', ')})` : '') + '.', ruins.length ? '' : 'ok');
       eaMarcadas.clear(); carregarEstAnuncios(true);
     }catch(e){ aviso(e.message); env.disabled = false; env.textContent = `Enviar estoque (${n0(eaMarcadas.size)})`; }
@@ -440,8 +457,8 @@ function pintarEnvioMl(alvo, ls){
     if(!d.envios.length) return;
     lista.appendChild(tabela([['Último(s) envio(s)'], ['Quem'], ['Anúncios', 'n'], ['Resultado'], ['Exemplos']], d.envios.slice(0, 5).map((e) => {
       const tr = el('tr');
-      tr.append(td(quando(e.em)), td(e.quem || '—'), td(n0(e.total), 'n'), td(`${n0(e.ok || 0)} ok` + (e.com_erro ? ` · ${n0(e.com_erro)} com erro` : '')),
-        td(e.linhas.slice(0, 4).map((l) => `${l.sku}: ${n0(l.antes)} → ${n0(l.depois)}${l.ok ? '' : ' ✗'}`).join(' | ') + (e.total > 4 ? ' …' : '')));
+      tr.append(td(quando(e.em)), td(e.quem || '—'), td(n0(e.total), 'n'), td(`${n0(e.ok || 0)} ok` + (e.linhas.some((l) => l.pendente) ? ` · ${n0(e.linhas.filter((l) => l.pendente).length)} aguardando a loja` : '') + (e.com_erro ? ` · ${n0(e.com_erro)} com erro` : '')),
+        td(e.linhas.slice(0, 4).map((l) => `${l.sku}: ${n0(l.antes)} → ${n0(l.depois)}${l.ok || l.substituido ? '' : l.pendente ? ' …' : ' ✗'}`).join(' | ') + (e.total > 4 ? ' …' : '')));
       return tr;
     })));
   }).catch(() => null);

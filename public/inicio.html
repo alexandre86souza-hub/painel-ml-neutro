@@ -89,7 +89,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 </head>
 <body>
@@ -97,7 +97,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -190,6 +190,24 @@ async function api(caminho){
   const j = await r.json();
   if(!r.ok) throw Object.assign(new Error(j.error || 'Falhou'), { status: r.status });
   return j;
+}
+
+// Outra loja (?conta=amazon|leroy|magalu|shopee-{loja}, pelo menu): a mesma tela com as vendas dela (GET /api/dashboard/canal).
+const EXT = (/^(amazon|leroy|magalu|shopee-\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[0] || null;
+if(EXT){
+  // só o ML tem ADS, Full, devoluções no resumo e saúde da conta
+  for(const id of ['rDev', 'rAds', 'rFull']) $(id).closest('.r-card').hidden = true;
+  for(const a of document.querySelectorAll('#resumo30 a.r-card')) a.href = '/vendas.html?conta=' + EXT;
+  $('addConta').hidden = true;
+}
+function pintarResumoCanal(m){
+  const pctx = (v) => (v == null ? '—' : (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+  $('rFat').textContent = real(m.faturamento);
+  $('rFatN').textContent = `${numero(m.pedidos)} pedidos · ${numero(m.unidades)} un.`;
+  $('rLucro').textContent = m.lucro == null ? '—' : real(m.lucro);
+  $('rLucroN').textContent = `${pctx(m.margem)} das vendas` + (m.cobertura != null && m.cobertura < 0.99 ? ` (sobre ${pctx(m.cobertura)} delas)` : '');
+  $('rLucroN').title = 'Faturamento menos tarifas, frete, custo dos produtos, embalagem e impostos.';
+  $('rNota').textContent = 'Clique num cartão para ver os pedidos.';
 }
 
 // ---------- contas (igual às outras telas) ----------
@@ -339,7 +357,8 @@ function erro(texto, comLink){
 async function carregar(){
   $('btAtualizar').disabled = true;
   try{
-    const d = await api('/api/dashboard?dias=14');
+    const d = await api(EXT ? '/api/dashboard/canal?conta=' + encodeURIComponent(EXT) : '/api/dashboard?dias=14');
+    if(EXT) pintarResumoCanal(d.mes);
     $('msg').style.display = 'none';
     const [ , mes, dia] = d.dia.split('-');
     $('titulo').textContent = `Vendas de hoje · ${dia}/${mes}`;
@@ -363,7 +382,8 @@ async function carregar(){
     listaRecentes(d.recentes);
     $('atualizado').textContent = 'Atualizado às '
       + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })
-      + (d.baixados_agora ? ` · ${d.baixados_agora} pedido(s) novos do Mercado Livre` : '');
+      + (d.baixados_agora ? ` · ${d.baixados_agora} pedido(s) novos do Mercado Livre` : '')
+      + (d.erro_leitura ? ` · não consegui ler tudo da loja: ${d.erro_leitura}` : '');
   }catch(e){
     erro(e.message, e.status === 401);
   }finally{
@@ -374,6 +394,7 @@ async function carregar(){
 // Saúde da conta: só aparece se houver leitura. Falha silenciosa é de propósito —
 // a seção é complemento, não pode derrubar o painel de vendas.
 async function carregarSaude(){
+  if(EXT) return;
   try{
     const s = await api('/api/saude');
     $('scNota').textContent = s.nota;
@@ -404,6 +425,7 @@ setInterval(() => { if(!document.hidden) carregar(); }, 120000);
 
 // Resumo de 30 dias. Cada parte pode falhar sozinha (ex.: conta sem ADS) sem apagar as outras.
 async function carregarResumo(){
+  if(EXT) return;   // a loja: os 30 dias vêm junto com o dashboard (pintarResumoCanal)
   try{
     const r = await api('/api/dashboard/resumo');
     const ok = (x) => x && !x.erro;

@@ -96,6 +96,10 @@ const porSku = new Map([['DQ-407', 407], ['BP-408', 408]]); porSku.numeros = new
 assert.deepStrictEqual(E.numerosDoCodigo('dq-407', porSku), [407]);
 assert.deepStrictEqual(E.numerosDoCodigo('KIT-407.408', porSku), [407, 408]);
 assert.deepStrictEqual(E.numerosDoCodigo('408', porSku), [408]);
+{ const Cm = require('./custos.js'); Cm.usarComposicoes(new Map([['DQ-407', 'KIT-408']]));
+  assert.deepStrictEqual(E.numerosDoCodigo('DQ-407', porSku, { doCanal: true }), [408], 'anúncio com SKU igual ao código segue a troca só no painel');
+  assert.deepStrictEqual(E.numerosDoCodigo('DQ-407', porSku), [407], 'código digitado na tela é o próprio produto');
+  Cm.usarComposicoes(new Map()); }
 const venda = (ref, sku, qtd, valida = true) => ({ ref, sku, qtd, valida, origem: 'Mercado Livre · LOJA', data: '2026-10-08T15:00:00.000Z' });
 // o exemplo do vendedor: KIT-407.408 tira 1 DQ-407 e 1 BP-408 (x quantidade)
 let d = E.diferencas([venda('venda:ml:1:A:0', 'KIT-407.408', 2)], new Map(), porSku);
@@ -341,11 +345,11 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
     porNumero: new Map([[407, { sku: 'DQ-407' }], [408, { sku: 'BP-408' }]]) };
   const saldos = new Map([[407, 10], [408, 3]]);
   const r = E.estoqueDosAnuncios([
-    { loja: 'ML', id: 'A', sku: 'AMG-407.408', estoque: 3 },
-    { loja: 'ML', id: 'B', sku: 'AMG-407.407', estoque: 8 },
+    { loja: 'ML', id: 'A', sku: 'KIT-407.408', estoque: 3 },
+    { loja: 'ML', id: 'B', sku: 'KIT-407.407', estoque: 8 },
     { loja: 'ML', id: 'C', sku: 'DQ-408', estoque: 5 },
-    { loja: 'ML', id: 'D', sku: 'AMG-999', estoque: 2 },
-    { loja: 'ML', id: 'E', sku: 'AMG-407.408', estoque: 9, full: true },
+    { loja: 'ML', id: 'D', sku: 'KIT-999', estoque: 2 },
+    { loja: 'ML', id: 'E', sku: 'KIT-407.408', estoque: 9, full: true },
   ], saldos, cat);
   assert.deepStrictEqual(r.linhas.map((l) => [l.id, l.deveria, l.diferenca, l.situacao]),
     [['A', 3, 0, 'igual'], ['B', 5, 3, 'loja_mais'], ['C', 3, 2, 'loja_mais'], ['D', null, null, 'sem_produto'], ['E', null, null, 'full']]);
@@ -357,7 +361,7 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
 {
   const cat = { porSku: Object.assign(new Map([['DQ-407', 407], ['BP-408', 408]]), { numeros: new Set([407, 408]) }),
     porNumero: new Map([[407, { sku: 'DQ-407' }], [408, { sku: 'BP-408' }]]) };
-  const r = E.estoqueDosAnuncios([{ id: 'A', sku: 'AMG-407.408', estoque: 7 }, { id: 'B', sku: 'AMG-407.407', estoque: 1 }],
+  const r = E.estoqueDosAnuncios([{ id: 'A', sku: 'KIT-407.408', estoque: 7 }, { id: 'B', sku: 'KIT-407.407', estoque: 1 }],
     new Map([[407, 10], [408, 9]]), cat, (n) => (n === 408 ? 5 : 3));
   assert.deepStrictEqual(r.linhas.map((l) => [l.id, l.deveria, l.limita.sku, l.limita.seguranca]), [['A', 4, 'BP-408', 5], ['B', 3, 'DQ-407', 3]]);
   console.log('estoque de segurança: ok');
@@ -378,6 +382,11 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
     'catálogo marcado vai pelo tradicional, uma vez só; variação pela chave id:variação');
   assert.deepStrictEqual(p.fora.map((f) => f.chave), ['MLB3', 'MLB6', 'MLB9'], 'par com números diferentes, sem produto e inexistente ficam de fora');
   assert.match(p.fora[0].motivo, /divide o estoque com MLB4/);
+  // par com produtos diferentes: o pausado não trava, vale o número do ativo
+  const par = [{ id: 'MLB7', up: 'UP7', status: 'paused', deveria: 0, estoque: 114 }, { id: 'MLB8', up: 'UP7', status: 'active', deveria: 120, estoque: 114 }];
+  assert.deepStrictEqual(E.planoEnvioMl(par, ['MLB8']).enviar.map((e) => e.quantidade), [120], 'ativo manda o número dele');
+  assert.strictEqual(E.planoEnvioMl(par, ['MLB7']).enviar.length, 0, 'o pausado sozinho não manda');
+  assert.strictEqual(E.planoEnvioMl(par.map((x) => ({ ...x, status: 'active' })), ['MLB8']).enviar.length, 0, 'os dois ativos com números diferentes: fica de fora');
   console.log('envio de estoque ao ML (catálogo): ok');
 }
 
@@ -385,11 +394,30 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
 {
   assert.strictEqual(E.precisaEnviar(1972, 1965), false, 'alto e perto: espera');
   assert.strictEqual(E.precisaEnviar(1972, 1700), true, 'mais de 10%');
+  { const ls = [{ canal: 'shopee', shop: 111111111, id: '18', var_id: 7, estoque: 12, deveria: 30, situacao: 'loja_menos' }, { canal: 'shopee', shop: 111111111, id: '19', var_id: null, estoque: 5, deveria: 5, situacao: 'igual' }, { canal: 'ml', id: 'MLB1', estoque: 3, deveria: 3 }];
+    const z = E.comZerados(ls, new Set(['shopee:111111111:18:7']));
+    assert.deepStrictEqual([z[0].deveria, z[0].situacao, z[0].diferenca], [0, 'zerado', 12], 'anúncio sempre zero: deveria 0');
+    assert.strictEqual(z[1].deveria, 5, 'os outros seguem a conta normal'); assert.strictEqual(E.chaveZerado(ls[2]), null, 'ML não tem sempre zero');
+    assert.strictEqual(E.chaveZerado({ canal: 'leroy', id: 'KIT-842.790' }), 'leroy:KIT-842.790', 'Leroy pela oferta'); }
   assert.strictEqual(E.precisaEnviar(25, 19), true, 'painel com pouco');
   assert.strictEqual(E.precisaEnviar(3, 0), true, 'zerar sempre');
   assert.strictEqual(E.precisaEnviar(0, 50), true, 'loja zerada com peça no painel');
   assert.strictEqual(E.precisaEnviar(10, 10), false, 'igual nunca');
   assert.strictEqual(E.precisaEnviar(128, 125), false, '128 x 125: dentro da faixa');
+  // envio à espera da loja: bateu = ok; dentro do prazo segue pendente; vencido = erro; reenviado = sai sem erro
+  {
+    const base = [{ sku: 'A', depois: 5, lido: 0, ok: false, pendente: true }, { sku: 'B', depois: 7, lido: 0, ok: false, pendente: true },
+      { sku: 'C', depois: 9, lido: 0, ok: false, pendente: true }, { sku: 'D', depois: 1, lido: 1, ok: true }];
+    const lidos = new Map([['A', 5], ['B', 0]]);
+    const cedo = E.fecharPendentes(base, lidos, new Set(['C']), false);
+    assert.deepStrictEqual([cedo.ok, cedo.pendentes, cedo.com_erro, cedo.vencidas.length], [2, 1, 0, 0]);
+    assert.strictEqual(cedo.linhas[0].pendente, undefined);
+    assert.strictEqual(cedo.linhas[2].substituido, true);
+    const tarde = E.fecharPendentes(cedo.linhas, new Map([['B', 2]]), new Set(), true);
+    assert.deepStrictEqual([tarde.ok, tarde.pendentes, tarde.com_erro], [2, 0, 1]);
+    assert.strictEqual(tarde.vencidas[0].sku, 'B');
+    assert.strictEqual(tarde.vencidas[0].lido, 2);
+  }
   console.log('faixa do envio automático: ok');
 }
 

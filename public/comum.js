@@ -59,5 +59,5 @@ function periodo(segId, inicial, aoMudar) {
   const seg = $(segId);
   const marcar = (v) => { for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.dias === String(v))); };
   marcar(inicial);
-  seg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; marcar(b.dataset.dias); aoMudar(Number(b.dataset.dias)); };
+  seg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; marcar(b.dataset.dias); window.guardarPeriodo?.(b.dataset.dias); aoMudar(Number(b.dataset.dias)); };
 }

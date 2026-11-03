@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .cartao.destaque{background:linear-gradient(135deg,#ee4d2d,#c2410c);border-color:transparent;color:#fff}
@@ -57,7 +57,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -174,7 +174,7 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script src="/aviso-flutuante.js?v=1"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
@@ -488,7 +488,7 @@ function alertaDe(a){
   if(a.recusa_em && Date.now() - Date.parse(a.recusa_em) < 30 * 864e5) return `recusado pela Shopee em ${dt(a.recusa_em)}: ${a.recusa}`;
   return null;
 }
-// produtos do SKU: os números (AMG-407.408 -> 407 e 408; BP-408 -> 408)
+// produtos do SKU: os números (KIT-407.408 -> 407 e 408; BP-408 -> 408)
 const numerosSku = (t) => (String(t || '').match(/\d+/g) || []).map(Number);
 const daBusca = () => {
   const q = $('buscaAn').value.trim().toLowerCase();

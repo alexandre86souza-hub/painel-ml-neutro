@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caixa a receber</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<script src="/tema.js?v=1"></script>
+<style>
+  .nota{font-size:12px;color:var(--muted);max-width:46ch}
+  td.neg{color:#b42318;font-weight:600}
+  .agenda{display:flex;gap:8px;flex-wrap:wrap}
+  .agenda div{border:1px solid #e3e5e8;border-radius:9px;padding:6px 10px;min-width:92px}
+  .agenda small{display:block;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=37"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Caixa a receber</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>O dinheiro das vendas que <b>ainda vai cair</b> em todas as contas e lojas: quanto, quando, o que está retido e o que caiu nos últimos 30 dias.</p>
+    <button type="button" class="bt" id="btLer">Ler de novo</button>
+  </div>
+  <div class="cartoes" id="cartoes"></div>
+  <section class="bloco">
+    <h2>Por loja</h2>
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Lendo os repasses de todas as lojas…</p></div>
+  </section>
+  <section class="bloco" id="blocoAgenda" hidden>
+    <h2>Agenda do Mercado Livre (Mercado Pago)</h2>
+    <p class="sub">O que cada dia libera nas contas do Mercado Livre (a data de liberação de cada venda).</p>
+    <div class="agenda" id="agenda"></div>
+  </section>
+  <p class="sub" id="rodape"></p>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=10"></script>
+<script>
+let dados = null, geracao = 0;
+async function carregar(recarregar){
+  const g = ++geracao;
+  erroTela('');
+  try{
+    let r;
+    for(let i = 0; i < 9; i++){
+      r = await api(`/api/caixa${recarregar && i === 0 ? '?recarregar=1' : ''}`);
+      if(g !== geracao) return;
+      if(r.pronto) break;
+      if(r.lojas){ dados = r; pintar(); }
+    }
+    dados = r; pintar();
+  }catch(e){ erroTela(e.message); }
+}
+function pintar(){
+  if(!dados?.lojas) return;
+  const t = dados.total, cs = $('cartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, nota, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); if(nota) c.appendChild(el('span', 'pequeno', nota)); cs.appendChild(c); };
+  cartao('A receber', real(t.a_receber), 'todas as lojas');
+  cartao('Nos próximos 7 dias', real(t.proximos_7), 'onde a loja diz a data (ML, Amazon, Leroy)');
+  cartao('Retido', real(t.retido), 'liberação vencida ou devolução em análise', t.retido > 0);
+  cartao('Caiu nos últimos 30 dias', real(t.liberado_30), 'liberado ou depositado');
+  const box = $('lista'); box.innerHTML = '';
+  const tb = el('table'), th = el('tr');
+  for(const h of ['Loja', 'A receber', 'Próximo depósito', 'Próximos 7 dias', 'Retido', 'Caiu (30 dias)', 'Como funciona']) th.appendChild(el('th', null, h));
+  tb.appendChild(el('thead')).appendChild(th);
+  const corpo = el('tbody');
+  for(const l of dados.lojas){
+    const tr = el('tr');
+    const tdL = el('td'); tdL.appendChild(l.link ? Object.assign(el('a', null, l.loja), { href: l.link }) : document.createTextNode(l.loja));
+    const prox = l.proximo ? `${data(l.proximo.data)}${l.proximo.valor != null ? ' · ' + real(l.proximo.valor) : ''}` : '—';
+    const extra = [l.aguardando_entrega ? `${real(l.aguardando_entrega)} aguardando a entrega` : null, l.entregue_30 ? `+ ${real(l.entregue_30)} entregues em 30 dias (podem já ter caído)` : null, l.a_caminho ? `${real(l.a_caminho)} a caminho do banco` : null,
+      l.qtd_a_receber != null ? `${numero(l.qtd_a_receber)} pedido(s)` : null,
+      l.por_dia_leroy?.length > 1 ? 'depois: ' + l.por_dia_leroy.slice(1).map((d) => `${data(d.data)} ${real(d.valor)}`).join(', ') : null].filter(Boolean).join(' · ');
+    const tdA = el('td', 'n'); tdA.append(el('div', null, real(l.a_receber))); if(extra) tdA.appendChild(el('div', 'nota', extra));
+    tr.append(tdL, tdA, el('td', 'n', prox), el('td', 'n', l.proximos_7 == null ? '—' : real(l.proximos_7)), el('td', 'n' + (l.retido > 0 ? ' neg' : ''), real(l.retido)),
+      el('td', 'n', l.liberado_30 == null ? '—' : real(l.liberado_30)), el('td', 'nota', l.nota || ''));
+    corpo.appendChild(tr);
+  }
+  tb.appendChild(corpo); box.appendChild(tb);
+  // agenda: soma das contas do ML por dia
+  const dias = new Map();
+  for(const l of dados.lojas) for(const d of l.por_dia || []) dias.set(d.dia, (dias.get(d.dia) || 0) + d.valor);
+  const ag = $('agenda'); ag.innerHTML = '';
+  for(const [dia, v] of [...dias].sort((a, b) => a[0].localeCompare(b[0])).slice(0, 21)){
+    const c = el('div'); c.append(el('small', null, new Date(dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })), el('b', null, real(v))); ag.appendChild(c);
+  }
+  $('blocoAgenda').hidden = !dias.size;
+  $('rodape').textContent = (dados.pronto ? `Lido ${dados.lido_em ? 'às ' + new Date(dados.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'agora'}.` : 'Ainda lendo…')
+    + (dados.erros?.length ? ' Não consegui ler: ' + dados.erros.join(' · ') : '')
+    + ' Shopee e Magalu não dizem a data do depósito de cada pedido: o valor está certo, a data não.';
+}
+$('btLer').onclick = () => carregar(true);
+carregar();
+</script>
+<script src="/sino.js?v=5" defer></script>
+</body>
+</html>

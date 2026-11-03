@@ -74,6 +74,9 @@ function situacaoPrazo(prazo, agora = Date.now()) {
   return d === diaLocal(agora + 864e5) ? 'amanhã' : 'depois';
 }
 
+// Prazo que vem só com a DATA (Magalu limit_date "2026-10-29"): até o fim desse dia em Brasília.
+const prazoDoDia = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59-03:00` : v || null);
+
 function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   // a mensagem que já começa com o nome do canal ("Magalu: HTTP 502") não ganha o nome de novo
   const passo = async (nome, fn, erros) => { try { return await fn(); } catch (e) { erros.push(e.message.startsWith(nome + ':') ? e.message : `${nome}: ${e.message}`); return []; } };
@@ -196,7 +199,9 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           const tipo = [d.shipping?.provider?.extras?.shipping_type, d.shipping?.logistic_network?.id].filter(Boolean).join(' ');
           const cat = categoriaDe('magalu', tipo);
           out.push({ chave: `magalu:${p.code}:${d.code || d.id}`, canal: 'magalu', loja: D.configLer('magalu_loja_nome') || 'Magalu', pedido: String(p.code),
-            ...cat, cliente: p.customer?.name || null, prazo: d.shipping?.handling_time?.limit_date || null,
+            // limit_date vem só com a DATA ("2026-10-29"): é até o fim do dia em Brasília — lido como data pura, virava
+            // 00h UTC = 21h da véspera e a comanda nascia "atrasada" (medido 29/10/2026)
+            ...cat, cliente: p.customer?.name || null, prazo: prazoDoDia(d.shipping?.handling_time?.limit_date),
             comprado_em: p.purchased_at || p.created_at || null,
             itens: (d.items || []).map((i) => ({ qtd: i.quantity, sku: i.info?.sku != null ? String(i.info.sku) : null, titulo: i.info?.description || null, variacao: null,
               foto: (i.info?.images || []).find((m) => /^https:\/\//.test(m?.url || ''))?.url || null })),
@@ -267,8 +272,14 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     // troca de produto no SKU (trocas-sku.js): o envio pendente já mostra o SKU novo, em todos os canais
     const trocas = Object.fromEntries(['ml', 'shopee', 'amazon', 'leroy', 'magalu'].map((k) => [k, D.skuTrocas(k)]));
     const vincMg = D.skuVinculos('magalu');   // Magalu: o "SKU do painel" digitado no lugar do código da Magalu
-    for (const x of lista) x.itens = (x.itens || []).map((i) => (i.sku
-      ? { ...i, sku: C.skuNaData(trocas[x.canal], x.canal === 'magalu' ? (vincMg.get(i.sku) || i.sku) : i.sku) } : i));
+    // composição escolhida no painel (Produtos, sku_vinculos 'composicao'): a comanda mostra os produtos certos ("KIT-524.408"),
+    // não o SKU do canal ("KIT-524.1" = 524 + produto 001, que não existe) — o mesmo que já vale para custo e estoque
+    const compo = D.skuVinculos('composicao');
+    for (const x of lista) x.itens = (x.itens || []).map((i) => {
+      if (!i.sku) return i;
+      const s = C.skuNaData(trocas[x.canal], x.canal === 'magalu' ? (vincMg.get(i.sku) || i.sku) : i.sku);
+      return { ...i, sku: compo.get(s) || s };
+    });
     // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém —
     // menos o que ficou de um dia anterior sem imprimir, que entra junto na numeração de hoje (pelo prazo)
     const dia = diaLocal();
@@ -432,4 +443,4 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   return { rotas, rotasParam: [], resumoFila, fila };
 }
 
-module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, CATEGORIAS };
+module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, prazoDoDia, CATEGORIAS };

@@ -101,6 +101,9 @@ html[data-tema="escuro"][data-pagina="anuncios"] .det-kpi{background:hsla(216,56
 html[data-tema="escuro"][data-pagina="anuncios"] .det-tab td{border-bottom:1px solid hsla(214,26%,60%,.35)}
 html[data-tema="escuro"][data-pagina="anuncios"] .det-falta{color:hsl(35,95%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .calc-tab tr.calc-lucro td{color:hsl(142,72%,72%)}
+/* caixa.html */
+html[data-tema="escuro"][data-pagina="caixa"] td.neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="caixa"] .agenda div{border:1px solid var(--line)}
 /* calculadora.html */
 html[data-tema="escuro"][data-pagina="calculadora"] .form-calc label{color:var(--muted)}
 html[data-tema="escuro"][data-pagina="calculadora"] .form-calc input,
@@ -164,6 +167,9 @@ html[data-tema="escuro"][data-pagina="comandas"] .campos input,
 html[data-tema="escuro"][data-pagina="comandas"] .campos select,
 html[data-tema="escuro"][data-pagina="comandas"] .itens input{border:1px solid var(--line)}
 html[data-tema="escuro"][data-pagina="comandas"] .sel-loja{border:1px solid var(--line)}
+/* compras.html */
+html[data-tema="escuro"][data-pagina="compras"] .forn{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="compras"] .filtros-c input[type=search]{border:1px solid var(--line)}
 /* configuracao.html */
 html[data-tema="escuro"][data-pagina="configuracao"]{--link:hsl(216,77%,72%);--ok-bg:hsla(137,39%,60%,.14);--ok-line:hsla(138,44%,60%,.35);--warn-bg:hsla(39,90%,60%,.14);--err-bg:hsla(5,79%,60%,.14);--err-line:hsla(5,69%,60%,.35)}
 html[data-tema="escuro"][data-pagina="configuracao"] input{border:1px solid var(--line);background:rgba(14,24,44,.72)}
@@ -226,6 +232,11 @@ html[data-tema="escuro"][data-pagina="devolucoes"] .chip.verde{background:hsla(1
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.vermelho{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+/* dre.html */
+html[data-tema="escuro"][data-pagina="dre"] td.neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="dre"] tr.total td{border-top:2px solid var(--line)}
+html[data-tema="escuro"][data-pagina="dre"] .custos table input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="dre"] .custos select{border:1px solid var(--line)}
 /* empresa.html */
 html[data-tema="escuro"][data-pagina="empresa"] #msg.erro{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
 html[data-tema="escuro"][data-pagina="empresa"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
@@ -377,6 +388,11 @@ html[data-tema="escuro"][data-pagina="magalu"] #msg.ok{background:hsla(137,39%,6
 html[data-tema="escuro"][data-pagina="magalu"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="magalu"] .aviso-amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
 html[data-tema="escuro"][data-pagina="magalu"] code{background:hsla(216,22%,60%,.14)}
+/* margem.html */
+html[data-tema="escuro"][data-pagina="margem"] .filtros-m input[type=number]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="margem"] .filtros-m select,
+html[data-tema="escuro"][data-pagina="margem"] .filtros-m input[type=search]{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="margem"] td.neg{color:hsl(4,76%,72%)}
 /* mensagens.html */
 html[data-tema="escuro"][data-pagina="mensagens"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border-color:hsla(139,41%,60%,.35)}
 html[data-tema="escuro"][data-pagina="mensagens"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
@@ -440,6 +456,9 @@ html[data-tema="escuro"][data-pagina="navegador"] .selo.neutro{background:rgba(1
 html[data-tema="escuro"][data-pagina="navegador"] .cabecaNota{color:hsl(57,61%,72%);background:rgba(14,24,44,.72)}
 /* performance.html */
 html[data-tema="escuro"][data-pagina="performance"] .barra-canais{background:hsla(218,31%,60%,.14)}
+/* placar.html */
+html[data-tema="escuro"][data-pagina="placar"] td.neg{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="placar"] details.promos{border:1px solid var(--line)}
 /* produtos.html */
 html[data-tema="escuro"][data-pagina="produtos"] #msg.erro{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%);border:1px solid hsla(5,69%,60%,.35)}
 html[data-tema="escuro"][data-pagina="produtos"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}

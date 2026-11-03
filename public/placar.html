@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promoções e Ads</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<script src="/tema.js?v=1"></script>
+<style>
+  td.neg{color:#b42318;font-weight:600}
+  .nota{font-size:12px;color:var(--muted)}
+  details.promos{margin:8px 0;border:1px solid #e3e5e8;border-radius:10px;padding:8px 12px}
+  details.promos summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=37"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Promoções e Ads</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Placar de cada loja: quanto vendeu <b>com promoção</b>, quanto de desconto saiu do seu bolso, anúncios em promoção que <b>não venderam</b>, e o Ads (gasto, ROAS, TACOS) com o <b>lucro depois do Ads</b>.</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+    </div>
+  </div>
+  <div class="cartoes" id="cartoes"></div>
+  <section class="bloco">
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Lendo vendas, promoções e Ads de todas as lojas (a primeira leitura pode levar 1 a 2 minutos)…</p></div>
+  </section>
+  <section class="bloco">
+    <h2>Promoções que mais venderam</h2>
+    <div id="promos"></div>
+  </section>
+  <p class="sub" id="rodape"></p>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=10"></script>
+<script>
+let dias = periodoInicial('segDias', 30), dados = null, geracao = 0;
+async function carregar(recarregar){
+  const g = ++geracao;
+  erroTela('');
+  try{
+    let r;
+    for(let i = 0; i < 12; i++){
+      r = await api(`/api/placar?dias=${dias}${recarregar && i === 0 ? '&recarregar=1' : ''}`);
+      if(g !== geracao) return;
+      if(r.pronto) break;
+      if(r.lojas){ dados = r; pintar(); }
+    }
+    dados = r; pintar();
+  }catch(e){ erroTela(e.message); }
+}
+function pintar(){
+  if(!dados?.lojas) return;
+  const t = dados.total, cs = $('cartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, nota, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); if(nota) c.appendChild(el('span', 'pequeno', nota)); cs.appendChild(c); };
+  cartao('Faturamento', real(t.faturamento), `lucro ${real(t.lucro)}`);
+  cartao('Vendido com promoção', real(t.promo_faturamento), t.faturamento ? pct(t.promo_faturamento / t.faturamento) + ' do faturamento' : '');
+  cartao('Desconto do seu bolso', real(t.desconto), 'nas vendas com promoção');
+  cartao('Ads', real(t.ads_gasto), `TACOS ${pct(t.tacos)} · vendas atribuídas ${real(t.ads_vendas)}`);
+  cartao('Lucro depois do Ads', real(t.lucro_pos_ads), t.faturamento ? pct(t.lucro_pos_ads / t.faturamento) : '', t.lucro_pos_ads < 0);
+  cartao('Em promoção sem vender', numero(t.parados), 'anúncios do ML numa promoção em andamento', t.parados > 0);
+  const box = $('lista'); box.innerHTML = '';
+  const tb = el('table'), th = el('tr');
+  for(const h of ['Loja', 'Faturamento', 'Lucro', 'Com promoção', 'Desconto', 'Margem com / sem promoção', 'Em promoção sem vender', 'Ads', 'ROAS', 'TACOS', 'Lucro depois do Ads']) th.appendChild(el('th', null, h));
+  tb.appendChild(el('thead')).appendChild(th);
+  const corpo = el('tbody');
+  for(const l of dados.lojas){
+    const p = l.promocoes, a = l.ads, tr = el('tr');
+    const tdL = el('td'); tdL.appendChild(el('div', null, l.loja));
+    const notas = [l.promocoes_nota, l.ads_nota].filter(Boolean);
+    if(notas.length) tdL.appendChild(el('div', 'nota', notas.join(' · ')));
+    tr.append(tdL, el('td', 'n', real(l.vendas.faturamento)), el('td', 'n' + (l.vendas.lucro < 0 ? ' neg' : ''), l.vendas.lucro == null ? '—' : `${real(l.vendas.lucro)} (${pct(l.vendas.margem)})`),
+      el('td', 'n', p ? `${real(p.faturamento)} (${pct(p.participacao)})` : '—'), el('td', 'n', p ? real(p.desconto) : '—'),
+      el('td', 'n', p && (p.margem_com != null || p.margem_sem != null) ? `${pct(p.margem_com)} / ${pct(p.margem_sem)}` : '—'),
+      el('td', 'n', p?.parados != null ? `${numero(p.parados)} de ${numero(p.em_promocao)}` : '—'),
+      el('td', 'n', a ? real(a.gasto) : '—'), el('td', 'n', a?.roas != null ? a.roas.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'x' : '—'),
+      el('td', 'n', a ? pct(a.tacos) : '—'), el('td', 'n' + (a?.lucro_pos_ads < 0 ? ' neg' : ''), a?.lucro_pos_ads != null ? `${real(a.lucro_pos_ads)} (${pct(a.margem_pos_ads)})` : '—'));
+    corpo.appendChild(tr);
+  }
+  tb.appendChild(corpo); box.appendChild(tb);
+  const pr = $('promos'); pr.innerHTML = '';
+  for(const l of dados.lojas){
+    if(!l.promocoes?.top?.length) continue;
+    const d = el('details', 'promos'); d.appendChild(el('summary', null, `${l.loja} — ${l.promocoes.top.length} promoção(ões)`));
+    const t = el('table'), h = el('tr');
+    for(const x of ['Promoção', 'Pedidos', 'Faturamento', 'Desconto seu', 'Lucro / retorno']) h.appendChild(el('th', null, x));
+    t.appendChild(el('thead')).appendChild(h);
+    const b = el('tbody');
+    for(const x of l.promocoes.top){
+      const tr = el('tr');
+      tr.append(el('td', null, x.nome + (x.tipo && x.tipo !== x.nome ? ` (${x.tipo})` : '')), el('td', 'n', numero(x.pedidos)), el('td', 'n', real(x.faturamento)), el('td', 'n', real(x.desconto)),
+        el('td', 'n', x.retorno != null ? `${x.retorno.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} de venda por R$ 1 de desconto` : x.lucro != null ? real(x.lucro) : '—'));
+      b.appendChild(tr);
+    }
+    t.appendChild(b); d.appendChild(t); pr.appendChild(d);
+  }
+  if(!pr.children.length) pr.appendChild(el('p', 'vazio', 'Nenhuma venda com promoção identificada no período.'));
+  $('rodape').textContent = (dados.pronto ? `Lido ${dados.lido_em ? 'às ' + new Date(dados.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'agora'}.` : 'Ainda lendo…')
+    + ' Lucro antes do Ads = margem de contribuição das vendas (tarifa, frete, custo, embalagem e imposto). O Ads do ML fecha o dia anterior às 10h.'
+    + (dados.erros?.length ? ' Não consegui ler: ' + dados.erros.join(' · ') : '');
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+carregar();
+</script>
+<script src="/sino.js?v=5" defer></script>
+</body>
+</html>

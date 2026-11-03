@@ -38,9 +38,12 @@ const TIPO_NOME = { entrada: 'Entrada', compra: 'Recebimento de compra', saida: 
 // ---------- funções puras (testadas) ----------
 
 // Código digitado -> números dos produtos. "DQ-407" (do catálogo), "407" ou um kit "KIT-407.408".
-function numerosDoCodigo(codigo, porSku) {
+// doCanal: SKU de venda/anúncio — a troca só no painel (composição) vale até quando o SKU é igual ao código de um produto
+// (anúncio "DQ-340" -> KIT-230). Código digitado na tela (entrada, saída, filtro) é sempre o próprio produto.
+function numerosDoCodigo(codigo, porSku, { doCanal = false } = {}) {
   const c = String(codigo || '').trim();
   if (!c) return [];
+  if (doCanal && C.composicaoDe(c)) return C.componentes(c);
   const exato = porSku.get(c.toUpperCase());
   if (exato != null) return [exato];
   if (/^\d+$/.test(c)) return C.composicaoDe(c) ? C.componentes(c) : [Number(c)];   // número puro com troca só no painel segue a composição
@@ -50,8 +53,9 @@ function numerosDoCodigo(codigo, porSku) {
 const contar = (nums) => nums.reduce((m, n) => m.set(n, (m.get(n) || 0) + 1), new Map());
 
 // Reposição de UM produto (fórmulas da aba Estoque da planilha).
-function reposicao({ ativo, saldo, saidas6m, prazo, abertos = 0, repor = true }) {
-  const media = saidas6m / 6;
+// meses = quantos meses de saída a base cobre (6, ou menos quando o estoque começou há menos tempo: mesesDaBase).
+function reposicao({ ativo, saldo, saidas6m, prazo, abertos = 0, repor = true, meses = 6 }) {
+  const media = saidas6m / meses;
   const dias = media > 0 ? Math.round(saldo / media * 30) : null;
   if (!ativo || !repor) return { media: r2(media), minimo: 0, maximo: 0, sugestao: 0, dias,
     status: saldo > 0 ? 'Vender o restante' : ativo ? 'Não repor' : 'Descontinuado' };
@@ -60,6 +64,15 @@ function reposicao({ ativo, saldo, saidas6m, prazo, abertos = 0, repor = true })
   const sugestao = ativo ? Math.max(0, Math.ceil(media * prazo - saldo - abertos - 1e-9)) : 0;
   const status = !ativo ? 'Descontinuado' : saldo <= maximo ? 'Repor agora' : saldo <= maximo * 1.25 ? 'Próximo de repor' : 'Regular';
   return { media: r2(media), minimo, maximo, sugestao, status, dias: media > 0 ? Math.round(saldo / media * 30) : null };
+}
+
+// Quantos meses de saída a média cobre: 6, ou o tempo desde a saída mais antiga registrada (ou o início da baixa automática,
+// o que vier antes) quando ele é menor — sem o histórico da planilha, o estoque só tem as saídas desde a 1ª contagem, e
+// dividir 18 dias de venda por 6 meses dava a média ~10x menor (medido 03/11/2026). Mínimo de meio mês. Função pura: testada.
+function mesesDaBase(seisMesesAtras, primeiraSaida, inicioBaixa, agora = Date.now()) {
+  const desde = [primeiraSaida, inicioBaixa].filter(Boolean).sort()[0];
+  if (!desde || desde <= seisMesesAtras) return 6;
+  return Math.min(6, Math.max(0.5, (agora - Date.parse(desde)) / (30.44 * 864e5)));
 }
 
 // Planilha -> dados para importar. Aceita "Saida" sem acento (a planilha deixava esses de fora do
@@ -162,7 +175,7 @@ function relatorio(movs, { periodo = 'mes', por = 'total', nomes = new Map() } =
 function diferencas(linhas, jaLancado, porSku) {
   const desejado = new Map(), pendentes = [];
   for (const l of linhas) {
-    const todos = numerosDoCodigo(l.sku, porSku);
+    const todos = numerosDoCodigo(l.sku, porSku, { doCanal: true });
     if (l.valida && (!todos.length || todos.some((n) => !porSku.numeros.has(n)))) {
       pendentes.push({ ref: l.ref, loja: l.origem, sku: l.sku || null, data: l.data, qtd: l.qtd, motivo: 'sku' });
       continue;
@@ -203,7 +216,7 @@ function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
   };
   for (const l of devolucoes) {
     if (!l.sem || l.pendente) continue;
-    numerosDoCodigo(l.sku, cat.porSku).forEach((n, i) => {
+    numerosDoCodigo(l.sku, cat.porSku, { doCanal: true }).forEach((n, i) => {
       if (!l.sem.includes(i)) return;
       const o = l.defeituosos || {}; const v = o[i] ?? o['*'];
       const q = v == null ? l.qtd : Math.max(0, Math.min(l.qtd, Math.round(Number(v)) || 0));
@@ -239,7 +252,7 @@ function estoqueDosAnuncios(anuncios, saldos, cat, seguranca = () => 0) {
   const linhas = anuncios.map((a) => {
     const base = { ...a, deveria: null, diferenca: null, limita: null, situacao: null };
     if (a.full) return { ...base, situacao: 'full' };
-    const nums = numerosDoCodigo(a.sku, cat.porSku);
+    const nums = numerosDoCodigo(a.sku, cat.porSku, { doCanal: true });
     base.produtos = nums;   // números dos produtos do anúncio (já com as trocas e composições do painel)
     if (!nums.length || nums.some((n) => !cat.porNumero.has(n))) return { ...base, situacao: 'sem_produto' };
     let deveria = Infinity, limita = null;
@@ -266,6 +279,13 @@ function estoqueDosAnuncios(anuncios, saldos, cat, seguranca = () => 0) {
 // user_product, no tradicional; se os que dividem calculam números diferentes (composições diferentes), fica de fora.
 // chave = id do anúncio ou "id:variação". Função pura: testada.
 const chaveMl = (l) => (l.var_id ? `${l.id}:${l.var_id}` : l.id);
+// Anúncios "sempre zero" (produto fora de linha, ex.: linha descontinuada pelo fornecedor, 29 e 30/10/2026): chave "shopee:{loja}:{item}[:{model}]", "amazon:{sku}" ou "magalu:{sku}".
+// Deveria = 0 (o envio manda zero uma vez e depois nunca outro número). Função pura: testada.
+const chaveZerado = (l) => (l.canal === 'shopee' && l.shop ? `shopee:${l.shop}:${chaveMl(l)}` : l.canal === 'amazon' ? `amazon:${l.id}` : l.canal === 'magalu' ? `magalu:${l.id}` : l.canal === 'leroy' ? `leroy:${l.id}` : null);
+function comZerados(linhas, zerados) {
+  if (!zerados?.size) return linhas;
+  return linhas.map((l) => { const k = chaveZerado(l); return k && zerados.has(k) ? { ...l, deveria: 0, diferenca: l.estoque == null ? null : l.estoque, limita: null, situacao: 'zerado' } : l; });
+}
 function planoEnvioMl(linhas, chaves) {
   const porChave = new Map(linhas.map((l) => [chaveMl(l), l]));
   const grupo = new Map();
@@ -275,7 +295,10 @@ function planoEnvioMl(linhas, chaves) {
     const l = porChave.get(k);
     if (!l) { fora.push({ chave: k, motivo: 'anúncio não encontrado (finalizado ou do Full?)' }); continue; }
     if (l.deveria == null) { fora.push({ chave: k, motivo: l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' }); continue; }
-    const g = (l.up && grupo.get(l.up)) || [l];
+    let g = (l.up && grupo.get(l.up)) || [l];
+    // par com produtos diferentes no mesmo user_product (29/10/2026: braço 858 x 793): o pausado não vende, vale o número
+    // dos ativos (o pausado fica junto e recebe o mesmo número, porque o estoque é um só no ML)
+    if (new Set(g.map((x) => x.deveria)).size > 1 && l.status === 'active') { const at = g.filter((x) => x.status === 'active'); if (at.length && new Set(at.map((x) => x.deveria)).size === 1) g = at.concat(g.filter((x) => x.status !== 'active').map((x) => ({ ...x, deveria: l.deveria }))); }
     const numeros = new Set(g.map((x) => x.deveria));
     if (numeros.size > 1) { fora.push({ chave: k, motivo: `divide o estoque com ${g.filter((x) => x !== l).map((x) => x.id).join(', ')}, que calcula outro número (${[...numeros].join(' / ')})` }); continue; }
     const alvo = g.find((x) => !x.catalogo) || l;
@@ -288,6 +311,24 @@ function precisaEnviar(naLoja, deveria, { pct = 0.1, baixo = 20 } = {}) {
   if (deveria === 0 || deveria <= baixo || naLoja <= baixo) return true;
   return Math.abs(naLoja - deveria) > pct * deveria;
 }
+// Linhas de um envio à espera da loja (Amazon, Magalu): `lidos` = sku -> número relido, `reenviados` = SKUs com envio mais
+// novo, `vencido` = passou o prazo: quem ainda não bateu vira erro. Função pura: testada.
+function fecharPendentes(linhas, lidos, reenviados, vencido) {
+  const vencidas = [];
+  const novas = linhas.map((l) => {
+    if (!l.pendente) return l;
+    const { pendente, ...resto } = l;
+    const lido = lidos.has(l.sku) ? lidos.get(l.sku) : l.lido;
+    if (lido === l.depois) return { ...resto, lido, ok: true };
+    if (reenviados.has(l.sku)) return { ...resto, lido, substituido: true };
+    if (!vencido) return { ...l, lido };
+    const ruim = { ...resto, lido };
+    vencidas.push(ruim);
+    return ruim;
+  });
+  return { linhas: novas, vencidas, ok: novas.filter((l) => l.ok).length, pendentes: novas.filter((l) => l.pendente).length,
+    com_erro: novas.filter((l) => !l.ok && !l.pendente && !l.substituido).length };
+}
 
 // Custo médio ponderado MÓVEL (pedido do dono, 22/10/2026): a cada entrada com preço, (peças em estoque × custo atual +
 // peças recebidas × preço) ÷ total. Estoque zerado/negativo ou sem custo = o preço novo. Função pura: testada.
@@ -299,6 +340,49 @@ function custoMovel(saldoAntes, custoAntes, qtd, preco) {
 }
 
 // ---------- módulo ----------
+// Compras e capital parado (pedido do dono, 03/11/2026), sobre a visão do estoque (visao().produtos: saldo, custo médio,
+// média de saída por mês dos 6 meses, sugestão da reposição, fornecedor e prazo): dinheiro parado em produto sem saída há
+// 60/90 dias, estoque acima de 6 meses de venda (o excesso em R$) e o pedido sugerido por fornecedor (sugestão × custo).
+// Função pura: testada.
+// inicio = início da baixa automática: produto sem nenhuma saída conta "sem saída" desde ele (não desde sempre).
+function comprasDe(produtos, { agora = Date.now(), meses_max = 6, inicio = null } = {}) {
+  const dia = (t) => (t ? Math.floor((agora - Date.parse(t)) / 864e5) : null);
+  const valor = (p, q) => (p.custo_medio != null ? r2(q * p.custo_medio) : null);
+  const comSaldo = produtos.filter((p) => p.saldo > 0);
+  const linha = (p) => ({ numero: p.numero, sku: p.sku || null, nome: p.nome || null, fornecedor: p.fornecedor || null, situacao: p.situacao || null,
+    saldo: p.saldo, custo: p.custo_medio ?? null, valor: valor(p, p.saldo), media_mes: p.media, cobertura_dias: p.dias ?? null,
+    sem_saida_dias: dia(p.ultima_saida) ?? dia(inicio), nunca_saiu: !p.ultima_saida, ultima_saida: p.ultima_saida || null, status: p.status });
+  // parado = sem saída há 60+ dias; produto que nunca saiu desde o início do estoque entra na lista, mas só conta como 60+
+  // quando o início tem 60 dias (antes disso fica em "sem saída desde o início")
+  const parados = comSaldo.map(linha).filter((x) => x.nunca_saiu || x.sem_saida_dias >= 60)
+    .sort((a, b) => (b.valor || 0) - (a.valor || 0));
+  const excesso = comSaldo.filter((p) => p.media > 0 && p.saldo > Math.ceil(p.media * meses_max)).map((p) => {
+    const sobra = p.saldo - Math.ceil(p.media * meses_max);
+    return { ...linha(p), excesso_un: sobra, excesso_valor: valor(p, sobra) };
+  }).sort((a, b) => (b.excesso_valor || 0) - (a.excesso_valor || 0));
+  const porForn = new Map();
+  for (const p of produtos) {
+    if (!(p.sugestao > 0) || p.situacao !== 'Ativo') continue;
+    const k = p.fornecedor || 'Sem fornecedor';
+    const f = porForn.get(k) || { fornecedor: k, prazo_meses: p.prazo, itens: [], unidades: 0, valor: 0, sem_custo: 0 };
+    const v = valor(p, p.sugestao);
+    f.itens.push({ ...linha(p), comprar: p.sugestao, valor_compra: v, em_pedido: p.em_pedido || 0, minimo: p.minimo, maximo: p.maximo });
+    f.unidades += p.sugestao; f.valor += v || 0; if (v == null) f.sem_custo++;
+    porForn.set(k, f);
+  }
+  const fornecedores = [...porForn.values()].map((f) => ({ ...f, valor: r2(f.valor), itens: f.itens.sort((a, b) => (b.valor_compra || 0) - (a.valor_compra || 0)) }))
+    .sort((a, b) => b.valor - a.valor);
+  const soma = (ls, k) => r2(ls.reduce((s, x) => s + (x[k] || 0), 0));
+  const p60 = parados.filter((x) => x.sem_saida_dias == null || x.sem_saida_dias >= 60), p90 = parados.filter((x) => x.sem_saida_dias == null || x.sem_saida_dias >= 90);
+  const nunca = parados.filter((x) => x.nunca_saiu);
+  return { resumo: { valor_estoque: soma(comSaldo.map(linha), 'valor'), inicio,
+    parado_60: { produtos: p60.length, valor: soma(p60, 'valor') }, parado_90: { produtos: p90.length, valor: soma(p90, 'valor') },
+    sem_saida_desde_inicio: { produtos: nunca.length, valor: soma(nunca, 'valor'), dias: dia(inicio) },
+    excesso: { produtos: excesso.length, valor: soma(excesso, 'excesso_valor'), meses: meses_max },
+    comprar: { fornecedores: fornecedores.length, produtos: fornecedores.reduce((s, f) => s + f.itens.length, 0), valor: soma(fornecedores, 'valor') } },
+    parados: parados.slice(0, 400), excesso: excesso.slice(0, 400), fornecedores };
+}
+
 function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, leroy, magalu, quem = () => null }) {
   const inicio = () => D.configLer('estoque_inicio');
   // A hora da 1ª contagem pode ser corrigida para MAIS CEDO nas 24 h depois de finalizar (contagem feita às 12h e
@@ -478,6 +562,8 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
     const saldos = D.estoqueSaldos();
     const seis = new Date(); seis.setMonth(seis.getMonth() - 6);
     const res = new Map(D.estoqueResumoMov(seis.toISOString()).map((r) => [r.numero, r]));
+    // sem a planilha importada, as saídas começam na 1ª contagem (uma saída manual com data anterior não estende a base)
+    const meses = mesesDaBase(seis.toISOString(), D.configLer('estoque_importado_em') ? D.estoquePrimeiraSaida(seis.toISOString()) : null, inicio());
     const forns = D.fornecedoresListar();
     const prazos = new Map(forns.map((f) => [String(f.nome).toLowerCase(), f.prazo_meses]));
     const parados = new Set(forns.filter((f) => f.situacao === 'Descontinuado').map((f) => String(f.nome).toLowerCase()));
@@ -487,7 +573,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const r = res.get(p.numero) || {};
       const saldo = saldos.get(p.numero) || 0;
       const prazo = prazos.get(String(p.fornecedor || '').toLowerCase()) ?? 1;
-      const rep = reposicao({ ativo: p.situacao === 'Ativo', saldo, saidas6m: r.saidas || 0, prazo, abertos: abertos.get(p.numero) || 0,
+      const rep = reposicao({ ativo: p.situacao === 'Ativo', saldo, saidas6m: r.saidas || 0, prazo, abertos: abertos.get(p.numero) || 0, meses,
         repor: !parados.has(String(p.fornecedor || '').toLowerCase()) });
       const custoMedio = p.custo ?? (r.ent_qtd ? r2(r.ent_valor / r.ent_qtd) : null);   // o custo do cadastro = médio ponderado móvel
       const seguranca = seg.has(p.numero) ? seg.get(p.numero) : segPadrao;
@@ -496,7 +582,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
         valor: custoMedio != null ? r2(saldo * custoMedio) : null, ultima_saida: r.ultima_saida || null };
     });
     const ativos = produtos.filter((p) => p.situacao === 'Ativo');
-    return { inicio: inicio(), ultima_baixa: ultimaBaixa, baixando: !!baixando, erros: errosBaixa, pendentes: pendentes.slice(0, 300),
+    return { inicio: inicio(), meses_media: r2(meses), ultima_baixa: ultimaBaixa, baixando: !!baixando, erros: errosBaixa, pendentes: pendentes.slice(0, 300),
       total_pendentes: pendentes.length, importado_em: D.configLer('estoque_importado_em'), seguranca_padrao: segPadrao,
       resumo: { ativos: ativos.length, repor: ativos.filter((p) => p.status === 'Repor agora').length,
         proximo: ativos.filter((p) => p.status === 'Próximo de repor').length, nao_repor: ativos.filter((p) => p.status === 'Não repor').length,
@@ -582,6 +668,8 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       }
       return visao();
     },
+    // Compras e capital parado (tela compras.html): sobre a mesma visão da aba Saldo.
+    'GET /api/estoque/capital': async () => { const v = visao(); return { ...comprasDe(v.produtos, { inicio: v.inicio }), meses_media: v.meses_media, inicio: v.inicio }; },
     'GET /api/estoque/movimentos': async (url) => {
       const q = url.searchParams;
       const cat = catalogo();
@@ -825,4 +913,4 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
 }
 
-module.exports = { criar, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, planoEnvioMl, chaveMl, custoMovel, TIPO_NOME };
+module.exports = { criar, comprasDe, mesesDaBase, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, fecharPendentes, planoEnvioMl, chaveMl, chaveZerado, comZerados, custoMovel, TIPO_NOME };

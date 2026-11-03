@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
@@ -28,7 +28,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -64,9 +64,9 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script src="/aviso-flutuante.js?v=1"></script>
-<script src="/composicao.js?v=1"></script>
+<script src="/composicao.js?v=3"></script>
 <script src="/margem-massa.js?v=2"></script>
 <script>
 // Ofertas da Leroy (GET /api/leroy/anuncios). Preço muda pelo PRI01 (uma importação por minuto, todas as ofertas
@@ -93,6 +93,8 @@ $('segFiltro').onclick = (ev) => {
   pintar();
 };
 $('busca').oninput = () => pintar();
+// ?q= (link da tela Margem baixa): a busca já preenchida
+try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('busca').value = q; }catch{}
 $('fMargemMax').oninput = () => { if(filtro !== 'baixa'){ $('segFiltro').querySelector('[data-f="baixa"]').click(); return; } if(filtro === 'baixa') pintar(); };
 $('btAtualizar').onclick = () => carregar(true);
 

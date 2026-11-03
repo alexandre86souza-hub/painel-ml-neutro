@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Margem baixa</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<script src="/tema.js?v=1"></script>
+<style>
+  .filtros-m{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+  .filtros-m input[type=number]{width:5em;font:inherit;padding:6px 8px;border:1px solid #d5d7db;border-radius:8px}
+  .filtros-m select,.filtros-m input[type=search]{font:inherit;padding:7px 10px;border:1px solid #d5d7db;border-radius:9px}
+  .filtros-m input[type=search]{flex:1 1 220px}
+  td.neg{color:#b42318;font-weight:600}
+  .motivo{font-size:13px}
+  .partes{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=37"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Margem baixa</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p id="periodoTxt">Anúncios que <b>venderam</b> com margem abaixo do mínimo, em todas as contas e lojas, com o motivo provável. Margem = lucro ÷ faturamento, venda por venda (tarifa, frete, custo do produto da data da venda, embalagem e imposto; ainda sem o Ads).</p>
+    <div class="seg" role="group" aria-label="Período" id="segDias">
+      <button type="button" data-dias="7">7 dias</button>
+      <button type="button" data-dias="15">15 dias</button>
+      <button type="button" data-dias="30">30 dias</button>
+    </div>
+  </div>
+  <div class="filtros-m">
+    <label>Margem mínima <input type="number" id="fMin" step="1" min="-50" max="80"> %</label>
+    <button type="button" class="bt" id="btPadrao" hidden>Usar como padrão</button>
+    <select id="fLoja" aria-label="Loja"><option value="">Todas as lojas</option></select>
+    <input type="search" id="fBusca" placeholder="Buscar por título ou SKU" aria-label="Buscar anúncio">
+    <button type="button" class="bt" id="btLer">Ler de novo</button>
+  </div>
+  <div class="cartoes" id="cartoes"></div>
+  <section class="bloco">
+    <div class="tabela-rolagem" id="lista"><p class="carregando">Lendo as vendas de todas as lojas (a primeira leitura pode levar 1 a 2 minutos)…</p></div>
+    <p class="sub" id="rodape"></p>
+  </section>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=10"></script>
+<script>
+let dias = periodoInicial('segDias', 7), dados = null, minimo = null, geracao = 0;
+const NOME_PARTE = { tarifa: 'Tarifa', frete: 'Frete', produto: 'Custo', embalagem: 'Embalagem', imposto: 'Imposto' };
+// onde corrigir o preço: a tela de anúncios da loja já com a busca (ML: troca a conta escolhida antes)
+function linkDe(x){
+  const q = encodeURIComponent(x.conta.startsWith('ml:') ? x.item_id : (x.sku || x.item_id));
+  if(x.conta.startsWith('ml:')) return { ml: Number(x.conta.slice(3)), href: `/anuncios.html?q=${q}` };
+  if(x.conta.startsWith('shopee-')) return { href: `/shopee-anuncios.html?conta=${x.conta}&q=${q}` };
+  if(x.conta === 'amazon') return { href: `/amazon-anuncios.html?q=${q}` };
+  return { href: `/${x.conta}-anuncios.html?conta=${x.conta}&q=${q}` };
+}
+async function carregar(recarregar){
+  const g = ++geracao;
+  erroTela('');
+  try{
+    let r;
+    for(let i = 0; i < 9; i++){
+      r = await api(`/api/margem?dias=${dias}${minimo != null ? '&min=' + minimo : ''}${recarregar && i === 0 ? '&recarregar=1' : ''}`);
+      if(g !== geracao) return;
+      if(r.pronto) break;
+      if(r.itens){ dados = r; pintar(); }
+    }
+    dados = r;
+    if(minimo == null){ minimo = Math.round(r.minimo * 100); $('fMin').value = minimo; }
+    pintar();
+  }catch(e){ erroTela(e.message); }
+}
+function pintar(){
+  if(!dados?.itens){ return; }
+  const sl = $('fLoja'), atual = sl.value;
+  sl.innerHTML = '<option value="">Todas as lojas</option>';
+  for(const l of dados.lojas){ const o = el('option', null, l.loja); o.value = l.conta; o.selected = l.conta === atual; sl.appendChild(o); }
+  const q = $('fBusca').value.trim().toLowerCase();
+  const ls = dados.itens.filter((x) => (!sl.value || x.conta === sl.value) && (!q || `${x.titulo || ''} ${x.sku || ''} ${x.item_id}`.toLowerCase().includes(q)));
+  const cs = $('cartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, nota, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); if(nota) c.appendChild(el('span', 'pequeno', nota)); cs.appendChild(c); };
+  const fat = ls.reduce((s, x) => s + x.faturamento, 0), luc = ls.reduce((s, x) => s + x.lucro, 0);
+  const falta = ls.reduce((s, x) => s + Math.max(0, dados.minimo * x.faturamento - x.lucro), 0);
+  cartao('Anúncios abaixo do mínimo', numero(ls.length), `margem abaixo de ${pct(dados.minimo, 0)}`, ls.length > 0);
+  cartao('Vendendo com prejuízo', numero(ls.filter((x) => x.prejuizo).length), 'lucro negativo no período', ls.some((x) => x.prejuizo));
+  cartao('Faturamento desses anúncios', real(fat), `lucro ${real(luc)} (${pct(fat ? luc / fat : null)})`);
+  cartao('Faltou para o mínimo', real(falta), 'o lucro a mais se todos tivessem a margem mínima');
+  const box = $('lista'); box.innerHTML = '';
+  if(!ls.length){ box.appendChild(el('p', 'vazio', dados.itens.length ? 'Nada com esse filtro.' : `Nenhum anúncio vendeu abaixo de ${pct(dados.minimo, 0)} de margem no período.`)); }
+  else{
+    const t = el('table'), th = el('tr');
+    for(const h of ['Loja', 'Anúncio', 'Vendas', 'Faturamento', 'Lucro', 'Margem', 'Motivo provável', '']) th.appendChild(el('th', null, h));
+    t.appendChild(el('thead')).appendChild(th);
+    const tb = el('tbody');
+    for(const x of ls.slice(0, 500)){
+      const tr = el('tr');
+      const partes = Object.keys(NOME_PARTE).map((k) => `${NOME_PARTE[k]} ${pct(x.peso[k], 0)}`).join(' · ');
+      const tdM = el('td'); tdM.append(el('div', 'motivo', x.motivo), el('div', 'partes', partes));
+      const lk = linkDe(x), a = el('a', null, 'Ajustar preço →'); a.href = lk.href;
+      if(lk.ml){ a.onclick = async (ev) => { ev.preventDefault();
+        await fetch('/api/accounts/active', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ml_user_id: lk.ml }) });
+        location.href = lk.href; }; }
+      const tdA = el('td'); tdA.appendChild(a);
+      tr.append(el('td', null, x.loja), celulaProduto(x.foto, x.titulo || x.item_id, [x.sku, x.item_id !== x.sku ? x.item_id : null].filter(Boolean).join(' · '), null),
+        el('td', 'n', `${numero(x.pedidos)} (${numero(x.unidades)} un.)`), el('td', 'n', real(x.faturamento)), el('td', 'n' + (x.lucro < 0 ? ' neg' : ''), real(x.lucro)),
+        el('td', 'n' + (x.margem < 0 ? ' neg' : ''), pct(x.margem)), tdM, tdA);
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); box.appendChild(t);
+  }
+  const semCusto = dados.lojas.reduce((s, l) => s + l.sem_custo, 0);
+  $('rodape').textContent = (dados.pronto ? `Lido ${dados.lido_em ? 'às ' + new Date(dados.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'agora'}.` : 'Ainda lendo…')
+    + ` Lojas: ${dados.lojas.map((l) => `${l.loja} (${numero(l.vendas)} vendas)`).join(', ')}.`
+    + (semCusto ? ` ${numero(semCusto)} venda(s) sem custo ficaram de fora (tela Produtos → "Anúncios vendidos sem custo").` : '')
+    + (dados.erros?.length ? ' Não consegui ler: ' + dados.erros.join(' · ') : '')
+    + ' "Ajustar preço" abre os anúncios da loja já na busca, com o Preço pela margem.';
+}
+periodo('segDias', dias, (d) => { dias = d; carregar(); });
+let espera; $('fMin').oninput = () => { const v = Number($('fMin').value); if(!Number.isFinite(v)) return; minimo = v; clearTimeout(espera); espera = setTimeout(() => carregar(), 400); };
+$('fLoja').onchange = pintar;
+$('fBusca').oninput = pintar;
+$('btLer').onclick = () => carregar(true);
+$('btPadrao').onclick = async () => { try{ await api('/api/margem/minimo', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ min: minimo }) }); erroTela(''); $('btPadrao').textContent = 'Padrão salvo'; }catch(e){ erroTela(e.message); } };
+fetch('/api/eu').then((r) => r.json()).then((eu) => { if(eu?.admin) $('btPadrao').hidden = false; }).catch(() => null);
+carregar();
+</script>
+<script src="/sino.js?v=5" defer></script>
+</body>
+</html>

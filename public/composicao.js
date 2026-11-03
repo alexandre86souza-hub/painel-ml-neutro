@@ -53,7 +53,9 @@
       const x = $c('button', null, '×'); x.type = 'button'; x.title = 'Tirar'; x.onclick = () => { lin.remove(); caixas.splice(caixas.indexOf(i), 1); };
       lin.append(i, info, x); lista.appendChild(lin); caixas.push(i); return i;
     };
-    (r.produtos.length ? r.produtos.map((p) => p.sku) : ['', '']).forEach((s) => nova(s));
+    // código da loja lido como produto (ex.: número da Magalu) não vem preenchido
+    const iniciais = r.produtos.map((p) => p.sku).filter((s) => r.escolhida || porSku.has(String(s).toUpperCase()));
+    (iniciais.length ? iniciais : ['', '']).forEach((s) => nova(s));
     if (r.escolhida) cx.appendChild($c('p', null, 'Escolhidos no painel. Pelo SKU seriam: ' + (r.do_sku.map((p) => p.sku).join(' + ') || 'nenhum produto')));
     const acoes = $c('div', 'comp-acoes');
     const mais = $c('button', null, '+ produto'); mais.type = 'button'; mais.onclick = () => nova().focus();

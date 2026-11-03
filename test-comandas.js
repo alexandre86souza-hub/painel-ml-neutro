@@ -45,6 +45,9 @@ const ag = Date.parse('2026-10-07T15:00:00Z');
 assert.strictEqual(K.situacaoPrazo('2026-10-06T20:00:00Z', ag), 'atrasado');
 assert.strictEqual(K.situacaoPrazo('2026-10-08T02:59:59Z', ag), 'hoje', '23h59 de Brasília ainda é hoje');
 assert.strictEqual(K.situacaoPrazo('2026-10-08T15:00:00Z', ag), 'amanhã');
+assert.strictEqual(K.prazoDoDia('2026-10-29'), '2026-10-29T23:59:59-03:00', 'Magalu: prazo só com a data = fim do dia em Brasília');
+assert.strictEqual(K.situacaoPrazo(K.prazoDoDia('2026-10-29'), Date.parse('2026-10-28T22:30:00Z')), 'amanhã', 'compra 28/10 19h30 com prazo 29/10 não está atrasada');
+assert.strictEqual(K.prazoDoDia('2026-10-29T20:00:00Z'), '2026-10-29T20:00:00Z');
 assert.strictEqual(K.situacaoPrazo(null, ag), 'sem prazo');
 
 // código de barras Code 128: 107 símbolos de 11 módulos (parada 13), barras pares e espaços ímpares

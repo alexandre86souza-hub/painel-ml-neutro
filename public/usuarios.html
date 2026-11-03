@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin:8px 0 4px}
@@ -17,6 +17,9 @@
   .mod input{margin-top:3px;width:18px;height:18px;flex:none}
   .mod b{display:block;font-size:14px}
   .mod span{font-size:12px;color:var(--muted)}
+  .mod-op{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:13px}
+  .mod-op label{display:flex;gap:4px;align-items:center;cursor:pointer}
+  .mod .mod-op input{margin:0;width:auto;height:auto}
   .campos{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .campos label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
   .campos input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;min-width:200px}
@@ -41,7 +44,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -93,7 +96,7 @@
   </form>
 </dialog>
 
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; }
 const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -103,12 +106,23 @@ let dados = null, editando = null;
 function grade(box, marcados){
   box.innerHTML = '';
   for(const m of dados.modulos){
+    if(m.id === 'metas_editar') continue;
+    if(m.id === 'metas'){   // uma caixa só: sem acesso, visualizar ou editar
+      const d = el('div', 'mod'), t = el('div'), op = el('div', 'mod-op');
+      const atual = marcados.includes('metas_editar') ? 'metas_editar' : marcados.includes('metas') ? 'metas' : '';
+      for(const [v, txt] of [['', 'Sem acesso'], ['metas', 'Visualizar'], ['metas_editar', 'Editar']]){
+        const lb = el('label'), r = el('input'); r.type = 'radio'; r.name = 'metas-' + box.id; r.value = v; r.checked = v === atual;
+        lb.append(r, document.createTextNode(txt)); op.appendChild(lb);
+      }
+      t.append(el('b', null, m.nome), el('span', null, m.descricao), op); d.appendChild(t); box.appendChild(d);
+      continue;
+    }
     const l = el('label', 'mod'); const c = el('input'); c.type = 'checkbox'; c.value = m.id; c.checked = marcados.includes(m.id);
     const t = el('div'); t.append(el('b', null, m.nome), el('span', null, m.descricao));
     l.append(c, t); box.appendChild(l);
   }
 }
-const marcados = (box) => [...box.querySelectorAll('input:checked')].map((c) => c.value);
+const marcados = (box) => [...box.querySelectorAll('input:checked')].map((c) => c.value).filter(Boolean);
 
 function mostrarSenha(nome, login, senha){
   const b = $('caixaSenha'); b.innerHTML = '';
@@ -128,7 +142,7 @@ async function carregar(){
 }
 
 function pintar(){
-  const nomes = Object.fromEntries(dados.modulos.map((m) => [m.id, m.nome]));
+  const nomes = Object.fromEntries(dados.modulos.map((m) => [m.id, m.id === 'metas' ? 'Metas e faturamento (visualizar)' : m.nome]));
   if(!$('nMods').children.length) grade($('nMods'), []);
   const box = $('lista'); box.innerHTML = '';
   const t = el('table'); const cab = el('tr');

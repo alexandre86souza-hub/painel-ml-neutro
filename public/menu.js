@@ -5,6 +5,11 @@
     dashboard: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
     geral: '<circle cx="12" cy="12" r="8"/><path d="M12 12V4M12 12l6.5 4.5M12 12l-6.5 4.5"/>',
     metas: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/><path d="M15 9l5-5M17 4h3v3"/>',
+    margem: '<path d="M12 4 3 20h18L12 4Z"/><path d="M12 10v4M12 17v.01"/>',
+    placar: '<path d="M4 20h16"/><path d="M6 16l4-5 3 3 5-7"/><circle cx="18" cy="7" r="1.6"/>',
+    caixa: '<path d="M4 7h16v12H4z"/><path d="M4 11h16"/><path d="M15 15h2"/><path d="M8 4h8"/>',
+    dre: '<path d="M6 3h12v18H6z"/><path d="M9 7h6M9 11h6M9 15h3M14 15h1M9 18h6"/>',
+    compras: '<path d="M4 5h2l2 10h10l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
     hoje: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     pedidos: '<path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
     performance: '<path d="M4 18 9 12l4 3 7-8"/><path d="M16 7h4v4"/>',
@@ -47,12 +52,15 @@
       ['/comandas.html', 'Comandas', 'comandas'],
       ['/etiquetas.html', 'Etiquetas de envio', 'etiquetas'],
       ['/estoque.html', 'Estoque', 'estoque'],
+      ['/compras.html', 'Compras e capital parado', 'compras'],
       ['/mensagens.html', 'Mensagens', 'mensagens'],
       ['/devolucoes.html', 'Devoluções', 'devolucoes']] },
     { nome: 'Vendas e análise', itens: [
       ['/vendas.html', 'Pedidos', 'pedidos'],
       ['/performance.html', 'Performance', 'performance'],
       ['/abc.html', 'Análise ABC', 'abc'],
+      ['/margem.html', 'Margem baixa', 'margem'],
+      ['/placar.html', 'Promoções e Ads', 'placar'],
       ['/full.html', 'Full', 'full'],
       ['/reputacao.html', 'Reputação', 'reputacao']] },
     { nome: 'Anúncios e marketing', itens: [
@@ -63,6 +71,8 @@
       ['/publicar.html', 'Publicar', 'publicar'],
       ['/calculadora.html', 'Calculadora reversa', 'calculadora']] },
     { nome: 'Financeiro', itens: [
+      ['/caixa.html', 'Caixa a receber', 'caixa'],
+      ['/dre.html', 'DRE do mês', 'dre'],
       ['/financeiro.html', 'Financeiro', 'financeiro'],
       ['/empresa.html', 'Empresa e custos', 'empresa']] },
     { nome: 'Conexões e sistema', recolhido: true, itens: [
@@ -126,23 +136,29 @@
     leroy: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'],
     magalu: ['/vendas.html', '/performance.html', '/abc.html', '/empresa.html'] };
   const tipo = (ext) => (ext === 'amazon' || ext === 'leroy' || ext === 'magalu' ? ext : 'shopee');
+  // Telas que a loja não tem (o menu as mostra apagadas, sem trocar de loja). Leroy: o Financeiro são os repasses (leroy.html).
+  const SEM_TELA = { amazon: ['/reputacao.html', '/financeiro.html'], shopee: ['/full.html', '/reputacao.html', '/financeiro.html'],
+    leroy: ['/full.html', '/reputacao.html', '/ads.html', '/publicar.html'], magalu: ['/full.html', '/reputacao.html', '/ads.html', '/publicar.html', '/financeiro.html'] };
   const comConta = (href, ext = EXT) => {
     const u = new URL(href, location.origin);
+    if (SEM_TELA[tipo(ext)].includes(u.pathname)) return null;
+    // Dashboard de toda loja = a mesma tela do ML com ?conta= (vendas do dia, gráfico, mais vendidos, resumo de 30 dias)
+    if (u.pathname === '/' || u.pathname === '/inicio.html') return `/?conta=${encodeURIComponent(ext)}`;
+    // telas de todas as contas: levam a loja escolhida, para a lista do topo não voltar para a conta do ML
+    if (DE_TODAS.includes(u.pathname)) { u.searchParams.set('conta', ext); return u.pathname + u.search; }
     if (tipo(ext) === 'amazon') {
-      if (u.pathname === '/' || u.pathname === '/inicio.html') return '/amazon.html';
       if (u.pathname === '/anuncios.html') return '/amazon-anuncios.html';
       if (u.pathname === '/ads.html') return '/amazon-ads.html';
       if (u.pathname === '/publicar.html') return '/publicar-canais.html?conta=amazon';
       if (u.pathname === '/promocoes.html') return '/campanhas-canais.html?conta=amazon';
       if (u.pathname === '/devolucoes.html') return '/devolucoes-canais.html?conta=amazon';
     } else if (tipo(ext) === 'leroy' || tipo(ext) === 'magalu') {
-      if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
+      if (u.pathname === '/financeiro.html' && ext === 'leroy') return '/leroy.html';
       if (u.pathname === '/promocoes.html') return `/campanhas-canais.html?conta=${ext}`;
       if (u.pathname === '/anuncios.html' && ext === 'magalu') return '/magalu-anuncios.html?conta=magalu';
       if (u.pathname === '/anuncios.html' && ext === 'leroy') return '/leroy-anuncios.html?conta=leroy';
       if (u.pathname === '/devolucoes.html') return `/devolucoes-canais.html?conta=${ext}`;
-    } else if (u.pathname === '/' || u.pathname === '/inicio.html') return `/vendas.html?conta=${ext}`;
-    else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
+    } else if (u.pathname === '/anuncios.html') return `/shopee-anuncios.html?conta=${ext}`;
     else if (u.pathname === '/ads.html') return `/shopee-ads.html?conta=${ext}`;
     else if (u.pathname === '/promocoes.html') return `/shopee-campanhas.html?conta=${ext}`;
     else if (u.pathname === '/devolucoes.html') return `/shopee-devolucoes.html?conta=${ext}`;
@@ -153,18 +169,18 @@
   };
   // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
   // fica na mesma tela, só com a loja escolhida na lista.
-  const DE_TODAS = ['/geral.html', '/metas.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+  const DE_TODAS = ['/geral.html', '/metas.html', '/margem.html', '/placar.html', '/caixa.html', '/dre.html', '/compras.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
     '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);
     const aquiTem = TELAS[tipo(ext)].includes(location.pathname) || ['/anuncios.html', '/ads.html', '/publicar.html'].includes(location.pathname)
       || ['/promocoes.html', '/campanhas-canais.html', '/shopee-campanhas.html'].includes(location.pathname)
-      || location.pathname === '/devolucoes.html';
+      || ['/devolucoes.html', '/', '/inicio.html'].includes(location.pathname);
     // campanhas: de uma conta para outra, a tela de campanhas da outra
     if (['/campanhas-canais.html', '/shopee-campanhas.html'].includes(location.pathname)) return comConta('/promocoes.html', ext);
     if (['/devolucoes-canais.html', '/shopee-devolucoes.html'].includes(location.pathname)) return comConta('/devolucoes.html', ext);
-    if (aquiTem) { const u = new URL(location.href); u.searchParams.delete('conta'); return comConta(u.pathname + u.search, ext); }
-    return tipo(ext) === 'amazon' ? '/amazon.html' : `/vendas.html?conta=${ext}`;   // Leroy: a tela Pedidos
+    if (aquiTem) { const u = new URL(location.href); u.searchParams.delete('conta'); const h = comConta(u.pathname + u.search, ext); if (h) return h; }
+    return `/?conta=${encodeURIComponent(ext)}`;   // tela que a loja não tem: o Dashboard dela
   };
   const semConta = () => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname;
@@ -226,6 +242,25 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', vigiar); else vigiar();
   });
 
+  // Período lembrado por tela (pedido do dono, 03/11/2026: trocar a conta ou a loja mantém o período escolhido).
+  // Ordem: ?dias= do endereço › o último escolhido nesta tela (neste navegador) › o padrão da tela; só vale o que existe
+  // nos botões dela. Escolher grava os dois, então recarregar (troca de conta do ML) e o link da troca de loja o levam junto.
+  const telaPeriodo = () => { const p = location.pathname;
+    return /devolucoes/.test(p) ? 'devolucoes' : /ads\.html$/.test(p) ? 'ads' : p; };
+  window.periodoInicial = (segId, padrao) => {
+    const ok = new Set([...(document.getElementById(segId)?.querySelectorAll('button[data-dias]') || [])].map((b) => b.dataset.dias));
+    let guardado = null;
+    try { guardado = localStorage.getItem('painel.periodo:' + telaPeriodo()); } catch {}
+    const v = [new URLSearchParams(location.search).get('dias'), guardado].find((x) => x != null && ok.has(x));
+    return v == null ? padrao : Number.isFinite(Number(v)) ? Number(v) : v;
+  };
+  window.guardarPeriodo = (v) => {
+    // Pedidos não guarda "hoje": a tela Vendas hoje é o item próprio do menu
+    if (!(location.pathname === '/vendas.html' && String(v) === '1')) try { localStorage.setItem('painel.periodo:' + telaPeriodo(), String(v)); } catch {}
+    const u = new URL(location.href); u.searchParams.set('dias', v);
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+  };
+
   const nav = document.getElementById('menuPainel');
   if (!nav) return;
   const aqui = location.pathname === '/inicio.html' ? '/' : location.pathname;
@@ -251,7 +286,9 @@
   function itemDoMenu(it) {
     const [href, rotulo, icone] = it;
     const a = document.createElement('a');
-    a.href = EXT ? comConta(href) : href;
+    const destino = EXT ? comConta(href) : href;
+    if (destino) a.href = destino;
+    else { a.className = 'nav-off'; a.setAttribute('aria-disabled', 'true'); a.title = 'Esta loja não tem esta tela'; a.style.opacity = '.4'; a.style.cursor = 'default'; }
     const [caminho, query] = href.split('?');
     const atual = (caminho === aqui || (NA_AMAZON && caminho === '/' && aqui === '/amazon.html')
       || (caminho === '/anuncios.html' && ['/amazon-anuncios.html', '/shopee-anuncios.html', '/magalu-anuncios.html', '/leroy-anuncios.html'].includes(aqui))

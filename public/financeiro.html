@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .cartao.destaque{background:linear-gradient(135deg,#16a34a,#15803d);border-color:transparent;color:#fff}
@@ -49,7 +49,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -170,11 +170,11 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script>
 const params = new URLSearchParams(location.search);
 let aba = ['resumo', 'extrato', 'conferencia'].includes(params.get('aba')) ? params.get('aba') : 'resumo';
-let dias = 30, dados = null, filtro = '', mostrar = 200;
+let dias = periodoInicial('segDias', 30), dados = null, filtro = '', mostrar = 200;
 let extrato = null, mostrarExt = 200, timerExtrato = null;
 let conf = null, filtroConf = 'pendente', mostrarConf = 200, editando = null;
 function cartao(rot, valor, nota, cls){

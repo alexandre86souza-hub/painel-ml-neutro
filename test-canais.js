@@ -201,4 +201,20 @@ assert.strictEqual(require('./shopee-ads.js').adsDe([]).total.roas, null, 'sem g
   assert.strictEqual(linha(214.64, null).lucro, 121.72, 'preço do detalhe, quando vem, continua valendo');
 }
 
-console.log('Canais e Shopee: pedidos, repasse, lucro exato, rateio, estimativa, resumo, performance e ABC: ok');
+// Dashboard das lojas (mesmo formato do /api/dashboard do ML)
+{
+  const agora = Date.parse('2026-11-03T15:00:00Z');   // 12h em Brasília
+  const v = (pedido, data, sku, q, fat, valida = true) => ({ pedido, data, sku, item_id: sku, titulo: 'Ducha ' + sku, quantidade: q, faturamento: fat, valida });
+  const d = K.dashboardDe([v('A', '2026-11-03T13:00:00Z', 'X', 2, 100), v('A', '2026-11-03T13:00:00Z', 'Y', 1, 50), v('B', '2026-11-03T14:00:00Z', 'X', 1, 50),
+    v('C', '2026-11-03T02:30:00Z', 'Y', 1, 40), v('D', '2026-11-02T12:00:00Z', 'Y', 1, 30, false)], { dias: 7, agora });
+  assert.deepStrictEqual([d.dia, d.hoje.pedidos, d.hoje.unidades, d.hoje.faturamento, d.hoje.ticket], ['2026-11-03', 2, 4, 200, 100], 'hoje: 23h30 da véspera em Brasília fica em ontem');
+  assert.deepStrictEqual([d.ontem.pedidos, d.ontem.faturamento], [1, 40], 'cancelada fora');
+  assert.strictEqual(d.serie.length, 7); assert.strictEqual(d.serie[6].dia, '2026-11-03');
+  assert.strictEqual(d.media.faturamento, 40 / 6, 'média só dos dias inteiros');
+  assert.deepStrictEqual([d.top.periodo, d.top.itens[0].item_id, d.top.itens[0].pedidos, d.top.itens[0].faturamento], ['hoje', 'X', 2, 150]);
+  assert.deepStrictEqual(d.recentes.map((r) => [r.order_id, r.anuncios, r.total]), [['B', 1, 50], ['A', 2, 150]]);
+  const semHoje = K.dashboardDe([v('C', '2026-11-01T15:00:00Z', 'Y', 1, 40)], { dias: 7, agora });
+  assert.deepStrictEqual([semHoje.top.periodo, semHoje.top.itens.length, semHoje.recentes.length], ['7dias', 1, 0]);
+}
+
+console.log('Canais e Shopee: pedidos, repasse, lucro exato, rateio, estimativa, resumo, performance, ABC e dashboard: ok');

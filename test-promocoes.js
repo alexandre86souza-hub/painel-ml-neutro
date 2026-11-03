@@ -43,6 +43,16 @@ assert.strictEqual(P.querySaida({ tipo: 'SMART', promocao_id: 'P-MLB17937078', o
 assert.strictEqual(P.querySaida({ tipo: 'PRICE_DISCOUNT' }), 'promotion_type=PRICE_DISCOUNT&app_version=v2');
 assert.throws(() => P.querySaida({ tipo: 'SMART', promocao_id: 'P-MLB1', oferta_id: 'x&promotion_type=DEAL' }), /offer_id inválido/);
 
+// ---------- mudar o preço de quem já está na promoção ----------
+assert.deepStrictEqual(P.corpoEdicao({ tipo: 'SELLER_CAMPAIGN', promocao_id: 'C-MLB302', preco: '33.004', preco_atual: 35, preco_original: 50, status: 'started' }),
+  { promotion_id: 'C-MLB302', promotion_type: 'SELLER_CAMPAIGN', deal_price: 33 });
+assert.throws(() => P.corpoEdicao({ tipo: 'SELLER_CAMPAIGN', promocao_id: 'C-MLB302', preco: 36, preco_atual: 35, preco_original: 50, status: 'started' }), /só aceita baixar/);
+assert.strictEqual(P.corpoEdicao({ tipo: 'DEAL', promocao_id: 'P-MLB1', preco: 36, preco_atual: 35, preco_original: 50, status: 'pending' }).deal_price, 36, 'agendada: pode subir');
+assert.throws(() => P.corpoEdicao({ tipo: 'SMART', promocao_id: 'P-MLB1', preco: 30 }), /não deixa mudar/);
+assert.throws(() => P.corpoEdicao({ tipo: 'DEAL', promocao_id: 'P-MLB1', preco: 50, preco_original: 50 }), /menor que o preço original/);
+{ const pd2 = P.corpoEdicao({ tipo: 'PRICE_DISCOUNT', preco: 40, preco_atual: 42, preco_original: 50, status: 'started', inicio: '2026-11-03', fim: '2026-11-10' });
+  assert.deepStrictEqual([pd2.promotion_type, pd2.deal_price, pd2.start_date, pd2.finish_date], ['PRICE_DISCOUNT', 40, '2026-11-03T00:00:00', '2026-11-10T23:59:59']); }
+
 // ---------- de qual promoção veio a venda (/orders/{id}/discounts real, 28/09/2026) ----------
 assert.deepStrictEqual(P.linhasDoDesconto({ details: [{ type: 'discount',
   items: [{ element_id: 1, quantity: 2, id: 'MLB4649426984', amounts: { total: 22.94, seller: 14.48 } }],

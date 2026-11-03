@@ -29,6 +29,8 @@ assert.ok(!U.permitido(exp, 'GET', '/auth'), 'conectar conta do ML: só o admini
 assert.ok(!U.permitido(exp, 'GET', '/api/rota-nova-qualquer'), 'rota nova nasce fechada');
 assert.ok(!U.permitido({ admin: false, modulos: ['anuncios'] }, 'PUT', '/api/empresa'), 'ler a empresa sim; gravar não');
 assert.ok(!U.permitido({ admin: false, modulos: ['anuncios'] }, 'POST', '/api/produtos-custo'), 'colar a tabela de custos: administrador');
+assert.ok(U.permitido({ admin: false, modulos: ['estoque'] }, 'PUT', '/api/produtos/composicoes'), 'Estoque nos anúncios: adicionar produtos');
+assert.ok(!U.permitido({ admin: false, modulos: ['estoque'] }, 'POST', '/api/produtos/1/trocar-sku'), 'módulo estoque não troca SKU');
 assert.ok(U.permitido({ admin: true }, 'GET', '/api/usuarios'));
 assert.ok(!U.permitido(null, 'GET', '/comandas.html'));
 assert.strictEqual(U.primeiraPagina(exp), '/comandas.html');
@@ -62,11 +64,18 @@ for (const m of U.MODULOS) {
   }
 }
 // toda tela do painel está num módulo ou é de administrador (de propósito)
-const ADMIN = ['/metas.html', '/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/navegador.html', '/usuarios.html'];
+const ADMIN = ['/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/navegador.html', '/usuarios.html'];
 for (const f of fs.readdirSync(path.join(__dirname, 'public')).filter((x) => x.endsWith('.html'))) {
   const pg = '/' + f;
   assert.ok(ADMIN.includes(pg) || U.MODULOS.some((m) => m.paginas.includes(pg)), `${pg}: ponha num módulo de usuarios.js ou na lista de administrador`);
 }
+
+// Metas: visualizar só lê; editar também escreve
+{ const ver = { admin: false, modulos: ['metas'] }, edita = { admin: false, modulos: ['metas_editar'] }, nada = { admin: false, modulos: ['vendas'] };
+  assert.ok(U.permitido(ver, 'GET', '/metas.html') && U.permitido(ver, 'GET', '/api/metas'), 'visualizar abre a tela');
+  assert.ok(!U.permitido(ver, 'PUT', '/api/metas/meta') && !U.permitido(ver, 'POST', '/api/metas/importar'), 'visualizar não escreve');
+  assert.ok(U.permitido(edita, 'GET', '/metas.html') && U.permitido(edita, 'PUT', '/api/metas/meta') && U.permitido(edita, 'POST', '/api/metas/importar'), 'editar escreve');
+  assert.ok(!U.permitido(nada, 'GET', '/metas.html') && !U.permitido(nada, 'GET', '/api/metas'), 'sem o módulo não abre'); }
 
 // ---------- servidor de verdade ----------
 const S = require('./server.js');

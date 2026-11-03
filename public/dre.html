@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRE do mês</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<script src="/tema.js?v=1"></script>
+<style>
+  td.neg{color:#b42318;font-weight:600}
+  tr.total td{font-weight:700;border-top:2px solid #d5d7db}
+  tr.menos td:first-child{padding-left:18px;color:var(--muted)}
+  .nota{font-size:12px;color:var(--muted)}
+  .custos{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .custos table input{font:inherit;padding:5px 7px;border:1px solid #d5d7db;border-radius:7px;width:100%;box-sizing:border-box}
+  .custos table input.v{width:7.5em;text-align:right}
+  .custos select{font:inherit;padding:5px 6px;border:1px solid #d5d7db;border-radius:7px}
+  .acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=37"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>DRE do mês</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Resultado do mês por <b>CNPJ</b> e por <b>loja</b>: vendas − tarifas − frete − custo dos produtos − embalagem − imposto = margem de contribuição; − Ads − devoluções − custos fixos = resultado.</p>
+    <div class="seg" role="group" aria-label="Mês" id="segMes"></div>
+  </div>
+  <div class="cartoes" id="cartoes"></div>
+  <section class="bloco">
+    <h2>Por CNPJ</h2>
+    <div class="tabela-rolagem" id="dre"><p class="carregando">Lendo as vendas, o Ads e as devoluções de todas as lojas (a primeira leitura pode levar 1 a 2 minutos)…</p></div>
+  </section>
+  <section class="bloco">
+    <h2>Por loja</h2>
+    <div class="tabela-rolagem" id="lojas"></div>
+  </section>
+  <section class="bloco">
+    <h2>Custos fixos</h2>
+    <p class="sub">Aluguel, salários, contador, sistemas, internet… "Todo mês" vale para todos os meses; "Só neste mês" é um gasto avulso do mês escolhido. Custo da empresa toda é dividido entre os CNPJs pelo faturamento.</p>
+    <div class="custos">
+      <div><h3>Todo mês</h3><div id="cFixos"></div></div>
+      <div><h3 id="tMes">Só neste mês</h3><div id="cMes"></div></div>
+    </div>
+    <div class="acoes"><button type="button" class="bt primario" id="btSalvar">Salvar custos</button><span class="sub" id="salvo"></span></div>
+  </section>
+  <p class="sub" id="rodape"></p>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=10"></script>
+<script>
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const hoje = new Date(Date.now() - 3 * 3600e3);
+// os meses que o painel cobre (até 90 dias de vendas): este, o anterior e o de antes se começou há menos de 90 dias
+const opcoes = [0, 1, 2].map((k) => { const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - k, 1)); return { mes: d.toISOString().slice(0, 7), ini: d.getTime() }; })
+  .filter((o) => Date.now() - o.ini <= 89 * 864e5);
+const pedido = new URLSearchParams(location.search).get('mes');
+let mes = opcoes.some((o) => o.mes === pedido) ? pedido : opcoes[0].mes, dados = null, geracao = 0, cfg = { fixos: [], meses: {} }, cnpjs = [];
+const nomeMes = (m) => `${MESES[Number(m.slice(5)) - 1]}/${m.slice(0, 4)}`;
+const seg = $('segMes');
+for(const o of opcoes){ const b = el('button', null, nomeMes(o.mes)); b.type = 'button'; b.dataset.mes = o.mes; seg.appendChild(b); }
+const marcar = () => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.mes === mes)); };
+seg.onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; mes = b.dataset.mes; marcar(); history.replaceState(null, '', `?mes=${mes}`); carregar(); };
+marcar();
+
+async function carregar(recarregar){
+  const g = ++geracao;
+  erroTela('');
+  $('tMes').textContent = `Só em ${nomeMes(mes)}`;
+  try{
+    let r;
+    for(let i = 0; i < 12; i++){
+      r = await api(`/api/dre?mes=${mes}${recarregar && i === 0 ? '&recarregar=1' : ''}`);
+      if(g !== geracao) return;
+      if(r.custos_cfg && i === 0){ cfg = r.custos_cfg; }
+      if(r.pronto) break;
+      if(r.lojas){ dados = r; pintar(); }
+    }
+    dados = r; cfg = r.custos_cfg || cfg; pintar(); pintarCustos();
+  }catch(e){ erroTela(e.message); }
+}
+const v = (x, menos) => el('td', 'n' + (x < 0 && !menos ? ' neg' : ''), x == null ? '—' : real(menos && x ? -x : x));
+function pintar(){
+  if(!dados?.lojas) return;
+  cnpjs = dados.cnpjs || [];
+  const t = dados.total, cs = $('cartoes'); cs.innerHTML = '';
+  const cartao = (rot, val, nota, alerta) => { const c = el('div', 'cartao' + (alerta ? ' alerta' : '')); c.append(el('small', null, rot), el('b', null, val)); if(nota) c.appendChild(el('span', 'pequeno', nota)); cs.appendChild(c); };
+  cartao('Faturamento', real(t.faturamento), dados.parcial ? 'mês em andamento' : nomeMes(mes));
+  cartao('Margem de contribuição', real(t.mc), pct(t.margem_mc));
+  cartao('Ads e devoluções', real(t.ads + t.devolucoes), `Ads ${real(t.ads)} · devoluções ${real(t.devolucoes)}`);
+  cartao('Custos fixos', real(t.custos_fixos), t.custos_fixos ? '' : 'cadastre abaixo', !t.custos_fixos);
+  cartao('Resultado', real(t.resultado_final), pct(t.margem_final), t.resultado_final < 0);
+  cartao('Ponto de equilíbrio', t.equilibrio == null ? '—' : real(t.equilibrio), 'faturamento que paga os custos fixos');
+  // DRE por CNPJ (linhas = contas, colunas = CNPJs + total)
+  const cols = [...cnpjs, { nome: 'Total', ...t }];
+  const tb = el('table'), th = el('tr'); th.appendChild(el('th', null, ''));
+  for(const c of cols) th.appendChild(el('th', 'n', c.nome + (c.efetiva != null ? ` (Simples ${pct(c.efetiva, 2)})` : '')));
+  tb.appendChild(el('thead')).appendChild(th);
+  const corpo = el('tbody');
+  const linha = (rot, k, tipo) => { const tr = el('tr', tipo || ''); tr.appendChild(el('td', null, rot)); for(const c of cols) tr.appendChild(v(c[k], tipo === 'menos')); corpo.appendChild(tr); };
+  linha('Faturamento', 'faturamento');
+  linha('Tarifas do marketplace', 'tarifa', 'menos'); linha('Frete', 'frete', 'menos'); linha('Custo dos produtos', 'produto', 'menos');
+  linha('Embalagem e outros', 'embalagem', 'menos'); linha('Imposto', 'imposto', 'menos');
+  linha('= Margem de contribuição', 'mc', 'total');
+  linha('Ads', 'ads', 'menos'); linha('Devoluções', 'devolucoes', 'menos');
+  linha('= Resultado das lojas', 'resultado', 'total');
+  linha('Custos fixos', 'custos_fixos', 'menos');
+  linha('= Resultado', 'resultado_final', 'total');
+  const trM = el('tr'); trM.appendChild(el('td', null, 'Margem final')); for(const c of cols) trM.appendChild(el('td', 'n', pct(c.margem_final))); corpo.appendChild(trM);
+  tb.appendChild(corpo);
+  const d = $('dre'); d.innerHTML = ''; d.appendChild(tb);
+  // por loja
+  const tl = el('table'), hl = el('tr');
+  for(const h of ['Loja', 'CNPJ', 'Faturamento', 'Tarifas', 'Frete', 'Custo', 'Embalagem', 'Imposto', 'Margem contrib.', 'Ads', 'Devoluções', 'Resultado', 'Margem']) hl.appendChild(el('th', null, h));
+  tl.appendChild(el('thead')).appendChild(hl);
+  const cl = el('tbody');
+  for(const l of dados.lojas){
+    const tr = el('tr');
+    const tdL = el('td'); tdL.appendChild(el('div', null, l.loja));
+    const notas = [l.sem_custo ? `${numero(l.sem_custo)} venda(s) sem custo (${real(l.faturamento_sem_custo)})` : null, l.ads_nota ? `Ads: ${l.ads_nota}` : null,
+      l.devolucoes_nota ? `devoluções: ${l.devolucoes_nota}` : null, l.imposto_fonte === 'simples' ? 'imposto pelo Simples do CNPJ' : 'imposto pelo % da Empresa'].filter(Boolean);
+    tdL.appendChild(el('div', 'nota', notas.join(' · ')));
+    tr.append(tdL, el('td', null, cnpjs.find((c) => c.id === l.cnpj)?.nome || '—'), v(l.faturamento), v(l.tarifa, true), v(l.frete, true), v(l.produto, true),
+      v(l.embalagem, true), v(l.imposto, true), v(l.mc), v(l.ads, true), v(l.devolucoes, true), v(l.resultado), el('td', 'n' + (l.margem < 0 ? ' neg' : ''), pct(l.margem)));
+    cl.appendChild(tr);
+  }
+  tl.appendChild(cl);
+  const bl = $('lojas'); bl.innerHTML = ''; bl.appendChild(tl);
+  $('rodape').textContent = (dados.pronto ? `Lido ${dados.lido_em ? 'às ' + new Date(dados.lido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'agora'}.` : 'Ainda lendo…')
+    + ' Vendas pela data da compra, sem canceladas; custo do produto da data da venda. CNPJs e Simples vêm da tela Metas e faturamento.'
+    + (dados.erros?.length ? ' Não consegui ler: ' + dados.erros.join(' · ') : '');
+}
+// editor dos custos fixos
+function tabelaCustos(lista, alvo){
+  const box = $(alvo); box.innerHTML = '';
+  const t = el('table'), h = el('tr');
+  for(const x of ['Custo', 'Valor (R$)', 'CNPJ', '']) h.appendChild(el('th', null, x));
+  t.appendChild(el('thead')).appendChild(h);
+  const tb = el('tbody');
+  const nova = (c = {}) => {
+    const tr = el('tr');
+    const nome = el('input'); nome.value = c.nome || ''; nome.placeholder = 'Ex.: aluguel'; nome.setAttribute('aria-label', 'Nome do custo');
+    const val = el('input', 'v'); val.value = c.valor != null ? String(c.valor).replace('.', ',') : ''; val.inputMode = 'decimal'; val.setAttribute('aria-label', 'Valor');
+    const sel = el('select'); sel.setAttribute('aria-label', 'CNPJ');
+    for(const [id, nm] of [['', 'Empresa toda'], ...cnpjs.map((x) => [x.id, x.nome])]){ const o = el('option', null, nm); o.value = id; o.selected = (c.cnpj || '') === id; sel.appendChild(o); }
+    const rm = el('button', 'bt', 'Tirar'); rm.type = 'button'; rm.onclick = () => tr.remove();
+    const tdN = el('td'), tdV = el('td'), tdC = el('td'), tdR = el('td'); tdN.appendChild(nome); tdV.appendChild(val); tdC.appendChild(sel); tdR.appendChild(rm);
+    tr.append(tdN, tdV, tdC, tdR); tb.appendChild(tr);
+  };
+  for(const c of lista) nova(c);
+  if(!lista.length) nova();
+  t.appendChild(tb); box.appendChild(t);
+  const add = el('button', 'bt', '+ Custo'); add.type = 'button'; add.onclick = () => nova(); box.appendChild(add);
+}
+const lerTabela = (alvo) => [...$(alvo).querySelectorAll('tbody tr')].map((tr) => { const [n, v] = tr.querySelectorAll('input'); const s = v.value.trim(); return { nome: n.value.trim(), valor: s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s, cnpj: tr.querySelector('select').value }; })
+  .filter((c) => c.nome || c.valor);
+function pintarCustos(){ tabelaCustos(cfg.fixos || [], 'cFixos'); tabelaCustos((cfg.meses || {})[mes] || [], 'cMes'); }
+$('btSalvar').onclick = async () => {
+  try{
+    const meses = { ...(cfg.meses || {}), [mes]: lerTabela('cMes') };
+    const r = await api('/api/dre/custos', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixos: lerTabela('cFixos'), meses }) });
+    cfg = { fixos: r.fixos, meses: r.meses }; $('salvo').textContent = 'Custos salvos. Recalculando…'; erroTela('');
+    await carregar(); $('salvo').textContent = 'Custos salvos.';
+  }catch(e){ erroTela(e.message); }
+};
+carregar();
+</script>
+<script src="/sino.js?v=5" defer></script>
+</body>
+</html>

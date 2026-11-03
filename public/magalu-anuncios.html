@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f6;color:#475569;white-space:nowrap}
@@ -37,7 +37,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -76,9 +76,9 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script src="/aviso-flutuante.js?v=1"></script>
-<script src="/composicao.js?v=1"></script>
+<script src="/composicao.js?v=3"></script>
 <script src="/margem-massa.js?v=2"></script>
 <script>
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) avisoNaTela(m); }
@@ -226,6 +226,8 @@ function pintarLista(){
 }
 $('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; for(const x of $('segFiltro').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); mostrar = 200; pintarLista(); };
 $('busca').oninput = () => { mostrar = 200; pintarLista(); };
+// ?q= (link da tela Margem baixa): a busca já preenchida
+try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('busca').value = q; }catch{}
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
 $('btReler').onclick = () => carregar(true);
 carregar(false);

@@ -183,6 +183,47 @@ function resumoGeral(linhas, { dias, de, ate, hojeDe, conta, topPorSku, mes, rot
   };
 }
 
+// Dashboard de uma loja (Amazon, Shopee, Leroy, Magalu) no MESMO formato de server.js 'GET /api/dashboard' (o do ML): hoje,
+// ontem, média dos dias inteiros, série por dia, mais vendidos (hoje; sem venda hoje, 7 dias) e os pedidos de hoje.
+// linhas = as vendas da loja (linhasDe). Data = a da compra, dia de Brasília. Função pura: testada.
+function dashboardDe(linhas, { dias = 14, agora = Date.now() } = {}) {
+  const hoje = diaLocal(new Date(agora).toISOString());
+  const meio = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const validas = linhas.filter((l) => l.valida && l.data);
+  const porDia = new Map();
+  for (const l of validas) {
+    const d = diaLocal(l.data), x = porDia.get(d) || { faturamento: 0, unidades: 0, pedidos: new Set() };
+    x.faturamento += l.faturamento || 0; x.unidades += l.quantidade || 0; x.pedidos.add(l.pedido); porDia.set(d, x);
+  }
+  const doDia = (d) => { const x = porDia.get(d), ped = x ? x.pedidos.size : 0, fat = x ? r2(x.faturamento) : 0;
+    return { dia: d, unidades: x ? x.unidades : 0, pedidos: ped, faturamento: fat, ticket: ped ? r2(fat / ped) : 0 }; };
+  const serie = Array.from({ length: dias }, (_, i) => doDia(meio(hoje, i - (dias - 1))));
+  const anteriores = serie.slice(0, -1);
+  const media = (k) => (anteriores.length ? anteriores.reduce((s, d) => s + d[k], 0) / anteriores.length : 0);
+  const top = (desde) => {
+    const m = new Map();
+    for (const l of validas) {
+      if (diaLocal(l.data) < desde) continue;
+      const k = l.sku || l.item_id, x = m.get(k) || { item_id: k, titulo: l.titulo || null, foto: l.foto || null, unidades: 0, pedidos: new Set(), faturamento: 0 };
+      x.unidades += l.quantidade || 0; x.faturamento += l.faturamento || 0; x.pedidos.add(l.pedido); x.foto ||= l.foto || null; m.set(k, x);
+    }
+    return [...m.values()].sort((a, b) => b.faturamento - a.faturamento).slice(0, 5).map((x) => ({ ...x, pedidos: x.pedidos.size, faturamento: r2(x.faturamento) }));
+  };
+  const topHoje = top(hoje);
+  const recentes = new Map();
+  for (const l of validas) {
+    if (diaLocal(l.data) !== hoje) continue;
+    const x = recentes.get(l.pedido) || { data: l.data, order_id: l.pedido, quantidade: 0, anuncios: new Set(), item_id: l.sku || l.item_id, total: 0 };
+    x.quantidade += l.quantidade || 0; x.total += l.faturamento || 0; x.anuncios.add(l.sku || l.item_id); recentes.set(l.pedido, x);
+  }
+  return {
+    dia: hoje, dias, hoje: doDia(hoje), ontem: doDia(meio(hoje, -1)),
+    media: { faturamento: media('faturamento'), unidades: media('unidades'), pedidos: media('pedidos') },
+    serie, top: topHoje.length ? { periodo: 'hoje', itens: topHoje } : { periodo: '7dias', itens: top(meio(hoje, -6)) },
+    recentes: [...recentes.values()].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 8).map((x) => ({ ...x, anuncios: x.anuncios.size, total: r2(x.total) })),
+  };
+}
+
 // Devoluções de um canal (Leroy, Magalu) -> o resumo e os produtos que mais voltam, no formato da tela de devoluções
 // (o mesmo de /api/amazon/devolucoes). vendidas = unidades vendidas no período. Função pura: testada.
 function resumoDevolucoes(devs, vendidas) {
@@ -199,4 +240,4 @@ function resumoDevolucoes(devs, vendidas) {
   por_produto: [...porSku.values()].map((x) => ({ ...x, devolvido: r2(x.devolvido), custo: r2(x.custo) })).sort((a, b) => b.casos - a.casos).slice(0, 30) };
 }
 
-module.exports = { resumoDevolucoes, janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, totaisABC, resumoGeral };
+module.exports = { dashboardDe, resumoDevolucoes, janelaVendas, janelaDoMes, periodoDoPedido, intervalo, diaLocal, somaLinhas, semCusto, performanceDe, abcDe, totaisABC, resumoGeral };

@@ -1156,7 +1156,7 @@ const shopeeRecusaLimpar = (itemId) => db.prepare('UPDATE shopee_anuncios SET re
 
 // Linhas de venda de uma loja na janela (pedido sem detalhe ainda não tem data: fica de fora).
 const shopeeVendasPeriodo = (shopId, de, ate) => db.prepare(`
-  SELECT p.order_sn, p.data, p.status, p.escrow_em, p.escrow_final, p.recebido, p.comissao, p.servico, p.transacao,
+  SELECT p.order_sn, p.data, p.status, p.atualizado, p.escrow_em, p.escrow_final, p.recebido, p.comissao, p.servico, p.transacao,
          p.frete_vendedor, p.cupom_vendedor, p.devolucao, p.transportadora, p.frete_shopee, p.taxa_item, p.precos_repasse, i.linha, i.sku, i.item_id, i.model_id, i.nome, i.quantidade, i.preco_unit, i.imagem
   FROM shopee_pedidos p JOIN shopee_itens i ON i.order_sn = p.order_sn
   WHERE p.shop_id=? AND p.data >= ? AND p.data < ? ORDER BY p.data DESC, i.linha`).all(shopId, de, ate);
@@ -1969,6 +1969,7 @@ function magaluAnunciosGravar(lista, visto) {
 const magaluAnunciosLimparAntes = (visto) => db.prepare('DELETE FROM magalu_anuncios WHERE visto_em < ?').run(visto);
 const magaluPrecoGravar = (sku, preco, lista, estoque) => db.prepare('UPDATE magalu_anuncios SET preco=?, preco_lista=?, estoque=?, lido_preco=? WHERE sku=?')
   .run(preco, lista, estoque, new Date().toISOString(), sku);
+const magaluEstoqueGravar = (sku, estoque) => db.prepare('UPDATE magalu_anuncios SET estoque=? WHERE sku=?').run(estoque, sku);
 // sem preço lido ou lido há mais de 6 h; publicados primeiro
 // antesDe: o "Atualizar da Magalu" relê também os preços lidos antes do clique
 const magaluSemPreco = (limite, antesDe = null) => db.prepare(`SELECT sku FROM magalu_anuncios WHERE lido_preco IS NULL OR lido_preco < ?
@@ -2104,6 +2105,7 @@ const estoqueEnvioGravar = (e) => Number(db.prepare('INSERT INTO estoque_envios 
   .run(e.canal, agora(), e.quem ?? null, e.import_id ?? null, JSON.stringify(e.linhas || []), e.situacao || 'WAITING').lastInsertRowid);
 const estoqueEnvioAtualizar = (id, r) => db.prepare('UPDATE estoque_envios SET situacao=?, ok=?, com_erro=?, erros=?, conferido_em=? WHERE id=?')
   .run(r.situacao ?? null, r.ok ?? null, r.com_erro ?? null, r.erros ?? null, agora(), id);
+const estoqueEnvioLinhas = (id, linhas) => db.prepare('UPDATE estoque_envios SET linhas=? WHERE id=?').run(JSON.stringify(linhas), id);
 const estoqueEnviosListar = (canal, n = 50) => {
   db.prepare("DELETE FROM estoque_envios WHERE em < datetime('now', '-180 days')").run();
   return db.prepare('SELECT * FROM estoque_envios WHERE canal=? ORDER BY id DESC LIMIT ?').all(canal, n).map((r) => ({ ...r, linhas: JSON.parse(r.linhas || '[]') }));
@@ -2180,6 +2182,8 @@ function estoqueHistoricoTrocar(lista) {
 }
 const estoqueSaldos = () => new Map(db.prepare('SELECT numero, SUM(qtd) s FROM estoque_mov WHERE historico=0 AND desfeito=0 GROUP BY numero').all().map((r) => [r.numero, r.s]));
 // Para a reposição e o custo médio: por produto, saídas (sem ajustes) desde `de` e entradas com valor.
+// A saída mais antiga desde uma data (quanto tempo de saída a média de reposição cobre).
+const estoquePrimeiraSaida = (de) => db.prepare("SELECT MIN(data) AS d FROM estoque_mov WHERE desfeito=0 AND qtd < 0 AND tipo <> 'ajuste' AND data >= ?").get(de)?.d || null;
 function estoqueResumoMov(de) {
   return db.prepare(`SELECT numero,
       SUM(CASE WHEN qtd < 0 AND tipo NOT IN ('ajuste', 'defeito') AND data >= ? THEN -qtd ELSE 0 END) AS saidas,
@@ -2323,11 +2327,11 @@ module.exports = {
   qualidadeGravar, qualidadeDe,
   leroyPedidosGravar, leroyPedidosPeriodo, leroyTransacoesGravar, leroyTransacoes, leroyMaisAntigaAberta, leroyCiclosGravar, leroyCiclos, leroyApagarTudo, leroyFreteGravar, leroyFretes, leroyPedidoExiste,
   magaluPedidosGravar, magaluFinanceiroGravar, magaluPedidosPeriodo, magaluFinanceiroDe, magaluApagarTudo,
-  magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
+  magaluAnunciosGravar, magaluAnunciosLimparAntes, magaluPrecoGravar, magaluEstoqueGravar, magaluSemPreco, magaluAnuncios, skuVinculos, skuVinculoGravar, skuTrocas, skuTrocaGravar,
   comandasDe, comandasDoDia, comandasCriar, comandasAtualizar, comandasListar, comandasImpressas, comandasRenumerar,
   comandasManuaisAbertas, comandasEtiqueta, comandaConcluir, comandaApagar, comandasImpressasEntre, comandasDoPedido,
   fatDiaGravar, fatDiaSubstituir, fatDiaPeriodo, metasListar, metaGravar, fatMesManualListar, fatMesManualGravar,
-  estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
-  estoqueSaldos, estoqueResumoMov, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
+  estoqueProdutos, estoqueEnvioGravar, estoqueEnvioAtualizar, estoqueEnvioLinhas, estoqueEnviosListar, estoqueSegurancas, estoqueSegurancaGravar, estoqueProdutoGravar, fornecedoresListar, fornecedorGravar, fornecedorRemover, estoqueMovGravar, estoqueHistoricoTrocar,
+  estoqueSaldos, estoqueResumoMov, estoquePrimeiraSaida, estoqueSomaPorRef, estoqueDefeitoGravar, estoqueDefeitoListar, estoqueDefeitoDesfazer, estoqueMovDefeitos, estoqueMovListar, estoqueMovObter, estoqueMovDesfeito, estoqueRelatorio,
   contagemListar, contagemGravar, contagemApagar, comprasListar, compraObter, comprasCriar, comprasDaPlanilhaApagar, compraAtualizar, compraPrecoGravar, compraPrecoRecebido, compraAntesGravar, compraRecebimentoDesfazer,
 };

@@ -62,8 +62,9 @@ function componentes(sku, { cru = false } = {}) {
   const s0 = String(sku || '').trim();
   const s = (!cru && composicoes.get(s0)) || s0;
   if (!s) return [];
-  const resto = s.includes('-') ? s.slice(s.indexOf('-') + 1) : s;
-  return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);
+  // antes do 1º hífen é prefixo (KIT-407), menos quando já é um produto (407-408 = 407 + 408)
+  const resto = s.includes('-') && !/^\d{3}-/.test(s) ? s.slice(s.indexOf('-') + 1) : s;
+  return resto.split(/[-_.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number);   // "_": 48 SKUs da Magalu (KIT_843_824_698)
 }
 
 // Custo do produto numa data: com histórico (db.js#catalogoGravar), o que valia na data da venda; sem data, o de hoje.
@@ -120,7 +121,7 @@ function skusDoAnuncio(it) {
   const doAttr = (attrs) => (attrs || []).find((a) => a.id === 'SELLER_SKU')?.value_name || null;
   // anúncio do ML sem SKU com produtos escolhidos no painel: o id faz o papel do SKU (componentes acha pela composição)
   // Atributo SELLER_SKU primeiro: é o que o pedido traz (seller_sku). Anúncio antigo guarda no seller_custom_field um
-  // código velho (medido 15/10: DQ-488.2 no campo, AMG-488.479 nos pedidos; o ".2" virava o produto 2 no custo).
+  // código velho (medido 15/10: DQ-488.2 no campo, KIT-488.479 nos pedidos; o ".2" virava o produto 2 no custo).
   const base = doAttr(it.attributes) || it.seller_custom_field || (it.id && composicoes.has(it.id) ? it.id : null);
   const vars = (it.variations || []).map((v) => ({ id: v.id, sku: doAttr(v.attributes) || v.seller_custom_field || null,
     nome: (v.attribute_combinations || []).map((a) => a.value_name).filter(Boolean).join(' / ') || null }));

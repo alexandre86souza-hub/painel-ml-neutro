@@ -87,6 +87,23 @@ function corpoAdesao(d) {
   return corpo;
 }
 
+// Mudar o preço de um anúncio que JÁ está numa promoção (PUT /seller-promotions/items/{item}, doc "Campañas del vendedor",
+// lida em 03/11/2026): com a promoção em andamento o ML só aceita preço MENOR ("New deal_price must be lower than current
+// deal_price"); agendada aceita os dois lados. PRICE_DISCOUNT não tem PUT: a rota sai e entra de novo. Função pura: testada.
+const EDITAVEIS = ['SELLER_CAMPAIGN', 'DEAL', 'PRICE_DISCOUNT'];
+function corpoEdicao(d) {
+  const tipo = exigeTipo(d.tipo);
+  if (!EDITAVEIS.includes(tipo)) throw erro(`${tipoNome(tipo)}: o Mercado Livre não deixa mudar o preço desta promoção.`);
+  const p = Math.round(Number(d.preco) * 100) / 100;
+  if (!Number.isFinite(p) || p <= 0) throw erro('Informe o preço promocional novo.');
+  if (Number.isFinite(Number(d.preco_original)) && p >= Number(d.preco_original)) throw erro('O preço promocional precisa ser menor que o preço original do anúncio.');
+  if (d.status === 'started' && Number.isFinite(Number(d.preco_atual)) && p >= Number(d.preco_atual)) {
+    throw erro('Com a promoção em andamento o Mercado Livre só aceita baixar o preço (aumentar o desconto).');
+  }
+  if (tipo === 'PRICE_DISCOUNT') return corpoAdesao({ ...d, tipo, preco: p });
+  return { promotion_id: exigePromo(d.promocao_id), promotion_type: tipo, deal_price: p };
+}
+
 // Query do DELETE: sair de uma promoção. PRICE_DISCOUNT não tem id de promoção.
 function querySaida(d) {
   const tipo = exigeTipo(d.tipo);
@@ -631,6 +648,28 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
       return { ok: true, item_id: id, enviado: corpo, resposta: r };
     } },
 
+    // Mudar o desconto de uma promoção em que o anúncio já está (ex.: passar o concorrente do catálogo). Muda o preço de venda.
+    { m: 'POST', re: /^\/api\/promocoes\/anuncio\/([A-Z]{3}\d+)\/editar$/, fn: async ([id], body) => {
+      contaOuErro();
+      exigeItemId(id);
+      const d = body || {};
+      const corpo = corpoEdicao(d);
+      let r;
+      if (corpo.promotion_type === 'PRICE_DISCOUNT') {
+        // sem PUT: sai e entra com o preço novo até o mesmo fim; se a entrada falhar, tenta voltar o preço antigo
+        await ml(`/seller-promotions/items/${id}?${querySaida({ tipo: 'PRICE_DISCOUNT' })}`, { method: 'DELETE' });
+        try { r = await ml(`/seller-promotions/items/${id}?${V2}`, { method: 'POST', body: JSON.stringify(corpo) }); }
+        catch (e) {
+          let voltou = false;
+          try { await ml(`/seller-promotions/items/${id}?${V2}`, { method: 'POST', body: JSON.stringify({ ...corpo, deal_price: Math.round(Number(d.preco_atual) * 100) / 100 }) }); voltou = true; } catch { /* fica sem o desconto */ }
+          cachePorAnuncio = null;
+          throw erro(`${e.message} — ${voltou ? 'o desconto antigo foi recolocado' : 'o anúncio ficou SEM o desconto próprio: confira no Mercado Livre'}.`, e.status || 400);
+        }
+      } else r = await ml(`/seller-promotions/items/${id}?${V2}`, { method: 'PUT', body: JSON.stringify(corpo) });
+      cachePorAnuncio = null;
+      return { ok: true, item_id: id, enviado: corpo, resposta: r };
+    } },
+
     // Sair de uma promoção com um anúncio. O preço volta ao original.
     { m: 'POST', re: /^\/api\/promocoes\/anuncio\/([A-Z]{3}\d+)\/sair$/, fn: async ([id], body) => {
       contaOuErro();
@@ -641,7 +680,10 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
     } },
   ];
 
-  return { rotas, rotasParam };
+  // Anúncios que estão numa promoção em andamento (started), para o Placar de promoções e Ads (gestao.js).
+  const emPromocao = async (conta) => [...(await promocoesPorAnuncio(conta)).values()]
+    .filter((a) => a.promocoes.some((p) => p.status === 'started')).map((a) => a.id);
+  return { rotas, rotasParam, emPromocao };
 }
 
-module.exports = { criar, lucroNoPreco, precoDaPromo, precoRelampago, descontoDaPromo, promoNoFiltro, corpoCampanha, corpoAdesao, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };
+module.exports = { criar, lucroNoPreco, precoDaPromo, precoRelampago, descontoDaPromo, promoNoFiltro, corpoCampanha, corpoAdesao, corpoEdicao, EDITAVEIS, querySaida, montarResultado, linhasDoDesconto, TIPOS, tipoNome };

@@ -18,10 +18,15 @@ const claim = (acoes, vendedor = conta) => ({ players: [{ role: 'complainant', u
 const msg = (sender_role, d) => ({ sender_role, message: 'x', message_date: d });
 assert.deepStrictEqual(M.destinosDe(claim(['send_message_to_complainant', 'refund'])), ['complainant']);
 assert.deepStrictEqual(M.destinosDe(claim(['send_message_to_mediator'])), ['mediator']);
+assert.strictEqual(M.textoDeHtml('<p dir="ltr"><span style="white-space: pre-wrap;">Olá, Equipe.</span></p><p dir="ltr"><br></p><p>Acesse <a href="https://x.com/dev"><span>Devoluções</span></a>&nbsp;e&nbsp;confira &amp; pronto.</p>'),
+  'Olá, Equipe.\n\nAcesse Devoluções (https://x.com/dev) e confira & pronto.', 'mensagem da mediação em HTML vira texto');
+assert.strictEqual(M.textoDeHtml('chegou quebrado <3'), 'chegou quebrado <3', 'texto comum passa igual');
 assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_complainant']), [msg('complainant', '2026-10-05')], conta), true, 'comprador falou por último');
 assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_complainant']),
   [msg('complainant', '2026-10-05'), msg('respondent', '2026-10-06')], conta), false, 'vendedor já respondeu');
-assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_complainant']), [msg('respondent', '2026-10-06'), msg('mediator', '2026-10-07')], conta), true, 'ML escreveu depois');
+assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_complainant']), [msg('respondent', '2026-10-06'), msg('mediator', '2026-10-07')], conta, { action_responsible: 'respondent' }), true, 'ML escreveu depois e a vez é do vendedor');
+assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_mediator']), [msg('complainant', '2026-10-05'), msg('mediator', '2026-10-07')], conta, { action_responsible: 'complainant' }), false, 'aviso do ML (devolução pedida) não pede resposta');
+assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_mediator']), [msg('mediator', '2026-10-07')], conta, null), false, 'aviso do ML sem detail');
 assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_mediator']), [], conta, { action_responsible: 'complainant' }), false, 'a vez é do comprador');
 assert.strictEqual(M.reclamacaoPendente(claim(['send_message_to_mediator']), [], conta, { action_responsible: 'respondent' }), true, 'a vez é do vendedor');
 assert.strictEqual(M.reclamacaoPendente(claim(['refund']), [msg('complainant', '2026-10-05')], conta), false, 'sem poder mandar mensagem');

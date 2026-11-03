@@ -53,4 +53,14 @@ assert.strictEqual(motivoDaPausa({ status: 'under_review', sub_status: [] }).pel
 assert.ok(E.TIPOS_EMAIL.has('pausa_ml') && !E.TIPOS_EMAIL.has('pausa') && !E.TIPOS_EMAIL.has('catalogo'),
   'pausa do ML vai por e-mail; pausa comum e catálogo ficam no sino (catálogo também no relatório)');
 
+// ofertas do catálogo para a tela: todas (a nossa marcada), mais barata primeiro, nome do vendedor e quem tem o botão
+{ const o = C.ofertasDe({ results: [
+    { item_id: 'MLB2', seller_id: 9, price: 35.24, shipping: { free_shipping: true }, listing_type_id: 'gold_special' },
+    { item_id: 'MLB1', seller_id: 7, price: 33.79, shipping: { logistic_type: 'fulfillment' }, official_store_id: 3 },
+    { item_id: 'MLB3', seller_id: 8, price: null } ] },
+  { meuItem: 'MLB2', ganhador: 'MLB1', nomes: new Map([['7', { nome: 'LOJAX', medalha: 'gold' }]]), nossas: new Map([['9', 'LOJAB']]) });
+  assert.deepStrictEqual(o.map((x) => x.item_id), ['MLB1', 'MLB2'], 'sem preço fica fora; mais barato primeiro');
+  assert.strictEqual(o[0].nome, 'LOJAX'); assert.strictEqual(o[0].ganhador, true); assert.strictEqual(o[0].full, true); assert.strictEqual(o[0].loja_oficial, true);
+  assert.strictEqual(o[1].eu, true); assert.strictEqual(o[1].nossa, 'LOJAB'); assert.strictEqual(o[1].frete_gratis, true); }
+
 console.log('Catálogo (disputa) e motivo da pausa: ok');

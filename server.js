@@ -313,6 +313,8 @@ function mensagemDoML(json, fallback) {
 }
 
 async function ml(pathname, opts = {}, contaId = null) {
+  const { aoResponder, ...init } = opts;   // aoResponder(headers): quem precisa de um cabeçalho da resposta (x-version do estoque)
+  opts = init;
   let conta = contaId ? D.contaObter(contaId) : D.contaAtiva();
   if (!conta) throw Object.assign(new Error(SEM_CONTA), { status: 401 });
   if (Date.now() > conta.expires_at) conta = await renovar(conta);
@@ -344,6 +346,7 @@ async function ml(pathname, opts = {}, contaId = null) {
   let json = null;
   try { json = body ? JSON.parse(body) : null; } catch { if (res.ok) throw new Error('O Mercado Livre respondeu fora do formato esperado.'); }
   if (!res.ok) throw Object.assign(new Error(mensagemDoML(json, res.statusText)), { status: res.status, body: json });
+  if (aoResponder) aoResponder(res.headers);
   return json;
 }
 
@@ -1159,9 +1162,11 @@ const routes = {
     const soConc = url.searchParams.get('concorrentes') ? new Set(D.concItensMarcados(conta.ml_user_id)) : null;
     // Filtros rápidos (iguais aos da tela da Shopee): venderam no período, em promoção (preço < original), sem custo,
     // margem abaixo de X% (margem do que vendeu no período, a mesma do cartão). Também passam pela lista local.
-    const filtro = ['venderam', 'promocao', 'semcusto', 'margem'].includes(url.searchParams.get('filtro')) ? url.searchParams.get('filtro') : null;
+    const filtro = ['venderam', 'promocao', 'semcusto', 'margem', 'catalogo'].includes(url.searchParams.get('filtro')) ? url.searchParams.get('filtro') : null;
     let soFiltro = null;
-    if (filtro === 'promocao') {
+    if (filtro === 'catalogo') {   // perdendo no catálogo (a leitura de 30 em 30 min do catalogo.js; contra a outra conta da empresa fica fora)
+      soFiltro = new Set((catalogoMod.resumo(conta.ml_user_id)?.lista_perdendo || []).map((x) => x.id));
+    } else if (filtro === 'promocao') {
       soFiltro = new Set((await custosMod.anuncios(conta)).filter((it) => it.original_price && it.price < it.original_price).map((it) => it.id));
     } else if (filtro) {
       const [todos] = await Promise.all([idsDaConta(conta, statusOk, q), sincronizarVendas(conta, dias)]);
@@ -2160,6 +2165,7 @@ const rotasParam = [
 let custosMod = null;   // composição do kit e filtro por produto, usados em GET /api/items
 let devolucoesMod = null;   // devoluções do ML: a baixa do estoque devolve o que chegou sem defeito
 let painelMod = null, precosMod = null;   // avisos em segundo plano; lucro no preço para ganhar o catálogo
+let promocoesMod = null;   // anúncios em promoção (Placar de promoções e Ads)
 for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), require('./custos.js'),
   require('./precos.js'), require('./painel.js')]) {
   const m = modulo.criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janela,
@@ -2171,6 +2177,7 @@ for (const modulo of [require('./promocoes.js'), require('./devolucoes.js'), req
   if (m.atualizarDevolucoes) devolucoesMod = m;
   if (m.gerarAvisos) painelMod = m;
   if (m.lucroNosPrecos) precosMod = m;
+  if (m.emPromocao) promocoesMod = m;
 }
 // Disputa do catálogo do ML ("volte a ganhar da concorrência"; catalogo.js): aviso no sino e resumo no e-mail. Só leitura.
 const catalogoMod = require('./catalogo.js').criar({ ml, D, emLotes, idsDaConta, contaOuErro, lucroNosPrecos: (...a) => precosMod.lucroNosPrecos(...a) });
@@ -2333,7 +2340,7 @@ const defeitoCanaisMod = require('./defeito-canais.js').criar({ D, aposGravar: (
   quem: () => CTX.atual()?.usuario?.login || null });
 defeitoCanaisMod.envolver(routes);
 Object.assign(routes, defeitoCanaisMod.rotas);
-// Metas e faturamento por CNPJ + Simples Nacional (metas.js; só o administrador: rotas fora de qualquer módulo de usuarios.js)
+// Metas e faturamento por CNPJ + Simples Nacional (metas.js; módulo metas de usuarios.js)
 const metasMod = require('./metas.js').criar({ D, routes, CTX });
 Object.assign(routes, metasMod.rotas);
 // E-mail: alertas de 5 em 5 min e o relatório do dia anterior às 7h30 (email.js; rotas só do administrador)
@@ -2420,7 +2427,9 @@ async function montarEstoqueAnuncios() {
         estoque: i.estoque ?? null, status: (i.status || []).join(', '), full: i.canal === 'FBA', link: i.link });
     }
   });
-  const r = require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe());
+  const E = require('./estoque.js');
+  const r = E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe());
+  r.linhas = E.comZerados(r.linhas, estoqueZerados());
   return { ...r, erros, inicio: D.configLer('estoque_inicio') || null, lido_em: new Date().toISOString() };
 }
 // Etapa 2, Leroy (a loja que o vendedor controla à mão; as outras ficam com o UpSeller por enquanto): manda às ofertas
@@ -2433,7 +2442,8 @@ async function linhasLeroy() {
     // inativa entra (estoque 0 deixa a oferta inativa; o envio de estoque a reativa)
     anuncios.push({ canal: 'leroy', loja: 'Leroy Merlin', id: o.sku, variacao: null, titulo: o.titulo, sku: C.skuNaData(tr, o.sku), estoque: o.estoque ?? null, status: o.ativa ? 'ativa' : 'inativa', full: false });
   }
-  return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
+  const E = require('./estoque.js');
+  return E.comZerados(E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas, estoqueZerados());
 }
 async function enviarEstoqueLeroy(skus, quem) {
   const porSku = new Map((await linhasLeroy()).map((l) => [l.id, l]));
@@ -2476,6 +2486,7 @@ async function leroyAuto() {
     const mudar = (await linhasLeroy()).filter((l) => precisaEnviar(l.estoque, l.deveria)).map((l) => l.id);
     if (mudar.length) await enviarEstoqueLeroy(mudar.slice(0, 1000), 'automático');
     D.configGravar('leroy_estoque_auto_ultimo', new Date().toISOString());
+    D.configGravar('leroy_estoque_auto_erro', '');   // rodada certa apaga o erro da anterior (como no ML e na Shopee)
   } catch (e) { D.configGravar('leroy_estoque_auto_erro', `${new Date().toISOString()} ${e.message}`.slice(0, 300)); }
   finally { leroyAutoRodando = false; }
 }
@@ -2586,16 +2597,30 @@ routes['GET /api/estoque/anuncios/shopee/diagnostico'] = async (url) => {
 // em armazém da Shopee. product/update_stock por anúncio (stock_list: model_id 0 sem variação, seller_stock [{ stock }]), relido
 // no get_item_base_info/get_model_list para conferir; a cópia shopee_anuncios é relida inteira antes de cada rodada automática.
 const lojasEstoqueShopee = () => String(D.configLer('shopee_estoque_lojas') || '717079477').split(',').map(Number).filter(Boolean);
+// Anúncios "sempre zero" (estoque.js#comZerados), em estado estoque_zerados (JSON). Só o administrador muda.
+const estoqueZerados = () => { try { return new Set(JSON.parse(D.configLer('estoque_zerados') || '[]')); } catch { return new Set(); } };
+routes['PUT /api/estoque/anuncios/zerados'] = async (_u, b) => {
+  soAdministrador();
+  const chaves = (Array.isArray(b?.chaves) ? b.chaves : []).map(String).filter((s) => /^(shopee:\d+:\d+(:\d+)?|(amazon|magalu|leroy):\S{1,80})$/.test(s));
+  if (!chaves.length || chaves.length > 2000) throw Object.assign(new Error('Informe de 1 a 2.000 anúncios (shopee:loja:item[:variação]).'), { status: 400 });
+  if (typeof b?.zerado !== 'boolean') throw Object.assign(new Error('Informe zerado: true ou false.'), { status: 400 });
+  const z = estoqueZerados();
+  for (const k of chaves) b.zerado ? z.add(k) : z.delete(k);
+  D.configGravar('estoque_zerados', JSON.stringify([...z]));
+  estAnuncios = null;
+  return { zerados: z.size };
+};
 async function linhasShopee(loja, fresco = false) {
   if (fresco) await shopeeAnunciosMod.ler(loja);
   const l = D.shopeeLojaObter(loja);
   const anuncios = [];
   for (const a of D.shopeeAnuncios(loja)) {
     if (a.status && !/NORMAL|UNLIST/i.test(a.status)) continue;
-    anuncios.push({ canal: 'shopee', loja: `Shopee · ${l?.nome || loja}`, id: String(a.item_id), variacao: a.variacao || null, var_id: a.model_id || null,
+    anuncios.push({ canal: 'shopee', loja: `Shopee · ${l?.nome || loja}`, shop: loja, id: String(a.item_id), variacao: a.variacao || null, var_id: a.model_id || null,
       titulo: a.nome, sku: a.sku, estoque: a.estoque ?? null, status: a.status, full: false });
   }
-  return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
+  const E = require('./estoque.js');
+  return E.comZerados(E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas, estoqueZerados());
 }
 async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
   const linhas = linhasProntas || await linhasShopee(loja);
@@ -2616,17 +2641,28 @@ async function enviarEstoqueShopee(loja, chaves, quem, linhasProntas = null) {
     await esperar(120);
   }
   // 2) espera e confere relendo em lote (base_info 50 por chamada; variações pelo get_model_list)
-  await esperar(6000);
   const lido = new Map();   // "item:model" -> estoque do vendedor
-  const ids = [...porItem.keys()].map(Number);
-  const semModelo = ids.filter((id) => !porItem.get(String(id)).some((e) => e.var_id));
-  for (let i = 0; i < semModelo.length; i += 50) {
-    const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: semModelo.slice(i, i + 50) }).catch(() => null);
-    for (const it of b?.response?.item_list || []) lido.set(`${it.item_id}:0`, it.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
-  }
-  for (const id of ids.filter((x) => !semModelo.includes(x))) {
-    const m = await dl('/api/v2/product/get_model_list', { item_id: id }).catch(() => null);
-    for (const x of m?.response?.model || []) lido.set(`${id}:${x.model_id}`, x.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+  const ler = async (ids) => {
+    const semModelo = ids.filter((id) => !porItem.get(String(id)).some((e) => e.var_id));
+    for (let i = 0; i < semModelo.length; i += 50) {
+      const b = await dl('/api/v2/product/get_item_base_info', { item_id_list: semModelo.slice(i, i + 50) }).catch(() => null);
+      for (const it of b?.response?.item_list || []) lido.set(`${it.item_id}:0`, it.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+    }
+    for (const id of ids.filter((x) => !semModelo.includes(x))) {
+      const m = await dl('/api/v2/product/get_model_list', { item_id: id }).catch(() => null);
+      for (const x of m?.response?.model || []) lido.set(`${id}:${x.model_id}`, x.stock_info_v2?.seller_stock?.[0]?.stock ?? null);
+    }
+  };
+  // a leitura às vezes ainda mostra o número antigo depois de 6 s (29/10/2026: leu 6 em vez de 5, certo na rodada seguinte):
+  // quem não bateu é relido mais 2 vezes (20 s e 40 s depois) antes de virar erro
+  const naoBateu = () => [...porItem].filter(([itemId, es]) => es.some((e) => !e.erro && lido.get(`${itemId}:${Number(e.var_id) || 0}`) !== e.quantidade)).map(([id]) => Number(id));
+  await esperar(6000);
+  await ler([...porItem.keys()].map(Number));
+  for (const pausa of [20000, 40000]) {
+    const reler = naoBateu();
+    if (!reler.length) break;
+    await esperar(pausa);
+    await ler(reler);
   }
   const res = [];
   for (const [itemId, es] of porItem) for (const e of es) {
@@ -2689,6 +2725,18 @@ routes['PUT /api/estoque/anuncios/shopee/auto'] = async (_u, b) => {
   if (b.ligado) shopeeAuto(loja).catch(() => null);
   return { automatico: b.ligado };
 };
+// Tirar uma loja do UpSeller: libera (ou volta a bloquear) o envio de estoque pelo painel. Só o administrador; o vendedor desliga
+// a sincronização do UpSeller na loja antes. Bloquear também desliga o automático dela.
+routes['PUT /api/estoque/anuncios/shopee/liberar'] = async (_u, b) => {
+  soAdministrador();
+  const loja = Number(b?.loja);
+  if (!D.shopeeLojaObter(loja)) throw Object.assign(new Error('Loja da Shopee não conectada.'), { status: 404 });
+  if (typeof b?.liberada !== 'boolean') throw Object.assign(new Error('Informe liberada: true ou false.'), { status: 400 });
+  const lojas = new Set(lojasEstoqueShopee());
+  if (b.liberada) lojas.add(loja); else { lojas.delete(loja); D.configGravar(`shopee_estoque_auto:${loja}`, '0'); }
+  D.configGravar('shopee_estoque_lojas', [...lojas].join(','));
+  return { lojas: [...lojas] };
+};
 // Envio de estoque ao ML (por conta liberada em ml_estoque_contas; começa só pela Primor — as outras ficam com o UpSeller).
 // Medido na Primor em 26/10/2026: um depósito só (selling_address), sem Full, 4 anúncios com variações e 131 pares
 // tradicional + catálogo que dividem o mesmo user_product (mudar um muda o outro). Por isso o envio é UM número por
@@ -2700,11 +2748,24 @@ async function linhasMl(id) {
   const C = require('./custos.js');
   const c = D.contaObter(id);
   return CTX.comConta(id, async () => {
-    const its = (await custosMod.anuncios(c)).filter((it) => ['active', 'paused'].includes(it.status) && it.shipping?.logistic_type !== 'fulfillment');
+    const todos = (await custosMod.anuncios(c)).filter((it) => ['active', 'paused'].includes(it.status));
+    const its = todos.filter((it) => it.shipping?.logistic_type !== 'fulfillment');
+    const multi = D.configLer(`ml_estoque_multi:${id}`) === '1';
     const ups = new Map();
-    for (let i = 0; i < its.length; i += 20) {
-      const r = await ml(`/items?ids=${its.slice(i, i + 20).map((it) => it.id).join(',')}&attributes=id,user_product_id,variations,catalog_listing`).catch(() => []);
+    const lerUps = multi ? todos : its;   // multi-origem: os do Full também, para achar o user_product dividido com o Full
+    for (let i = 0; i < lerUps.length; i += 20) {
+      const r = await ml(`/items?ids=${lerUps.slice(i, i + 20).map((it) => it.id).join(',')}&attributes=id,user_product_id,variations,catalog_listing`).catch(() => []);
       for (const x of r || []) { const b = x.body || {}; if (b.id) ups.set(b.id, { up: b.user_product_id || null, catalogo: !!b.catalog_listing, vars: new Map((b.variations || []).map((v) => [v.id, v.user_product_id || null])) }); }
+    }
+    // multi-origem: o available_quantity do anúncio soma o depósito e o Full do mesmo user_product; onde o user_product também
+    // está num anúncio do Full, o "estoque" do anúncio é o do depósito (lido no /user-products/{up}/stock)
+    const doDeposito = new Map();
+    if (multi) {
+      const upsFull = new Set(todos.filter((it) => it.shipping?.logistic_type === 'fulfillment').flatMap((it) => { const u = ups.get(it.id); return u ? [u.up, ...u.vars.values()] : []; }).filter(Boolean));
+      for (const up of upsFull) {
+        const d = await estoqueDoDeposito(up, id).catch(() => null);
+        if (d?.deps.length === 1) doDeposito.set(up, d.deps[0].quantity ?? null);
+      }
     }
     const anuncios = [], loja = `Mercado Livre · ${c.nickname}`;
     for (const it of its) {
@@ -2712,8 +2773,9 @@ async function linhasMl(id) {
       const u = ups.get(it.id) || {};
       const comum = { canal: 'ml', loja, id: it.id, titulo: it.title, status: it.status, full: false, link: it.permalink || null, catalogo: !!u.catalogo };
       if (variacoes.length) variacoes.forEach((v, i) => { const vv = it.variations?.[i];
-        anuncios.push({ ...comum, variacao: v.nome, var_id: vv?.id ?? null, up: (vv && u.vars?.get(vv.id)) || null, sku: v.sku || base, estoque: vv?.available_quantity ?? null }); });
-      else anuncios.push({ ...comum, variacao: null, var_id: null, up: u.up || null, sku: base, estoque: it.available_quantity ?? null });
+        const up = (vv && u.vars?.get(vv.id)) || null;
+        anuncios.push({ ...comum, variacao: v.nome, var_id: vv?.id ?? null, up, sku: v.sku || base, estoque: doDeposito.has(up) ? doDeposito.get(up) : vv?.available_quantity ?? null }); });
+      else anuncios.push({ ...comum, variacao: null, var_id: null, up: u.up || null, sku: base, estoque: doDeposito.has(u.up) ? doDeposito.get(u.up) : it.available_quantity ?? null });
     }
     return require('./estoque.js').estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas;
   });
@@ -2725,13 +2787,55 @@ async function putComEspera(id, corpo, contaId) {
     catch (e) { if (e.status === 429 && t < 4) { await esperar(3000 * (t + 1)); continue; } throw e; }
   }
 }
+// Conta multi-origem (seller_warehouse, medido numa conta real em 29/10/2026: "available_quantity is not updatable for multi warehouse
+// seller" em todo PUT do item): o estoque muda no depósito do user_product — GET /user-products/{up}/stock (cabeçalho x-version)
+// e PUT /user-products/{up}/stock/type/seller_warehouse com o mesmo x-version. Só com UM depósito do vendedor no produto; o do
+// Full (meli_facility) não é tocado. Versão velha (409, outra mudança no meio) = relê e tenta de novo uma vez.
+async function estoqueDoDeposito(up, contaId) {
+  let versao = null;
+  const s = await ml(`/user-products/${up}/stock`, { aoResponder: (h) => { versao = h.get('x-version'); } }, contaId);
+  const deps = (s?.locations || []).filter((l) => l.type === 'seller_warehouse');
+  return { versao: versao ?? s?.version ?? null, deps };
+}
+async function mudarEstoqueDeposito(up, quantidade, contaId) {
+  for (let t = 0; ; t++) {
+    const { versao, deps } = await estoqueDoDeposito(up, contaId);
+    if (deps.length !== 1) throw new Error(deps.length ? `o produto tem ${deps.length} depósitos do vendedor` : 'o produto não tem depósito do vendedor');
+    if (versao == null) throw new Error('o ML não mandou a versão do estoque (x-version)');
+    if (!deps[0].network_node_id) throw new Error(`o depósito não tem network_node_id (campos: ${Object.keys(deps[0]).join(', ')})`);
+    try {
+      await ml(`/user-products/${up}/stock/type/seller_warehouse`, { method: 'PUT', headers: { 'x-version': String(versao) },
+        body: JSON.stringify({ locations: [{ store_id: deps[0].store_id, network_node_id: deps[0].network_node_id, quantity: quantidade }] }) }, contaId);
+      return;
+    } catch (e) {
+      if (e.status === 429 && t < 4) { await esperar(3000 * (t + 1)); continue; }
+      if (e.status === 409 && t < 1) continue;
+      throw e;
+    }
+  }
+}
+const multiDeposito = (e) => /multi ?warehouse/i.test(e?.message || '');
 async function enviarEstoqueMl(id, chaves, quem, linhasProntas = null) {
   const linhas = linhasProntas || await linhasMl(id);
   const { enviar, fora } = planoEnvioMl(linhas, chaves);
   const porItem = new Map();
   for (const e of enviar) { if (!porItem.has(e.id)) porItem.set(e.id, []); porItem.get(e.id).push(e); }
   const res = [];
+  // conta multi-origem: já sabida (ml_estoque_multi:{id}) ou descoberta no 1º PUT recusado
+  let multi = D.configLer(`ml_estoque_multi:${id}`) === '1';
+  const peloDeposito = async (es) => {
+    for (const e of es) {
+      try {
+        if (!e.up) throw new Error('anúncio sem user_product');
+        await mudarEstoqueDeposito(e.up, e.quantidade, id);
+        const agora = (await estoqueDoDeposito(e.up, id)).deps[0]?.quantity ?? null;
+        res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora, ok: agora === e.quantidade, junto: e.junto });
+      } catch (err) { res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message }); }
+      await esperar(250);
+    }
+  };
   for (const [itemId, es] of porItem) {
+    if (multi) { await peloDeposito(es); continue; }
     try {
       if (es.some((e) => e.var_id)) {
         const it = await ml(`/items/${itemId}?attributes=id,variations`, {}, id);
@@ -2744,7 +2848,12 @@ async function enviarEstoqueMl(id, chaves, quem, linhasProntas = null) {
         const agora = e.var_id ? v?.variations?.find((x) => x.id === e.var_id)?.available_quantity : v?.available_quantity;
         res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, lido: agora ?? null, ok: agora === e.quantidade, junto: e.junto });
       }
-    } catch (err) { for (const e of es) res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message }); }
+    } catch (err) {
+      if (multiDeposito(err)) {   // nada mudou no ML: marca a conta e manda este anúncio pelo depósito
+        multi = true; D.configGravar(`ml_estoque_multi:${id}`, '1');
+        await peloDeposito(es);
+      } else for (const e of es) res.push({ sku: chaveMl(e), antes: e.estoque, depois: e.quantidade, ok: false, erro: err.message });
+    }
     await esperar(250);
   }
   const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => !r.ok);
@@ -2796,12 +2905,245 @@ async function mlAuto(id) {
   finally { mlAutoRodando.delete(id); }
 }
 if (!process.env.PAINEL_TESTE) setInterval(() => { for (const id of contasEstoqueMl()) mlAuto(id).catch(() => null); }, 10 * 60e3).unref?.();
+// Tirar uma conta do ML do UpSeller (como a Shopee): só o administrador; bloquear também desliga o automático dela.
+routes['PUT /api/estoque/anuncios/ml/liberar'] = async (_u, b) => {
+  soAdministrador();
+  const id = Number(b?.conta);
+  if (!D.contaObter(id)) throw Object.assign(new Error('Conta do ML não conectada.'), { status: 404 });
+  if (typeof b?.liberada !== 'boolean') throw Object.assign(new Error('Informe liberada: true ou false.'), { status: 400 });
+  const contas = new Set(contasEstoqueMl());
+  if (b.liberada) contas.add(id); else { contas.delete(id); D.configGravar(`ml_estoque_auto:${id}`, '0'); }
+  D.configGravar('ml_estoque_contas', [...contas].join(','));
+  return { contas: [...contas] };
+};
 routes['PUT /api/estoque/anuncios/ml/auto'] = async (_u, b) => {
   const id = Number(b?.conta);
   if (!contasEstoqueMl().includes(id)) throw Object.assign(new Error('Envio de estoque não liberado para esta conta do ML.'), { status: 400 });
   if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
   D.configGravar(`ml_estoque_auto:${id}`, b.ligado ? '1' : '0');
   if (b.ligado) mlAuto(id).catch(() => null);
+  return { automatico: b.ligado };
+};
+// Envio de estoque à Amazon (envio próprio/DBA; FBA fica fora), loja liberada em amazon_estoque_liberada = '1' (tirar do
+// UpSeller). Um PATCH de fulfillment_availability por SKU (amazon.js#mudarEstoque); a Amazon aceita e aplica em segundo
+// plano, então o envio relê os SKUs 10 s depois e quem ainda não mostra o número novo é relido mais 2 vezes (20 s, 40 s).
+const amazonEstoqueLiberada = () => D.configLer('amazon_estoque_liberada') === '1';
+async function linhasAmazon() {
+  const itens = (await amazonMod.anuncios(true)).itens || [];
+  const anuncios = itens.map((i) => ({ canal: 'amazon', loja: 'Amazon', id: i.sku, variacao: null, titulo: i.titulo, sku: i.sku_painel || i.sku,
+    estoque: i.estoque ?? null, status: (i.status || []).join(', '), full: i.canal === 'FBA', link: i.link }));
+  const E = require('./estoque.js');
+  return E.comZerados(E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas, estoqueZerados());
+}
+// Amazon e Magalu aceitam o envio e podem mostrar o número só depois (medido 30/10/2026: Amazon ~4 min, Magalu ~13 min):
+// quem não bateu na conferência rápida fica pendente e é relido de 5 em 5 min; só vira erro e aviso depois de `minutos`.
+const ENVIOS_ATRASADOS = {
+  amazon: { nome: 'Amazon', minutos: 15, pausa: 220, ler: (sku) => amazonMod.estoqueAgora(sku) },
+  magalu: { nome: 'Magalu', minutos: 30, pausa: 350, ler: (sku) => magaluMod.estoqueAgora(sku) },
+};
+const textoRuins = (ruins) => ruins.map((r) => `${r.sku}: ${r.erro || `leu ${r.lido} em vez de ${r.depois}`}`);
+const situacaoEnvio = ({ ok, com_erro, pendentes }) => (pendentes ? 'RUNNING' : com_erro && !ok ? 'FAILED' : 'COMPLETE');
+function registrarEnvioAtrasado(canal, quem, enviar, fora) {
+  const res = enviar.map((e) => {
+    const bateu = !e.erro && e.lido === e.depois;
+    return { sku: e.sku, antes: e.antes, depois: e.depois, lido: e.lido ?? null, ok: bateu, ...(e.erro ? { erro: e.erro } : bateu ? {} : { pendente: true }) };
+  });
+  const ok = res.filter((r) => r.ok).length, ruins = res.filter((r) => r.erro), pendentes = res.filter((r) => r.pendente).length;
+  const envio = res.length ? D.estoqueEnvioGravar({ canal, quem, import_id: null, linhas: res }) : null;
+  if (envio && ruins.length) avisoEstoque(`estoque_${canal}:${envio}`, `Envio de estoque à ${ENVIOS_ATRASADOS[canal].nome}: ${ruins.length} anúncio(s) não ficaram`, textoRuins(ruins.slice(0, 4)).join(' | '));
+  if (envio) D.estoqueEnvioAtualizar(envio, { situacao: situacaoEnvio({ ok, com_erro: ruins.length, pendentes }), ok, com_erro: ruins.length,
+    erros: ruins.length ? ['erros', ...textoRuins(ruins.slice(0, 20))].join('\n') : null });
+  estAnuncios = null;
+  return { enviadas: res, ok, com_erro: ruins.length, pendentes, fora };
+}
+const skusPendentes = (canal) => new Set(D.estoqueEnviosListar(canal, 30).filter((e) => e.situacao === 'RUNNING').flatMap((e) => e.linhas.filter((l) => l.pendente).map((l) => l.sku)));
+let conferindoEnvios = false;
+async function conferirEnviosAtrasados() {
+  if (conferindoEnvios) return;
+  conferindoEnvios = true;
+  try {
+    const { fecharPendentes } = require('./estoque.js');
+    for (const [canal, c] of Object.entries(ENVIOS_ATRASADOS)) {
+      const envios = D.estoqueEnviosListar(canal, 30);
+      for (const e of envios.filter((x) => x.situacao === 'RUNNING')) {
+        // envio mais novo do mesmo SKU substitui este (manual, por cima do pendente)
+        const reenviados = new Set(envios.filter((x) => x.id > e.id).flatMap((x) => x.linhas.map((l) => l.sku)));
+        const lidos = new Map();
+        for (const l of e.linhas.filter((x) => x.pendente && !reenviados.has(x.sku))) {
+          try { lidos.set(l.sku, await c.ler(l.sku)); } catch { /* lê de novo na próxima volta */ }
+          await esperar(c.pausa);
+        }
+        const r = fecharPendentes(e.linhas, lidos, reenviados, Date.now() - Date.parse(e.em) > c.minutos * 60e3);
+        D.estoqueEnvioLinhas(e.id, r.linhas);
+        const ruins = r.linhas.filter((l) => !l.ok && !l.pendente && !l.substituido);
+        D.estoqueEnvioAtualizar(e.id, { situacao: situacaoEnvio({ ok: r.ok, com_erro: r.com_erro, pendentes: r.pendentes }), ok: r.ok, com_erro: r.com_erro,
+          erros: ruins.length ? ['erros', ...textoRuins(ruins.slice(0, 20))].join('\n') : null });
+        if (r.vencidas.length) avisoEstoque(`estoque_${canal}:${e.id}:atraso`, `Envio de estoque à ${c.nome}: ${r.vencidas.length} anúncio(s) não ficaram em ${c.minutos} minutos`, textoRuins(r.vencidas.slice(0, 4)).join(' | '));
+      }
+    }
+  } finally { conferindoEnvios = false; }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { conferirEnviosAtrasados().catch(() => null); }, 5 * 60e3).unref?.();
+async function enviarEstoqueAmazon(skus, quem, linhasProntas = null) {
+  const linhas = linhasProntas || await linhasAmazon();
+  const porSku = new Map(linhas.map((l) => [l.id, l]));
+  const enviar = [], fora = [];
+  for (const s of skus) {
+    const l = porSku.get(s);
+    if (!l) fora.push({ chave: s, motivo: 'SKU não encontrado na Amazon' });
+    else if (l.full) fora.push({ chave: s, motivo: 'FBA' });
+    else if (l.deveria == null) fora.push({ chave: s, motivo: l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' });
+    else enviar.push({ sku: s, antes: l.estoque, depois: l.deveria });
+  }
+  for (const e of enviar) {
+    try { await amazonMod.mudarEstoque(e.sku, e.depois); }
+    catch (err) { e.erro = err.message; }
+    await esperar(220);   // patchListingsItem: 5 por segundo
+  }
+  const ler = async (lista) => { for (const e of lista) { e.lido = await amazonMod.estoqueAgora(e.sku).catch(() => e.lido ?? null); await esperar(220); } };
+  const naoBateu = () => enviar.filter((e) => !e.erro && e.lido !== e.depois);
+  if (enviar.some((e) => !e.erro)) {
+    await esperar(10000);
+    await ler(enviar.filter((e) => !e.erro));
+    for (const pausa of [20000, 40000]) { const r = naoBateu(); if (!r.length) break; await esperar(pausa); await ler(r); }
+  }
+  return registrarEnvioAtrasado('amazon', quem, enviar, fora);
+}
+routes['GET /api/estoque/anuncios/amazon/diagnostico'] = async (url) => { soAdministrador(); return amazonMod.estoqueDiagnostico(String(url.searchParams.get('sku') || '')); };
+routes['PUT /api/estoque/anuncios/amazon/liberar'] = async (_u, b) => {
+  soAdministrador();
+  if (!D.configLer('amazon_refresh_token')) throw Object.assign(new Error('Amazon não conectada.'), { status: 404 });
+  if (typeof b?.liberada !== 'boolean') throw Object.assign(new Error('Informe liberada: true ou false.'), { status: 400 });
+  D.configGravar('amazon_estoque_liberada', b.liberada ? '1' : '0');
+  if (!b.liberada) D.configGravar('amazon_estoque_auto', '0');
+  return { liberada: b.liberada };
+};
+routes['POST /api/estoque/anuncios/amazon'] = async (_u, b) => {
+  if (!amazonEstoqueLiberada()) throw Object.assign(new Error('Envio de estoque não liberado para a Amazon (ela segue com o UpSeller).'), { status: 400 });
+  const skus = [...new Set((Array.isArray(b?.chaves) ? b.chaves : []).map((s) => String(s ?? '').trim()).filter((s) => s && s.length <= 80))];
+  if (!skus.length || skus.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 anúncios.'), { status: 400 });
+  const r = await enviarEstoqueAmazon(skus, CTX.atual()?.usuario?.login || 'admin');
+  if (!r.enviadas.length) throw Object.assign(new Error('Nenhum anúncio enviado: ' + r.fora.map((f) => `${f.chave} (${f.motivo})`).join(', ')), { status: 400 });
+  return r;
+};
+let amazonAutoRodando = false;
+routes['GET /api/estoque/anuncios/amazon/envios'] = async () => ({ liberada: amazonEstoqueLiberada(), automatico: D.configLer('amazon_estoque_auto') === '1',
+  rodando: amazonAutoRodando, ultimo_automatico: D.configLer('amazon_estoque_auto_ultimo'), erro_automatico: D.configLer('amazon_estoque_auto_erro'),
+  envios: D.estoqueEnviosListar('amazon', 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) });
+// Automático (amazon_estoque_auto = '1'): a cada 10 min relê a Amazon inteira e manda só o que saiu da faixa (precisaEnviar).
+async function amazonAuto() {
+  if (amazonAutoRodando || D.configLer('amazon_estoque_auto') !== '1' || !D.configLer('estoque_inicio') || !amazonEstoqueLiberada()) return;
+  amazonAutoRodando = true;
+  try {
+    const { precisaEnviar } = require('./estoque.js');
+    const linhas = await linhasAmazon();
+    const pendentes = skusPendentes('amazon');
+    const mudar = linhas.filter((l) => !l.full && l.deveria != null && !pendentes.has(l.id) && precisaEnviar(l.estoque, l.deveria)).map((l) => l.id);
+    for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueAmazon(mudar.slice(i, i + 300), 'automático', linhas);
+    D.configGravar('amazon_estoque_auto_ultimo', new Date().toISOString());
+    D.configGravar('amazon_estoque_auto_erro', '');
+    D.configGravar('amazon_estoque_auto_falhas', '0');
+  } catch (e) {
+    D.configGravar('amazon_estoque_auto_erro', `${new Date().toISOString()} ${e.message}`.slice(0, 300));
+    const falhas = (Number(D.configLer('amazon_estoque_auto_falhas')) || 0) + 1;
+    D.configGravar('amazon_estoque_auto_falhas', String(falhas));
+    if (falhas === 2) avisoEstoque(`estoque_amazon_auto:${new Date().toISOString().slice(0, 13)}`, 'Envio automático de estoque à Amazon falhou', e.message);
+  } finally { amazonAutoRodando = false; }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { amazonAuto().catch(() => null); }, 10 * 60e3).unref?.();
+routes['PUT /api/estoque/anuncios/amazon/auto'] = async (_u, b) => {
+  if (!amazonEstoqueLiberada()) throw Object.assign(new Error('Envio de estoque não liberado para a Amazon.'), { status: 400 });
+  if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
+  D.configGravar('amazon_estoque_auto', b.ligado ? '1' : '0');
+  if (b.ligado) amazonAuto().catch(() => null);
+  return { automatico: b.ligado };
+};
+// Envio de estoque à Magalu, loja liberada em magalu_estoque_liberada = '1' (tirar do UpSeller). Um PATCH por SKU (magalu.js#mudarEstoque,
+// 202 assíncrono). A comparação vem da cópia local (magalu_anuncios: uma chamada por SKU, relida a cada 6 h), por isso a rodada relê
+// antes de mandar só os SKUs que parecem fora da faixa. Automático em magalu_estoque_auto = '1'.
+const magaluEstoqueLiberada = () => D.configLer('magalu_estoque_liberada') === '1';
+function linhasMagalu() {
+  const C = require('./custos.js'), E = require('./estoque.js');
+  const vinc = D.skuVinculos('magalu'), tr = D.skuTrocas('magalu');
+  const anuncios = D.magaluAnuncios().filter((a) => a.ativo || /PUBLISHED/i.test(a.status || '')).map((a) => ({ canal: 'magalu', loja: 'Magalu', id: a.sku, variacao: null, titulo: a.titulo,
+    sku: C.skuNaData(tr, vinc.get(a.sku) || a.sku), estoque: a.estoque ?? null, status: a.status, full: false, link: a.url || null }));
+  return E.comZerados(E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe()).linhas, estoqueZerados());
+}
+async function enviarEstoqueMagalu(skus, quem, linhasProntas = null) {
+  const porSku = new Map((linhasProntas || linhasMagalu()).map((l) => [l.id, l]));
+  const enviar = [], fora = [];
+  for (const s of skus) {
+    const l = porSku.get(s);
+    if (!l) fora.push({ chave: s, motivo: 'SKU não encontrado na Magalu' });
+    else if (l.deveria == null) fora.push({ chave: s, motivo: l.situacao === 'sem_produto' ? 'SKU sem produto no painel' : 'sem cálculo' });
+    else enviar.push({ sku: s, antes: l.estoque, depois: l.deveria });
+  }
+  for (const e of enviar) {
+    // 409 "already exists" = o número já é esse (medido 30/10/2026): não é erro, a releitura confere
+    try { await magaluMod.mudarEstoque(e.sku, e.depois); }
+    catch (err) { if (!(err.status === 409 && /already exists/i.test(err.message))) e.erro = err.message; }
+    await esperar(350);
+  }
+  const ler = async (lista) => { for (const e of lista) { e.lido = await magaluMod.estoqueAgora(e.sku).catch(() => e.lido ?? null); await esperar(350); } };
+  const naoBateu = () => enviar.filter((e) => !e.erro && e.lido !== e.depois);
+  if (enviar.some((e) => !e.erro)) {
+    await esperar(10000);
+    await ler(enviar.filter((e) => !e.erro));
+    for (const pausa of [20000, 40000]) { const r = naoBateu(); if (!r.length) break; await esperar(pausa); await ler(r); }
+  }
+  return registrarEnvioAtrasado('magalu', quem, enviar, fora);
+}
+routes['GET /api/estoque/anuncios/magalu/diagnostico'] = async (url) => { soAdministrador(); return magaluMod.estoqueDiagnostico(String(url.searchParams.get('sku') || '')); };
+routes['PUT /api/estoque/anuncios/magalu/liberar'] = async (_u, b) => {
+  soAdministrador();
+  if (!magaluMod.config()?.refresh) throw Object.assign(new Error('Magalu não conectada.'), { status: 404 });
+  if (typeof b?.liberada !== 'boolean') throw Object.assign(new Error('Informe liberada: true ou false.'), { status: 400 });
+  D.configGravar('magalu_estoque_liberada', b.liberada ? '1' : '0');
+  if (!b.liberada) D.configGravar('magalu_estoque_auto', '0');
+  return { liberada: b.liberada };
+};
+routes['POST /api/estoque/anuncios/magalu'] = async (_u, b) => {
+  if (!magaluEstoqueLiberada()) throw Object.assign(new Error('Envio de estoque não liberado para a Magalu (ela segue com o UpSeller).'), { status: 400 });
+  const skus = [...new Set((Array.isArray(b?.chaves) ? b.chaves : []).map((s) => String(s ?? '').trim()).filter((s) => s && s.length <= 80))];
+  if (!skus.length || skus.length > 500) throw Object.assign(new Error('Escolha de 1 a 500 anúncios.'), { status: 400 });
+  const r = await enviarEstoqueMagalu(skus, CTX.atual()?.usuario?.login || 'admin');
+  if (!r.enviadas.length) throw Object.assign(new Error('Nenhum anúncio enviado: ' + r.fora.map((f) => `${f.chave} (${f.motivo})`).join(', ')), { status: 400 });
+  return r;
+};
+let magaluAutoRodando = false;
+routes['GET /api/estoque/anuncios/magalu/envios'] = async () => ({ liberada: magaluEstoqueLiberada(), automatico: D.configLer('magalu_estoque_auto') === '1',
+  rodando: magaluAutoRodando, ultimo_automatico: D.configLer('magalu_estoque_auto_ultimo'), erro_automatico: D.configLer('magalu_estoque_auto_erro'),
+  envios: D.estoqueEnviosListar('magalu', 30).map((e) => ({ ...e, linhas: e.linhas.slice(0, 200), total: e.linhas.length })) });
+async function magaluAuto() {
+  if (magaluAutoRodando || D.configLer('magalu_estoque_auto') !== '1' || !D.configLer('estoque_inicio') || !magaluEstoqueLiberada()) return;
+  magaluAutoRodando = true;
+  try {
+    const { precisaEnviar } = require('./estoque.js');
+    // estoque null = SKU sem registro na Magalu: entra para criar
+    const pendentes = skusPendentes('magalu');
+    const foraDaFaixa = (ls) => ls.filter((l) => l.deveria != null && !pendentes.has(l.id) && (precisaEnviar(l.estoque, l.deveria) || (l.estoque == null && l.deveria > 0))).map((l) => l.id);
+    // a cópia pode estar até 6 h atrás: relê só quem parece fora da faixa (3 por vez) e decide de novo com o número da Magalu
+    const suspeitos = foraDaFaixa(linhasMagalu());
+    for (let i = 0; i < suspeitos.length; i += 3) await Promise.all(suspeitos.slice(i, i + 3).map((s) => magaluMod.estoqueAgora(s).catch(() => null)));
+    const linhas = linhasMagalu();
+    const mudar = foraDaFaixa(linhas);
+    for (let i = 0; i < mudar.length; i += 300) await enviarEstoqueMagalu(mudar.slice(i, i + 300), 'automático', linhas);
+    D.configGravar('magalu_estoque_auto_ultimo', new Date().toISOString());
+    D.configGravar('magalu_estoque_auto_erro', '');
+    D.configGravar('magalu_estoque_auto_falhas', '0');
+  } catch (e) {
+    D.configGravar('magalu_estoque_auto_erro', `${new Date().toISOString()} ${e.message}`.slice(0, 300));
+    const falhas = (Number(D.configLer('magalu_estoque_auto_falhas')) || 0) + 1;
+    D.configGravar('magalu_estoque_auto_falhas', String(falhas));
+    if (falhas === 2) avisoEstoque(`estoque_magalu_auto:${new Date().toISOString().slice(0, 13)}`, 'Envio automático de estoque à Magalu falhou', e.message);
+  } finally { magaluAutoRodando = false; }
+}
+if (!process.env.PAINEL_TESTE) setInterval(() => { magaluAuto().catch(() => null); }, 10 * 60e3).unref?.();
+routes['PUT /api/estoque/anuncios/magalu/auto'] = async (_u, b) => {
+  if (!magaluEstoqueLiberada()) throw Object.assign(new Error('Envio de estoque não liberado para a Magalu.'), { status: 400 });
+  if (typeof b?.ligado !== 'boolean') throw Object.assign(new Error('Informe ligado: true ou false.'), { status: 400 });
+  D.configGravar('magalu_estoque_auto', b.ligado ? '1' : '0');
+  if (b.ligado) magaluAuto().catch(() => null);
   return { automatico: b.ligado };
 };
 routes['GET /api/estoque/anuncios'] = async (url) => {
@@ -2818,6 +3160,12 @@ routes['GET /api/estoque/anuncios'] = async (url) => {
 // Tela Produtos, "Produtos escolhidos no painel": os anúncios de cada SKU com composição (ML, Shopee, Magalu, Leroy, Amazon),
 // com o link, para o vendedor abrir e conferir os produtos. Usa a mesma leitura de "Estoque nos anúncios" (cache de 10 min).
 // A chave da composição é o SKU do canal, o id do anúncio do ML sem SKU ou o código da Magalu.
+// Saldo do painel de cada produto (Anúncios -> Detalhes: o que falta para o anúncio pausado voltar). Só leitura.
+routes['GET /api/produtos/saldos'] = async (url) => {
+  const numeros = [...new Set(String(url.searchParams.get('numeros') || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 50);
+  const saldos = D.estoqueSaldos(), seg = estoqueMod.segurancaDe();
+  return { saldos: Object.fromEntries(numeros.map((n) => [n, { saldo: saldos.get(n) || 0, seguranca: Math.max(0, Number(seg(n)) || 0) }])) };
+};
 routes['GET /api/produtos/composicoes/anuncios'] = async () => {
   const r = await routes['GET /api/estoque/anuncios'](new URL('/api/estoque/anuncios', 'http://painel'));
   const chaves = new Set(D.skuVinculos('composicao').keys()), out = {};
@@ -2845,7 +3193,11 @@ routes['GET /api/contas/atencao'] = async () => {
     limite(Promise.resolve().then(() => { const v = estoqueMod.visao(); return v.inicio ? { ...v.resumo, inicio: v.inicio } : { inicio: null, ativos: v.resumo.ativos }; }), 5000),
     limite(comandasMod.resumoFila(), 9000)]);
   let envios = null; try { envios = resumoEnviosEstoque(); } catch { /* sem o cartão */ }
-  return { estoque, comandas, envios_estoque: envios };
+  // O que espera resposta (a mesma caixa da tela Mensagens, cache de 2 min): só os números, e só para quem abre Mensagens.
+  const quem = CTX.atual()?.usuario;
+  const mensagens = quem && U.permitido(quem, 'GET', '/api/mensagens')
+    ? await limite(routes['GET /api/mensagens'](new URL('http://x/api/mensagens')).then((m) => m && { ...m.por_tipo, erros: m.erros.length }), 12000) : undefined;
+  return { estoque, comandas, envios_estoque: envios, mensagens };
 };
 // Cartão "Envio de estoque" (Todas as contas, para acompanhar de fora do escritório): por loja com envio pelo painel, o
 // automático, a última rodada (parada há mais de 40 min = atrasado), os envios e os erros de hoje (dia de Brasília).
@@ -2987,6 +3339,73 @@ routes['PUT /api/marca'] = async (url, body) => {
   return marcaAtual(contaId);
 };
 
+// Alerta de margem (margem.js): os anúncios que venderam abaixo da margem mínima em TODAS as contas e lojas, com o motivo
+// provável. Lê as vendas de cada loja pelas mesmas rotas das telas (o ML por conta, em CTX.comConta), em segundo plano,
+// guardadas 10 min por período. Mínimo: ?min= (%) › margem_alerta_min (estado) › 10%. Só leitura; sem dado de cliente.
+const margemCache = new Map();
+async function vendasDeTodasAsLojas(dias) {
+  const grupos = [], erros = [], u = (p) => new URL(p, 'http://painel');
+  const passo = async (loja, conta, fn) => {
+    try { const r = await fn(); if (r && r.conectada !== false) grupos.push({ loja, conta, linhas: r.vendas || [] }); }
+    catch (e) { erros.push(`${loja}: ${e.message}`); }
+  };
+  for (const c of D.contasListar()) await passo(`Mercado Livre · ${c.nickname}`, `ml:${c.ml_user_id}`, () => CTX.comConta(c.ml_user_id, () => routes['GET /api/vendas'](u(`/api/vendas?dias=${dias}`))));
+  for (const s of D.shopeeLojasListar()) await passo(`Shopee · ${s.nome || s.shop_id}`, `shopee-${s.shop_id}`, () => routes['GET /api/shopee/pedidos'](u(`/api/shopee/pedidos?dias=${dias}&loja=${s.shop_id}`)));
+  if (D.configLer('amazon_refresh_token')) await passo('Amazon', 'amazon', () => routes['GET /api/amazon/pedidos'](u(`/api/amazon/pedidos?dias=${dias}`)));
+  if (leroyMod.config()?.api_key) await passo('Leroy Merlin', 'leroy', () => routes['GET /api/leroy/pedidos'](u(`/api/leroy/pedidos?dias=${dias}`)));
+  if (magaluMod.config()?.refresh) await passo('Magalu', 'magalu', () => routes['GET /api/magalu/pedidos'](u(`/api/magalu/pedidos?dias=${dias}`)));
+  return { grupos, erros };
+}
+// As vendas de todas as lojas num período, lidas em segundo plano e guardadas 10 min (Margem baixa, DRE e Placar usam).
+function vendasEmCache(dias, recarregar = false) {
+  let c = margemCache.get(dias);
+  if (!c || (!c.rodando && (Date.now() - c.em > 10 * 60e3 || recarregar))) {
+    const novo = { em: Date.now(), rodando: true, dados: c?.dados || null };
+    novo.promessa = vendasDeTodasAsLojas(dias).then((d) => { novo.dados = d; novo.lido_em = new Date().toISOString(); })
+      .catch((e) => { novo.erro = e.message; }).finally(() => { novo.rodando = false; });
+    margemCache.set(dias, novo); c = novo;
+  }
+  return c;
+}
+routes['GET /api/margem'] = async (url) => {
+  const dias = [7, 15, 30].includes(Number(url.searchParams.get('dias'))) ? Number(url.searchParams.get('dias')) : 7;
+  const pedido = Number(url.searchParams.get('min'));
+  const minimo = (Number.isFinite(pedido) && url.searchParams.get('min') !== null && url.searchParams.get('min') !== '' ? pedido : Number(D.configLer('margem_alerta_min') || 10)) / 100;
+  const c = vendasEmCache(dias, url.searchParams.get('recarregar') === '1');
+  if (c.rodando) await Promise.race([c.promessa, esperar(20000)]);
+  if (!c.dados) return { pronto: false, dias, minimo, erro: c.erro || null };
+  const M = require('./margem.js');
+  return { pronto: !c.rodando, dias, minimo, lido_em: c.lido_em || null, erros: c.dados.erros,
+    lojas: c.dados.grupos.map((g) => ({ loja: g.loja, conta: g.conta, vendas: g.linhas.filter((l) => l.valida).length,
+      sem_custo: g.linhas.filter((l) => l.valida && l.lucro == null).length })),
+    itens: M.margemBaixaDe(c.dados.grupos, { minimo }) };
+};
+routes['PUT /api/margem/minimo'] = async (_u, b) => {
+  soAdministrador();
+  const v = Number(b?.min);
+  if (!Number.isFinite(v) || v < -50 || v > 80) throw Object.assign(new Error('Informe a margem mínima em % (de −50 a 80).'), { status: 400 });
+  D.configGravar('margem_alerta_min', String(v));
+  return { min: v };
+};
+// Caixa a receber, DRE do mês e Placar de promoções e Ads de todas as lojas (gestao.js). Só leitura; fora do MCP.
+Object.assign(routes, require('./gestao.js').criar({ D, routes, CTX, vendasEmCache, amazon: amazonMod, shopeeVendas: shopeeVendasMod,
+  emPromocao: () => promocoesMod.emPromocao(contaOuErro()), leroyConectada: () => !!leroyMod.config()?.api_key,
+  magaluConectada: () => !!magaluMod.config()?.refresh }).rotas);
+// Dashboard das outras lojas (?conta=amazon|leroy|magalu|shopee-{loja}): a tela do ML com as vendas da loja — hoje, ontem,
+// média, 14 dias, mais vendidos, pedidos de hoje (canais.js#dashboardDe) e os 30 dias (faturamento e lucro). Uma leitura
+// só, das vendas de 30 dias da própria rota de pedidos da loja. Sem dado de cliente na resposta. Fora do MCP.
+routes['GET /api/dashboard/canal'] = async (url) => {
+  const conta = String(url.searchParams.get('conta') || ''), loja = (/^shopee-(\d+)$/.exec(conta) || [])[1];
+  const rota = conta === 'amazon' ? 'GET /api/amazon/pedidos' : conta === 'leroy' ? 'GET /api/leroy/pedidos'
+    : conta === 'magalu' ? 'GET /api/magalu/pedidos' : loja ? 'GET /api/shopee/pedidos' : null;
+  if (!rota || !routes[rota]) throw Object.assign(new Error('Loja desconhecida.'), { status: 400 });
+  const r = await routes[rota](new URL(`${rota.split(' ')[1]}?dias=30${loja ? '&loja=' + loja : ''}`, 'http://painel'));
+  if (r?.conectada === false) throw Object.assign(new Error('Loja não conectada.'), { status: 404 });
+  const s = r?.resumo || {};
+  return { conta, ...require('./canais.js').dashboardDe(r?.vendas || [], { dias: 14 }),
+    mes: { faturamento: s.faturamento ?? 0, pedidos: s.pedidos ?? 0, unidades: s.unidades ?? 0, lucro: s.lucro ?? null, margem: s.margem ?? null, cobertura: s.cobertura ?? null },
+    erro_leitura: r?.erro_leitura || null };
+};
 // Dashboard: junta o resumo das outras telas (cada parte falha sozinha, sem derrubar as outras).
 routes['GET /api/dashboard/resumo'] = async () => {
   contaOuErro();

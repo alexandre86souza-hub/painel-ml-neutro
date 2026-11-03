@@ -319,7 +319,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 </head>
 <body>
@@ -327,7 +327,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -438,6 +438,7 @@
     <button type="button" data-f="promocao" aria-pressed="false" title="Preço abaixo do preço original (promoção do ML ou desconto)">Em promoção</button>
     <button type="button" data-f="pausados" aria-pressed="false">Pausados</button>
     <button type="button" data-f="semcusto" aria-pressed="false">Sem custo</button>
+    <button type="button" data-f="catalogo" aria-pressed="false" title="Anúncios de catálogo em que outro vendedor está com o botão de compra (lido a cada 30 min)">Perdendo no catálogo</button>
     <button type="button" data-f="margem" aria-pressed="false" title="Margem do que vendeu no período, abaixo do valor escolhido">Margem abaixo de</button>
     <label><input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
   </div>
@@ -595,7 +596,7 @@
 
 <script src="/mascaras.js"></script>
 <script src="/analise.js"></script>
-<script src="/composicao.js?v=1"></script>
+<script src="/composicao.js?v=3"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const msg = $('msg');
@@ -976,6 +977,8 @@ function cartao(it){
     if(abrindo) pintarDetalhes(it, detalhes);
   };
   acoes.insertBefore(verDetalhes, verAnalise);
+  if(it.status === 'paused'){ st.style.cursor = 'pointer'; st.title = 'Ver os produtos do anúncio e o estoque de cada um'; st.onclick = () => { if(detalhes.hidden) verDetalhes.click(); detalhes.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }; }
+  if(abrirDetalhes && abrirDetalhes === it.id){ abrirDetalhes = null; setTimeout(() => verDetalhes.click(), 0); }
 
   // Caixa de seleção para pausar/reativar em massa (encerrado não entra: o ML não reativa).
   li.dataset.id = it.id;
@@ -989,6 +992,13 @@ function cartao(it){
     li.appendChild(sel);
   }
   li.append(img, info, campos, acoes, periodo, detalhes, analise);
+  // filtro "Perdendo no catálogo": o quadro do catálogo (vendedores, margem e promoções) já aparece no cartão; um cartão a
+  // cada 1,5 s (cada quadro faz várias leituras no ML)
+  if(($('fRapido').querySelector('[aria-pressed="true"]')?.dataset.f || '') === 'catalogo'){
+    const lugar = document.createElement('section'); lugar.className = 'detalhes'; li.appendChild(lugar);
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+    filaCatalogo = filaCatalogo.then(() => { if(lugar.isConnected) lugar.appendChild(blocoCatalogo(it, el)); return new Promise((ok) => setTimeout(ok, 1500)); });
+  }
   return li;
 }
 
@@ -1054,21 +1064,37 @@ function pintarDetalhes(it, alvo){
     if(c.produtos.length){
       const t = el('table', 'det-tab');
       const hr = el('tr');
-      for(const h of ['Produto', 'Descrição', 'Custo', '']) hr.appendChild(el('th', null, h));
+      for(const h of ['Produto', 'Descrição', 'Custo', 'Estoque', '']) hr.appendChild(el('th', null, h));
       const th = el('thead'); th.appendChild(hr); t.appendChild(th);
       const tb = el('tbody');
+      const celulasEstoque = new Map();   // número do produto -> células da coluna Estoque
       for(const p of c.produtos){
         const tr = el('tr');
         const filtrar = el('button', 'ghost det-filtro', 'Ver anúncios com este produto');
         filtrar.type = 'button';
         filtrar.onclick = () => { $('fProduto').value = p.sku || String(p.numero); offset = 0; carregar(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
         const td = el('td'); td.appendChild(filtrar);
+        const tdEst = el('td', null, '…');
+        if(p.numero != null) celulasEstoque.set(p.numero, [...(celulasEstoque.get(p.numero) || []), tdEst]);
         tr.append(el('td', 'det-sku-prod', p.sku || String(p.numero)), el('td', null, p.nome || 'não está na tabela de produtos'),
-          el('td', p.custo == null ? 'det-falta' : null, p.custo == null ? 'sem custo' : dinheiro(p.custo)), td);
+          el('td', p.custo == null ? 'det-falta' : null, p.custo == null ? 'sem custo' : dinheiro(p.custo)), tdEst, td);
         tb.appendChild(tr);
       }
       t.appendChild(tb);
       bloco.appendChild(t);
+      // estoque de cada produto no painel e quantos kits dá para montar (saldo − segurança ÷ vezes no kit)
+      const notaEstoque = el('p', 'nota'); bloco.appendChild(notaEstoque);
+      api('/api/produtos/saldos?numeros=' + [...celulasEstoque.keys()].join(',')).then(({ saldos }) => {
+        let kits = Infinity, falta = [];
+        for(const [n, tds] of celulasEstoque){
+          const s = saldos[n]; if(!s) continue;
+          const disp = Math.floor(Math.max(0, s.saldo - s.seguranca) / tds.length);
+          if(disp < kits) kits = disp;
+          if(disp <= 0) falta.push(n);
+          for(const tdE of tds){ tdE.textContent = `${num(s.saldo)}${s.seguranca ? ` (segurança ${num(s.seguranca)})` : ''}`; if(disp <= 0) tdE.className = 'det-falta'; }
+        }
+        if(kits !== Infinity) notaEstoque.textContent = kits > 0 ? `Dá para montar ${num(kits)} unidade(s) deste anúncio com o estoque do painel.` : `Sem estoque para montar este anúncio: falta o produto ${falta.join(', ')}.`;
+      }).catch(() => { for(const tds of celulasEstoque.values()) for(const tdE of tds) tdE.textContent = '—'; });
       if(c.custo != null) bloco.appendChild(el('p', 'nota', `Soma dos produtos: ${dinheiro(c.custo)}`));
       else if(c.faltando.length) bloco.appendChild(el('p', 'nota det-falta', `Sem custo na tabela: ${c.faltando.join(', ')}. Cadastre em Produtos.`));
     }else{
@@ -1079,6 +1105,7 @@ function pintarDetalhes(it, alvo){
 
   alvo.appendChild(blocoGtin(it, el));
   alvo.appendChild(blocoCalculadora(it, el));
+  alvo.appendChild(blocoCatalogo(it, el));
   alvo.appendChild(blocoConcorrentes(it, el));
   alvo.appendChild(blocoAtacado(it, el));
 }
@@ -1207,6 +1234,167 @@ function blocoCalculadora(it, el){
     finally{ bt.disabled = false; }
   };
   b.append(f, res);
+  return b;
+}
+
+// ---------- vendedores do mesmo catálogo ----------
+// Quem vende no produto de catálogo do anúncio, do mais barato ao mais caro, e quem está com o botão de compra (lido agora).
+// O aviso "Perdendo no catálogo" abre a tela já com os Detalhes deste anúncio.
+function blocoCatalogo(it, el){
+  const b = el('div', 'det-bloco');
+  b.appendChild(el('div', 'det-cab')).appendChild(el('b', null, 'Vendedores neste catálogo'));
+  const corpo = el('div'); corpo.appendChild(el('p', 'nota', 'lendo o catálogo no Mercado Livre…'));
+  b.appendChild(corpo);
+  api('/api/catalogo/ofertas?item=' + encodeURIComponent(it.id)).then((r) => {
+    corpo.innerHTML = '';
+    if(!r.catalogo){ corpo.appendChild(el('p', 'nota', 'Este anúncio não está num produto de catálogo.')); return; }
+    const sit = { winning: 'você está ganhando', competing: 'você está perdendo', sharing_first_place: 'empatado em 1º', listed: 'sem disputa' }[r.situacao];
+    const topo = [r.nome, sit, r.preco_para_ganhar != null ? `preço para ganhar: ${dinheiro(r.preco_para_ganhar)}` : null].filter(Boolean).join(' · ');
+    if(topo) corpo.appendChild(el('p', 'nota', topo));
+    if(!r.ofertas.length){ corpo.appendChild(el('p', 'nota', 'Nenhum vendedor neste catálogo agora.')); return; }
+    const t = el('table', 'det-tab'), th = el('tr');
+    for(const h of ['Vendedor', 'Preço', 'Envio', 'Anúncio', '']) th.appendChild(el('th', null, h));
+    t.appendChild(el('thead')).appendChild(th);
+    const tb = el('tbody');
+    for(const o of r.ofertas){
+      const tr = el('tr');
+      if(o.eu || o.nossa) tr.style.fontWeight = '600';
+      const nome = (o.nome || `vendedor ${o.vendedor}`) + (o.eu ? ' (este anúncio)' : o.nossa ? ` (sua conta ${o.nossa})` : '');
+      const extras = [o.loja_oficial ? 'loja oficial' : null, o.medalha ? `MercadoLíder ${o.medalha}` : null].filter(Boolean).join(' · ');
+      const tdN = el('td'); tdN.appendChild(el('div', null, nome)); if(extras) tdN.appendChild(el('div', 'nota', extras));
+      const envio = o.full ? 'Full' : o.frete_gratis ? 'frete grátis' : 'frete pago';
+      const tipo = o.tipo === 'gold_pro' ? 'Premium' : o.tipo === 'gold_special' ? 'Clássico' : (o.tipo || '');
+      const tdL = el('td');
+      if(o.item_id){ const a = el('a', null, 'abrir ↗'); a.href = `https://produto.mercadolivre.com.br/${o.item_id.replace(/^MLB/, 'MLB-')}`; a.target = '_blank'; a.rel = 'noopener'; tdL.appendChild(a); }
+      tr.append(tdN, el('td', null, dinheiro(o.preco)), el('td', null, envio), el('td', null, tipo), tdL);
+      if(o.ganhador){ const g = el('div', 'nota', '🏆 botão de compra'); tr.children[1].appendChild(g); }
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb);
+    const caixa = el('div'); caixa.style.overflowX = 'auto'; caixa.appendChild(t);
+    corpo.appendChild(caixa);
+    if(r.link){ const a = el('a', null, 'ver o catálogo no Mercado Livre ↗'); a.href = r.link; a.target = '_blank'; a.rel = 'noopener'; corpo.appendChild(el('p', 'nota')).appendChild(a); }
+    const outros = r.ofertas.filter((o) => !o.eu && !o.nossa);
+    corpo.appendChild(blocoPromosCatalogo(it, el, outros.length ? Math.min(...outros.map((o) => o.preco)) : null));
+  }).catch((e) => { corpo.innerHTML = ''; corpo.appendChild(el('p', 'nota det-falta', 'Não consegui ler o catálogo: ' + e.message)); });
+  return b;
+}
+
+// Promoções que o anúncio pode entrar, com o lucro e a margem em cada preço, contra o mais barato do catálogo (outro
+// vendedor). Entrar muda o preço de venda: só com o clique e a confirmação aqui mesmo.
+function blocoPromosCatalogo(it, el, menorConc){
+  const b = el('div'); b.style.marginTop = '14px';
+  b.appendChild(el('b', null, 'Promoções e margem deste anúncio'));
+  const corpo = el('div'); corpo.appendChild(el('p', 'nota', 'lendo as promoções…')); b.appendChild(corpo);
+  const pct = (m) => (m == null ? '—' : (m * 100).toFixed(1).replace('.', ',') + '%');
+  const alvo = menorConc != null ? Math.round((menorConc - 0.01) * 100) / 100 : null;
+  const lucroEm = (preco, meli) => api('/api/promocoes/lucro', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itens: [{ id: it.id, preco, meli_pct: meli || 0 }] }) }).then((x) => x.itens[0]);
+  const txtLucro = (x, lado) => { const l = x?.[lado]; return !l || l.lucro == null ? `sem cálculo (falta ${(l?.falta || ['dados']).join(', ')})` : `lucro ${dinheiro(l.lucro)} · margem ${pct(l.margem)}`; };
+  api('/api/promocoes/anuncio/' + encodeURIComponent(it.id)).then(async (r) => {
+    corpo.innerHTML = '';
+    const atual = r.item.preco;
+    const base = await lucroEm(atual, 0).catch(() => null);
+    if(base){
+      const a = base.atual || {};
+      const partes = [`custo ${dinheiro(base.custo)}`, `tarifa ${dinheiro(a.tarifa)}`, `frete ${dinheiro(base.frete)}`, `imposto ${dinheiro(a.imposto)}`, `embalagem/outros ${dinheiro(base.embalagem)}`];
+      corpo.appendChild(el('p', null, `Preço atual ${dinheiro(atual)}: ${txtLucro(base, 'atual')}`));
+      corpo.appendChild(el('p', 'nota', partes.join(' · ')));
+    }
+    if(alvo != null){
+      const x = await lucroEm(alvo, 0).catch(() => null);
+      corpo.appendChild(el('p', 'nota', `Para ficar abaixo do mais barato (${dinheiro(menorConc)}): ${dinheiro(alvo)} → ${txtLucro(x, 'promo')}`));
+    }
+    const lista = r.promocoes.filter((p) => ['candidate', 'started', 'pending'].includes(p.status));
+    if(!lista.length){ corpo.appendChild(el('p', 'nota', 'Nenhuma promoção disponível para este anúncio agora. Dá para criar um desconto próprio na tela Campanhas.')); return; }
+    const t = el('table', 'det-tab'), th = el('tr');
+    for(const h of ['Promoção', 'Preço', 'Lucro e margem', '']) th.appendChild(el('th', null, h));
+    t.appendChild(el('thead')).appendChild(th);
+    const tb = el('tbody');
+    for(const p of lista){
+      const tr = el('tr');
+      const tdN = el('td'); tdN.appendChild(el('div', null, p.nome));
+      const det = [p.status === 'started' ? 'participando' : p.status === 'pending' ? 'agendada' : 'disponível',
+        p.ml_pct ? `ML paga ${String(p.ml_pct).replace('.', ',')}%` : null,
+        p.fim ? `até ${new Date(p.fim).toLocaleDateString('pt-BR')}` : null,
+        p.preco_min != null || p.preco_max != null ? `aceita ${dinheiro(p.preco_min)} a ${dinheiro(p.preco_max)}` : null].filter(Boolean).join(' · ');
+      tdN.appendChild(el('div', 'nota', det));
+      const tdP = el('td'), tdL = el('td', null, '…'), tdB = el('td');
+      let preco = p.preco || p.preco_sugerido || p.preco_max || null;
+      if(p.precisa_preco && p.status === 'candidate' && alvo != null){ let v = alvo; if(p.preco_max != null) v = Math.min(v, p.preco_max); if(p.preco_min != null) v = Math.max(v, p.preco_min); preco = v; }
+      // já participando (campanha do vendedor, do ML com preço, desconto próprio): dá para aumentar o desconto e passar o
+      // concorrente. Em andamento o ML só aceita preço MENOR (promocoes.js#corpoEdicao).
+      const editavel = ['started', 'pending'].includes(p.status) && ['SELLER_CAMPAIGN', 'DEAL', 'PRICE_DISCOUNT'].includes(p.tipo) && p.preco > 0;
+      const precoPromo = p.preco;
+      if(editavel && alvo != null && (p.status === 'pending' || alvo < precoPromo)){ let v = alvo; if(p.preco_min != null) v = Math.max(v, p.preco_min); preco = v; }
+      const pintar = () => { tdL.textContent = '…'; if(!(preco > 0)) { tdL.textContent = '—'; return; }
+        lucroEm(preco, p.ml_pct).then((x) => { tdL.textContent = txtLucro(x, 'promo') + (menorConc != null ? (preco < menorConc ? ' · fica o mais barato' : ' · acima do mais barato') : ''); })
+          .catch((e) => { tdL.textContent = e.message; }); };
+      let est = null, ini = null, fim = null;
+      if((p.precisa_preco && p.status === 'candidate') || editavel){
+        if(editavel) tdP.appendChild(el('div', 'nota', `hoje ${dinheiro(precoPromo)} · novo:`));
+        const inp = el('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.value = preco ?? ''; inp.style.width = '7em';
+        let espera; inp.oninput = () => { preco = Number(inp.value); clearTimeout(espera); espera = setTimeout(pintar, 400); };
+        tdP.appendChild(inp);
+      } else tdP.textContent = dinheiro(preco);
+      if(p.precisa_estoque && p.status === 'candidate'){ est = el('input'); est.type = 'number'; est.min = '1'; est.placeholder = 'unidades'; est.value = p.estoque_min || ''; est.style.width = '6em'; tdP.appendChild(el('div', 'nota', 'unidades na oferta:')); tdP.appendChild(est); }
+      if(p.precisa_datas && p.status === 'candidate'){
+        const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), d7 = new Date(Date.now() + 6 * 864e5 - 3 * 3600e3).toISOString().slice(0, 10);
+        ini = el('input'); ini.type = 'date'; ini.value = hoje; fim = el('input'); fim.type = 'date'; fim.value = d7;
+        tdP.appendChild(el('div', 'nota', 'de / até (máx. 14 dias):')); tdP.append(ini, fim);
+      }
+      if(p.status === 'candidate'){
+        const bt = el('button', null, 'Entrar'); bt.type = 'button';
+        const conf = el('div'); conf.hidden = true;
+        bt.onclick = () => { conf.innerHTML = ''; conf.hidden = false; bt.hidden = true;
+          conf.appendChild(el('div', 'nota', `Entrar em "${p.nome}" com ${dinheiro(preco)}? O preço de venda muda no Mercado Livre.`));
+          const sim = el('button', null, 'Confirmar'); sim.type = 'button';
+          const nao = el('button', 'ghost', 'Cancelar'); nao.type = 'button';
+          nao.onclick = () => { conf.hidden = true; bt.hidden = false; };
+          sim.onclick = async () => {
+            sim.disabled = true;
+            try{
+              await api(`/api/promocoes/anuncio/${it.id}/aderir`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                tipo: p.tipo, promocao_id: p.id, oferta_id: p.oferta_id, preco, preco_original: atual,
+                estoque: est ? Number(est.value) : undefined, inicio: ini?.value, fim: fim?.value }) });
+              conf.innerHTML = ''; conf.appendChild(el('div', 'nota', 'Pronto: o anúncio entrou na promoção (o ML pode levar alguns minutos para mostrar o preço novo).'));
+            }catch(e){ sim.disabled = false; conf.appendChild(el('div', 'nota det-falta', e.message)); }
+          };
+          conf.append(sim, nao);
+        };
+        tdB.append(bt, conf);
+      }
+      if(editavel){
+        const bt = el('button', null, 'Mudar desconto'); bt.type = 'button';
+        const conf = el('div'); conf.hidden = true;
+        bt.onclick = () => { conf.innerHTML = ''; conf.hidden = false; bt.hidden = true;
+          const dia = (iso) => new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10);
+          conf.appendChild(el('div', 'nota', `Mudar "${p.nome}" de ${dinheiro(precoPromo)} para ${dinheiro(preco)}? O preço de venda muda no Mercado Livre.`
+            + (p.status === 'started' ? ' Em andamento, o ML só aceita baixar.' : '')
+            + (p.tipo === 'PRICE_DISCOUNT' ? ` O desconto próprio não tem edição: o painel tira e põe de novo, de hoje até ${p.fim ? new Date(p.fim).toLocaleDateString('pt-BR') : 'o fim atual'}.` : '')));
+          const sim = el('button', null, 'Confirmar'); sim.type = 'button';
+          const nao = el('button', 'ghost', 'Cancelar'); nao.type = 'button';
+          nao.onclick = () => { conf.hidden = true; bt.hidden = false; };
+          sim.onclick = async () => {
+            sim.disabled = true;
+            try{
+              await api(`/api/promocoes/anuncio/${it.id}/editar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                tipo: p.tipo, promocao_id: p.id, status: p.status, preco, preco_atual: precoPromo, preco_original: p.preco_original ?? atual,
+                inicio: p.tipo === 'PRICE_DISCOUNT' ? dia(new Date().toISOString()) : undefined, fim: p.tipo === 'PRICE_DISCOUNT' && p.fim ? dia(p.fim) : undefined }) });
+              conf.innerHTML = ''; conf.appendChild(el('div', 'nota', `Pronto: a promoção passou para ${dinheiro(preco)} (o ML pode levar alguns minutos para mostrar o preço novo).`));
+            }catch(e){ sim.disabled = false; conf.appendChild(el('div', 'nota det-falta', e.message)); }
+          };
+          conf.append(sim, nao);
+        };
+        tdB.append(bt, conf);
+      }
+      tr.append(tdN, tdP, tdL, tdB);
+      tb.appendChild(tr);
+      pintar();
+    }
+    t.appendChild(tb);
+    const caixa = el('div'); caixa.style.overflowX = 'auto'; caixa.appendChild(t); corpo.appendChild(caixa);
+  }).catch((e) => { corpo.innerHTML = ''; corpo.appendChild(el('p', 'nota det-falta', 'Não consegui ler as promoções: ' + e.message)); });
   return b;
 }
 
@@ -2932,7 +3120,10 @@ $('qFiltros').onclick = (ev) => {
 $('qAnt').onclick = () => { qPagina = Math.max(0, qPagina - 1); carregarQualidade(); };
 $('qProx').onclick = () => { qPagina++; carregarQualidade(); };
 // Vindo de um aviso (?q=MLB…): já abre buscando o anúncio.
-try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('fBusca').value = q; }catch{}
+// Com o código do anúncio (aviso do catálogo), os Detalhes já abrem.
+let abrirDetalhes = null;
+let filaCatalogo = Promise.resolve();   // quadros do filtro "Perdendo no catálogo", um de cada vez
+try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('fBusca').value = q; if(/^MLB\d+$/i.test(q || '')) abrirDetalhes = q.toUpperCase(); }catch{}
 
 carregarContas(); carregar(); carregarQualidade();
 </script>

@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/tema-hn.css?v=4">
 <link rel="stylesheet" href="/tema-painel.css?v=3">
 <link rel="stylesheet" href="/tema-escuro.css?v=4">
-<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
 <script src="/tema.js?v=1"></script>
 <style>
   #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
@@ -34,7 +34,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=36"></script>
+    <script src="/menu.js?v=37"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -70,9 +70,9 @@
 </main>
   </div>
 </div>
-<script src="/comum.js?v=8"></script>
+<script src="/comum.js?v=10"></script>
 <script src="/aviso-flutuante.js?v=1"></script>
-<script src="/composicao.js?v=1"></script>
+<script src="/composicao.js?v=3"></script>
 <script src="/margem-massa.js?v=2"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
@@ -102,6 +102,8 @@ $('segFiltro').onclick = (ev) => {
   pintar();
 };
 $('busca').oninput = () => pintar();
+// ?q= (link da tela Margem baixa): a busca já preenchida
+try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('busca').value = q; }catch{}
 $('btAtualizar').onclick = () => carregar(true);
 
 // margem escolhida no filtro "Margem abaixo de" (padrão 10%)
