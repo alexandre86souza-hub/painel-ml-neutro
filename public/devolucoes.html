@@ -632,16 +632,32 @@ async function carregarNaoEntregues(){
       const tdV = el('td'); tdV.append(el('div', null, '#' + (x.pacote || x.pedido)), el('div', 'sub', new Date(x.data).toLocaleDateString('pt-BR') + (x.pacote ? ` · pedido ${x.pedido}` : '')));
       const tdE = el('td'); tdE.append(el('div', null, ST_ENVIO[x.status_envio] || x.status_envio || '—'), el('div', 'sub', [x.substatus, x.enviado_em ? 'saiu ' + new Date(x.enviado_em).toLocaleDateString('pt-BR') : null, 'envio ' + x.envio].filter(Boolean).join(' · ')));
       const tdS = el('td');
-      if(x.conferido_em) tdS.append(el('div', null, '✓ chegou'), el('div', 'sub', `${new Date(x.conferido_em).toLocaleDateString('pt-BR')}${x.quem ? ' · ' + x.quem : ''}${x.obs ? ' · ' + x.obs : ''}`));
+      const nomePeca = (i) => { const k = (x.pecas_kit || [])[i]; return k ? k.sku : 'produto'; };
+      const resumoPecas = !x.pecas ? 'todas boas' : x.pecas.map((p, i) => `${nomePeca(i)}: ${p.boas} boa(s)` + (p.ruins ? `, ${p.ruins} danificada(s)` : '')
+        + (x.quantidade - p.boas - p.ruins > 0 ? `, ${x.quantidade - p.boas - p.ruins} não chegou` : '')).join(' · ');
+      if(x.conferido_em) tdS.append(el('div', null, '✓ chegou'), el('div', 'sub', resumoPecas), el('div', 'sub', `${new Date(x.conferido_em).toLocaleDateString('pt-BR')}${x.quem ? ' · ' + x.quem : ''}${x.obs ? ' · ' + x.obs : ''}`));
       else tdS.append(el('div', null, 'falta conferir'), el('div', 'sub', x.segura_estoque ? 'fora do estoque até conferir' : 'venda antes da 1ª contagem do estoque'));
       const tdB = el('td');
       const bt = el('button', null, x.conferido_em ? 'Desfazer' : 'Conferir'); bt.type = 'button';
       const conf = el('div'); conf.hidden = true;
       bt.onclick = () => {
         conf.innerHTML = ''; conf.hidden = false; bt.hidden = true;
-        let obs = null;
-        if(!x.conferido_em){ obs = el('input'); obs.placeholder = 'observação (opcional)'; obs.maxLength = 300; conf.appendChild(obs); }
-        conf.appendChild(el('div', 'sub', x.conferido_em ? 'Desfazer a conferência? O produto sai do estoque de novo até conferir.' : `Confirmar que ${x.quantidade} un. chegaram? Elas voltam ao estoque na próxima baixa (alguns minutos).`));
+        let obs = null; const campos = [];
+        if(!x.conferido_em){
+          // por peça do kit (ou o produto só): quantas chegaram boas e quantas danificadas; o resto = não chegou
+          const pecas = (x.pecas_kit && x.pecas_kit.length) ? x.pecas_kit : [{ pos: 0, sku: x.sku || 'produto', nome: null }];
+          const grade = el('div'); grade.style.cssText = 'display:grid;grid-template-columns:auto auto auto;gap:4px 8px;align-items:center;justify-content:end;margin:4px 0';
+          grade.append(el('span', 'sub', `peça (${x.quantidade} un. vendidas)`), el('span', 'sub', 'boas'), el('span', 'sub', 'danificadas'));
+          for(const k of pecas){
+            const boa = el('input'); boa.type = 'number'; boa.min = '0'; boa.max = String(x.quantidade); boa.value = String(x.quantidade); boa.style.width = '4.5em';
+            const ruim = el('input'); ruim.type = 'number'; ruim.min = '0'; ruim.max = String(x.quantidade); ruim.value = '0'; ruim.style.width = '4.5em';
+            const nome = el('span', null, k.sku); if(k.nome) nome.title = k.nome;
+            grade.append(nome, boa, ruim); campos.push({ boa, ruim });
+          }
+          conf.appendChild(grade);
+          obs = el('input'); obs.placeholder = 'observação (opcional)'; obs.maxLength = 300; conf.appendChild(obs);
+        }
+        conf.appendChild(el('div', 'sub', x.conferido_em ? 'Desfazer a conferência? O produto sai do estoque de novo até conferir.' : 'As boas voltam ao estoque e as danificadas vão para "Defeitos (troca)" na próxima baixa (alguns minutos); o que faltar conta como não chegou.'));
         const sim = el('button', null, 'Confirmar'); sim.type = 'button';
         const nao = el('button', 'ghost', 'Cancelar'); nao.type = 'button';
         nao.onclick = () => { conf.hidden = true; bt.hidden = false; };
@@ -649,7 +665,8 @@ async function carregarNaoEntregues(){
           sim.disabled = true;
           try{
             await api('/api/devolucoes/nao-entregues/conferir', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ envio: x.envio, desfazer: !!x.conferido_em, obs: obs?.value || '' }) });
+              body: JSON.stringify({ envio: x.envio, desfazer: !!x.conferido_em, obs: obs?.value || '',
+                pecas: x.conferido_em ? undefined : campos.map((c) => ({ boas: Number(c.boa.value), ruins: Number(c.ruim.value) || 0 })) }) });
             carregarNaoEntregues();
           }catch(e){ sim.disabled = false; conf.appendChild(el('div', 'sub', 'Não gravou: ' + e.message)); }
         };

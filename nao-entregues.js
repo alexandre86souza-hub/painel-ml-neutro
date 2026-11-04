@@ -15,10 +15,32 @@ function saiuParaEntrega(s) {
   return !!s.status_history?.date_shipped || ['shipped', 'not_delivered'].includes(s.status);
 }
 
-function criar({ D, ml, CTX, contaOuErro }) {
+// Peças conferidas -> a linha de devolução do estoque (estoque.js#diferencas): sem = posições com dano, defeituosos = quantas
+// danificadas, faltam = as que não chegaram. pecas null (conferida sem detalhe) = tudo bom. Pura: testada.
+function devolucaoDe(qtd, nPos, pecas) {
+  if (!Array.isArray(pecas)) return { sem: null, defeituosos: null, faltam: null };
+  const sem = [], defeituosos = {}, faltam = {};
+  for (let i = 0; i < nPos; i++) {
+    const p = pecas[i] || { boas: qtd, ruins: 0 };
+    const boas = Math.max(0, Math.min(qtd, Math.round(Number(p.boas) || 0)));
+    const ruins = Math.max(0, Math.min(qtd - boas, Math.round(Number(p.ruins) || 0)));
+    if (ruins) { sem.push(i); defeituosos[i] = ruins; }
+    if (qtd - boas - ruins > 0) faltam[i] = qtd - boas - ruins;
+  }
+  return { sem: sem.length ? sem : null, defeituosos: sem.length ? defeituosos : null, faltam: Object.keys(faltam).length ? faltam : null };
+}
+
+function criar({ D, ml, CTX, contaOuErro, estoque }) {
   D.db.exec(`CREATE TABLE IF NOT EXISTS ml_nao_entregues (envio_id INTEGER PRIMARY KEY, ml_user_id INTEGER NOT NULL,
     saiu INTEGER NOT NULL, status TEXT, substatus TEXT, enviado_em TEXT, lido_em TEXT NOT NULL,
     conferido_em TEXT, quem TEXT, obs TEXT)`);
+  // pecas: JSON [{ boas, ruins }] por posição do kit (numerosDoCodigo do SKU), dito no Conferir
+  if (!D.db.prepare('PRAGMA table_info(ml_nao_entregues)').all().some((c) => c.name === 'pecas')) D.db.exec('ALTER TABLE ml_nao_entregues ADD COLUMN pecas TEXT');
+  const { numerosDoCodigo } = require('./estoque.js');
+  const pecasDoKit = (sku) => {
+    const cat = estoque?.()?.catalogo?.(); if (!cat || !sku) return [];
+    return numerosDoCodigo(sku, cat.porSku, { doCanal: true }).map((n, pos) => ({ pos, numero: n, sku: cat.porNumero.get(n)?.sku || String(n), nome: cat.porNumero.get(n)?.nome || null }));
+  };
   const lerEnvio = D.db.prepare('SELECT * FROM ml_nao_entregues WHERE envio_id=?');
   const gravar = D.db.prepare(`INSERT INTO ml_nao_entregues (envio_id, ml_user_id, saiu, status, substatus, enviado_em, lido_em)
     VALUES (?,?,?,?,?,?,?) ON CONFLICT(envio_id) DO UPDATE SET saiu=excluded.saiu, status=excluded.status,
@@ -69,16 +91,29 @@ function criar({ D, ml, CTX, contaOuErro }) {
         item_id: l.item_id, titulo: info[l.item_id]?.title || null, foto: info[l.item_id]?.thumbnail || null, link: info[l.item_id]?.permalink || null,
         sku: l.sku || null, quantidade: l.quantidade, valor: Math.round(l.quantidade * l.preco_unit * 100) / 100,
         status_envio: l.status, substatus: l.substatus, enviado_em: l.enviado_em,
-        conferido_em: l.conferido_em, quem: l.quem, obs: l.obs, segura_estoque: !!inicio && l.data >= inicio && !l.conferido_em })) };
+        conferido_em: l.conferido_em, quem: l.quem, obs: l.obs, segura_estoque: !!inicio && l.data >= inicio && !l.conferido_em,
+        pecas_kit: pecasDoKit(l.sku), pecas: (() => { try { return JSON.parse(l.pecas || 'null'); } catch { return null; } })() })) };
     },
     // { envio, desfazer?, obs? }: chegou (o estoque volta na próxima baixa) ou desfaz a conferência
     'POST /api/devolucoes/nao-entregues/conferir': async (_u, body) => {
       const envio = Number(body?.envio);
       const r = Number.isInteger(envio) ? lerEnvio.get(envio) : null;
       if (!r || !r.saiu || String(r.ml_user_id) !== String(contaOuErro().ml_user_id)) throw Object.assign(new Error('Entrega não encontrada.'), { status: 400 });
-      if (body?.desfazer) D.db.prepare('UPDATE ml_nao_entregues SET conferido_em=NULL, quem=NULL WHERE envio_id=?').run(envio);
-      else D.db.prepare('UPDATE ml_nao_entregues SET conferido_em=?, quem=?, obs=? WHERE envio_id=?')
-        .run(new Date().toISOString(), CTX.atual()?.usuario || 'administrador', String(body?.obs || '').slice(0, 300) || null, envio);
+      if (body?.desfazer) { D.db.prepare('UPDATE ml_nao_entregues SET conferido_em=NULL, quem=NULL, pecas=NULL WHERE envio_id=?').run(envio); return { ok: true }; }
+      // quantas de cada peça chegaram boas e danificadas (o resto = não chegou); sem a lista = todas boas
+      const v = D.db.prepare('SELECT sku, SUM(quantidade) AS q FROM vendas WHERE envio_id=? GROUP BY envio_id').get(envio);
+      const qtd = Math.round(v?.q || 0), nPos = pecasDoKit(v?.sku).length || 1;
+      let pecas = null;
+      if (Array.isArray(body?.pecas)) {
+        pecas = Array.from({ length: nPos }, (_, i) => {
+          const p = body.pecas[i] || {};
+          const boas = Math.round(Number(p.boas)), ruins = Math.round(Number(p.ruins) || 0);
+          if (!Number.isInteger(boas) || boas < 0 || ruins < 0 || boas + ruins > qtd) throw Object.assign(new Error(`Peça ${i + 1}: boas + danificadas vai de 0 a ${qtd}.`), { status: 400 });
+          return { boas, ruins };
+        });
+      }
+      D.db.prepare('UPDATE ml_nao_entregues SET conferido_em=?, quem=?, obs=?, pecas=? WHERE envio_id=?')
+        .run(new Date().toISOString(), CTX.atual()?.usuario || 'administrador', String(body?.obs || '').slice(0, 300) || null, pecas ? JSON.stringify(pecas) : null, envio);
       return { ok: true };
     },
   };
@@ -86,4 +121,4 @@ function criar({ D, ml, CTX, contaOuErro }) {
   return { rotas, verificar };
 }
 
-module.exports = { criar, saiuParaEntrega };
+module.exports = { criar, saiuParaEntrega, devolucaoDe };

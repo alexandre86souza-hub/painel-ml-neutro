@@ -451,5 +451,20 @@ console.log('custo médio móvel: ok');
   assert2.strictEqual(saiuParaEntrega({ status: 'cancelled', status_history: { date_shipped: '2026-10-20T10:00:00Z' } }), true);
   assert2.strictEqual(saiuParaEntrega({ status: 'cancelled', status_history: { date_shipped: null } }), false);
   assert2.strictEqual(saiuParaEntrega(null), false);
+  const { devolucaoDe } = require('./nao-entregues.js');
+  assert2.deepStrictEqual(devolucaoDe(2, 2, null), { sem: null, defeituosos: null, faltam: null });
+  // kit de 2 peças, 2 unidades: peça 0 = 1 boa + 1 danificada; peça 1 = 1 boa (1 não chegou)
+  assert2.deepStrictEqual(devolucaoDe(2, 2, [{ boas: 1, ruins: 1 }, { boas: 1, ruins: 0 }]), { sem: [0], defeituosos: { 0: 1 }, faltam: { 1: 1 } });
+  // tudo bom
+  assert2.deepStrictEqual(devolucaoDe(2, 1, [{ boas: 2, ruins: 0 }]), { sem: null, defeituosos: null, faltam: null });
+  // ligado ao diferencas: volta só a boa de cada peça
+  {
+    const E = require('./estoque.js');
+    const porSku = new Map([['DQ-688', 688], ['NI-714', 714]]); porSku.numeros = new Set([688, 714]);
+    const l = { ref: 'devolucao:mlne:1:AMG-688.714', sku: 'AMG-688.714', qtd: 2, data: 'x', valida: true, sinal: 1, pendente: null, tipo: 'devolucao', origem: 'ML',
+      ...devolucaoDe(2, 2, [{ boas: 1, ruins: 1 }, { boas: 1, ruins: 0 }]) };
+    const r = E.diferencas([l], new Map(), porSku);
+    assert2.deepStrictEqual(r.lancar.map((m) => [m.numero, m.qtd]).sort(), [[688, 1], [714, 1]]);
+  }
   console.log('Entregas não realizadas: ok');
 }

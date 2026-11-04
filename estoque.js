@@ -468,9 +468,10 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   function linhasDeVenda(desde) {
     const db = D.db, out = [];
     const nomeConta = new Map(D.contasListar().map((c) => [c.ml_user_id, c.nickname]));
-    // entrega não realizada (nao-entregues.js): cancelada depois de sair para entrega — segue fora do estoque até "Conferir"
+    // entrega não realizada (nao-entregues.js): cancelada depois de sair para entrega — a venda segue baixada; o que chegou
+    // volta pela linha de devolução do "Conferir" (linhasDeNaoEntregues: boas voltam, danificadas vão para Defeitos)
     let segurar = new Set();
-    try { segurar = new Set(db.prepare('SELECT envio_id FROM ml_nao_entregues WHERE saiu=1 AND conferido_em IS NULL').all().map((x) => x.envio_id)); } catch { /* tabela ainda não criada */ }
+    try { segurar = new Set(db.prepare('SELECT envio_id FROM ml_nao_entregues WHERE saiu=1').all().map((x) => x.envio_id)); } catch { /* tabela ainda não criada */ }
     for (const v of db.prepare('SELECT order_id, item_id, variacao, ml_user_id, data, status, quantidade, sku, origem, envio_id FROM vendas WHERE data >= ?').all(desde)) {
       const full = !!v.origem && !/^BRP\d+$/.test(v.origem);
       out.push({ ref: `venda:ml:${v.order_id}:${v.item_id}:${v.variacao}`, sku: v.sku, qtd: v.quantidade, data: v.data,
@@ -521,7 +522,22 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
           try { defeituosos = JSON.parse(d.qtds || 'null'); } catch { defeituosos = null; } }
         return { ref: `devolucao:ml:${d.claim_id}`, sku: d.sku, qtd: Math.round(d.quantidade || 1), data: d.atualizada_em || new Date().toISOString(),
           valida: true, sinal: 1, sem, defeituosos, faltam, pendente, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(d.ml_user_id) || d.ml_user_id}` };
-      }).concat(linhasDeDevolucaoCanais(desde));
+      }).concat(linhasDeDevolucaoCanais(desde), linhasDeNaoEntregues(desde));
+  }
+  // Entregas não realizadas conferidas (venda a partir do início do estoque, Full fora): boas voltam, danificadas -> Defeitos
+  function linhasDeNaoEntregues(desde) {
+    const { devolucaoDe } = require('./nao-entregues.js');
+    const cat = catalogo(), nomeConta = new Map(D.contasListar().map((c) => [c.ml_user_id, c.nickname]));
+    let rs = [];
+    try { rs = D.db.prepare(`SELECT n.envio_id, n.ml_user_id, n.conferido_em, n.pecas, v.sku, SUM(v.quantidade) AS qtd, MIN(v.data) AS data, MAX(v.origem) AS origem
+        FROM ml_nao_entregues n JOIN vendas v ON v.envio_id = n.envio_id AND v.ml_user_id = n.ml_user_id
+        WHERE n.saiu=1 AND n.conferido_em IS NOT NULL AND v.status='cancelled' GROUP BY n.envio_id, v.sku`).all(); } catch { return []; }
+    return rs.filter((r) => r.data >= desde && !(r.origem && !/^BRP\d+$/.test(r.origem))).map((r) => {
+      let pecas = null; try { pecas = JSON.parse(r.pecas || 'null'); } catch { pecas = null; }
+      const qtd = Math.round(r.qtd || 0), nPos = numerosDoCodigo(r.sku, cat.porSku, { doCanal: true }).length || 1;
+      return { ref: `devolucao:mlne:${r.envio_id}:${r.sku}`, sku: r.sku, qtd, data: r.conferido_em, valida: true, sinal: 1, ...devolucaoDe(qtd, nPos, pecas),
+        pendente: null, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(r.ml_user_id) || r.ml_user_id} (entrega não realizada)` };
+    });
   }
   // Shopee, Amazon, Leroy e Magalu (defeito-canais.js): só o item CONFERIDO na tela de devoluções volta, sem as peças
   // marcadas com defeito — conferir = o produto chegou (pedido do dono, 19/10/2026: lança ao conferir, qualquer que seja a
