@@ -245,7 +245,7 @@ function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
     const g = grupos.get(l.forn) || { fornecedor: l.forn, pecas: 0, valor: 0, dias: new Map() };
     const d = g.dias.get(l.dia) || { dia: l.dia, pecas: 0, valor: 0, porNum: new Map() };
     const p = cat.porNumero.get(l.numero), custo = p?.custo ?? null;
-    const it = d.porNum.get(l.numero) || { numero: l.numero, sku: p?.sku || String(l.numero).padStart(3, '0'), nome: p?.nome || null, qtd: 0, custo, valor: null, origens: [] };
+    const it = d.porNum.get(l.numero) || { numero: l.numero, sku: p?.sku || String(l.numero).padStart(3, '0'), nome: p?.nome || null, ref_compra: p?.ref_compra || null, qtd: 0, custo, valor: null, origens: [] };
     it.qtd += l.qtd; it.valor = custo == null ? null : r2(custo * it.qtd); it.origens.push({ ...l.origem, qtd: l.qtd });
     d.porNum.set(l.numero, it); d.pecas += l.qtd; d.valor += (custo || 0) * l.qtd;
     g.dias.set(l.dia, d); g.pecas += l.qtd; g.valor += (custo || 0) * l.qtd;
@@ -652,8 +652,10 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const cat = catalogo();
       const lotes = new Map();
       for (const m of D.estoqueDefeitoListar()) {
-        const l = lotes.get(m.lote) || { lote: m.lote, data: m.data, tipo: m.tipo, fornecedor: m.fornecedor, obs: m.obs, quem: m.quem, itens: [] };
-        l.itens.push({ sku: cat.porNumero.get(m.numero)?.sku || String(m.numero), qtd: Math.abs(m.qtd) }); lotes.set(m.lote, l);
+        const l = lotes.get(m.lote) || { lote: m.lote, data: m.data, tipo: m.tipo, fornecedor: m.fornecedor, obs: m.obs, quem: m.quem, criado_em: m.criado_em, itens: [] };
+        const p = cat.porNumero.get(m.numero);
+        l.itens.push({ sku: p?.sku || String(m.numero), nome: p?.nome || null, ref_compra: p?.ref_compra || null, qtd: Math.abs(m.qtd), dia_lote: m.dia_lote || null });
+        lotes.set(m.lote, l);
       }
       return { grupos: r.grupos, pecas: r.grupos.reduce((s, g) => s + g.pecas, 0), valor: r2(r.grupos.reduce((s, g) => s + g.valor, 0)),
         lancamentos: [...lotes.values()].slice(0, 200) };
@@ -665,19 +667,27 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       const fornecedor = String(b?.fornecedor || '').trim().slice(0, 60) || null;
       if (tipo === 'recolhido' && !fornecedor) throw erro('Informe o fornecedor que recolheu.');
       const cat = catalogo();
-      const linhas = expandir(b.itens, cat);
+      // recolhido/descarte: cada item pode dizer de qual data (dia_lote) sai — um lançamento só para várias datas do fornecedor
+      const ehDia = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+      const porDia = new Map();
+      for (const it of Array.isArray(b.itens) ? b.itens : []) {
+        const d = tipo === 'entrada' ? null : ehDia(it?.dia_lote) ? it.dia_lote : ehDia(b?.dia_lote) ? b.dia_lote : null;
+        porDia.set(d, [...(porDia.get(d) || []), it]);
+      }
+      const linhas = [];
+      for (const [d, its] of porDia) for (const l of expandir(its, cat)) linhas.push({ ...l, dia_lote: d });
       if (!linhas.length) throw erro('Informe as peças.');
       if (tipo !== 'entrada') {
-        const saldos = defeitos().saldos;
-        for (const l of linhas) {
-          const s = saldos.get(l.numero) || 0;
-          if (l.qtd > s) throw erro(`${cat.porNumero.get(l.numero)?.sku || l.numero}: só há ${s} peça(s) com defeito.`);
+        const saldos = defeitos().saldos, pedido = new Map();
+        for (const l of linhas) pedido.set(l.numero, (pedido.get(l.numero) || 0) + l.qtd);
+        for (const [n, q] of pedido) {
+          const s = saldos.get(n) || 0;
+          if (q > s) throw erro(`${cat.porNumero.get(n)?.sku || n}: só há ${s} peça(s) com defeito.`);
         }
       }
       const data = dataOuAgora(b.data);
       const obs = String(b?.obs || '').trim().slice(0, 200) || null;
-      const diaLote = tipo !== 'entrada' && /^\d{4}-\d{2}-\d{2}$/.test(String(b?.dia_lote || '')) ? b.dia_lote : null;
-      const lote = D.estoqueDefeitoGravar(linhas.map((l) => ({ data, tipo, numero: l.numero, qtd: tipo === 'entrada' ? l.qtd : -l.qtd, fornecedor, obs, quem: quem(), dia_lote: diaLote })));
+      const lote = D.estoqueDefeitoGravar(linhas.map((l) => ({ data, tipo, numero: l.numero, qtd: tipo === 'entrada' ? l.qtd : -l.qtd, fornecedor, obs, quem: quem(), dia_lote: l.dia_lote })));
       return { lote, pecas: linhas.reduce((s, l) => s + l.qtd, 0) };
     },
     'POST /api/estoque/defeitos/desfazer': async (_u, b) => {

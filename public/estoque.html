@@ -21,6 +21,13 @@
   .def-forn > h3{margin:0 0 4px;font-size:16px}
   .def-dia{border-top:1px dashed var(--line);padding-top:10px;margin-top:10px}
   .def-topo h4{margin:0;font-size:14px}
+  .def-dia h4{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:6px}
+  .def-qtd{width:64px}
+  .def-barra{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .def-barra label{display:flex;align-items:center;gap:4px;font-size:13px}
+  .def-hist{margin:18px 0 6px;font-size:16px}
+  .def-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+  @media print{ #impressaoPedido .assinatura{margin-top:40px} }
   .def-topo .acoes{display:flex;gap:6px;flex-wrap:wrap}
   .def-origens{font-size:12px;color:var(--muted)}
   .def-recolher{border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:8px}
@@ -139,7 +146,8 @@
   <section class="bloco escondido" data-painel="defeitos">
     <h2>Peças com defeito para trocar</h2>
     <p class="sub">Entram sozinhas: as peças que você tirou do estoque como "Peças com defeito (troca com fornecedor)" e as peças marcadas com defeito
-      nas devoluções conferidas (todas as lojas). Quando o fornecedor recolher, clique em "Recolhido" no bloco dele e elas saem daqui.</p>
+      nas devoluções conferidas (todas as lojas). Marque as peças (e a quantidade), imprima a lista para o fornecedor e, quando ele recolher,
+      clique em "Confirmar recolhido": elas saem daqui e vão para o histórico com a data do recolhimento.</p>
     <div class="cartoes" id="dCartoes"></div>
     <div id="dGrupos"><p class="carregando">Carregando…</p></div>
     <details class="def-extra">
@@ -154,10 +162,12 @@
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="bt" id="deMais">+ Produto</button><button class="bt forte">Lançar</button></div>
       </form>
     </details>
-    <details class="def-extra">
-      <summary>Recolhidas e lançadas à mão</summary>
-      <div class="tabela-rolagem" id="dLanc"></div>
-    </details>
+    <h3 class="def-hist">Histórico de recolhimentos</h3>
+    <div class="def-filtros">
+      <select id="dHistTipo" aria-label="Tipo"><option value="recolhido">Recolhidas pelo fornecedor</option><option value="descarte">Descartadas</option><option value="entrada">Entradas diretas</option><option value="">Tudo</option></select>
+      <select id="dHistForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
+    </div>
+    <div class="tabela-rolagem" id="dLanc"></div>
   </section>
 
   <!-- ESTOQUE NOS ANÚNCIOS (só comparação) -->
@@ -545,59 +555,83 @@ $('eaCsv').onclick = () => ea?.linhas && csv(`estoque-nos-anuncios-${hoje()}.csv
 
 // ---------- DEFEITOS (troca com fornecedor) ----------
 let defs = null;
-// Um dia de um fornecedor: as peças, "Copiar lista" e "Recolhido pelo fornecedor" (tira deste dia: dia_lote)
-function blocoDefeitoDia(g, d){
-  const b = el('div', 'def-dia');
-  const topo = el('div', 'def-topo');
-  topo.appendChild(el('h4', null, `${d.dia ? diaBR(d.dia) : 'Sem data'} · ${n0(d.pecas)} peça(s) · ${real(d.valor)}`));
-  const ac = el('div', 'acoes');
+// Um fornecedor: as peças de cada data com caixinha e quantidade. Com as marcadas: imprimir a lista para o fornecedor recolher,
+// copiar, confirmar o recolhimento (saem da lista e vão para o histórico, com a data) ou descartar.
+function blocoDefeitoForn(g){
+  const b = el('div', 'def-forn');
+  b.appendChild(el('h3', null, `${g.fornecedor} · ${n0(g.pecas)} peça(s) · ${real(g.valor)}${g.dias.length > 1 ? ` · ${g.dias.length} datas` : ''}`));
+  const marcas = [];   // { i, d, cx, n }
+  for(const d of g.dias){
+    const bd = el('div', 'def-dia');
+    const cxDia = el('input'); cxDia.type = 'checkbox'; cxDia.title = 'Marcar todas desta data';
+    const h = el('h4'); h.append(cxDia, document.createTextNode(` ${d.dia ? diaBR(d.dia) : 'Sem data'} · ${n0(d.pecas)} peça(s) · ${real(d.valor)}`));
+    bd.appendChild(h);
+    const daqui = [];
+    bd.appendChild(tabela([[''], ['SKU'], ['Produto'], ['Ref. de compra'], ['Peças', 'n'], ['Recolher', 'n'], ['Valor', 'n'], ['De onde veio']], d.itens.map((i) => {
+      const tr = el('tr');
+      const cx = el('input'); cx.type = 'checkbox';
+      const n = el('input'); n.type = 'number'; n.min = '1'; n.max = String(i.qtd); n.step = '1'; n.value = String(i.qtd); n.className = 'def-qtd';
+      n.oninput = () => { if(Number(n.value) > 0) cx.checked = true; atualizar(); };
+      cx.onchange = atualizar;
+      const t0 = el('td'); t0.appendChild(cx); const tq = el('td', 'n'); tq.appendChild(n);
+      const o = el('td', 'def-origens', i.origens.slice(0, 4).map((x) => `${x.de} (${x.qtd})${x.obs ? ' · ' + x.obs : ''}`).join(' | ') + (i.origens.length > 4 ? ` | +${i.origens.length - 4}` : ''));
+      tr.append(t0, td(i.sku), td(i.nome || '—'), td(i.ref_compra || '—'), td(n0(i.qtd), 'n'), tq, td(i.valor == null ? '—' : real(i.valor), 'n'), o);
+      const m = { i, d, cx, n }; marcas.push(m); daqui.push(m);
+      return tr;
+    })));
+    cxDia.onchange = () => { for(const m of daqui) m.cx.checked = cxDia.checked; atualizar(); };
+    b.appendChild(bd);
+  }
+  const escolhidas = () => marcas.filter((m) => m.cx.checked).map((m) => ({ ...m, q: Math.max(0, Math.min(m.i.qtd, Math.round(Number(m.n.value) || 0))) })).filter((m) => m.q > 0);
+  const barra = el('div', 'def-barra');
+  const info = el('b', null, '');
+  const dt = el('input'); dt.type = 'date'; dt.value = hoje(); const lD = el('label', null, 'Data do recolhimento '); lD.appendChild(dt);
+  const ob = el('input'); ob.maxLength = 200; ob.placeholder = 'ex.: nota de devolução 123'; const lO = el('label', null, 'Observação '); lO.appendChild(ob);
+  const btTodas = el('button', 'bt', 'Marcar todas'); btTodas.type = 'button';
+  const btImp = el('button', 'bt', 'Imprimir lista para recolher'); btImp.type = 'button';
   const btCop = el('button', 'bt', 'Copiar lista'); btCop.type = 'button';
+  const btOk = el('button', 'bt forte', 'Confirmar recolhido'); btOk.type = 'button';
+  const btDesc = el('button', 'bt', 'Descartar'); btDesc.type = 'button';
+  barra.append(info, btTodas, btImp, btCop, lD, lO, btOk, btDesc);
+  b.appendChild(barra);
+  function atualizar(){
+    const e = escolhidas(), pc = e.reduce((s, m) => s + m.q, 0);
+    info.textContent = e.length ? `${n0(pc)} peça(s) marcada(s)` : 'Marque as peças a recolher';
+    for(const x of [btImp, btCop, btOk, btDesc]) x.disabled = !e.length;
+  }
+  atualizar();
+  btTodas.onclick = () => { const todas = marcas.every((m) => m.cx.checked); for(const m of marcas) m.cx.checked = !todas; b.querySelectorAll('h4 input').forEach((c) => { c.checked = !todas; }); atualizar(); };
+  const linhasTexto = (e) => e.map((m) => `${m.q}x ${m.i.sku}${m.i.ref_compra ? ' (ref. ' + m.i.ref_compra + ')' : ''}${m.i.nome ? ' - ' + m.i.nome : ''}`);
   btCop.onclick = async () => {
-    const txt = `Peças com defeito para troca - ${g.fornecedor} (${d.dia ? diaBR(d.dia) : 'sem data'}):\n` + d.itens.map((i) => `${i.qtd}x ${i.sku}${i.nome ? ' - ' + i.nome : ''}`).join('\n') + `\nTotal: ${d.pecas} peça(s)`;
+    const e = escolhidas();
+    const txt = `Peças com defeito para recolher - ${g.fornecedor} (${new Date().toLocaleDateString('pt-BR')}):\n` + linhasTexto(e).join('\n') + `\nTotal: ${e.reduce((s, m) => s + m.q, 0)} peça(s)`;
     try{ await navigator.clipboard.writeText(txt); btCop.textContent = 'Lista copiada'; }catch{ prompt('Copie a lista:', txt); }
     setTimeout(() => { btCop.textContent = 'Copiar lista'; }, 2500);
   };
-  const btRec = el('button', 'bt forte', 'Recolhido pelo fornecedor'); btRec.type = 'button';
-  ac.append(btCop, btRec); topo.appendChild(ac); b.appendChild(topo);
-  b.appendChild(tabela([['SKU'], ['Produto'], ['Peças', 'n'], ['Custo', 'n'], ['Valor', 'n'], ['De onde veio']], d.itens.map((i) => {
-    const tr = el('tr');
-    const o = el('td', 'def-origens', i.origens.slice(0, 4).map((x) => `${x.de} (${x.qtd})${x.obs ? ' · ' + x.obs : ''}`).join(' | ') + (i.origens.length > 4 ? ` | +${i.origens.length - 4}` : ''));
-    tr.append(td(i.sku), td(i.nome || '—'), td(n0(i.qtd), 'n'), td(i.custo == null ? 'sem custo' : real(i.custo), 'n'), td(i.valor == null ? '—' : real(i.valor), 'n'), o);
-    return tr;
-  })));
-  // recolher: quantas de cada peça o fornecedor levou (ou descartar)
-  btRec.onclick = () => {
-    if(b.querySelector('.def-recolher')) return;
-    const f = el('form', 'def-recolher');
-    const linhaTopo = el('div', 'form');
-    const selT = el('select'); selT.innerHTML = '<option value="recolhido">Recolhido pelo fornecedor (vai trocar)</option><option value="descarte">Descartada (sem troca)</option>';
-    const lT = el('label', null, 'O que aconteceu'); lT.appendChild(selT);
-    const dt = el('input'); dt.type = 'date'; dt.value = hoje(); const lD = el('label', null, 'Data'); lD.appendChild(dt);
-    const ob = el('input'); ob.maxLength = 200; ob.placeholder = 'ex.: nota de devolução 123'; const lO = el('label', null, 'Observação'); lO.appendChild(ob);
-    linhaTopo.append(lT, lD, lO); f.appendChild(linhaTopo);
-    const qs = d.itens.map((i) => {
-      const l = el('label', null, `${i.sku} ${i.nome || ''} — de ${i.qtd}: `);
-      const n = el('input'); n.type = 'number'; n.min = '0'; n.max = String(i.qtd); n.step = '1'; n.value = String(i.qtd);
-      l.appendChild(n); f.appendChild(l); return [i, n];
-    });
-    const pe = el('div', 'acoes');
-    const ok = el('button', 'bt forte', 'Confirmar'); const cancel = el('button', 'bt', 'Cancelar'); cancel.type = 'button';
-    cancel.onclick = () => f.remove();
-    pe.append(ok, cancel); f.appendChild(pe); b.appendChild(f);
-    f.onsubmit = async (ev) => {
-      ev.preventDefault();
-      const itens = qs.map(([i, n]) => ({ codigo: i.sku, qtd: Math.min(i.qtd, Math.round(Number(n.value) || 0)) })).filter((x) => x.qtd > 0);
-      if(!itens.length){ aviso('Informe quantas peças saíram.'); return; }
-      const total = itens.reduce((s2, x) => s2 + x.qtd, 0);
-      if(!confirm(`${selT.value === 'recolhido' ? 'Marcar como recolhidas por' : 'Descartar'} ${total} peça(s)${selT.value === 'recolhido' ? ' "' + g.fornecedor + '"' : ''}?`)) return;
-      ok.disabled = true;
-      try{
-        const r = await post('/api/estoque/defeitos', { tipo: selT.value, fornecedor: g.fornecedor, data: dt.value, obs: ob.value, itens, dia_lote: d.dia || null });
-        aviso(`${r.pecas} peça(s) saíram das peças com defeito.`, 'ok'); carregarDefeitos();
-      }catch(e){ aviso(e.message); ok.disabled = false; }
-    };
+  btImp.onclick = () => imprimirRecolher(g.fornecedor, escolhidas().map((m) => ({ ...m.i, qtd: m.q })), 'Peças com defeito para recolher');
+  const lancar = async (tipo) => {
+    const e = escolhidas(); if(!e.length) return;
+    const total = e.reduce((s, m) => s + m.q, 0);
+    if(!confirm(`${tipo === 'recolhido' ? `Confirmar que "${g.fornecedor}" recolheu` : 'Descartar'} ${total} peça(s) em ${diaBR(dt.value)}? Elas saem desta lista e vão para o histórico.`)) return;
+    btOk.disabled = btDesc.disabled = true;
+    try{
+      const r = await post('/api/estoque/defeitos', { tipo, fornecedor: g.fornecedor, data: dt.value, obs: ob.value,
+        itens: e.map((m) => ({ codigo: m.i.sku, qtd: m.q, dia_lote: m.d.dia || null })) });
+      aviso(`${r.pecas} peça(s) ${tipo === 'recolhido' ? 'recolhida(s)' : 'descartada(s)'}: estão no histórico.`, 'ok'); carregarDefeitos();
+    }catch(err){ aviso(err.message); atualizar(); }
   };
+  btOk.onclick = () => lancar('recolhido');
+  btDesc.onclick = () => lancar('descarte');
   return b;
+}
+// Folha para o fornecedor (impressora comum, área #impressaoPedido): fornecedor, peças com a referência de compra, total e assinatura.
+function imprimirRecolher(fornecedor, itens, titulo, data){
+  const area = $('impressaoPedido'); area.innerHTML = '';
+  area.append(el('h2', null, titulo), el('p', null, `Fornecedor: ${fornecedor} · ${data ? 'Recolhido em ' + diaBR(String(data).slice(0, 10)) : 'Data: ' + new Date().toLocaleDateString('pt-BR')}`));
+  area.appendChild(tabela([['SKU'], ['Produto'], ['Ref. de compra'], ['Quantidade', 'n']], itens.map((i) => { const tr = el('tr'); tr.append(td(i.sku), td(i.nome || ''), td(i.ref_compra || ''), td(n0(i.qtd), 'n')); return tr; })));
+  area.appendChild(el('p', null, `Total: ${n0(itens.reduce((s, i) => s + i.qtd, 0))} peça(s)`));
+  area.appendChild(el('p', 'assinatura', 'Recolhido por: ______________________________   Data: ____/____/______   Assinatura: ______________________________'));
+  window.print();
 }
 async function carregarDefeitos(){
   await garantirNomes();
@@ -611,24 +645,35 @@ async function carregarDefeitos(){
   const box = $('dGrupos'); box.innerHTML = '';
   if(!defs.grupos.length) box.appendChild(el('p', 'vazio', 'Nenhuma peça com defeito esperando troca.'));
   // por fornecedor e, dentro dele, por data (o dia em que as peças saíram do estoque ou a devolução chegou)
-  for(const g of defs.grupos){
-    const b = el('div', 'def-forn');
-    b.appendChild(el('h3', null, `${g.fornecedor} · ${n0(g.pecas)} peça(s) · ${real(g.valor)}${g.dias.length > 1 ? ` · ${g.dias.length} datas` : ''}`));
-    for(const d of g.dias) b.appendChild(blocoDefeitoDia(g, d));
-    box.appendChild(b);
-  }
+  for(const g of defs.grupos) box.appendChild(blocoDefeitoForn(g));
+  pintarHistDefeitos();
+}
+// histórico: recolhidas pelo fornecedor (com a data do recolhimento), descartadas e entradas diretas
+function pintarHistDefeitos(){
   const NOME_T = { recolhido: 'Recolhido pelo fornecedor', descarte: 'Descartada', entrada: 'Entrada direta' };
+  const sf = $('dHistForn'), fH = sf.value;
+  const forns = [...new Set(defs.lancamentos.map((l) => l.fornecedor).filter(Boolean))].sort();
+  sf.innerHTML = ''; const o0 = el('option', null, 'Todos os fornecedores'); o0.value = ''; sf.appendChild(o0);
+  for(const f of forns){ const o = el('option', null, f); o.value = f; sf.appendChild(o); }
+  sf.value = forns.includes(fH) ? fH : '';
+  const tipoH = $('dHistTipo').value;
+  const hist = defs.lancamentos.filter((l) => (!tipoH || l.tipo === tipoH) && (!sf.value || l.fornecedor === sf.value));
   const lb = $('dLanc'); lb.innerHTML = '';
-  if(!defs.lancamentos.length) lb.appendChild(el('p', 'vazio', 'Nada lançado à mão ainda.'));
-  else lb.appendChild(tabela([['Data'], ['O quê'], ['Fornecedor'], ['Peças'], ['Observação'], ['Quem'], ['']], defs.lancamentos.map((l) => {
-    const tr = el('tr'); const t = el('td'); const bt = el('button', 'bt', 'Desfazer'); bt.type = 'button';
-    bt.onclick = async () => { if(!confirm('Desfazer esse lançamento?')) return; try{ await post('/api/estoque/defeitos/desfazer', { lote: l.lote }); carregarDefeitos(); }catch(e){ aviso(e.message); } };
-    t.appendChild(bt);
-    tr.append(td(quando(l.data)), td(NOME_T[l.tipo] || l.tipo), td(l.fornecedor || '—'), td(l.itens.map((i) => `${i.qtd}x ${i.sku}`).join(', ')), td(l.obs || '—'), td(l.quem || '—'), t);
+  if(!hist.length){ lb.appendChild(el('p', 'vazio', 'Nada no histórico com esse filtro.')); return; }
+  lb.appendChild(tabela([['Data'], ['O quê'], ['Fornecedor'], ['Peças'], ['Total', 'n'], ['Observação'], ['Quem'], ['']], hist.map((l) => {
+    const tr = el('tr'); const t = el('td');
+    const bi = el('button', 'bt', 'Imprimir'); bi.type = 'button';
+    bi.onclick = () => imprimirRecolher(l.fornecedor || '—', l.itens, l.tipo === 'recolhido' ? 'Peças com defeito recolhidas' : (NOME_T[l.tipo] || l.tipo), l.data);
+    const bt = el('button', 'bt', 'Desfazer'); bt.type = 'button';
+    bt.onclick = async () => { if(!confirm('Desfazer esse lançamento? As peças voltam para a lista.')) return; try{ await post('/api/estoque/defeitos/desfazer', { lote: l.lote }); carregarDefeitos(); }catch(e){ aviso(e.message); } };
+    t.append(bi, bt);
+    tr.append(td(diaBR(String(l.data).slice(0, 10))), td(NOME_T[l.tipo] || l.tipo), td(l.fornecedor || '—'),
+      td(l.itens.map((i) => `${i.qtd}x ${i.sku}${i.ref_compra ? ' (ref. ' + i.ref_compra + ')' : ''}`).join(', ')), td(n0(l.itens.reduce((s2, i) => s2 + i.qtd, 0)), 'n'), td(l.obs || '—'), td(l.quem || '—'), t);
     return tr;
   })));
 }
 $('deMais').onclick = () => linha($('deLinhas'), { comValor: false });
+$('dHistTipo').onchange = $('dHistForn').onchange = () => defs && pintarHistDefeitos();
 $('fDefEnt').onsubmit = async (ev) => {
   ev.preventDefault();
   const itens = itensDe($('deLinhas')).map(({ codigo, qtd }) => ({ codigo, qtd }));
