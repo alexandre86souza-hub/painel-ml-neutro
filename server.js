@@ -345,7 +345,9 @@ async function ml(pathname, opts = {}, contaId = null) {
   const body = await res.text();
   let json = null;
   try { json = body ? JSON.parse(body) : null; } catch { if (res.ok) throw new Error('O Mercado Livre respondeu fora do formato esperado.'); }
-  if (!res.ok) throw Object.assign(new Error(mensagemDoML(json, res.statusText)), { status: res.status, body: json });
+  // recurso que o ML desligou (04/11/2026, "Resource deprecated"): a mensagem diz QUAL caminho, para achar a chamada
+  if (!res.ok) { const m = mensagemDoML(json, res.statusText);
+    throw Object.assign(new Error(/deprecated|no longer allowed/i.test(m) ? `${m} (${String(pathname).split('?')[0].replace(/\d{5,}/g, '…')}${String(pathname).includes('?') ? '?' + [...new URLSearchParams(String(pathname).split('?')[1]).keys()].join('&') : ''})` : m), { status: res.status, body: json }); }
   if (aoResponder) aoResponder(res.headers);
   return json;
 }
