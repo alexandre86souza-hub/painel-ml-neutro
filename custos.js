@@ -574,7 +574,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           data: new Date(o.date_created).toISOString(), status: o.status, quantidade: oi.quantity || 0,
           preco_unit: oi.unit_price ?? 0, tarifa_unit: oi.sale_fee ?? null, envio_id: o.shipping?.id ?? null,
           sku: oi.item.seller_sku || oi.item.seller_custom_field || '', origem: oi.stock?.node_id || '',
-          comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '', pack_id: o.pack_id ?? null,
+          comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '', pack_id: o.pack_id ?? 0,
         }))));
       }
 

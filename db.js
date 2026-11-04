@@ -784,7 +784,7 @@ const vendasLinhas = (mlUserId, de, ate) =>
               ORDER BY v.data DESC`).all(mlUserId, de, ate);
 // Linhas baixadas antes de o painel guardar SKU ou origem do estoque: a janela é baixada de novo.
 const vendasSemSku = (mlUserId, de, ate) =>
-  db.prepare('SELECT COUNT(*) AS n FROM vendas WHERE ml_user_id=? AND data >= ? AND data < ? AND (sku IS NULL OR origem IS NULL OR comprador IS NULL)')
+  db.prepare('SELECT COUNT(*) AS n FROM vendas WHERE ml_user_id=? AND data >= ? AND data < ? AND (sku IS NULL OR origem IS NULL OR comprador IS NULL OR pack_id IS NULL)')
     .get(mlUserId, de, ate).n;
 // Pedidos com cliente conhecido e sem o nome ainda (os mais novos primeiro).
 const pedidosSemNome = (mlUserId, limite) => db.prepare(`SELECT DISTINCT order_id FROM vendas WHERE ml_user_id=?
