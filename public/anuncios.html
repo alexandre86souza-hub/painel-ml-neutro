@@ -460,6 +460,7 @@
       <button type="button" id="btPausarMassa" disabled>Pausar selecionados</button>
       <button type="button" id="btAtivarMassa" disabled>Reativar selecionados</button>
       <button type="button" id="btPrecoMassa" disabled title="Novo preço de cada anúncio selecionado pela margem de lucro desejada">Preço pela margem</button>
+      <button type="button" id="btAtacadoMassa" disabled title="Preço de atacado (desconto por quantidade) nos anúncios selecionados">Preço de atacado</button>
       <button type="button" class="ghost" id="btLimparSel" disabled>Limpar seleção</button>
     </span>
   </div>
@@ -473,6 +474,20 @@
       <span id="mpInfo" class="nota"></span>
     </form>
     <div class="mp-rol" id="mpLista"></div>
+  </div>
+
+  <div class="massa-preco" id="massaAtacado" hidden>
+    <form id="maForm">
+      <b>Preço de atacado nos selecionados</b>
+      <span class="nota">Desconto em % a partir de quantas unidades (2 a 100; até 5 faixas). O mesmo % vale para todos os anúncios marcados e substitui o atacado que eles já tiverem.</span>
+      <div id="maFaixas" style="display:flex;flex-wrap:wrap;gap:8px;width:100%"></div>
+      <button type="button" class="ghost" id="maMais">+ faixa</button>
+      <button type="submit" id="maAplicar">Aplicar nos selecionados</button>
+      <button type="button" class="ghost" id="maRemover" title="Tira o preço de atacado dos selecionados">Tirar o atacado</button>
+      <button type="button" class="ghost" id="maFechar">Fechar</button>
+      <div id="maConf" style="width:100%"></div>
+      <span id="maInfo" class="nota" style="width:100%"></span>
+    </form>
   </div>
 
   <ul id="lista"></ul>
@@ -666,7 +681,7 @@ const selecionados = new Set();
 function pintarSelecao(){
   const n = selecionados.size;
   $('selCont').textContent = n ? `${n} anúncio(s) selecionado(s)` : 'Nenhum anúncio selecionado';
-  $('btPausarMassa').disabled = $('btAtivarMassa').disabled = $('btLimparSel').disabled = $('btPrecoMassa').disabled = !n;
+  $('btPausarMassa').disabled = $('btAtivarMassa').disabled = $('btLimparSel').disabled = $('btPrecoMassa').disabled = $('btAtacadoMassa').disabled = !n;
   const caixas = [...document.querySelectorAll('#lista .selItem')];
   for(const c of caixas){ const id = c.closest('li').dataset.id; c.checked = selecionados.has(id); c.closest('li').classList.toggle('selecionado', c.checked); }
   $('selPagina').checked = caixas.length > 0 && caixas.every((c) => c.checked);
@@ -726,6 +741,43 @@ function iniciarPrecoMassa(){
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
   let linhas = [];
   const fechar = () => { $('massaPreco').hidden = true; linhas = []; $('mpLista').innerHTML = ''; $('mpInfo').textContent = ''; $('mpAplicar').disabled = true; };
+  // Preço de atacado em massa: /api/atacado/aplicar (o mesmo da tela Produtos), até 100 por vez, com confirmação aqui
+  const faixaAtacado = (q, pct) => { const d = document.createElement('span'); d.className = 'maFaixa'; d.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+    d.innerHTML = 'a partir de <input type="number" min="2" max="100" step="1" style="width:5em" aria-label="quantidade mínima"> un. → <input type="number" min="0.5" max="80" step="0.5" style="width:5em" aria-label="desconto em %"> % de desconto';
+    const [iq, ip] = d.querySelectorAll('input'); iq.value = q ?? ''; ip.value = pct ?? ''; return d; };
+  $('btAtacadoMassa').onclick = () => {
+    $('massaAtacado').hidden = false; $('maConf').innerHTML = '';
+    if(!$('maFaixas').children.length) $('maFaixas').append(faixaAtacado(3, 3), faixaAtacado(6, 5));
+    $('maInfo').textContent = `${selecionados.size} anúncio(s) selecionado(s).`;
+  };
+  $('maMais').onclick = () => { if($('maFaixas').children.length < 5) $('maFaixas').appendChild(faixaAtacado()); };
+  $('maFechar').onclick = () => { $('massaAtacado').hidden = true; };
+  const confirmarAtacado = (texto, corpo, rota) => {
+    const box = $('maConf'); box.innerHTML = '';
+    const ids = [...selecionados];
+    if(ids.length > 100){ box.textContent = 'No máximo 100 anúncios por vez: tire alguns da seleção.'; return; }
+    const p = document.createElement('p'); p.className = 'nota'; p.textContent = texto(ids.length) + ' Muda o anúncio no Mercado Livre.';
+    const sim = document.createElement('button'); sim.type = 'button'; sim.textContent = 'Confirmar';
+    const nao = document.createElement('button'); nao.type = 'button'; nao.className = 'ghost'; nao.textContent = 'Cancelar';
+    nao.onclick = () => { box.innerHTML = ''; };
+    sim.onclick = async () => {
+      sim.disabled = nao.disabled = true; $('maInfo').textContent = 'Enviando ao Mercado Livre…';
+      try{
+        const r = await api(rota, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corpo, ids }) });
+        box.innerHTML = '';
+        $('maInfo').textContent = `${r.alterados} de ${r.pedidos} anúncio(s) ok.` + (r.falhas?.length ? ' Não mudaram: ' + r.falhas.map((f) => `${f.id} (${f.erro})`).join('; ') : '');
+      }catch(e){ $('maInfo').textContent = 'Não aplicou: ' + e.message; sim.disabled = nao.disabled = false; }
+    };
+    box.append(p, sim, nao);
+  };
+  $('maForm').onsubmit = (ev) => {
+    ev.preventDefault();
+    const faixas = [...$('maFaixas').querySelectorAll('.maFaixa')].map((d) => { const [q, p] = d.querySelectorAll('input'); return { quantidade: Number(q.value), pct: Number(String(p.value).replace(',', '.')) }; })
+      .filter((f) => f.quantidade && f.pct);
+    if(!faixas.length){ $('maInfo').textContent = 'Preencha pelo menos uma faixa (quantidade e %).'; return; }
+    confirmarAtacado((n) => `Colocar o atacado ${faixas.map((f) => `${f.quantidade}+ un. = −${String(f.pct).replace('.', ',')}%`).join(', ')} em ${n} anúncio(s)?`, { faixas }, '/api/atacado/aplicar');
+  };
+  $('maRemover').onclick = () => confirmarAtacado((n) => `Tirar o preço de atacado de ${n} anúncio(s)?`, {}, '/api/atacado/remover');
   $('btPrecoMassa').onclick = () => { $('massaPreco').hidden = false; $('mpInfo').textContent = `${selecionados.size} anúncio(s) selecionado(s). Escolha a margem e clique em Calcular.`; $('mpMargem').focus(); };
   $('mpFechar').onclick = fechar;
   const contar = () => { const n = linhas.filter((l) => l.ck?.checked).length; $('mpAplicar').disabled = !n; $('mpAplicar').textContent = n ? `Aplicar em ${n} anúncio(s)` : 'Aplicar nos marcados'; };
@@ -1302,9 +1354,9 @@ function blocoCatalogo(it, el){
 
 // Promoções que o anúncio pode entrar, com o lucro e a margem em cada preço, contra o mais barato do catálogo (outro
 // vendedor). Entrar muda o preço de venda: só com o clique e a confirmação aqui mesmo.
-function blocoPromosCatalogo(it, el, menorConc){
+function blocoPromosCatalogo(it, el, menorConc, opc = {}){
   const b = el('div'); b.style.marginTop = '14px';
-  b.appendChild(el('b', null, 'Promoções e margem deste anúncio'));
+  if(!opc.criar) b.appendChild(el('b', null, 'Promoções e margem deste anúncio'));
   const corpo = el('div'); corpo.appendChild(el('p', 'nota', 'lendo as promoções…')); b.appendChild(corpo);
   const pct = (m) => (m == null ? '—' : (m * 100).toFixed(1).replace('.', ',') + '%');
   const alvo = menorConc != null ? Math.round((menorConc - 0.01) * 100) / 100 : null;
@@ -1326,7 +1378,8 @@ function blocoPromosCatalogo(it, el, menorConc){
       corpo.appendChild(el('p', 'nota', `Para ficar abaixo do mais barato (${dinheiro(menorConc)}): ${dinheiro(alvo)} → ${txtLucro(x, 'promo')}`));
     }
     const lista = r.promocoes.filter((p) => ['candidate', 'started', 'pending'].includes(p.status));
-    if(!lista.length){ corpo.appendChild(el('p', 'nota', 'Nenhuma promoção disponível para este anúncio agora. Dá para criar um desconto próprio na tela Campanhas.')); return; }
+    if(opc.criar) corpo.appendChild(criarDescontoProprio(it, el, atual, lucroEm, txtLucro, lista.some((p) => p.tipo === 'PRICE_DISCOUNT' && ['started', 'pending'].includes(p.status))));
+    if(!lista.length){ corpo.appendChild(el('p', 'nota', opc.criar ? 'Nenhuma campanha disponível para este anúncio agora.' : 'Nenhuma promoção disponível para este anúncio agora. Dá para criar um desconto próprio na tela Campanhas.')); return; }
     const t = el('table', 'det-tab'), th = el('tr');
     for(const h of ['Promoção', 'Preço', 'Lucro e margem', '']) th.appendChild(el('th', null, h));
     t.appendChild(el('thead')).appendChild(th);
@@ -1408,6 +1461,25 @@ function blocoPromosCatalogo(it, el, menorConc){
         };
         tdB.append(bt, conf);
       }
+      if(opc.sair && ['started', 'pending'].includes(p.status)){
+        const bt = el('button', 'ghost', 'Sair'); bt.type = 'button';
+        const conf = el('div'); conf.hidden = true;
+        bt.onclick = () => { conf.innerHTML = ''; conf.hidden = false; bt.hidden = true;
+          conf.appendChild(el('div', 'nota', `Tirar o anúncio de "${p.nome}"? O preço volta ao normal no Mercado Livre.`));
+          const sim = el('button', null, 'Confirmar'); sim.type = 'button';
+          const nao = el('button', 'ghost', 'Cancelar'); nao.type = 'button';
+          nao.onclick = () => { conf.hidden = true; bt.hidden = false; };
+          sim.onclick = async () => {
+            sim.disabled = true;
+            try{
+              await api(`/api/promocoes/anuncio/${it.id}/sair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ promocao_id: p.id, tipo: p.tipo, oferta_id: p.oferta_id }) });
+              conf.innerHTML = ''; conf.appendChild(el('div', 'nota', 'Pronto: o anúncio saiu da promoção (o ML pode levar alguns minutos para mostrar o preço).'));
+            }catch(e){ sim.disabled = false; conf.appendChild(el('div', 'nota det-falta', e.message)); }
+          };
+          conf.append(sim, nao);
+        };
+        tdB.append(bt, conf);
+      }
       tr.append(tdN, tdP, tdL, tdB);
       tb.appendChild(tr);
       pintar();
@@ -1415,6 +1487,53 @@ function blocoPromosCatalogo(it, el, menorConc){
     t.appendChild(tb);
     const caixa = el('div'); caixa.style.overflowX = 'auto'; caixa.appendChild(t); corpo.appendChild(caixa);
   }).catch((e) => { corpo.innerHTML = ''; corpo.appendChild(el('p', 'nota det-falta', 'Não consegui ler as promoções: ' + e.message)); });
+  return b;
+}
+
+// Criar um desconto próprio (PRICE_DISCOUNT) no anúncio: preço ou %, de/até (o ML aceita até 14 dias), lucro no preço novo.
+function criarDescontoProprio(it, el, atual, lucroEm, txtLucro, jaTem){
+  const b = el('div'); b.style.margin = '6px 0 12px';
+  const bt = el('button', null, '+ Criar desconto próprio'); bt.type = 'button';
+  const f = el('div'); f.hidden = true; f.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px';
+  b.append(bt, f);
+  if(jaTem) b.appendChild(el('p', 'nota', 'Este anúncio já tem um desconto próprio: para mudar, use "Mudar desconto" na lista abaixo.'));
+  bt.onclick = () => {
+    bt.hidden = true; f.hidden = false; f.innerHTML = '';
+    const dia = (ms) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
+    const pct = el('input'); pct.type = 'number'; pct.min = '1'; pct.max = '80'; pct.step = '0.5'; pct.value = '10'; pct.style.width = '5em';
+    const preco = el('input'); preco.type = 'number'; preco.min = '0'; preco.step = '0.01'; preco.style.width = '7em';
+    const ini = el('input'); ini.type = 'date'; ini.value = dia(Date.now());
+    const fim = el('input'); fim.type = 'date'; fim.value = dia(Date.now() + 13 * 864e5);
+    const luc = el('span', 'nota', '');
+    const conta = () => { const v = Number(preco.value); luc.textContent = '…'; if(!(v > 0)) { luc.textContent = ''; return; }
+      lucroEm(v, 0).then((x) => { luc.textContent = txtLucro(x, 'promo'); }).catch((e) => { luc.textContent = e.message; }); };
+    let espera; const depois = () => { clearTimeout(espera); espera = setTimeout(conta, 400); };
+    pct.oninput = () => { preco.value = (Math.round(atual * (1 - Number(pct.value) / 100) * 100) / 100).toFixed(2); depois(); };
+    preco.oninput = () => { pct.value = (Math.round((1 - Number(preco.value) / atual) * 1000) / 10).toString(); depois(); };
+    pct.oninput();
+    const ok = el('button', null, 'Criar'); ok.type = 'button';
+    const cancelar = el('button', 'ghost', 'Cancelar'); cancelar.type = 'button';
+    const conf = el('div'); conf.style.width = '100%';
+    cancelar.onclick = () => { f.hidden = true; bt.hidden = false; };
+    ok.onclick = () => {
+      conf.innerHTML = '';
+      const v = Number(preco.value);
+      if(!(v > 0 && v < atual)){ conf.appendChild(el('div', 'nota det-falta', 'O preço com desconto precisa ser menor que o preço de hoje.')); return; }
+      conf.appendChild(el('div', 'nota', `Criar desconto próprio: de ${dinheiro(atual)} por ${dinheiro(v)} (−${pct.value}%), de ${ini.value.split('-').reverse().join('/')} a ${fim.value.split('-').reverse().join('/')}? O preço de venda muda no Mercado Livre.`));
+      const sim = el('button', null, 'Confirmar'); sim.type = 'button';
+      const nao = el('button', 'ghost', 'Cancelar'); nao.type = 'button'; nao.onclick = () => { conf.innerHTML = ''; };
+      sim.onclick = async () => {
+        sim.disabled = true;
+        try{
+          await api(`/api/promocoes/anuncio/${it.id}/aderir`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tipo: 'PRICE_DISCOUNT', preco: v, preco_original: atual, inicio: ini.value, fim: fim.value }) });
+          f.innerHTML = ''; f.appendChild(el('div', 'nota', `Pronto: desconto criado, ${dinheiro(v)} de ${ini.value.split('-').reverse().join('/')} a ${fim.value.split('-').reverse().join('/')} (o ML pode levar alguns minutos para mostrar).`));
+        }catch(e){ sim.disabled = false; conf.appendChild(el('div', 'nota det-falta', 'O Mercado Livre recusou: ' + e.message)); }
+      };
+      conf.append(sim, nao);
+    };
+    f.append(el('span', null, 'Desconto'), pct, el('span', null, '% = preço'), preco, el('span', null, 'de'), ini, el('span', null, 'até'), fim, ok, cancelar, luc, conf);
+  };
   return b;
 }
 
@@ -1695,6 +1814,13 @@ async function pintarAnalise(id, alvo, dias){
         rotulo: (i, v) => `${datas[i] ? br(datas[i]) : ''}: ${num(v)} visita(s)` }));
       alvo.appendChild(w);
     }
+
+    // Promoções do anúncio: participando, agendadas e disponíveis (entrar, mudar desconto, sair) e criar um desconto próprio
+    const itAn = ultimaLista?.itens?.find((x) => x.id === id) || { id };
+    const elA = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+    const promos = elA('div', 'grafico'); promos.appendChild(elA('h4', null, 'Promoções deste anúncio'));
+    promos.appendChild(blocoPromosCatalogo(itAn, elA, null, { sair: true, criar: true }));
+    alvo.appendChild(promos);
 
     const pe = document.createElement('p');
     pe.className = 'nota';
