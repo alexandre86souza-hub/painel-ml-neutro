@@ -347,9 +347,28 @@ async function ml(pathname, opts = {}, contaId = null) {
   try { json = body ? JSON.parse(body) : null; } catch { if (res.ok) throw new Error('O Mercado Livre respondeu fora do formato esperado.'); }
   // recurso que o ML desligou (04/11/2026, "Resource deprecated"): a mensagem diz QUAL caminho, para achar a chamada
   if (!res.ok) { const m = mensagemDoML(json, res.statusText);
+    // 04/11/2026: o ML passou a recusar às vezes o include_attributes=all (o SELLER_SKU de cada variação). Leitura: repete
+    // sem ele e traz os atributos das variações por /items/{id}/variations.
+    if (/deprecated|no longer allowed/i.test(m) && (!opts.method || opts.method === 'GET') && /[?&]include_attributes=all/.test(pathname)) {
+      return lerSemIncludeAttributes(pathname, contaId);
+    }
     throw Object.assign(new Error(/deprecated|no longer allowed/i.test(m) ? `${m} (${String(pathname).split('?')[0].replace(/\d{5,}/g, '…')}${String(pathname).includes('?') ? '?' + [...new URLSearchParams(String(pathname).split('?')[1]).keys()].join('&') : ''})` : m), { status: res.status, body: json }); }
   if (aoResponder) aoResponder(res.headers);
   return json;
+}
+
+async function lerSemIncludeAttributes(pathname, contaId) {
+  const sem = pathname.replace(/([?&])include_attributes=all(&|$)/, (_, a, b) => (b ? a : '')).replace(/\?$/, '');
+  const r = await ml(sem, {}, contaId);
+  const itens = Array.isArray(r) ? r.map((x) => (x?.code === 200 ? x.body : null)).filter(Boolean) : [r];
+  for (const it of itens) {
+    if (!it?.id || !(it.variations || []).length || it.variations.every((v) => Array.isArray(v.attributes) && v.attributes.length)) continue;
+    const vs = await ml(`/items/${it.id}/variations`, {}, contaId).catch(() => null);
+    if (!Array.isArray(vs)) continue;
+    const porId = new Map(vs.map((v) => [v.id, v]));
+    it.variations = it.variations.map((v) => ({ ...v, attributes: porId.get(v.id)?.attributes ?? v.attributes }));
+  }
+  return r;
 }
 
 // Arquivo da API do ML (PDF da etiqueta de envio): mesma conta e renovação do ml(), devolve os bytes.
