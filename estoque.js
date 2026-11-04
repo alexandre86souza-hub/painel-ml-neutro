@@ -531,11 +531,12 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
     let rs = [];
     try { rs = D.db.prepare(`SELECT n.envio_id, n.ml_user_id, n.conferido_em, n.pecas, v.sku, SUM(v.quantidade) AS qtd, MIN(v.data) AS data, MAX(v.origem) AS origem
         FROM ml_nao_entregues n JOIN vendas v ON v.envio_id = n.envio_id AND v.ml_user_id = n.ml_user_id
-        WHERE n.saiu=1 AND n.conferido_em IS NOT NULL AND v.status='cancelled' GROUP BY n.envio_id, v.sku`).all(); } catch { return []; }
+        WHERE n.saiu=1 AND v.status='cancelled' GROUP BY n.envio_id, v.sku`).all(); } catch { return []; }
     return rs.filter((r) => r.data >= desde && !(r.origem && !/^BRP\d+$/.test(r.origem))).map((r) => {
       let pecas = null; try { pecas = JSON.parse(r.pecas || 'null'); } catch { pecas = null; }
       const qtd = Math.round(r.qtd || 0), nPos = numerosDoCodigo(r.sku, cat.porSku, { doCanal: true }).length || 1;
-      return { ref: `devolucao:mlne:${r.envio_id}:${r.sku}`, sku: r.sku, qtd, data: r.conferido_em, valida: true, sinal: 1, ...devolucaoDe(qtd, nPos, pecas),
+      // sem conferir: valida false (alvo 0), para o "Desfazer" tirar o que a conferência tinha devolvido
+      return { ref: `devolucao:mlne:${r.envio_id}:${r.sku}`, sku: r.sku, qtd, data: r.conferido_em || new Date().toISOString(), valida: !!r.conferido_em, sinal: 1, ...devolucaoDe(qtd, nPos, pecas),
         pendente: null, tipo: 'devolucao', origem: `Mercado Livre · ${nomeConta.get(r.ml_user_id) || r.ml_user_id} (entrega não realizada)` };
     });
   }

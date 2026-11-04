@@ -235,6 +235,19 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     D.vendasGravar([{ order_id: 1, item_id: 'MLB1', variacao: 0, ml_user_id: 111, data: depois, status: 'cancelled', quantidade: 2, preco_unit: 100, tarifa_unit: 10, envio_id: 1, sku: 'KIT-407.408', origem: 'BRP123', comprador_id: 1, comprador: 'x' }]);
     await api('GET', '/api/estoque?recarregar=1');
     assert.strictEqual(saldoDe(407), 130, 'cancelada voltou');
+    // entrega não realizada: a cancelada que saiu para entrega fica fora do estoque até Conferir; boas voltam, danificada não
+    D.db.prepare("INSERT INTO ml_nao_entregues (envio_id, ml_user_id, saiu, status, lido_em) VALUES (1, 111, 1, 'not_delivered', ?)").run(new Date().toISOString());
+    await api('GET', '/api/estoque?recarregar=1');
+    assert.deepStrictEqual([saldoDe(407), saldoDe(408)], [128, 7], 'não entregue: segue baixada até conferir');
+    D.db.prepare("UPDATE ml_nao_entregues SET conferido_em=?, pecas=? WHERE envio_id=1").run(new Date().toISOString(), JSON.stringify([{ boas: 2, ruins: 0 }, { boas: 1, ruins: 1 }]));
+    await api('GET', '/api/estoque?recarregar=1');
+    assert.deepStrictEqual([saldoDe(407), saldoDe(408)], [130, 8], 'conferida: 2 DQ-407 e 1 BP-408 voltaram (1 danificada)');
+    D.db.prepare("UPDATE ml_nao_entregues SET conferido_em=NULL, pecas=NULL WHERE envio_id=1").run();
+    await api('GET', '/api/estoque?recarregar=1');
+    assert.deepStrictEqual([saldoDe(407), saldoDe(408)], [128, 7], 'desfazer: sai de novo');
+    D.db.prepare("UPDATE ml_nao_entregues SET conferido_em=? WHERE envio_id=1").run(new Date().toISOString());
+    await api('GET', '/api/estoque?recarregar=1');
+    assert.deepStrictEqual([saldoDe(407), saldoDe(408)], [130, 9], 'conferida sem detalhe: tudo bom');
 
     // devoluções do ML: chegou sem defeito volta; com defeito não; Full não; sem conferência = pendente
     const devol = (claim, order, defeito, produtos) => {
