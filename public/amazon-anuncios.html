@@ -67,6 +67,7 @@
         <button type="button" data-f="venderam">Venderam em 30 dias</button>
         <button type="button" data-f="promocao">Em promoção</button>
         <button type="button" data-f="pausados" title="Fora de venda (sem o status à venda na Amazon)">Pausados</button>
+        <button type="button" data-f="pausado_estoque" title="Fora de venda e com estoque no painel de todos os produtos do SKU, já descontada a segurança">Pausados com estoque</button>
         <button type="button" data-f="concorrentes">Com concorrentes</button>
         <button type="button" data-f="semdestaque">Sem o destaque</button>
         <button type="button" data-f="fba">FBA</button>
@@ -147,6 +148,7 @@ function pintar(){
     if(filtro === 'venderam' && !i.vendas_30) return false;
     if(filtro === 'promocao' && !((i.desconto && (!i.desconto.fim || i.desconto.fim > new Date().toISOString())) || (i.cheio && i.preco != null && i.preco < i.cheio - 0.009))) return false;
     if(filtro === 'pausados' && (i.status || []).includes('BUYABLE')) return false;
+    if(filtro === 'pausado_estoque' && !(pausadosComEstoque && pausadosComEstoque.has(String(i.sku)))) return false;
     if(filtro === 'concorrentes' && !(i.conc?.outros > 0)) return false;
     if(filtro === 'semdestaque' && !(i.conc?.outros > 0 && !i.conc.voce_destaque)) return false;
     if(filtro === 'fba' && i.canal !== 'FBA') return false;
@@ -337,6 +339,20 @@ async function carregar(recarregar){
   }catch(e){ $('lista').innerHTML = ''; aviso(e.message); }
 }
 carregar();
+// Filtro "Pausados com estoque": a lista vem do painel (estoque de todos os produtos do SKU, já tirada a segurança)
+let pausadosComEstoque = null, pausadosLendo = false;
+async function lerPausadosComEstoque(){
+  if(pausadosLendo) return; pausadosLendo = true;
+  try{
+    for(let i = 0; i < 6; i++){
+      const r = await fetch('/api/anuncios/pausados-com-estoque?canal=' + 'amazon').then((x) => x.json());
+      if(r.pronto){ pausadosComEstoque = new Set(r.chaves || []); break; }
+      await new Promise((ok) => setTimeout(ok, 10000));
+    }
+  }catch{} finally{ pausadosLendo = false; }
+  if(filtro === 'pausado_estoque') pintar();
+}
+document.addEventListener('click', (ev) => { const b = ev.target.closest && ev.target.closest('[data-f="pausado_estoque"]'); if(b) { pausadosComEstoque = null; lerPausadosComEstoque(); } }, true);
 </script>
 <script src="/sino.js?v=6" defer></script>
 </body>

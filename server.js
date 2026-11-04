@@ -3251,6 +3251,29 @@ routes['GET /api/estoque/anuncios'] = async (url) => {
   await Promise.race([new Promise((ok) => { const t = setInterval(() => { if (!estAnuncios.rodando) { clearInterval(t); ok(); } }, 300); }), new Promise((ok) => setTimeout(ok, 20000))]);
   return { pronto: !estAnuncios.rodando, erro: estAnuncios.erro, ...(estAnuncios.dados || {}) };
 };
+// Filtro "Pausados com estoque" das telas de anúncios da Shopee, Amazon, Leroy e Magalu (o do ML mora em /api/items): os anúncios
+// fora de venda com estoque no painel de TODOS os produtos do SKU, já tirada a segurança (deveria > 0 na comparação de "Estoque nos
+// anúncios"; "sempre zero" e FBA ficam fora). Magalu: a comparação só leva os publicados, então os despublicados são contados aqui.
+// chaves: Shopee "item:model" (model 0 sem variação), as outras o SKU da loja. Só leitura.
+routes['GET /api/anuncios/pausados-com-estoque'] = async (url) => {
+  const canal = url.searchParams.get('canal'), loja = url.searchParams.get('loja');
+  if (!['shopee', 'amazon', 'leroy', 'magalu'].includes(canal)) throw Object.assign(new Error('canal inválido'), { status: 400 });
+  const tem = (l) => Number(l.deveria) > 0 && !l.full;
+  if (canal === 'magalu') {
+    const C = require('./custos.js'), E = require('./estoque.js');
+    const vinc = D.skuVinculos('magalu'), tr = D.skuTrocas('magalu');
+    const anuncios = D.magaluAnuncios().filter((a) => a.status !== 'PUBLISHED').map((a) => ({ canal: 'magalu', loja: 'Magalu', id: a.sku, variacao: null,
+      titulo: a.titulo, sku: C.skuNaData(tr, vinc.get(a.sku) || a.sku), estoque: a.estoque ?? null, status: a.status, full: false }));
+    const r = E.estoqueDosAnuncios(anuncios, D.estoqueSaldos(), estoqueMod.catalogo(), estoqueMod.segurancaDe());
+    return { pronto: true, chaves: [...new Set(E.comZerados(r.linhas, estoqueZerados()).filter(tem).map((l) => String(l.id)))] };
+  }
+  const r = await routes['GET /api/estoque/anuncios'](new URL('/api/estoque/anuncios', 'http://painel'));
+  if (r.pronto === false && !(r.linhas || []).length) return { pronto: false, chaves: [] };
+  const fora = { shopee: (l) => l.status === 'UNLIST' && (!loja || String(l.shop) === String(loja)),
+    amazon: (l) => !String(l.status || '').includes('BUYABLE'), leroy: (l) => l.status === 'inativa' }[canal];
+  const chave = (l) => (canal === 'shopee' ? `${l.id}:${l.var_id || 0}` : String(l.id));
+  return { pronto: true, chaves: [...new Set((r.linhas || []).filter((l) => l.canal === canal && fora(l) && tem(l)).map(chave))] };
+};
 // Tela Produtos, "Produtos escolhidos no painel": os anúncios de cada SKU com composição (ML, Shopee, Magalu, Leroy, Amazon),
 // com o link, para o vendedor abrir e conferir os produtos. Usa a mesma leitura de "Estoque nos anúncios" (cache de 10 min).
 // A chave da composição é o SKU do canal, o id do anúncio do ML sem SKU ou o código da Magalu.

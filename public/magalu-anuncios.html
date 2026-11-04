@@ -63,6 +63,7 @@
         <button type="button" data-f="vendem" aria-pressed="false">Venderam em 30 dias</button>
         <button type="button" data-f="promocao" aria-pressed="false">Em promoção</button>
         <button type="button" data-f="pausados" aria-pressed="false">Pausados</button>
+        <button type="button" data-f="pausado_estoque" title="Fora de venda e com estoque no painel de todos os produtos do SKU, já descontada a segurança" aria-pressed="false">Pausados com estoque</button>
         <button type="button" data-f="baixa" aria-pressed="false">Margem abaixo de</button>
         <label class="margem-max"><input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
         <button type="button" data-f="todos" aria-pressed="false">Todos</button>
@@ -161,6 +162,7 @@ function pintarLista(){
     if(filtro === 'vendem' && !x.vendas_30) return false;
     if(filtro === 'promocao' && !(x.preco_lista && x.preco != null && x.preco_lista > x.preco + 0.009)) return false;
     if(filtro === 'pausados' && x.status === 'PUBLISHED') return false;
+    if(filtro === 'pausado_estoque' && !(pausadosComEstoque && pausadosComEstoque.has(String(x.sku)))) return false;
     if(filtro === 'baixa'){ const lu = lucroDe(x); if(lu == null || !x.preco || lu / x.preco >= margemMax()) return false; }
     if(q && ![x.titulo, x.sku, x.sku_painel].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
@@ -231,6 +233,20 @@ try{ const q = new URLSearchParams(location.search).get('q'); if(q) $('busca').v
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
 $('btReler').onclick = () => carregar(true);
 carregar(false);
+// Filtro "Pausados com estoque": a lista vem do painel (estoque de todos os produtos do SKU, já tirada a segurança)
+let pausadosComEstoque = null, pausadosLendo = false;
+async function lerPausadosComEstoque(){
+  if(pausadosLendo) return; pausadosLendo = true;
+  try{
+    for(let i = 0; i < 6; i++){
+      const r = await fetch('/api/anuncios/pausados-com-estoque?canal=' + 'magalu').then((x) => x.json());
+      if(r.pronto){ pausadosComEstoque = new Set(r.chaves || []); break; }
+      await new Promise((ok) => setTimeout(ok, 10000));
+    }
+  }catch{} finally{ pausadosLendo = false; }
+  if(filtro === 'pausado_estoque') pintarLista();
+}
+document.addEventListener('click', (ev) => { const b = ev.target.closest && ev.target.closest('[data-f="pausado_estoque"]'); if(b) { pausadosComEstoque = null; lerPausadosComEstoque(); } }, true);
 </script>
 <script src="/sino.js?v=6" defer></script>
 </body>

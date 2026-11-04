@@ -53,6 +53,7 @@
         <button type="button" data-f="venderam">Venderam em 30 dias</button>
         <button type="button" data-f="promocao">Em promoção</button>
         <button type="button" data-f="pausados">Pausados</button>
+        <button type="button" data-f="pausado_estoque" title="Fora de venda e com estoque no painel de todos os produtos do SKU, já descontada a segurança">Pausados com estoque</button>
         <button type="button" data-f="semcusto">Sem custo</button>
         <button type="button" data-f="baixa">Margem abaixo de</button>
         <label class="margem-max"><input id="fMargemMax" type="number" step="1" min="-100" max="100" value="10" aria-label="Margem máxima em %"> %</label>
@@ -107,6 +108,7 @@ function pintar(){
     if(filtro === 'venderam' && !i.vendas_30) return false;
     if(filtro === 'promocao' && !i.em_desconto) return false;
     if(filtro === 'pausados' && i.ativa) return false;
+    if(filtro === 'pausado_estoque' && !(pausadosComEstoque && pausadosComEstoque.has(String(i.sku)))) return false;
     if(filtro === 'semcusto' && i.custo_unit != null) return false;
     if(filtro === 'baixa' && !(e && e.margem < margemMax())) return false;
     return !q || [i.titulo, i.sku].some((t) => (t || '').toLowerCase().includes(q));
@@ -178,6 +180,20 @@ async function carregar(recarregar){
   }catch(e){ aviso(e.message); $('lista').innerHTML = ''; }
 }
 carregar();
+// Filtro "Pausados com estoque": a lista vem do painel (estoque de todos os produtos do SKU, já tirada a segurança)
+let pausadosComEstoque = null, pausadosLendo = false;
+async function lerPausadosComEstoque(){
+  if(pausadosLendo) return; pausadosLendo = true;
+  try{
+    for(let i = 0; i < 6; i++){
+      const r = await fetch('/api/anuncios/pausados-com-estoque?canal=' + 'leroy').then((x) => x.json());
+      if(r.pronto){ pausadosComEstoque = new Set(r.chaves || []); break; }
+      await new Promise((ok) => setTimeout(ok, 10000));
+    }
+  }catch{} finally{ pausadosLendo = false; }
+  if(filtro === 'pausado_estoque') pintar();
+}
+document.addEventListener('click', (ev) => { const b = ev.target.closest && ev.target.closest('[data-f="pausado_estoque"]'); if(b) { pausadosComEstoque = null; lerPausadosComEstoque(); } }, true);
 </script>
 <script src="/sino.js?v=6" defer></script>
 </body>
