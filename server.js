@@ -1243,9 +1243,16 @@ const routes = {
     const soConc = url.searchParams.get('concorrentes') ? new Set(D.concItensMarcados(conta.ml_user_id)) : null;
     // Filtros rápidos (iguais aos da tela da Shopee): venderam no período, em promoção (preço < original), sem custo,
     // margem abaixo de X% (margem do que vendeu no período, a mesma do cartão). Também passam pela lista local.
-    const filtro = ['venderam', 'promocao', 'semcusto', 'margem', 'catalogo'].includes(url.searchParams.get('filtro')) ? url.searchParams.get('filtro') : null;
+    const filtro = ['venderam', 'promocao', 'semcusto', 'margem', 'catalogo', 'pausado_estoque'].includes(url.searchParams.get('filtro')) ? url.searchParams.get('filtro') : null;
     let soFiltro = null;
-    if (filtro === 'catalogo') {   // perdendo no catálogo (a leitura de 30 em 30 min do catalogo.js; contra a outra conta da empresa fica fora)
+    if (filtro === 'pausado_estoque') {
+      // Não ativo e com estoque no painel de TODOS os produtos do SKU (já tirada a segurança): a mesma comparação da aba
+      // "Estoque nos anúncios" (cache de 10 min; deveria > 0 = o kit que acaba primeiro ainda dá 1+). Full fica fora.
+      const r = await routes['GET /api/estoque/anuncios'](new URL('/api/estoque/anuncios', 'http://painel'));
+      const daConta = new Set((await idsDaConta(conta, null, q)).ids);
+      soFiltro = new Set((r.linhas || []).filter((l) => l.canal === 'ml' && !l.full && l.status !== 'active' && l.status !== 'closed'
+        && Number(l.deveria) > 0 && daConta.has(l.id)).map((l) => l.id));
+    } else if (filtro === 'catalogo') {   // perdendo no catálogo (a leitura de 30 em 30 min do catalogo.js; contra a outra conta da empresa fica fora)
       soFiltro = new Set((catalogoMod.resumo(conta.ml_user_id)?.lista_perdendo || []).map((x) => x.id));
     } else if (filtro === 'promocao') {
       soFiltro = new Set((await custosMod.anuncios(conta)).filter((it) => it.original_price && it.price < it.original_price).map((it) => it.id));
