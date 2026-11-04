@@ -574,7 +574,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           data: new Date(o.date_created).toISOString(), status: o.status, quantidade: oi.quantity || 0,
           preco_unit: oi.unit_price ?? 0, tarifa_unit: oi.sale_fee ?? null, envio_id: o.shipping?.id ?? null,
           sku: oi.item.seller_sku || oi.item.seller_custom_field || '', origem: oi.stock?.node_id || '',
-          comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '',
+          comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '', pack_id: o.pack_id ?? null,
         }))));
       }
 
@@ -655,7 +655,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
           s.vendas++; semCusto.set(k, s);
         }
         vendas.push({
-          pedido: l.order_id, data: l.data, status: l.status, valida, item_id: l.item_id,
+          pedido: l.order_id, pacote: l.pack_id || null, envio: l.envio_id || null, data: l.data, status: l.status, valida, item_id: l.item_id,
           comprador: l.comprador || null, comprador_nome: l.comprador_nome || null,
           titulo: info[l.item_id]?.title || null, foto: info[l.item_id]?.thumbnail || null,
           sku: l.sku || null, quantidade: l.quantidade, preco_unit: l.preco_unit,

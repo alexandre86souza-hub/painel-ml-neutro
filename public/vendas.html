@@ -305,14 +305,15 @@ function campoFreteLeroy(v){
 function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
-  const q = $('busca').value.trim().toLowerCase();
+  // "#2000…" copiado do ML: sem o #; o ML mostra o nº do PACOTE e do envio, que também valem na busca
+  const q = $('busca').value.trim().toLowerCase().replace(/^#/, '');
   const itens = dados.vendas.filter((v) => {
     if(filtro === 'canceladas' && v.valida) return false;
     if(filtro !== 'canceladas' && filtro !== 'todas' && !v.valida) return false;
     if(filtro === 'prejuizo' && !(v.lucro < 0)) return false;
     if(filtro === 'semcusto' && v.custo_unit != null) return false;
     if(filtro === 'full' && !v.full) return false;
-    if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))) return false;
+    if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido), v.pacote && String(v.pacote), v.envio && String(v.envio), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
   if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }

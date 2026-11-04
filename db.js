@@ -353,6 +353,8 @@ colunaNova('vendas', 'origem TEXT');
 colunaNova('vendas', 'comprador_id INTEGER');
 colunaNova('vendas', 'comprador TEXT');
 colunaNova('vendas', 'comprador_nome TEXT');
+// vendas.pack_id: número do PACOTE que o ML mostra na lista de vendas (#2000…); sem pacote = o próprio pedido. Busca da tela Pedidos.
+colunaNova('vendas', 'pack_id INTEGER');
 
 function custoGravar(mlUserId, itemId, { custo, outros }) {
   db.prepare(`INSERT INTO custos (item_id, ml_user_id, custo, outros, atualizado_em, origem) VALUES (?,?,?,?,?,'manual')
@@ -466,21 +468,22 @@ const EM_VENDA = `status IN (${STATUS_VENDA.map((s) => `'${s}'`).join(',')})`;
 
 function vendasGravar(linhas) {
   const st = db.prepare(`INSERT INTO vendas (order_id, item_id, variacao, ml_user_id, data, status,
-                                             quantidade, preco_unit, tarifa_unit, envio_id, sku, origem, comprador_id, comprador)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                             quantidade, preco_unit, tarifa_unit, envio_id, sku, origem, comprador_id, comprador, pack_id)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                          ON CONFLICT(order_id, item_id, variacao) DO UPDATE SET
                            status=excluded.status, quantidade=excluded.quantidade,
                            preco_unit=excluded.preco_unit, tarifa_unit=excluded.tarifa_unit,
                            envio_id=excluded.envio_id, sku=COALESCE(excluded.sku, vendas.sku),
                            origem=COALESCE(excluded.origem, vendas.origem),
                            comprador_id=COALESCE(excluded.comprador_id, vendas.comprador_id),
-                           comprador=COALESCE(excluded.comprador, vendas.comprador)`);
+                           comprador=COALESCE(excluded.comprador, vendas.comprador),
+                           pack_id=COALESCE(excluded.pack_id, vendas.pack_id)`);
   db.exec('BEGIN');
   try {
     for (const l of linhas) {
       st.run(l.order_id, l.item_id, l.variacao || 0, l.ml_user_id, l.data, l.status ?? null,
         l.quantidade, l.preco_unit, l.tarifa_unit ?? null, l.envio_id ?? null, l.sku ?? null, l.origem ?? null,
-        l.comprador_id ?? null, l.comprador ?? null);
+        l.comprador_id ?? null, l.comprador ?? null, l.pack_id ?? null);
     }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -773,7 +776,7 @@ const vendasDesde = (mlUserId) => db.prepare('SELECT MIN(data) AS d FROM vendas 
 // linhas dividem o mesmo envio, para ratear o frete de um pacote entre os anúncios dele.
 const vendasLinhas = (mlUserId, de, ate) =>
   db.prepare(`SELECT v.order_id, v.item_id, v.variacao, v.data, v.status, v.quantidade, v.preco_unit,
-                     v.tarifa_unit, v.envio_id, v.sku, v.origem, v.comprador, v.comprador_nome, f.custo AS frete_envio,
+                     v.tarifa_unit, v.envio_id, v.sku, v.origem, v.comprador, v.comprador_nome, v.pack_id, f.custo AS frete_envio,
                      (SELECT SUM(x.quantidade * x.preco_unit) FROM vendas x
                        WHERE x.envio_id = v.envio_id AND x.ml_user_id = v.ml_user_id) AS total_envio
               FROM vendas v LEFT JOIN fretes f ON f.envio_id = v.envio_id

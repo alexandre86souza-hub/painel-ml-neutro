@@ -885,6 +885,7 @@ const linhasDoPedido = (o, contaId) => (o.order_items || []).filter((oi) => oi.i
   sku: oi.item.seller_sku || oi.item.seller_custom_field || '',   // '' = pedido sem SKU (não baixa de novo)
   origem: oi.stock?.node_id || '',   // estoque de onde saiu (Full = armazém do ML); '' = sem informação
   comprador_id: o.buyer?.id ?? null, comprador: o.buyer?.nickname || '',   // '' = sem cliente (não baixa de novo)
+  pack_id: o.pack_id ?? null,
 }));
 
 // Baixa os pedidos com `campo` (date_created ou date_last_updated) entre de e ate.
