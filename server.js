@@ -315,6 +315,7 @@ function mensagemDoML(json, fallback) {
 async function ml(pathname, opts = {}, contaId = null) {
   const { aoResponder, ...init } = opts;   // aoResponder(headers): quem precisa de um cabeçalho da resposta (x-version do estoque)
   opts = init;
+  if (!opts.method || opts.method === 'GET') pathname = mlFormaAceita(pathname);
   let conta = contaId ? D.contaObter(contaId) : D.contaAtiva();
   if (!conta) throw Object.assign(new Error(SEM_CONTA), { status: 401 });
   if (Date.now() > conta.expires_at) conta = await renovar(conta);
@@ -347,16 +348,52 @@ async function ml(pathname, opts = {}, contaId = null) {
   try { json = body ? JSON.parse(body) : null; } catch { if (res.ok) throw new Error('O Mercado Livre respondeu fora do formato esperado.'); }
   // recurso que o ML desligou (04/11/2026, "Resource deprecated"): a mensagem diz QUAL caminho, para achar a chamada
   if (!res.ok) { const m = mensagemDoML(json, res.statusText);
-    // 04/11/2026: o ML passou a recusar às vezes o include_attributes=all (o SELLER_SKU de cada variação). Leitura: repete
-    // sem ele e traz os atributos das variações por /items/{id}/variations.
-    if (/deprecated|no longer allowed/i.test(m) && (!opts.method || opts.method === 'GET') && /[?&]include_attributes=all/.test(pathname)) {
-      return lerSemIncludeAttributes(pathname, contaId);
+    // 04/11/2026: o ML passou a recusar às vezes ("Resource deprecated") a leitura de anúncios — com include_attributes=all, e
+    // depois a de vários de uma vez (/items?ids=&attributes=). Leitura: tenta a forma mais simples seguinte (mlAlternativa).
+    if (/deprecated|no longer allowed/i.test(m) && (!opts.method || opts.method === 'GET')) {
+      const alt = mlAlternativa(pathname, contaId);
+      if (alt) { formaRecusada.set(formaDe(pathname), Date.now()); return alt; }
     }
     throw Object.assign(new Error(/deprecated|no longer allowed/i.test(m) ? `${m} (${String(pathname).split('?')[0].replace(/\d{5,}/g, '…')}${String(pathname).includes('?') ? '?' + [...new URLSearchParams(String(pathname).split('?')[1]).keys()].join('&') : ''})` : m), { status: res.status, body: json }); }
   if (aoResponder) aoResponder(res.headers);
   return json;
 }
 
+// Leitura de anúncio que o ML recusou ("Resource deprecated", 04/11/2026), da forma mais completa para a mais simples:
+// sem include_attributes (variações por /items/{id}/variations) › vários sem o filtro attributes › um por um › um sem filtro.
+// A forma recusada fica guardada 1 h (formaRecusada) e a próxima chamada já vai direto na seguinte. null = não há alternativa.
+const formaRecusada = new Map();
+const formaDe = (p) => { const [c, q = ''] = String(p).split('?'); return `${c.startsWith('/items/') ? '/items/:id' : c}?${[...new URLSearchParams(q).keys()].sort().join('&')}`; };
+const semParam = (p, nome) => p.replace(new RegExp(`([?&])${nome}=[^&]*(&|$)`), (_, a, b) => (b ? a : '')).replace(/[?&]$/, '');
+function mlAlternativa(pathname, contaId) {
+  const p = String(pathname), q = new URLSearchParams(p.split('?')[1] || '');
+  if (q.get('include_attributes') === 'all') return lerSemIncludeAttributes(p, contaId);
+  if (p.startsWith('/items?') && q.get('ids')) {
+    if (q.has('attributes')) return ml(semParam(p, 'attributes'), {}, contaId);
+    return lerUmPorUm(q.get('ids').split(',').filter(Boolean), contaId);
+  }
+  if (/^\/items\/MLB\d+\?/.test(p) && q.has('attributes')) return ml(semParam(p, 'attributes'), {}, contaId);
+  return null;
+}
+// pula direto para a forma que o ML aceitou da última vez (as recusadas há menos de 1 h)
+function mlFormaAceita(pathname) {
+  let p = String(pathname);
+  for (let i = 0; i < 4; i++) {
+    const t = formaRecusada.get(formaDe(p));
+    if (!t || Date.now() - t > 3600e3) return p;
+    const q = new URLSearchParams(p.split('?')[1] || '');
+    if (q.get('include_attributes') === 'all') return p;   // esta precisa da leitura das variações: segue pelo caminho normal
+    if (q.has('attributes') && (p.startsWith('/items?') || /^\/items\/MLB\d+\?/.test(p))) p = semParam(p, 'attributes');
+    else return p;
+  }
+  return p;
+}
+async function lerUmPorUm(ids, contaId) {
+  return emLotes(ids, 5, async (id) => {
+    try { return { code: 200, body: await ml(`/items/${id}`, {}, contaId) }; }
+    catch (e) { return { code: e.status || 500, body: e.body || { message: e.message } }; }
+  });
+}
 async function lerSemIncludeAttributes(pathname, contaId) {
   const sem = pathname.replace(/([?&])include_attributes=all(&|$)/, (_, a, b) => (b ? a : '')).replace(/\?$/, '');
   const r = await ml(sem, {}, contaId);
