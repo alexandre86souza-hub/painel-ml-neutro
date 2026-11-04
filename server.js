@@ -944,6 +944,7 @@ function lucroDasVendas(conta, dias) {
 // Todos os anúncios da conta que passam no filtro, para ordenar pelo período.
 // O /items/search para em offset 1000; acima disso a ordenação considera os 1000 mais recentes.
 const idsCache = new Map();
+let scanRecusadoEm = 0;   // o ML recusou o search_type=scan (deprecated): 6 h sem tentar de novo
 async function idsDaConta(conta, status, q) {
   const chave = `${conta.ml_user_id}|${status || ''}|${q || ''}`;
   const c = idsCache.get(chave);
@@ -963,12 +964,34 @@ async function idsDaConta(conta, status, q) {
   // 1000; os demais entram no fim. A busca por texto (q) não existe no scan.
   if (total > ids.length && !q) {
     const vistos = new Set(ids);
+    const junta = (l) => { for (const id of l || []) if (!vistos.has(id)) { vistos.add(id); ids.push(id); } };
     const sb = `/users/${conta.ml_user_id}/items/search?search_type=scan&limit=100${status ? `&status=${status}` : ''}`;
-    let s = await ml(sb);
-    for (let n = 0; n < 200 && (s.results || []).length; n++) {
-      for (const id of s.results) if (!vistos.has(id)) { vistos.add(id); ids.push(id); }
-      if (!s.scroll_id) break;
-      s = await ml(`${sb}&scroll_id=${encodeURIComponent(s.scroll_id)}`);
+    try {
+      if (Date.now() - scanRecusadoEm < 6 * 3600e3) throw Object.assign(new Error('scan recusado há pouco'), { semScan: true });
+      let s = await ml(sb);
+      for (let n = 0; n < 200 && (s.results || []).length; n++) {
+        junta(s.results);
+        if (!s.scroll_id) break;
+        s = await ml(`${sb}&scroll_id=${encodeURIComponent(s.scroll_id)}`);
+      }
+    } catch (e) {
+      // 04/11/2026: o ML passou a recusar o scan às vezes ("Resource deprecated - client no longer allowed to consume this
+      // resource") e o envio automático de estoque parava. Sem scan: cada situação na ordem de criação, do mais novo e do mais
+      // antigo (até 1.000 + 1.000 por situação).
+      if (!e.semScan && !/deprecated|no longer allowed/i.test(e.message || '')) throw e;
+      if (!e.semScan) scanRecusadoEm = Date.now();
+      for (const st of status ? [status] : ['active', 'paused', 'closed', 'under_review', 'inactive']) {
+        for (const ord of ['start_time_desc', 'start_time_asc']) {
+          const b2 = `/users/${conta.ml_user_id}/items/search?limit=100&status=${st}&orders=${ord}`;
+          const q1 = await ml(`${b2}&offset=0`).catch(() => null);
+          if (!q1) continue;
+          junta(q1.results);
+          const t = q1.paging?.total ?? 0, offs = [];
+          for (let off = 100; off < Math.min(t, 1000); off += 100) offs.push(off);
+          for (const p of await emLotes(offs, 4, (off) => ml(`${b2}&offset=${off}`).catch(() => null))) junta(p?.results);
+          if (t <= 1000) break;   // a situação inteira já veio
+        }
+      }
     }
   }
   const r = { ids, total, cortado: total > ids.length, em: Date.now() };
