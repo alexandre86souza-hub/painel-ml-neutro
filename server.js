@@ -2352,6 +2352,8 @@ const emailMod = require('./email.js').criar({ D, routes, resumoEnviosEstoque: (
 Object.assign(routes, emailMod.rotas);
 // Avisos do sino (vendas, pausas…) e a disputa do catálogo em segundo plano, por conta: o e-mail não depende do painel aberto.
 let avisosFundo = false;
+// Novidades (novidades.js): campanha nova das lojas e anúncio novo na conta do ML viram aviso (30 em 30 min, no segundo plano dos avisos).
+const novidadesMod = require('./novidades.js').criar({ D, ml, magalu: magaluMod, leroy: leroyMod });
 async function avisosEmSegundoPlano() {
   if (avisosFundo) return;
   avisosFundo = true;
@@ -2360,8 +2362,10 @@ async function avisosEmSegundoPlano() {
       await CTX.comConta(c.ml_user_id, async () => {
         await painelMod.gerarAvisos(c).catch(() => null);
         await catalogoMod.verificar(c).catch(() => null);
+        await novidadesMod.verificarConta(c).catch(() => null);
       });
     }
+    await novidadesMod.verificarLojas().catch(() => null);
   } finally { avisosFundo = false; }
 }
 if (!process.env.PAINEL_TESTE) {

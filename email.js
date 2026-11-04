@@ -14,7 +14,7 @@ const hojeBR = (agora = Date.now()) => new Date(agora - 3 * 3600e3).toISOString(
 const horaBR = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 // Tipos de aviso do sino que também vão por e-mail (venda nova, pergunta, mensagem… ficam só no sino).
 // pausa_ml = o Mercado Livre pausou ou mandou para revisão; a disputa do catálogo (catalogo) vai só no relatório das 7h30.
-const TIPOS_EMAIL = new Set(['estoque_leroy', 'estoque_envio', 'seguranca', 'alerta', 'reclamacao', 'pausa_ml']);
+const TIPOS_EMAIL = new Set(['estoque_leroy', 'estoque_envio', 'seguranca', 'alerta', 'reclamacao', 'pausa_ml', 'campanha', 'anuncio_novo']);
 
 // Mensagem MIME (texto + HTML, UTF-8 em base64). Função pura: testada.
 function mensagemMime({ de, para, assunto, html, texto }, agora = new Date(), id = Math.random().toString(36).slice(2)) {

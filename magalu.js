@@ -960,7 +960,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
     } catch (e) { return falha('A Magalu não entregou o acesso', e.message, 502); }
   }
 
-  return { rotas, rotasParam: [], callback, mg, config, sincronizar, estoqueAgora, mudarEstoque, estoqueDiagnostico: (sku) => mg(caminhoEstoque(sku)) };
+  return { rotas, rotasParam: [], callback, mg, config, sincronizar, estoqueAgora, mudarEstoque, promocoesDaLoja, estoqueDiagnostico: (sku) => mg(caminhoEstoque(sku)) };
 }
 
 module.exports = { criar, fretePctDe, devolucoesDe, logDaRequisicao, validarConfig, urlAutorizacao, semPessoais, ESCOPOS, pedidoDe, transacoesDe, financeiroDo, linhasDe };

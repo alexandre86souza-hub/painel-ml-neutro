@@ -63,4 +63,11 @@ assert.ok(E.TIPOS_EMAIL.has('pausa_ml') && !E.TIPOS_EMAIL.has('pausa') && !E.TIP
   assert.strictEqual(o[0].nome, 'LOJAX'); assert.strictEqual(o[0].ganhador, true); assert.strictEqual(o[0].full, true); assert.strictEqual(o[0].loja_oficial, true);
   assert.strictEqual(o[1].eu, true); assert.strictEqual(o[1].nossa, 'LOJAB'); assert.strictEqual(o[1].frete_gratis, true); }
 
+{ const N = require('./novidades.js');
+  assert.deepStrictEqual(N.novosDe(null, ['A', 'B']), { novos: [], vistos: ['A', 'B'] }, '1ª leitura só vira a base');
+  assert.deepStrictEqual(N.novosDe(['A', 'B'], ['C', 'A']).novos, ['C'], 'só o que não foi visto avisa');
+  assert.deepStrictEqual(N.novosDe(['A', 'B'], ['A']).vistos, ['A', 'B'], 'quem saiu da lista continua visto (não avisa de novo)');
+  assert.match(N.textoCampanhaMl({ type: 'DEAL', start_date: '2026-11-10T03:00:00Z', finish_date: '2026-11-12T02:59:00Z', deadline_date: '2026-11-08T03:00:00Z' }),
+    /Campanha do Mercado Livre · 10\/11 a 11\/11 · entrar até 08\/11/);
+  assert.ok(E.TIPOS_EMAIL.has('campanha') && E.TIPOS_EMAIL.has('anuncio_novo'), 'campanha e anúncio novo vão no e-mail'); }
 console.log('Catálogo (disputa) e motivo da pausa: ok');

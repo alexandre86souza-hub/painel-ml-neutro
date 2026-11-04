@@ -46,7 +46,7 @@
   barra.prepend(box);
   const botao = box.querySelector('button'), bolha = box.querySelector('.bolha');
 
-  const ICONE = { venda: '🛒', mensagem: '💬', pausa: '⏸️', pausa_ml: '⛔', catalogo: '🏷️' };
+  const ICONE = { venda: '🛒', mensagem: '💬', pausa: '⏸️', pausa_ml: '⛔', catalogo: '🏷️', campanha: '📣', anuncio_novo: '🆕' };
   let avisos = [], vistos = null;
   const quando = (iso) => {
     const min = Math.round((Date.now() - new Date(iso)) / 60000);

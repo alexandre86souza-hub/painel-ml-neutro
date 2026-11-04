@@ -349,6 +349,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   perdendo) = aviso `catalogo` no sino com o lucro e a margem no preço para ganhar (`precos.js#lucroNosPrecos`) e "vale baixar" (margem ≥
   `catalogo_margem_min`, padrão 15%) ou "não compensa"; a 1ª leitura só vira a base. Só sino + resumo no relatório das 7h30 (pedido do dono).
   `GET /api/catalogo/competicao[?recarregar=1]` (só leitura, administrador). Nunca muda preço sozinho. Nada no MCP (`test-catalogo.js`).
+- Novidades das lojas (`novidades.js`, pedido do dono 04/11/2026): aviso `campanha` (📣) para campanha nova do ML (`/seller-promotions/users/{id}`),
+  promoção nova da Magalu (`magalu.js#promocoesDaLoja`) e da Leroy (PR01), e `anuncio_novo` (🆕) para anúncio novo na conta do ML (50 mais novos
+  por start_time_desc, catálogo marcado). 30 em 30 min no segundo plano dos avisos; 1ª leitura = base; estado `novidades:{chave}`. Os dois tipos vão
+  no e-mail de alertas. Shopee (campanhas da plataforma) e Amazon (convites) não têm API. Nada no MCP.
 - Comandas de separação (`comandas.js`, tela `public/comandas.html`, item do menu entre Todas as contas e Dashboard):
   envios que ainda vão sair, de TODAS as contas, por categoria — Flex (ML self_service + Shopee "Entrega Direta" + Magalu
   VAPT), Mercado Envios (ML coleta/ponto; Full fora), Magalu, Melhor Envios (Leroy), Shopee (sem Entrega Direta), Amazon
