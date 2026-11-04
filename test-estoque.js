@@ -429,5 +429,16 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
   assert.strictEqual(E.custoMovel(10, null, 5, 3), 3, 'sem custo: o preço novo');
   assert.strictEqual(E.custoMovel(30, 4, 10, 6), 4.5);
   assert.strictEqual(E.custoMovel(10, 1, 10, null), 1, 'sem preço: não muda');
-  console.log('custo médio móvel: ok');
+  { // peças com defeito: por fornecedor (o escolhido na saída) e por dia; recolhido tira do dia escolhido
+  const cat = { porSku: new Map([['DQ-581', 581], ['DQ-688', 688]]), porNumero: new Map([[581, { sku: 'DQ-581', nome: 'Ducha', custo: 10, fornecedor: 'ALADDIN' }], [688, { sku: 'DQ-688', nome: 'Rose', custo: 20, fornecedor: 'ALADDIN' }]]) };
+  const saidas = [{ numero: 581, qtd: -2, data: '2026-11-03T15:00:00Z', origem: 'BRUNO' }, { numero: 688, qtd: -1, data: '2026-11-03T15:00:00Z', origem: 'BRUNO' },
+    { numero: 581, qtd: -1, data: '2026-11-04T15:00:00Z', origem: 'BRUNO' }];
+  let r = E.defeitosDe({ saidas }, cat);
+  assert.deepStrictEqual(r.grupos.map((g) => [g.fornecedor, g.pecas, g.dias.map((d) => [d.dia, d.pecas])]), [['BRUNO', 4, [['2026-11-04', 1], ['2026-11-03', 3]]]],
+    'o fornecedor escolhido na saída vale (não o do cadastro) e cada data é um grupo');
+  r = E.defeitosDe({ saidas, manuais: [{ numero: 581, qtd: -1, data: '2026-11-05T12:00:00Z', fornecedor: 'BRUNO', dia_lote: '2026-11-04' }] }, cat);
+  assert.deepStrictEqual(r.grupos[0].dias.map((d) => [d.dia, d.pecas]), [['2026-11-03', 3]], 'recolhido do dia 04 tira do dia 04, não do mais antigo');
+  assert.strictEqual(r.saldos.get(581), 2);
+}
+console.log('custo médio móvel: ok');
 }

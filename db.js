@@ -2215,12 +2215,14 @@ const estoqueMovDesfeito = (m) => db.prepare(`UPDATE estoque_mov SET desfeito=1 
 db.exec(`CREATE TABLE IF NOT EXISTS estoque_defeito (
   id INTEGER PRIMARY KEY AUTOINCREMENT, lote TEXT NOT NULL, data TEXT NOT NULL, tipo TEXT NOT NULL, numero INTEGER NOT NULL,
   qtd INTEGER NOT NULL, fornecedor TEXT, obs TEXT, quem TEXT, desfeito INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL)`);
+// dia_lote (AAAA-MM-DD): o recolhido/descarte tira as peças do grupo dessa data de retirada do estoque (aba Defeitos, por fornecedor e data)
+if (!db.prepare('PRAGMA table_info(estoque_defeito)').all().some((c) => c.name === 'dia_lote')) db.exec('ALTER TABLE estoque_defeito ADD COLUMN dia_lote TEXT');
 function estoqueDefeitoGravar(linhas) {
   const lote = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-  const st = db.prepare('INSERT INTO estoque_defeito (lote, data, tipo, numero, qtd, fornecedor, obs, quem, criado_em) VALUES (?,?,?,?,?,?,?,?,?)');
+  const st = db.prepare('INSERT INTO estoque_defeito (lote, data, tipo, numero, qtd, fornecedor, obs, quem, criado_em, dia_lote) VALUES (?,?,?,?,?,?,?,?,?,?)');
   const em = agora();
   db.exec('BEGIN');
-  try { for (const l of linhas) st.run(lote, l.data, l.tipo, l.numero, l.qtd, l.fornecedor ?? null, l.obs ?? null, l.quem ?? null, em); db.exec('COMMIT'); }
+  try { for (const l of linhas) st.run(lote, l.data, l.tipo, l.numero, l.qtd, l.fornecedor ?? null, l.obs ?? null, l.quem ?? null, em, l.dia_lote ?? null); db.exec('COMMIT'); }
   catch (e) { db.exec('ROLLBACK'); throw e; }
   return lote;
 }

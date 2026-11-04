@@ -65,7 +65,7 @@ assert.strictEqual(F.pecasDo(item, porNumero, undefined, null).estoque, 'sem_con
   }, cat);
   // DH-694: 1 (devolução, 1 de 4) + 1 (ML, kit todo) + 1 (entrada) − 2 recolhidas = 1; NI-831: 1 (ML) + 2 (tirado do estoque) = 3
   assert.deepStrictEqual([...r.saldos].sort(), [[694, 1], [831, 3]]);
-  assert.deepStrictEqual(r.grupos.map((g) => [g.fornecedor, g.pecas, g.valor]), [['BRUNO', 1, 100], ['ZEZE', 3, 30]], 'fornecedor do cadastro, senão o da saída');
+  assert.deepStrictEqual(r.grupos.map((g) => [g.fornecedor, g.pecas, g.valor]), [['BRUNO', 1, 100], ['ZEZE', 2, 20], ['Sem fornecedor', 1, 10]], 'devolução: fornecedor do cadastro; saída: o escolhido nela');
 }
 
 // peça NÃO devolvida pelo cliente: nem estoque bom nem de defeitos; o custo soma como perdida

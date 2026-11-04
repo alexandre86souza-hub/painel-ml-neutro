@@ -207,39 +207,62 @@ function diferencas(linhas, jaLancado, porSku) {
 // Estoque de peças com defeito para a troca com o fornecedor (pedido do dono, 19/10/2026). Entram: a saída "defeito" do
 // estoque, as peças com defeito das devoluções conferidas (as MESMAS linhas da volta ao estoque: sem = posições com defeito,
 // defeituosos = quantas) e a entrada direta; saem: recolhidas pelo fornecedor e descartadas (manuais com qtd < 0).
-// Fornecedor = o do cadastro do produto (senão o escolhido na saída). Função pura: testada.
+// Agrupado por FORNECEDOR e, dentro dele, pelo DIA em que entraram (pedido do dono, 04/11/2026: a saída
+// de várias peças de uma vez vira um grupo só, com a data da retirada do estoque). Fornecedor = o escolhido na saída "defeito" ou na
+// entrada direta; sem ele (devolução), o do cadastro do produto. Recolhido/descarte (manuais com qtd < 0) tira primeiro do grupo do
+// dia escolhido (dia_lote) do mesmo fornecedor, depois dos mais antigos. Função pura: testada.
 function defeitosDe({ devolucoes = [], saidas = [], manuais = [] }, cat) {
-  const porNum = new Map();
-  const add = (numero, qtd, o, forn) => {
-    const x = porNum.get(numero) || { numero, qtd: 0, origens: [], forn: null };
-    x.qtd += qtd; if (o) x.origens.push(o); if (forn) x.forn = forn; porNum.set(numero, x);
-  };
+  // dia em Brasília; data só com o dia (ou que não abre) fica como veio
+  const diaDe = (d) => { const t = Date.parse(d); return !d ? '' : /T/.test(String(d)) && Number.isFinite(t) ? new Date(t - 3 * 3600e3).toISOString().slice(0, 10) : String(d).slice(0, 10); };
+  const fornDe = (numero, f) => f || cat.porNumero.get(numero)?.fornecedor || 'Sem fornecedor';
+  const lotes = [];   // { numero, qtd, dia, forn, origem }
+  const entra = (numero, qtd, data, forn, origem) => { if (qtd > 0) lotes.push({ numero, qtd, dia: diaDe(data), data, forn: fornDe(numero, forn), origem }); };
   for (const l of devolucoes) {
     if (!l.sem || l.pendente) continue;
     numerosDoCodigo(l.sku, cat.porSku, { doCanal: true }).forEach((n, i) => {
       if (!l.sem.includes(i)) return;
       const o = l.defeituosos || {}; const v = o[i] ?? o['*'];
       const q = v == null ? l.qtd : Math.max(0, Math.min(l.qtd, Math.round(Number(v)) || 0));
-      if (q > 0) add(n, q, { data: l.data, qtd: q, de: `Devolução · ${l.origem}` });
+      entra(n, q, l.data, null, { data: l.data, qtd: q, de: `Devolução · ${l.origem}` });
     });
   }
-  for (const m of saidas) add(m.numero, -m.qtd, { data: m.data, qtd: -m.qtd, de: 'Tirado do estoque', obs: m.obs || null }, m.origem);
-  for (const m of manuais) add(m.numero, m.qtd, m.qtd > 0 ? { data: m.data, qtd: m.qtd, de: 'Entrada direta', obs: m.obs || null } : null, m.qtd > 0 ? m.fornecedor : null);
-  const grupos = new Map();
-  for (const x of porNum.values()) {
-    if (x.qtd <= 0) continue;
-    const p = cat.porNumero.get(x.numero);
-    const forn = p?.fornecedor || x.forn || 'Sem fornecedor';
-    const g = grupos.get(forn) || { fornecedor: forn, itens: [], pecas: 0, valor: 0 };
-    const custo = p?.custo ?? null;
-    g.itens.push({ numero: x.numero, sku: p?.sku || String(x.numero).padStart(3, '0'), nome: p?.nome || null, qtd: x.qtd, custo,
-      valor: custo == null ? null : r2(custo * x.qtd), origens: x.origens.sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 30) });
-    g.pecas += x.qtd; g.valor += (custo || 0) * x.qtd;
-    grupos.set(forn, g);
+  for (const m of saidas) entra(m.numero, -m.qtd, m.data, m.origem, { data: m.data, qtd: -m.qtd, de: 'Tirado do estoque', obs: m.obs || null });
+  for (const m of manuais) if (m.qtd > 0) entra(m.numero, m.qtd, m.data, m.fornecedor, { data: m.data, qtd: m.qtd, de: 'Entrada direta', obs: m.obs || null });
+  lotes.sort((a, b) => String(a.data).localeCompare(String(b.data)));
+  // recolhidos e descartes, do mais antigo ao mais novo
+  for (const m of manuais.filter((x) => x.qtd < 0).sort((a, b) => String(a.data).localeCompare(String(b.data)))) {
+    let falta = -m.qtd;
+    const do_ = lotes.filter((l) => l.numero === m.numero && l.qtd > 0);
+    const ordem = [...do_.filter((l) => m.dia_lote && l.dia === m.dia_lote && (!m.fornecedor || l.forn === m.fornecedor)),
+      ...do_.filter((l) => !m.fornecedor || l.forn === m.fornecedor), ...do_];
+    for (const l of ordem) { if (!falta) break; const t = Math.min(falta, l.qtd); l.qtd -= t; falta -= t; }
   }
-  return { saldos: new Map([...porNum.values()].map((x) => [x.numero, x.qtd])),
-    grupos: [...grupos.values()].map((g) => ({ ...g, valor: r2(g.valor), itens: g.itens.sort((a, b) => a.sku.localeCompare(b.sku)) }))
-      .sort((a, b) => (a.fornecedor === 'Sem fornecedor') - (b.fornecedor === 'Sem fornecedor') || a.fornecedor.localeCompare(b.fornecedor)) };
+  const saldos = new Map();
+  for (const l of lotes) saldos.set(l.numero, (saldos.get(l.numero) || 0) + l.qtd);
+  const grupos = new Map();
+  for (const l of lotes) {
+    if (l.qtd <= 0) continue;
+    const g = grupos.get(l.forn) || { fornecedor: l.forn, pecas: 0, valor: 0, dias: new Map() };
+    const d = g.dias.get(l.dia) || { dia: l.dia, pecas: 0, valor: 0, porNum: new Map() };
+    const p = cat.porNumero.get(l.numero), custo = p?.custo ?? null;
+    const it = d.porNum.get(l.numero) || { numero: l.numero, sku: p?.sku || String(l.numero).padStart(3, '0'), nome: p?.nome || null, qtd: 0, custo, valor: null, origens: [] };
+    it.qtd += l.qtd; it.valor = custo == null ? null : r2(custo * it.qtd); it.origens.push({ ...l.origem, qtd: l.qtd });
+    d.porNum.set(l.numero, it); d.pecas += l.qtd; d.valor += (custo || 0) * l.qtd;
+    g.dias.set(l.dia, d); g.pecas += l.qtd; g.valor += (custo || 0) * l.qtd;
+    grupos.set(l.forn, g);
+  }
+  return { saldos,
+    grupos: [...grupos.values()].map((g) => {
+      const dias = [...g.dias.values()].sort((a, b) => b.dia.localeCompare(a.dia))
+        .map((d) => ({ dia: d.dia, pecas: d.pecas, valor: r2(d.valor), itens: [...d.porNum.values()].sort((a, b) => a.sku.localeCompare(b.sku)) }));
+      // itens = a soma do fornecedor (todas as datas)
+      const soma = new Map();
+      for (const d of dias) for (const i of d.itens) {
+        const x = soma.get(i.numero) || { ...i, qtd: 0, origens: [] };
+        x.qtd += i.qtd; x.valor = i.custo == null ? null : r2(i.custo * x.qtd); x.origens.push(...i.origens); soma.set(i.numero, x);
+      }
+      return { fornecedor: g.fornecedor, pecas: g.pecas, valor: r2(g.valor), dias, itens: [...soma.values()].sort((a, b) => a.sku.localeCompare(b.sku)) };
+    }).sort((a, b) => (a.fornecedor === 'Sem fornecedor') - (b.fornecedor === 'Sem fornecedor') || a.fornecedor.localeCompare(b.fornecedor)) };
 }
 
 // Estoque nos anúncios (etapa 1 do estoque sincronizado, pedido do dono 19/10/2026: SÓ comparação, nada é enviado às lojas).
@@ -653,7 +676,8 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       }
       const data = dataOuAgora(b.data);
       const obs = String(b?.obs || '').trim().slice(0, 200) || null;
-      const lote = D.estoqueDefeitoGravar(linhas.map((l) => ({ data, tipo, numero: l.numero, qtd: tipo === 'entrada' ? l.qtd : -l.qtd, fornecedor, obs, quem: quem() })));
+      const diaLote = tipo !== 'entrada' && /^\d{4}-\d{2}-\d{2}$/.test(String(b?.dia_lote || '')) ? b.dia_lote : null;
+      const lote = D.estoqueDefeitoGravar(linhas.map((l) => ({ data, tipo, numero: l.numero, qtd: tipo === 'entrada' ? l.qtd : -l.qtd, fornecedor, obs, quem: quem(), dia_lote: diaLote })));
       return { lote, pecas: linhas.reduce((s, l) => s + l.qtd, 0) };
     },
     'POST /api/estoque/defeitos/desfazer': async (_u, b) => {

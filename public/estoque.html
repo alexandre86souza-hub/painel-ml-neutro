@@ -18,6 +18,9 @@
   .def-forn{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px}
   .def-topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px}
   .def-topo h3{margin:0;font-size:16px}
+  .def-forn > h3{margin:0 0 4px;font-size:16px}
+  .def-dia{border-top:1px dashed var(--line);padding-top:10px;margin-top:10px}
+  .def-topo h4{margin:0;font-size:14px}
   .def-topo .acoes{display:flex;gap:6px;flex-wrap:wrap}
   .def-origens{font-size:12px;color:var(--muted)}
   .def-recolher{border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:8px}
@@ -542,6 +545,60 @@ $('eaCsv').onclick = () => ea?.linhas && csv(`estoque-nos-anuncios-${hoje()}.csv
 
 // ---------- DEFEITOS (troca com fornecedor) ----------
 let defs = null;
+// Um dia de um fornecedor: as peças, "Copiar lista" e "Recolhido pelo fornecedor" (tira deste dia: dia_lote)
+function blocoDefeitoDia(g, d){
+  const b = el('div', 'def-dia');
+  const topo = el('div', 'def-topo');
+  topo.appendChild(el('h4', null, `${d.dia ? diaBR(d.dia) : 'Sem data'} · ${n0(d.pecas)} peça(s) · ${real(d.valor)}`));
+  const ac = el('div', 'acoes');
+  const btCop = el('button', 'bt', 'Copiar lista'); btCop.type = 'button';
+  btCop.onclick = async () => {
+    const txt = `Peças com defeito para troca - ${g.fornecedor} (${d.dia ? diaBR(d.dia) : 'sem data'}):\n` + d.itens.map((i) => `${i.qtd}x ${i.sku}${i.nome ? ' - ' + i.nome : ''}`).join('\n') + `\nTotal: ${d.pecas} peça(s)`;
+    try{ await navigator.clipboard.writeText(txt); btCop.textContent = 'Lista copiada'; }catch{ prompt('Copie a lista:', txt); }
+    setTimeout(() => { btCop.textContent = 'Copiar lista'; }, 2500);
+  };
+  const btRec = el('button', 'bt forte', 'Recolhido pelo fornecedor'); btRec.type = 'button';
+  ac.append(btCop, btRec); topo.appendChild(ac); b.appendChild(topo);
+  b.appendChild(tabela([['SKU'], ['Produto'], ['Peças', 'n'], ['Custo', 'n'], ['Valor', 'n'], ['De onde veio']], d.itens.map((i) => {
+    const tr = el('tr');
+    const o = el('td', 'def-origens', i.origens.slice(0, 4).map((x) => `${x.de} (${x.qtd})${x.obs ? ' · ' + x.obs : ''}`).join(' | ') + (i.origens.length > 4 ? ` | +${i.origens.length - 4}` : ''));
+    tr.append(td(i.sku), td(i.nome || '—'), td(n0(i.qtd), 'n'), td(i.custo == null ? 'sem custo' : real(i.custo), 'n'), td(i.valor == null ? '—' : real(i.valor), 'n'), o);
+    return tr;
+  })));
+  // recolher: quantas de cada peça o fornecedor levou (ou descartar)
+  btRec.onclick = () => {
+    if(b.querySelector('.def-recolher')) return;
+    const f = el('form', 'def-recolher');
+    const linhaTopo = el('div', 'form');
+    const selT = el('select'); selT.innerHTML = '<option value="recolhido">Recolhido pelo fornecedor (vai trocar)</option><option value="descarte">Descartada (sem troca)</option>';
+    const lT = el('label', null, 'O que aconteceu'); lT.appendChild(selT);
+    const dt = el('input'); dt.type = 'date'; dt.value = hoje(); const lD = el('label', null, 'Data'); lD.appendChild(dt);
+    const ob = el('input'); ob.maxLength = 200; ob.placeholder = 'ex.: nota de devolução 123'; const lO = el('label', null, 'Observação'); lO.appendChild(ob);
+    linhaTopo.append(lT, lD, lO); f.appendChild(linhaTopo);
+    const qs = d.itens.map((i) => {
+      const l = el('label', null, `${i.sku} ${i.nome || ''} — de ${i.qtd}: `);
+      const n = el('input'); n.type = 'number'; n.min = '0'; n.max = String(i.qtd); n.step = '1'; n.value = String(i.qtd);
+      l.appendChild(n); f.appendChild(l); return [i, n];
+    });
+    const pe = el('div', 'acoes');
+    const ok = el('button', 'bt forte', 'Confirmar'); const cancel = el('button', 'bt', 'Cancelar'); cancel.type = 'button';
+    cancel.onclick = () => f.remove();
+    pe.append(ok, cancel); f.appendChild(pe); b.appendChild(f);
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const itens = qs.map(([i, n]) => ({ codigo: i.sku, qtd: Math.min(i.qtd, Math.round(Number(n.value) || 0)) })).filter((x) => x.qtd > 0);
+      if(!itens.length){ aviso('Informe quantas peças saíram.'); return; }
+      const total = itens.reduce((s2, x) => s2 + x.qtd, 0);
+      if(!confirm(`${selT.value === 'recolhido' ? 'Marcar como recolhidas por' : 'Descartar'} ${total} peça(s)${selT.value === 'recolhido' ? ' "' + g.fornecedor + '"' : ''}?`)) return;
+      ok.disabled = true;
+      try{
+        const r = await post('/api/estoque/defeitos', { tipo: selT.value, fornecedor: g.fornecedor, data: dt.value, obs: ob.value, itens, dia_lote: d.dia || null });
+        aviso(`${r.pecas} peça(s) saíram das peças com defeito.`, 'ok'); carregarDefeitos();
+      }catch(e){ aviso(e.message); ok.disabled = false; }
+    };
+  };
+  return b;
+}
 async function carregarDefeitos(){
   await garantirNomes();
   try{ defs = await api('/api/estoque/defeitos'); }catch(e){ aviso(e.message); return; }
@@ -553,57 +610,11 @@ async function carregarDefeitos(){
   cartao('Peças com defeito', n0(defs.pecas)); cartao('Valor (custo)', real(defs.valor)); cartao('Fornecedores', n0(defs.grupos.length));
   const box = $('dGrupos'); box.innerHTML = '';
   if(!defs.grupos.length) box.appendChild(el('p', 'vazio', 'Nenhuma peça com defeito esperando troca.'));
+  // por fornecedor e, dentro dele, por data (o dia em que as peças saíram do estoque ou a devolução chegou)
   for(const g of defs.grupos){
     const b = el('div', 'def-forn');
-    const topo = el('div', 'def-topo');
-    topo.appendChild(el('h3', null, `${g.fornecedor} · ${n0(g.pecas)} peça(s) · ${real(g.valor)}`));
-    const ac = el('div', 'acoes');
-    const btCop = el('button', 'bt', 'Copiar lista'); btCop.type = 'button';
-    btCop.onclick = async () => {
-      const txt = `Peças com defeito para troca (${new Date().toLocaleDateString('pt-BR')}):\n` + g.itens.map((i) => `${i.qtd}x ${i.sku}${i.nome ? ' - ' + i.nome : ''}`).join('\n') + `\nTotal: ${g.pecas} peça(s)`;
-      try{ await navigator.clipboard.writeText(txt); btCop.textContent = 'Lista copiada'; }catch{ prompt('Copie a lista:', txt); }
-      setTimeout(() => { btCop.textContent = 'Copiar lista'; }, 2500);
-    };
-    const btRec = el('button', 'bt forte', 'Recolhido pelo fornecedor'); btRec.type = 'button';
-    ac.append(btCop, btRec); topo.appendChild(ac); b.appendChild(topo);
-    b.appendChild(tabela([['SKU'], ['Produto'], ['Peças', 'n'], ['Custo', 'n'], ['Valor', 'n'], ['De onde veio']], g.itens.map((i) => {
-      const tr = el('tr');
-      const o = el('td', 'def-origens', i.origens.slice(0, 4).map((x) => `${diaBR(String(x.data).slice(0, 10))} · ${x.de} (${x.qtd})${x.obs ? ' · ' + x.obs : ''}`).join(' | ') + (i.origens.length > 4 ? ` | +${i.origens.length - 4}` : ''));
-      tr.append(td(i.sku), td(i.nome || '—'), td(n0(i.qtd), 'n'), td(i.custo == null ? 'sem custo' : real(i.custo), 'n'), td(i.valor == null ? '—' : real(i.valor), 'n'), o);
-      return tr;
-    })));
-    // recolher: quantas de cada peça o fornecedor levou (ou descartar)
-    btRec.onclick = () => {
-      if(b.querySelector('.def-recolher')) return;
-      const f = el('form', 'def-recolher');
-      const linhaTopo = el('div', 'form');
-      const selT = el('select'); selT.innerHTML = '<option value="recolhido">Recolhido pelo fornecedor (vai trocar)</option><option value="descarte">Descartada (sem troca)</option>';
-      const lT = el('label', null, 'O que aconteceu'); lT.appendChild(selT);
-      const dt = el('input'); dt.type = 'date'; dt.value = hoje(); const lD = el('label', null, 'Data'); lD.appendChild(dt);
-      const ob = el('input'); ob.maxLength = 200; ob.placeholder = 'ex.: nota de devolução 123'; const lO = el('label', null, 'Observação'); lO.appendChild(ob);
-      linhaTopo.append(lT, lD, lO); f.appendChild(linhaTopo);
-      const qs = g.itens.map((i) => {
-        const l = el('label', null, `${i.sku} ${i.nome || ''} — de ${i.qtd}: `);
-        const n = el('input'); n.type = 'number'; n.min = '0'; n.max = String(i.qtd); n.step = '1'; n.value = String(i.qtd);
-        l.appendChild(n); f.appendChild(l); return [i, n];
-      });
-      const pe = el('div', 'acoes');
-      const ok = el('button', 'bt forte', 'Confirmar'); const cancel = el('button', 'bt', 'Cancelar'); cancel.type = 'button';
-      cancel.onclick = () => f.remove();
-      pe.append(ok, cancel); f.appendChild(pe); b.appendChild(f);
-      f.onsubmit = async (ev) => {
-        ev.preventDefault();
-        const itens = qs.map(([i, n]) => ({ codigo: i.sku, qtd: Math.round(Number(n.value) || 0) })).filter((x) => x.qtd > 0);
-        if(!itens.length){ aviso('Informe quantas peças saíram.'); return; }
-        const total = itens.reduce((s2, x) => s2 + x.qtd, 0);
-        if(!confirm(`${selT.value === 'recolhido' ? 'Marcar como recolhidas por' : 'Descartar'} ${total} peça(s)${selT.value === 'recolhido' ? ' "' + g.fornecedor + '"' : ''}?`)) return;
-        ok.disabled = true;
-        try{
-          const r = await post('/api/estoque/defeitos', { tipo: selT.value, fornecedor: g.fornecedor === 'Sem fornecedor' ? 'Sem fornecedor' : g.fornecedor, data: dt.value, obs: ob.value, itens });
-          aviso(`${r.pecas} peça(s) saíram das peças com defeito.`, 'ok'); carregarDefeitos();
-        }catch(e){ aviso(e.message); ok.disabled = false; }
-      };
-    };
+    b.appendChild(el('h3', null, `${g.fornecedor} · ${n0(g.pecas)} peça(s) · ${real(g.valor)}${g.dias.length > 1 ? ` · ${g.dias.length} datas` : ''}`));
+    for(const d of g.dias) b.appendChild(blocoDefeitoDia(g, d));
     box.appendChild(b);
   }
   const NOME_T = { recolhido: 'Recolhido pelo fornecedor', descarte: 'Descartada', entrada: 'Entrada direta' };
