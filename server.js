@@ -1065,7 +1065,7 @@ const ORDENS_PERIODO = ['vendas_desc', 'vendas_asc', 'abc', 'queda', 'margem_des
 const ATRIBUTOS_LISTA = ['id', 'title', 'price', 'available_quantity', 'sold_quantity', 'status',
   'sub_status', 'secure_thumbnail', 'thumbnail', 'permalink', 'listing_type_id', 'health',
   'category_id', 'date_created', 'shipping', 'family_name', 'variations',
-  'seller_custom_field', 'attributes'].join(',');   // SKU mora em attributes (SELLER_SKU)
+  'seller_custom_field', 'attributes', 'catalog_listing'].join(',');   // SKU mora em attributes (SELLER_SKU)
 
 const erro400 = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -1347,8 +1347,23 @@ const routes = {
       total = busca.paging?.total ?? 0;
     }
     if (!ids.length) return { total, offset, dias, itens: [], aviso };
+    // Tradicional + catálogo do mesmo produto sempre um logo depois do outro: o par que está em outra página entra nesta
+    // também (marcado par_junto), logo depois do anúncio. Busca por código (soId) também traz o par.
+    const parDe = paresDaConta(conta), naPagina = new Set(ids), juntos = new Set(), ordem2 = [];
+    for (const id of ids) {
+      if (juntos.has(id)) continue;
+      ordem2.push(id); juntos.add(id);
+      for (const p of parDe(id)) {
+        if (juntos.has(p.id)) continue;
+        if (!naPagina.has(p.id) && ordem2.length >= ids.length + 20) continue;
+        ordem2.push(p.id); juntos.add(p.id);
+      }
+    }
+    const extras = new Set(ordem2.filter((id) => !naPagina.has(id)));
+    ids = ordem2;
 
-    const multi = await ml(`/items?ids=${ids.join(',')}&attributes=${ATRIBUTOS_LISTA}`);
+    const multi = (await Promise.all(Array.from({ length: Math.ceil(ids.length / 20) }, (_, i) =>
+      ml(`/items?ids=${ids.slice(i * 20, i * 20 + 20).join(',')}&attributes=${ATRIBUTOS_LISTA}`)))).flat();
     // /visits/items aceita UM id por chamada — daí o leque em paralelo, não um multiget.
     const visitas = Object.fromEntries(await Promise.all(ids.map(async (id) => {
       const v = await ml(`/items/${id}/visits/time_window?last=${dias + 1}&unit=day`).catch(() => null);
@@ -1370,6 +1385,7 @@ const routes = {
         tem_familia: !!porId[id].family_name, tem_variacoes: (porId[id].variations || []).length > 0,
         composicao: custosMod.composicao(porId[id], mapa),
         gtin: (attributes || []).find((a) => a.id === 'GTIN')?.value_name || null,
+        catalogo: !!porId[id].catalog_listing, pares: parDe(id), par_junto: extras.has(id),
       };
     });
     for (const it of itens) D.produtoSincronizar(conta.ml_user_id, it);
@@ -2836,6 +2852,33 @@ routes['PUT /api/estoque/anuncios/shopee/liberar'] = async (_u, b) => {
 // tradicional + catálogo que dividem o mesmo user_product (mudar um muda o outro). Por isso o envio é UM número por
 // user_product: manda no tradicional, e o par fica de fora se os dois calcularem números diferentes. Anúncio com variações:
 // o PUT leva TODAS as variações (as que ficam fora do corpo seriam apagadas), cada uma com o número novo ou o de hoje.
+// Pares tradicional + catálogo (tela Anúncios do ML): anúncios da conta que dividem o mesmo user_product. O mapa vem da leitura do
+// envio de estoque (linhasMl, 10 em 10 min); conta sem ela (ou mapa com mais de 1 h) é lida aqui em segundo plano.
+const upsDaConta = new Map(), upsLendo = new Set();
+function paresDaConta(conta) {
+  const id = String(conta.ml_user_id), m = upsDaConta.get(id);
+  if ((!m || Date.now() - m.em > 3600e3) && !upsLendo.has(id)) {
+    upsLendo.add(id);
+    CTX.comConta(conta.ml_user_id, async () => {
+      const todos = (await custosMod.anuncios(conta)).filter((it) => ['active', 'paused'].includes(it.status));
+      const ups = new Map();
+      for (let i = 0; i < todos.length; i += 20) {
+        const r = await ml(`/items?ids=${todos.slice(i, i + 20).map((it) => it.id).join(',')}&attributes=id,user_product_id,variations,catalog_listing`).catch(() => []);
+        for (const x of r || []) { const b = x.body || {}; if (b.id) ups.set(b.id, { up: b.user_product_id || null, catalogo: !!b.catalog_listing, vars: new Map((b.variations || []).map((v) => [v.id, v.user_product_id || null])) }); }
+      }
+      upsDaConta.set(id, { em: Date.now(), ups });
+    }).catch(() => {}).finally(() => upsLendo.delete(id));
+  }
+  const ups = m?.ups || new Map(), porUp = new Map();
+  for (const [itemId, u] of ups) for (const up of new Set([u.up, ...u.vars.values()].filter(Boolean))) (porUp.get(up) || porUp.set(up, []).get(up)).push(itemId);
+  // id -> [{ id, catalogo }] dos outros anúncios com o mesmo user_product
+  return (itemId) => {
+    const u = ups.get(itemId); if (!u) return [];
+    const outros = new Set([u.up, ...u.vars.values()].filter(Boolean).flatMap((up) => porUp.get(up) || []));
+    outros.delete(itemId);
+    return [...outros].map((x) => ({ id: x, catalogo: !!ups.get(x)?.catalogo }));
+  };
+}
 const contasEstoqueMl = () => String(D.configLer('ml_estoque_contas') || '227586866').split(',').map(Number).filter(Boolean);
 const { chaveMl, planoEnvioMl } = require('./estoque.js');
 async function linhasMl(id) {
@@ -2851,6 +2894,7 @@ async function linhasMl(id) {
       const r = await ml(`/items?ids=${lerUps.slice(i, i + 20).map((it) => it.id).join(',')}&attributes=id,user_product_id,variations,catalog_listing`).catch(() => []);
       for (const x of r || []) { const b = x.body || {}; if (b.id) ups.set(b.id, { up: b.user_product_id || null, catalogo: !!b.catalog_listing, vars: new Map((b.variations || []).map((v) => [v.id, v.user_product_id || null])) }); }
     }
+    upsDaConta.set(String(id), { em: Date.now(), ups });   // pares tradicional + catálogo na tela Anúncios
     // multi-origem: o available_quantity do anúncio soma o depósito e o Full do mesmo user_product; onde o user_product também
     // está num anúncio do Full, o "estoque" do anúncio é o do depósito (lido no /user-products/{up}/stock)
     const doDeposito = new Map();

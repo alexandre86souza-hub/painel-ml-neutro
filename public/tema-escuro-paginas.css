@@ -56,6 +56,8 @@ html[data-tema="escuro"][data-pagina="anuncios"] .selo.active{background:hsla(13
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.paused{background:hsla(39,90%,60%,.14);color:hsl(36,95%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.closed{background:rgba(125,211,252,.06);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="anuncios"] .selo.under_review{background:hsla(222,77%,60%,.14);color:hsl(224,64%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tipoAnuncio.cat{background:hsla(222,77%,60%,.14);color:hsl(224,64%,72%)}
+html[data-tema="escuro"][data-pagina="anuncios"] .tipoAnuncio.trad{background:rgba(125,211,252,.06);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="anuncios"] .saude{background:rgba(125,211,252,.06)}
 html[data-tema="escuro"][data-pagina="anuncios"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(144,61%,72%);border:1px solid hsla(138,44%,60%,.35)}
 html[data-tema="escuro"][data-pagina="anuncios"] #msg.err{background:hsla(5,79%,60%,.14);color:hsl(0,63%,72%);border:1px solid hsla(5,69%,60%,.35)}

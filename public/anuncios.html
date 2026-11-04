@@ -94,6 +94,13 @@
   .selo.paused{background:#fff4e0;color:#7a4a00}
   .selo.closed{background:#f1f1f1;color:#555}
   .selo.under_review{background:#e8eefc;color:#1f3d8f}
+  /* tradicional + catálogo do mesmo produto: etiqueta e os dois cartões colados, com a mesma borda à esquerda */
+  .tipoAnuncio{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;margin-right:6px;vertical-align:1px}
+  .tipoAnuncio.cat{background:#e8eefc;color:#1f3d8f}
+  .tipoAnuncio.trad{background:#f1f1f1;color:#444}
+  .item.com-par{border-left:4px solid #7c5cd6}
+  .item.par-seguinte{margin-top:-6px;border-top-left-radius:0;border-top-right-radius:0;border-top-style:dashed}
+  .parNota{font-size:12px;color:#7c5cd6;font-weight:600}
   .saude{height:4px;border-radius:2px;background:#eee;margin-top:6px;width:120px;overflow:hidden}
   .saude i{display:block;height:100%;background:var(--ok)}
   #msg{padding:13px;border-radius:var(--radius);margin-bottom:16px;display:none;white-space:pre-wrap;font-size:14px}
@@ -820,7 +827,19 @@ function cartao(it){
   abrir.href = it.permalink || '#'; abrir.target = '_blank'; abrir.rel = 'noopener';
   abrir.textContent = ' · abrir ↗'; abrir.style.whiteSpace = 'nowrap';
   meta.appendChild(abrir);
+  // Catálogo ou tradicional; com par (o outro anúncio do mesmo produto, que divide o estoque), os dois ficam juntos na lista
+  const tipo = document.createElement('span');
+  tipo.className = 'tipoAnuncio ' + (it.catalogo ? 'cat' : 'trad');
+  tipo.textContent = it.catalogo ? 'Catálogo' : 'Tradicional';
+  meta.prepend(tipo);
   info.append(tituloInput, meta);
+  if((it.pares || []).length){
+    li.classList.add('com-par'); li.dataset.pares = it.pares.map((p) => p.id).join(',');
+    const n = document.createElement('div'); n.className = 'parNota';
+    n.textContent = '↕ Par: ' + it.pares.map((p) => `${p.id} (${p.catalogo ? 'catálogo' : 'tradicional'})`).join(', ')
+      + ' · mesmo produto, mesmo estoque' + (it.par_junto ? ' · trazido para ficar junto (o lugar dele na lista é em outra página)' : '');
+    info.appendChild(n);
+  }
 
   if(typeof it.health === 'number'){
     const b = document.createElement('div'); b.className = 'saude';
@@ -1910,7 +1929,8 @@ async function carregar(){
       $('lista').innerHTML = '<li class="vazio">Nenhum anúncio com esse filtro.</li>';
       $('paginacao').hidden = true; return;
     }
-    r.itens.forEach(it => $('lista').appendChild(cartao(it)));
+    let anterior = null;
+    r.itens.forEach(it => { const c = cartao(it); if(anterior && (anterior.pares || []).some((p) => p.id === it.id)) c.classList.add('par-seguinte'); $('lista').appendChild(c); anterior = it; });
     pintarSelecao();
     ultimaLista = { itens: r.itens, dias };
     pintarPeriodo(r.itens, dias, minha);
