@@ -1352,11 +1352,13 @@ const routes = {
     const parDe = paresDaConta(conta), naPagina = new Set(ids), juntos = new Set(), ordem2 = [];
     for (const id of ids) {
       if (juntos.has(id)) continue;
-      ordem2.push(id); juntos.add(id);
-      for (const p of parDe(id)) {
-        if (juntos.has(p.id)) continue;
-        if (!naPagina.has(p.id) && ordem2.length >= ids.length + 20) continue;
-        ordem2.push(p.id); juntos.add(p.id);
+      const fila = [id]; juntos.add(id);   // o grupo inteiro (com variações, cada uma pode ter o seu anúncio de catálogo)
+      while (fila.length) {
+        const x = fila.shift(); ordem2.push(x);
+        for (const p of parDe(x)) {
+          if (juntos.has(p.id) || (!naPagina.has(p.id) && ordem2.length + fila.length >= ids.length + 20)) continue;
+          fila.push(p.id); juntos.add(p.id);
+        }
       }
     }
     const extras = new Set(ordem2.filter((id) => !naPagina.has(id)));
