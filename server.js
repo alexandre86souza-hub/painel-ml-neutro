@@ -1249,6 +1249,7 @@ const routes = {
       // Não ativo e com estoque no painel de TODOS os produtos do SKU (já tirada a segurança): a mesma comparação da aba
       // "Estoque nos anúncios" (cache de 10 min; deveria > 0 = o kit que acaba primeiro ainda dá 1+). Full fica fora.
       const r = await routes['GET /api/estoque/anuncios'](new URL('/api/estoque/anuncios', 'http://painel'));
+      if (r.pronto === false && !(r.linhas || []).length) return { total: 0, offset, dias, itens: [], aviso: 'Lendo o estoque de todos os anúncios (leva cerca de 1 minuto depois que o painel reinicia): clique no filtro de novo daqui a pouco.' };
       const daConta = new Set((await idsDaConta(conta, null, q)).ids);
       soFiltro = new Set((r.linhas || []).filter((l) => l.canal === 'ml' && !l.full && l.status !== 'active' && l.status !== 'closed'
         && Number(l.deveria) > 0 && daConta.has(l.id)).map((l) => l.id));
