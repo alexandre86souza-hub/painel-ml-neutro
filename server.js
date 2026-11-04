@@ -2462,6 +2462,9 @@ Object.assign(routes, emailMod.rotas);
 let avisosFundo = false;
 // Novidades (novidades.js): campanha nova das lojas e anúncio novo na conta do ML viram aviso (30 em 30 min, no segundo plano dos avisos).
 const novidadesMod = require('./novidades.js').criar({ D, ml, magalu: magaluMod, leroy: leroyMod });
+// Entregas não realizadas do ML (nao-entregues.js): venda cancelada que saiu para entrega e voltou; o estoque só volta no "Conferir".
+const naoEntreguesMod = require('./nao-entregues.js').criar({ D, ml, CTX, contaOuErro });
+Object.assign(routes, naoEntreguesMod.rotas);
 async function avisosEmSegundoPlano() {
   if (avisosFundo) return;
   avisosFundo = true;
@@ -2471,6 +2474,7 @@ async function avisosEmSegundoPlano() {
         await painelMod.gerarAvisos(c).catch(() => null);
         await catalogoMod.verificar(c).catch(() => null);
         await novidadesMod.verificarConta(c).catch(() => null);
+        await naoEntreguesMod.verificar(c).catch(() => null);
       });
     }
     await novidadesMod.verificarLojas().catch(() => null);

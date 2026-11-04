@@ -381,6 +381,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   comprador: não é guardada (só `comandas.etiqueta_em`) e nada vai ao MCP. Magalu: `POST /seller/v1/logistics/shipping-labels` (deliveries,
   label {format pdf, type full}, channel) devolve signed_url, mas exige os escopos open:order-logistics-seller:read/write (reconectar a loja).
   Amazon: a etiqueta do Easy Ship pede o papel restrito Direct-to-Consumer Shipping + RDT — contra o compromisso de não ler dado de comprador; fica no Seller Central.
+- Entregas não realizadas do ML (`nao-entregues.js`, bloco na tela Devoluções, pedido do dono 04/11/2026): venda CANCELADA cujo envio saiu
+  (`/shipments/{id}` status_history.date_shipped ou shipped/not_delivered; tabela `ml_nao_entregues`, lida no segundo plano dos avisos),
+  sem reclamação e fora do Full. `estoque.js#linhasDeVenda` segura a baixa (o estoque NÃO volta no cancelamento) até o vendedor clicar
+  "Conferir" (`POST /api/devolucoes/nao-entregues/conferir`). A busca de Pedidos também acha pelo nº do pacote (`vendas.pack_id`) e do envio.
 - Armazenagem do Full (`GET /api/full/armazenagem`, tela Full): medido em 13/10/2026, o billing traz "Tarifa pelo serviço de
   armazenamento Full" (CFWA) UMA por dia para a conta toda, SEM produto (items_info null), e aceita só 5 consultas POR MINUTO:
   `lerArmazenagem` lê em segundo plano (1 a cada 13 s, no máx. a cada 12 h; depois de erro espera 15 min) e guarda as cobranças

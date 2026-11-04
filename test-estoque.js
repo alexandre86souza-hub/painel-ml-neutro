@@ -442,3 +442,14 @@ function U_SENHA() { return require('./usuarios.js').senhaTemporaria(); }
 }
 console.log('custo médio móvel: ok');
 }
+
+// Entregas não realizadas (nao-entregues.js): só a venda cancelada cujo envio chegou a sair
+{
+  const { saiuParaEntrega } = require('./nao-entregues.js');
+  const assert2 = require('assert');
+  assert2.strictEqual(saiuParaEntrega({ status: 'not_delivered' }), true);
+  assert2.strictEqual(saiuParaEntrega({ status: 'cancelled', status_history: { date_shipped: '2026-10-20T10:00:00Z' } }), true);
+  assert2.strictEqual(saiuParaEntrega({ status: 'cancelled', status_history: { date_shipped: null } }), false);
+  assert2.strictEqual(saiuParaEntrega(null), false);
+  console.log('Entregas não realizadas: ok');
+}

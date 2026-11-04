@@ -468,10 +468,13 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
   function linhasDeVenda(desde) {
     const db = D.db, out = [];
     const nomeConta = new Map(D.contasListar().map((c) => [c.ml_user_id, c.nickname]));
-    for (const v of db.prepare('SELECT order_id, item_id, variacao, ml_user_id, data, status, quantidade, sku, origem FROM vendas WHERE data >= ?').all(desde)) {
+    // entrega não realizada (nao-entregues.js): cancelada depois de sair para entrega — segue fora do estoque até "Conferir"
+    let segurar = new Set();
+    try { segurar = new Set(db.prepare('SELECT envio_id FROM ml_nao_entregues WHERE saiu=1 AND conferido_em IS NULL').all().map((x) => x.envio_id)); } catch { /* tabela ainda não criada */ }
+    for (const v of db.prepare('SELECT order_id, item_id, variacao, ml_user_id, data, status, quantidade, sku, origem, envio_id FROM vendas WHERE data >= ?').all(desde)) {
       const full = !!v.origem && !/^BRP\d+$/.test(v.origem);
       out.push({ ref: `venda:ml:${v.order_id}:${v.item_id}:${v.variacao}`, sku: v.sku, qtd: v.quantidade, data: v.data,
-        valida: v.status !== 'cancelled' && !full, origem: `Mercado Livre · ${nomeConta.get(v.ml_user_id) || v.ml_user_id}` });
+        valida: (v.status !== 'cancelled' || segurar.has(v.envio_id)) && !full, origem: `Mercado Livre · ${nomeConta.get(v.ml_user_id) || v.ml_user_id}` });
     }
     const lojas = new Map(D.shopeeLojasListar().map((l) => [l.shop_id, l.nome || `Loja ${l.shop_id}`]));
     for (const i of db.prepare(`SELECT p.order_sn, p.shop_id, p.data, p.status, i.linha, i.sku, i.quantidade FROM shopee_pedidos p
