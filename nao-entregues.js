@@ -113,7 +113,7 @@ function criar({ D, ml, CTX, contaOuErro, estoque }) {
         });
       }
       D.db.prepare('UPDATE ml_nao_entregues SET conferido_em=?, quem=?, obs=?, pecas=? WHERE envio_id=?')
-        .run(new Date().toISOString(), CTX.atual()?.usuario || 'administrador', String(body?.obs || '').slice(0, 300) || null, pecas ? JSON.stringify(pecas) : null, envio);
+        .run(new Date().toISOString(), (CTX.atual()?.usuario?.nome || CTX.atual()?.usuario?.login || 'administrador'), String(body?.obs || '').slice(0, 300) || null, pecas ? JSON.stringify(pecas) : null, envio);
       return { ok: true };
     },
   };
