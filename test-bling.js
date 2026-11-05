@@ -50,6 +50,11 @@ assert.deepStrictEqual(cp.itens[0], { codigo: '', descricao: 'Curto', classifica
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
 
+assert.ok(B.itemAjustado([{ codigo: '', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]));
+assert.ok(!B.itemAjustado([{ codigo: 'AMG-1', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]), 'código ainda no item');
+assert.ok(!B.itemAjustado([{ codigo: '', ncm: '', origem: 2, sugestao: { origem: 2 } }]), 'sem NCM');
+assert.ok(!B.itemAjustado([{ codigo: '', ncm: '8481.80.19', origem: 0, sugestao: { origem: 2 } }]), 'origem diferente');
+
 // nota fiscal tem dado do comprador: nada do Bling no MCP
 assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/bling');
 

@@ -375,6 +375,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   comanda não impressa e não manual ainda não vista (localStorage, dividido entre as abas), mostra faixa laranja, toca som
   (Web Audio, liberado no 1º clique da página), pisca o título e manda notificação do Windows. Atalho "Canceladas" (`GET /api/comandas/canceladas?dias=7`, `canceladas`): comanda que saiu da fila porque a loja cancelou o pedido (cópias locais de cada canal); impressa = devolver os produtos à prateleira. Comanda: pedido no topo (sem código de
   barras, pedido do vendedor; `public/codigo128.js` segue testado, sem uso). Nada no MCP (`test-comandas.js`).
+- Bling (`bling.js`; telas `public/bling.html` = notas para ajustar/emitir, menu Operação, e `public/bling-conexao.html` = aplicativo, conexão e teste, menu Conexões e sistema; só o administrador; pedido do dono 05/11/2026): DUAS contas (1 = Shopee AMG; 2 = Amazon, Leroy,
+  Shopee Primor e Magalu), cada uma com aplicativo próprio da Área do Integrador (Client Id/Secret na tela, segredo e refresh cifrados; o refresh
+  MUDA a cada renovação). Retorno FIXO em `/bling/callback` pela porta pública (state de uso único diz a conta). Etapa 1 = conexão e diagnóstico
+  (só leitura: pedidos, notas, naturezas; dos itens só descrição/código/NCM). Objetivo: emitir a nota do pedido importado pela integração com o
+  nome CURTO do produto, SEM código e com o NCM (hoje o vendedor edita nota por nota). Etapa 2 = "Notas pendentes" (`GET /api/bling/notas?conta=`, situação 1) + "Corrigir itens no Bling" (`POST /api/bling/notas/corrigir`:
+  só nota PENDENTE; PUT /nfe/{id} com a nota lida INTEIRA, `corpoCorrigido`: código vazio, nome curto, NCM, origem no item e no ICMS; relê e confere).
+  Origem: importado = 1 na conta 1 (AMG importa direto), 2 na conta 2 (Primor compra no Brasil); bucha/desempenadeira = 0 (`nacionalPeloNome`).
+  Nome/NCM/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. A EMISSÃO segue no Bling.
+  Nota tem dado do comprador: nada no MCP (`test-bling.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas
   (`comandas.js#fila`) com o número da comanda. ML: substatus ready_to_print/printed, `GET /shipment_labels?shipment_ids=&response_type=pdf`

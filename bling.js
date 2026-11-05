@@ -92,6 +92,9 @@ function corpoCorrigido(nota, conta, mudancas) {
   return b;
 }
 
+// A nota já está como o vendedor quer? Todo item sem código, com NCM e com a origem sugerida. Função pura: testada.
+const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => !i.codigo && !!i.ncm && Number(i.origem) === i.sugestao.origem);
+
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
 
@@ -186,19 +189,24 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     origem: origemDoItem(it), quantidade: it.quantidade ?? null, valor: it.valorTotal ?? null,
     sugestao: (() => { const g = sugestaoDe(it, it.codigo ? s[it.codigo] : null); return { ...g, origem: origemDoProduto(n, g.nacional) }; })() });
   // só o que a tela precisa: nada do destinatário (contato, endereço, etiqueta)
-  const notaDaTela = (n, x, s) => ({ id: x.id, numero: x.numero ?? null, serie: x.serie ?? null, situacao: x.situacao ?? null,
-    data: x.dataEmissao ?? null, loja: x.loja?.id ?? null, pedido_loja: x.numeroPedidoLoja ?? null, valor: x.valorNota ?? null,
-    itens: (x.itens || []).map((it, i) => itemDaNota(n, it, i, s)) });
+  const notaDaTela = (n, x, s) => {
+    const itens = (x.itens || []).map((it, i) => itemDaNota(n, it, i, s));
+    return { id: x.id, numero: x.numero ?? null, serie: x.serie ?? null, situacao: x.situacao ?? null,
+      data: x.dataEmissao ?? null, loja: x.loja?.id ?? null, pedido_loja: x.numeroPedidoLoja ?? null, valor: x.valorNota ?? null,
+      itens, ajustada: itemAjustado(itens) };
+  };
 
   const rotas = {
     // Notas de saída PENDENTES (ainda não emitidas) da conta, com a sugestão de cada item.
     'GET /api/bling/notas': async (url) => {
       const n = contaValida(url.searchParams.get('conta'));
-      const lista = (await bling(n, '/nfe?pagina=1&limite=50&tipo=1&situacao=1')).data || [];
+      // 1 = Pendente (falta ajustar e/ou emitir); 4 = Rejeitada pela Sefaz (corrigir no Bling)
+      const lista = [...((await bling(n, '/nfe?pagina=1&limite=50&tipo=1&situacao=1')).data || []),
+        ...((await bling(n, '/nfe?pagina=1&limite=20&tipo=1&situacao=4')).data || [])];
       const s = salvos(), notas = [];
       for (const x of lista.slice(0, 30)) {
         const d = (await bling(n, `/nfe/${x.id}`)).data;
-        if (d && Number(d.situacao) === 1) notas.push(notaDaTela(n, d, s));
+        if (d && [1, 4].includes(Number(d.situacao))) notas.push(notaDaTela(n, d, s));
       }
       return { conta: publica(n), notas, mais: lista.length > 30 };
     },
@@ -290,7 +298,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     const st = consumirEstadoOAuth(url.searchParams.get('state') || '');
     const voltar = st?.origem || `http://localhost:${portaPainel()}`;
     const falha = (titulo, detalhe, code = 400) => enviarHtml(res, pagina(titulo, `<h1>${esc(titulo)}</h1>
-<pre>${esc(detalhe)}</pre><p><a href="${esc(voltar)}/bling.html">Voltar ao painel</a></p>`, code));
+<pre>${esc(detalhe)}</pre><p><a href="${esc(voltar)}/bling-conexao.html">Voltar ao painel</a></p>`, code));
     if (!st?.bling || !CONTAS.includes(st.bling)) return falha('Autorização expirada ou desconhecida', 'Este retorno não corresponde a um "Conectar" feito pelo painel nos últimos 15 minutos.\nVolte ao painel e clique em "Conectar" de novo.');
     if (url.searchParams.get('error')) return falha('O Bling não autorizou', `${url.searchParams.get('error')}: ${url.searchParams.get('error_description') || ''}`);
     const code = url.searchParams.get('code');
@@ -300,7 +308,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const j = await pedirToken(n, { grant_type: 'authorization_code', code });
       guardar(n, j);
       D.configGravar(chave(n, 'conectada_em'), new Date().toISOString());
-      return redirecionar(res, `${voltar}/bling.html?conectado=${n}`);
+      return redirecionar(res, `${voltar}/bling-conexao.html?conectado=${n}`);
     } catch (e) { return falha('O Bling não entregou o acesso', e.message, 502); }
   }
 
@@ -308,4 +316,4 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
 }
 
 module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
-  sugestaoDe, corpoCorrigido, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };
+  sugestaoDe, corpoCorrigido, itemAjustado, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };

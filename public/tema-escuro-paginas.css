@@ -103,14 +103,48 @@ html[data-tema="escuro"][data-pagina="anuncios"] .det-kpi{background:hsla(216,56
 html[data-tema="escuro"][data-pagina="anuncios"] .det-tab td{border-bottom:1px solid hsla(214,26%,60%,.35)}
 html[data-tema="escuro"][data-pagina="anuncios"] .det-falta{color:hsl(35,95%,72%)}
 html[data-tema="escuro"][data-pagina="anuncios"] .calc-tab tr.calc-lucro td{color:hsl(142,72%,72%)}
+/* bling-conexao.html */
+html[data-tema="escuro"][data-pagina="bling-conexao"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .num{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .num.ajustar b{color:hsl(22,92%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .num.emitir b{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .num.rejeitada b{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .nota{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .etq{background:hsla(213,36%,60%,.14);color:hsl(218,24%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .etq.ajustar{background:hsla(45,90%,60%,.14);color:hsl(19,84%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .etq.emitir{background:hsla(140,80%,60%,.14);color:hsl(155,90%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .etq.rej{background:hsla(4,90%,60%,.14);color:hsl(4,72%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .nota input,
+html[data-tema="escuro"][data-pagina="bling-conexao"] .nota select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .nota input.mudou,
+html[data-tema="escuro"][data-pagina="bling-conexao"] .nota select.mudou{background:hsla(45,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .salvo{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .codigo s{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .res.erro{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .res.ok{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling-conexao"] .dominio{background:hsla(216,56%,60%,.14)}
 /* bling.html */
 html[data-tema="escuro"][data-pagina="bling"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
-html[data-tema="escuro"][data-pagina="bling"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
-html[data-tema="escuro"][data-pagina="bling"] .dominio{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="bling"] .num{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling"] .num.ajustar b{color:hsl(22,92%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .num.emitir b{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .num.rejeitada b{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .abas button span{background:hsla(213,36%,60%,.14);color:hsl(218,24%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .abas button span.tem{background:hsla(45,90%,60%,.14);color:hsl(19,84%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .nota{background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling"] .etq{background:hsla(213,36%,60%,.14);color:hsl(218,24%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .etq.ajustar{background:hsla(45,90%,60%,.14);color:hsl(19,84%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .etq.emitir{background:hsla(140,80%,60%,.14);color:hsl(155,90%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .etq.rej{background:hsla(4,90%,60%,.14);color:hsl(4,72%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .nota input,
 html[data-tema="escuro"][data-pagina="bling"] .nota select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
-html[data-tema="escuro"][data-pagina="bling"] .nota .salvo{color:hsl(145,81%,72%)}
-html[data-tema="escuro"][data-pagina="bling"] .nota .res.erro{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .nota input.mudou,
+html[data-tema="escuro"][data-pagina="bling"] .nota select.mudou{background:hsla(45,90%,60%,.14)}
+html[data-tema="escuro"][data-pagina="bling"] .salvo{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .codigo s{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .res.erro{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .res.ok{color:hsl(145,81%,72%)}
 /* caixa.html */
 html[data-tema="escuro"][data-pagina="caixa"] td.neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="caixa"] .agenda div{border:1px solid var(--line)}
