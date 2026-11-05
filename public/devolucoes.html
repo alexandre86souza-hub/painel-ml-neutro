@@ -150,7 +150,7 @@
   <div id="barraContas">
     <label for="selConta" id="rotuloConta">Conta</label>
     <select id="selConta" aria-describedby="rotuloConta"></select>
-    <a href="/auth" id="addConta">+ conectar outra</a>
+    <a href="/auth" id="addConta" hidden>conectar Mercado Livre →</a>
   </div>
 </header>
 
@@ -259,7 +259,7 @@ async function carregarContas(){
     selConta.innerHTML = '';
     if(!contas.length){
       selConta.hidden = true; $('rotuloConta').textContent = 'nenhuma conta —';
-      $('addConta').textContent = 'conectar Mercado Livre →'; return;
+      $('addConta').textContent = 'conectar Mercado Livre →'; $('addConta').hidden = false; return;
     }
     for(const c of contas){
       const o = el('option', null, `${c.nickname} · ${c.site_id}`);

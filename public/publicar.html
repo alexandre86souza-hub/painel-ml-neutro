@@ -94,7 +94,7 @@
   <div id="barraContas">
     <label for="selConta" class="hint" id="rotuloConta">Conta</label>
     <select id="selConta" aria-describedby="rotuloConta"></select>
-    <a href="/auth" id="addConta">+ conectar outra</a>
+    <a href="/auth" id="addConta" hidden>conectar Mercado Livre →</a>
   </div>
 </header>
 
@@ -247,12 +247,12 @@ async function carregarContas(){
     if(!contas.length){
       selConta.hidden = true;
       $('rotuloConta').textContent = 'nenhuma conta conectada —';
-      $('addConta').textContent = 'conectar Mercado Livre →';
+      $('addConta').textContent = 'conectar Mercado Livre →'; $('addConta').hidden = false;
       return;
     }
     selConta.hidden = false;
     $('rotuloConta').textContent = 'Conta';
-    $('addConta').textContent = '+ conectar outra';
+    $('addConta').hidden = true;
     for(const c of contas){
       const o = document.createElement('option');   // textContent: nickname vem do ML, não confiar
       o.value = c.ml_user_id;
@@ -263,7 +263,7 @@ async function carregarContas(){
   }catch(e){
     selConta.hidden = true;
     $('rotuloConta').textContent = 'sem conexão —';
-    $('addConta').textContent = 'conectar Mercado Livre →';
+    $('addConta').textContent = 'conectar Mercado Livre →'; $('addConta').hidden = false;
   }
 }
 
