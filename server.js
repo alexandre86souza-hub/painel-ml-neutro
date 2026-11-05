@@ -136,28 +136,37 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 // Telas servidas pelo próprio servidor: login, primeiro acesso e retorno do OAuth.
 const ESTILO = `
-  :root{--bg:#f2f3f5;--card:#fff;--ink:#1a1a1a;--muted:#5f6368;--line:#e0e2e6;--brand:#2968c8;
-    --err:#b3261e;--radius:8px}
+  :root{color-scheme:dark;--bg:#0b1120;--card:#111a2c;--ink:#e6edf7;--muted:#97a6bf;--line:#1f2b44;--campo:#0d1525;--campo-linha:#26344f;
+    --brand:#3b82f6;--brand-forte:#2563eb;--ciano:#22d3ee;--err:#f87171;--radius:10px}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh;display:grid;place-items:center;
-    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px 16px}
-  .cartao{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:32px;width:min(420px,100%)}
-  h1{font-size:19px;margin:0 0 6px}
+    font:15px/1.55 "Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;padding:24px 16px;
+    background-image:radial-gradient(800px 420px at 50% -10%,rgba(59,130,246,.16),transparent 70%);-webkit-font-smoothing:antialiased}
+  .cartao{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.45);
+    padding:34px 32px 30px;width:min(420px,100%);position:relative}
+  .cartao::before{content:"";display:block;width:40px;height:40px;border-radius:11px;margin:0 0 18px;
+    background:linear-gradient(135deg,#3b82f6,#22d3ee);box-shadow:0 6px 18px rgba(34,211,238,.25)}
+  h1{font-size:20px;margin:0 0 6px;letter-spacing:-.015em}
   p{margin:0 0 16px;color:var(--muted);font-size:14px}
-  label{font-size:13px;font-weight:600;display:block;margin:16px 0 4px}
-  input{width:100%;padding:10px 12px;border:1px solid #c4c7cc;border-radius:var(--radius);font:inherit}
-  input:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
-  button{margin-top:20px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:var(--radius);
-    padding:12px;font:inherit;font-weight:600;cursor:pointer}
-  button:hover{filter:brightness(.94)}
-  .erro{color:var(--err);font-size:13px;margin:12px 0 0}
-  .dica{font-size:12px;color:var(--muted);margin:4px 0 0}
+  label{font-size:13px;font-weight:600;display:block;margin:16px 0 6px}
+  input{width:100%;padding:11px 12px;border:1px solid var(--campo-linha);border-radius:var(--radius);font:inherit;background:var(--campo);color:var(--ink);
+    transition:border-color .15s,box-shadow .15s}
+  input::placeholder{color:#6a7892}
+  input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,130,246,.22)}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  button{margin-top:22px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:var(--radius);
+    padding:12px;font:inherit;font-weight:600;cursor:pointer;transition:background .15s}
+  button:hover{background:var(--brand-forte)}
+  .erro{color:var(--err);font-size:13px;margin:12px 0 0;padding:9px 11px;border-radius:9px;background:rgba(248,113,113,.1)}
+  .dica{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .dica b{color:var(--ink)}
   .passos{display:flex;gap:6px;list-style:none;padding:0;margin:0 0 20px;font-size:12px;color:var(--muted)}
   .passos li{flex:1;border-top:3px solid var(--line);padding-top:6px}
   .passos li[aria-current]{border-color:var(--brand);color:var(--ink);font-weight:600}
-  pre{background:#f4f4f5;padding:14px;border-radius:var(--radius);white-space:pre-wrap;font-size:13px}
-  a{color:#1a5fc4}`;
+  pre{background:var(--campo);border:1px solid var(--line);padding:14px;border-radius:var(--radius);white-space:pre-wrap;font-size:13px;color:var(--ink)}
+  code{background:var(--campo);border:1px solid var(--line);padding:2px 6px;border-radius:6px;color:var(--ink)}
+  ol{padding-left:20px;color:var(--muted);font-size:14px;margin:0 0 8px} ol li{margin:0 0 10px} ol b{color:var(--ink)}
+  a{color:#7cb4ff}`;
 
 const pagina = (titulo, corpo, codigo = 200) => [codigo, `<!doctype html><html lang="pt-BR"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title>

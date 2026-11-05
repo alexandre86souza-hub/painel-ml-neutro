@@ -64,7 +64,7 @@ assert.deepStrictEqual(P.porCanal([]).map((c) => [c.canal, c.pedidos, c.faturame
 {
   const G = require('./tema-escuro-gerar.js');
   assert.strictEqual(require('node:fs').readFileSync(G.SAIDA, 'utf8'), G.gerar(), 'rode: node tema-escuro-gerar.js');
-  assert.strictEqual(G.escura('#fff', 'fundo'), 'rgba(14,24,44,.72)');
+  assert.strictEqual(G.escura('#fff', 'fundo'), 'var(--card)', 'fundo branco vira o cartão do tema (ds.css)');
   assert.strictEqual(G.escura('#1a1a1a', 'texto'), 'var(--ink)');
   assert.strictEqual(G.escura('#2563eb', 'fundo'), null, 'cor forte (botão) fica');
   assert.ok(/^hsla\(/.test(G.escura('#dcfce7', 'fundo')), 'chip verde-claro vira verde translúcido');

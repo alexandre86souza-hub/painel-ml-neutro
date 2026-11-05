@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central de comando</title>
+<style>
+  :root{--bg:#f3f5f9;--card:#fff;--ink:#0f172a;--muted:#56657d;--line:#e2e7ef;--brand:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Inter","Segoe UI",system-ui,sans-serif}
+  /* cores fixas de cada marketplace (validadas para daltonismo na ordem ML, Amazon, Shopee, Magalu, Leroy) */
+  html{--mk-ml:#eda100;--mk-amazon:#6250d6;--mk-shopee:#eb6834;--mk-magalu:#2a78d6;--mk-leroy:#008300}
+  html[data-tema="escuro"]{--mk-ml:#c98500;--mk-amazon:#9085e9;--mk-shopee:#d95926;--mk-magalu:#3987e5;--mk-leroy:#008300}
+
+  .barra-topo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+  .barra-topo .esq{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .lido{font-size:12.5px;color:var(--muted)}
+  .lido.rodando::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:var(--acento,#2563eb);animation:pulso 1.2s ease-in-out infinite;vertical-align:1px}
+  @keyframes pulso{50%{opacity:.25}}
+  select.outro{height:36px;padding:0 10px;border-radius:10px;font-size:13px}
+
+  .secao-tit{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:26px 0 10px}
+  .secao-tit h2{margin:0;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .secao-tit a{font-size:13px;text-decoration:none}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  .kpi{border-radius:14px;padding:14px 16px 13px;min-height:108px;display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line)}
+  .kpi .rot{font-size:12.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:7px}
+  .kpi .rot svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
+  .kpi .val{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+  .kpi .nota{font-size:12px;color:var(--muted);margin-top:auto}
+  .kpi .chip{align-self:flex-start;margin-top:2px}
+  .kpi.destaque .val{color:var(--brand)}
+
+  .grade2{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px}
+  .grade-meio{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .bloco{border-radius:14px;padding:16px 18px;background:var(--card);border:1px solid var(--line);min-width:0}
+  .bloco h3{margin:0 0 2px;font-size:15px;font-weight:650;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .bloco h3 a{font-size:12.5px;font-weight:600;text-decoration:none}
+  .bloco .sub{margin:0 0 12px;font-size:12.5px}
+
+  /* gráficos */
+  .graf{position:relative;width:100%}
+  .graf svg{display:block;width:100%;height:auto;overflow:visible}
+  .graf .eixo-t{font-size:11px;fill:var(--muted)}
+  .graf .grade-l{stroke:var(--line);stroke-width:1}
+  .graf .hit{fill:transparent;cursor:crosshair}
+  .graf .hit:hover + .col-real, .graf g.col:hover rect.seg{opacity:.85}
+  .legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+  .legenda span{display:inline-flex;align-items:center;gap:6px}
+  .legenda i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .dica-g{position:absolute;z-index:5;pointer-events:none;min-width:170px;padding:9px 11px;border-radius:10px;font-size:12.5px;
+    background:var(--card-solido,#fff);border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.25);color:var(--ink)}
+  .dica-g b{display:block;margin-bottom:4px}
+  .dica-g div{display:flex;justify-content:space-between;gap:14px}
+  .dica-g div span:first-child{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+  .dica-g i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  /* participação (rosca) */
+  .rosca{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .rosca svg{width:150px;height:150px;flex:none}
+  .rosca ul{list-style:none;margin:0;padding:0;flex:1;min-width:170px;display:grid;gap:8px}
+  .rosca li{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:13px}
+  .rosca li i{width:10px;height:10px;border-radius:3px}
+  .rosca li b{font-variant-numeric:tabular-nums}
+  .rosca li small{grid-column:2/4;margin-top:-6px;color:var(--muted);font-size:12px}
+
+  /* tabela por marketplace */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+  thead th{border-top:0}
+  th:first-child,td:first-child{text-align:left}
+  td.mk{display:flex;align-items:center;gap:9px;font-weight:600}
+  td.mk i{width:10px;height:10px;border-radius:3px;flex:none}
+  td.mk small{font-weight:400;color:var(--muted)}
+  .barrinha{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--line);vertical-align:middle;margin-left:8px;overflow:hidden}
+  .barrinha i{display:block;height:100%;border-radius:3px}
+
+  /* composição do resultado */
+  .cascata{display:grid;gap:7px}
+  .cascata .l{display:grid;grid-template-columns:150px 1fr 104px;gap:10px;align-items:center;font-size:13px}
+  .cascata .l .trilho{height:14px;border-radius:4px;background:var(--line);position:relative;overflow:hidden}
+  .cascata .l .trilho i{position:absolute;top:0;bottom:0;border-radius:4px}
+  .cascata .l b{text-align:right;font-variant-numeric:tabular-nums}
+  .cascata .l.total{font-weight:700;padding-top:6px;border-top:1px solid var(--line)}
+  .cascata .l .p{color:var(--muted);font-weight:400;font-size:12px}
+
+  /* ads */
+  .ads-num{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px}
+  .ads-num div{padding:10px 12px;border-radius:10px;background:var(--overlay,#f6f8fb);border:1px solid var(--line)}
+  .ads-num small{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
+  .ads-num b{font-size:17px;font-variant-numeric:tabular-nums}
+  .lista-simples{list-style:none;margin:0;padding:0}
+  .lista-simples li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+  .lista-simples li:first-child{border-top:0}
+  .lista-simples .nome{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lista-simples .nome small{display:block;color:var(--muted);font-size:11.5px}
+  .lista-simples b{font-variant-numeric:tabular-nums;text-align:right}
+  .lista-simples .x{color:var(--muted);font-size:12px;text-align:right;min-width:62px}
+
+  /* produtos */
+  .prod-l{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+  .prod-l:first-of-type{border-top:0}
+  .prod-l img{width:38px;height:38px;border-radius:8px;object-fit:contain;background:#fff}
+  .prod-l .t{min-width:0}
+  .prod-l .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+  .prod-l .t small{color:var(--muted);font-size:11.5px}
+  .prod-l .v{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+  .prod-l .v small{display:block;color:var(--muted);font-size:11.5px}
+
+  /* atenção */
+  .atencao{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .atencao a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;text-decoration:none;color:var(--ink);border:1px solid var(--line)}
+  .atencao a:hover{border-color:var(--brand)}
+  .atencao a b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .atencao .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none;background:rgba(248,113,113,.15);color:#ef4444}
+  .atencao .ic.am{background:rgba(251,191,36,.15);color:#d97706}
+  .atencao .ic.ok{background:rgba(52,211,153,.15);color:#059669}
+
+  .esq-carga{display:grid;gap:10px}
+  .esq-carga .ds-esqueleto:nth-child(1){height:22px;width:40%}
+  .esq-carga .ds-esqueleto:nth-child(2){height:120px}
+  #msg{display:none;padding:12px 14px;margin-bottom:14px;font-size:13px}
+  .rodape-nota{margin-top:24px;font-size:12px;color:var(--muted)}
+
+  @media (max-width:1100px){.grade2{grid-template-columns:1fr}}
+  @media (max-width:760px){.grade-meio{grid-template-columns:1fr}.cascata .l{grid-template-columns:110px 1fr 92px}}
+</style>
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<link rel="stylesheet" href="/ds.css?v=1">
+<script src="/tema.js?v=2"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=40"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Central de comando</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div class="barra-topo">
+    <div class="esq">
+      <div class="seg" id="segPer" role="group" aria-label="Período">
+        <button type="button" data-per="hoje">Hoje</button>
+        <button type="button" data-per="7">7 dias</button>
+        <button type="button" data-per="30">30 dias</button>
+        <button type="button" data-per="atual">Este mês</button>
+        <button type="button" data-per="anterior">Mês anterior</button>
+      </div>
+      <select class="outro" id="selOutro" aria-label="Outro período">
+        <option value="">Outro período…</option>
+        <option value="15">Últimos 15 dias</option>
+        <option value="60">Últimos 60 dias</option>
+        <option value="90">Últimos 90 dias</option>
+      </select>
+    </div>
+    <div class="esq">
+      <span class="lido" id="lido"></span>
+      <button type="button" class="bt" id="btAtualizar">Atualizar</button>
+    </div>
+  </div>
+  <div id="msg" role="alert"></div>
+
+  <div class="secao-tit"><h2>Comercial</h2><a href="/geral.html">Todas as contas →</a></div>
+  <div class="kpis" id="kpisComercial"></div>
+
+  <div class="secao-tit"><h2>Rentabilidade</h2><a href="/dre.html">DRE do mês →</a></div>
+  <div class="kpis" id="kpisFinanceiro"></div>
+
+  <div class="secao-tit"><h2>Vendas por marketplace</h2></div>
+  <div class="grade2">
+    <section class="bloco"><h3>Evolução do faturamento</h3><p class="sub" id="subEvolucao">Por dia, empilhado por marketplace</p><div id="grafEvolucao"></div></section>
+    <section class="bloco"><h3>Participação no faturamento</h3><p class="sub" id="subPart">&nbsp;</p><div id="grafPart"></div></section>
+  </div>
+  <section class="bloco" style="margin-top:14px">
+    <h3>Desempenho por marketplace</h3><p class="sub">Faturamento, pedidos e margem de contribuição de cada loja no período (antes do Ads, que está na coluna própria)</p>
+    <div class="tabela-rolagem" id="tabMarket"></div>
+  </section>
+
+  <div class="secao-tit"><h2>Resultado e Ads</h2><a href="/placar.html">Promoções e Ads →</a></div>
+  <div class="grade-meio">
+    <section class="bloco"><h3>Composição do resultado</h3><p class="sub">Do faturamento ao lucro, somando todas as lojas</p><div id="cascata"></div></section>
+    <section class="bloco"><h3>Publicidade (Ads) <a href="/ads.html">Ver Ads →</a></h3><p class="sub" id="subAds">&nbsp;</p><div id="blocoAds"></div></section>
+  </div>
+
+  <div class="secao-tit"><h2>Produtos</h2><a href="/abc.html">Curva ABC →</a></div>
+  <div class="grade-meio">
+    <section class="bloco"><h3>Mais vendidos</h3><p class="sub">Por faturamento no período, todas as lojas</p><div id="maisVendidos"></div></section>
+    <section class="bloco"><h3>Mais lucrativos</h3><p class="sub">Por margem de contribuição no período (só produtos com custo)</p><div id="maisLucrativos"></div></section>
+  </div>
+
+  <div class="secao-tit"><h2>Estoque e pendências</h2><a href="/estoque.html">Estoque →</a></div>
+  <div class="kpis" id="kpisEstoque"></div>
+  <section class="bloco" style="margin-top:14px"><h3>Precisa de atenção</h3><p class="sub">O que espera alguém agir, em todas as lojas</p><ul class="atencao" id="atencao"></ul></section>
+
+  <p class="rodape-nota">Números lidos das mesmas rotas das outras telas (vendas pela data da compra, sem canceladas). O lucro por dia não é
+    calculado pelo painel: a evolução mostra o faturamento, e o lucro aparece no total do período. O Ads conta o Mercado Livre e a Shopee
+    (Amazon Ads ainda sem leitura do gasto; Leroy e Magalu não têm Ads integrado).</p>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=3"></script>
+<script>
+// ---------- Central de comando: vendas, resultado, Ads e estoque de TODAS as lojas, com dados reais ----------
+// Mesmas rotas de "Todas as contas" (/api/contas/resumo e /api/{loja}/vendas), da tela Promoções e Ads (/api/placar)
+// e do "Precisa de atenção" (/api/contas/atencao). Ads por campanha (/api/ads/historico) e estoque parado
+// (/api/estoque/capital) só para quem tem esses módulos. Nada aqui grava: só leitura.
+const MK = { ml: { nome: 'Mercado Livre', cor: 'var(--mk-ml)', tela: '/geral.html' }, amazon: { nome: 'Amazon', cor: 'var(--mk-amazon)', tela: '/vendas.html?conta=amazon' },
+  shopee: { nome: 'Shopee', cor: 'var(--mk-shopee)', tela: '/geral.html' }, magalu: { nome: 'Magalu', cor: 'var(--mk-magalu)', tela: '/vendas.html?conta=magalu' },
+  leroy: { nome: 'Leroy Merlin', cor: 'var(--mk-leroy)', tela: '/vendas.html?conta=leroy' } };
+const ORDEM = ['ml', 'amazon', 'shopee', 'magalu', 'leroy'];
+const ICO = {
+  fat: '<path d="M4 18 9 12l4 3 7-8"/><path d="M16 7h4v4"/>', hoje: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  pedidos: '<path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>', ticket: '<path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/>',
+  un: '<path d="M4 8 12 4l8 4-8 4-8-4Z"/><path d="M4 8v8l8 4 8-4V8"/>', lucro: '<path d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 1.8 2.6 4.5 3 4.5 1.4 4.5 3.2-2 3.3-4.5 3.3-4.5-1.3-4.5-3"/>',
+  margem: '<path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>', ads: '<path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/>',
+  taxa: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>', estoque: '<path d="M3 9l9-5 9 5v10H3z"/><path d="M7 19v-6h10v6"/>',
+  alerta: '<path d="M12 4 3 20h18L12 4Z"/><path d="M12 10v4M12 17v.01"/>', parado: '<circle cx="12" cy="12" r="8"/><path d="M10 9v6M14 9v6"/>',
+};
+let per = 'hoje', geracao = 0, eu = null, ultimo = null;
+
+const canalDe = (id) => (/^shopee-/.test(String(id)) ? 'shopee' : ['amazon', 'leroy', 'magalu'].includes(id) ? id : 'ml');
+const diasDe = (p) => (p === 'hoje' ? 7 : /^\d+$/.test(p) ? Number(p) : null);
+const qs = (p) => (p === 'atual' || p === 'anterior' ? `mes=${p}` : `dias=${diasDe(p)}`);
+// período para comparar (só o faturamento e os pedidos por dia; o lucro não tem série diária)
+const qsComparar = (p) => ({ hoje: null, 7: 'dias=15', 15: 'dias=30', 30: 'dias=60', 60: null, 90: null, atual: 'mes=anterior', anterior: null }[p] ?? null);
+const nomePer = (p, r) => (p === 'hoje' ? 'hoje' : p === 'atual' ? (r?.rotulo ? `em ${r.rotulo}` : 'neste mês') : p === 'anterior' ? (r?.rotulo ? `em ${r.rotulo}` : 'no mês anterior') : `nos últimos ${p} dias`);
+const hojeBr = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+const svgIco = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICO[n] || ''}</svg>`;
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// ---------- leitura: o mesmo caminho de "Todas as contas" ----------
+const VAZIO = () => ({ pedidos: 0, unidades: 0, faturamento: 0, tarifa: 0, frete: 0, produto: 0, embalagem: 0, imposto: 0, lucro: 0, comCusto: 0 });
+function somarEm(t, r) { if (!r) return; for (const k of ['pedidos', 'unidades', 'faturamento', 'tarifa', 'frete', 'produto', 'embalagem', 'imposto', 'lucro']) t[k] += Number(r[k]) || 0;
+  t.comCusto += (Number(r.faturamento) || 0) * (r.cobertura ?? (r.lucro != null ? 1 : 0)); }
+async function lerLojas(q, minha, aoParcial) {
+  const lojas = [];   // { conta, canal, nome, hoje, periodo, dias:[{dia,faturamento,pedidos}], produtos }
+  const erros = [];
+  const [cfgA, cfgL, cfgM, cfgS] = await Promise.all(['amazon', 'leroy', 'magalu', 'shopee'].map((c) => api(`/api/${c}/config`).catch(() => ({}))));
+  let rotulo = null;
+  try {
+    const r = await api(`/api/contas/resumo?${q}`);
+    rotulo = r.rotulo || null;
+    for (const c of r.contas || []) {
+      if (c.erro) { erros.push(`${c.nickname || 'Conta do ML'}: ${c.erro}`); continue; }
+      lojas.push({ conta: String(c.ml_user_id), canal: 'ml', nome: c.nickname, hoje: c.hoje, periodo: c.periodo, dias: c.dias || [], produtos: (r.produtos || []).map((p) => ({ ...p, _ml: true })) });
+    }
+    // os produtos do ML vêm juntos (todas as contas): guarda uma vez só
+    lojas.forEach((l, i) => { if (i > 0 && l.canal === 'ml') l.produtos = []; });
+  } catch (e) { erros.push('Mercado Livre: ' + e.message); }
+  if (minha !== geracao) return null;
+  aoParcial?.({ lojas, erros, rotulo });
+  const externa = async (conta, canal, caminho, nome) => {
+    const x = await api(caminho).catch((e) => ({ erro: e.message }));
+    if (x.erro) { erros.push(`${MK[canal].nome}: ${x.erro}`); return; }
+    if (x.conectada === false) return;
+    rotulo ||= x.rotulo || null;
+    lojas.push({ conta, canal, nome: x.nome || nome, hoje: x.hoje, periodo: x.resumo, dias: x.por_dia || [], produtos: x.produtos || [] });
+  };
+  const fila = [];
+  if (cfgA?.conectada_em) fila.push(externa('amazon', 'amazon', `/api/amazon/vendas?${q}`, cfgA.vendedor || 'Amazon'));
+  if (cfgL?.conectada_em) fila.push(externa('leroy', 'leroy', `/api/leroy/vendas?${q}`, cfgL.loja || 'Leroy Merlin'));
+  if (cfgM?.conectada_em) fila.push(externa('magalu', 'magalu', `/api/magalu/vendas?${q}`, cfgM.loja || 'Magalu'));
+  for (const l of cfgS?.lojas || []) fila.push(externa('shopee-' + l.shop_id, 'shopee', `/api/shopee/vendas?loja=${l.shop_id}&${q}`, l.nome || 'Shopee'));
+  // pinta a cada loja que chega
+  await Promise.all(fila.map((p) => p.then(() => { if (minha === geracao) aoParcial?.({ lojas, erros, rotulo }); })));
+  return { lojas, erros, rotulo };
+}
+
+function consolidar({ lojas }) {
+  const porCanal = {}, total = VAZIO(), totalHoje = VAZIO();
+  for (const l of lojas) {
+    const c = porCanal[l.canal] ||= { canal: l.canal, contas: [], periodo: VAZIO(), hoje: VAZIO(), dias: {} };
+    c.contas.push(l.nome); somarEm(c.periodo, l.periodo); somarEm(c.hoje, l.hoje); somarEm(total, l.periodo); somarEm(totalHoje, l.hoje);
+    for (const d of l.dias) { const x = c.dias[d.dia] ||= { faturamento: 0, pedidos: 0 }; x.faturamento += d.faturamento || 0; x.pedidos += d.pedidos || 0; }
+  }
+  // produtos: junta pelo SKU (os números do produto), como em Todas as contas
+  const numerosSku = (sku) => { const s = String(sku || ''); const resto = s.includes('-') ? s.slice(s.indexOf('-') + 1) : s;
+    return resto.split(/[-.\s+/]+/).filter((p) => /^\d+$/.test(p)).map(Number).sort((a, b) => a - b).join('.'); };
+  const m = new Map();
+  for (const l of lojas) for (const p of l.produtos || []) {
+    const k = numerosSku((p.skus || [])[0] || p.sku) || p.sku || p.titulo; const x = m.get(k);
+    if (!x) { m.set(k, { titulo: p.titulo, foto: p.foto, sku: (p.skus || [])[0] || p.sku, unidades: p.unidades || 0, faturamento: p.faturamento || 0, lucro: p.lucro, canais: new Set([l.canal]) }); continue; }
+    x.titulo ||= p.titulo; x.foto ||= p.foto; x.unidades += p.unidades || 0; x.faturamento += p.faturamento || 0; x.canais.add(l.canal);
+    x.lucro = p.lucro == null || x.lucro == null ? null : x.lucro + p.lucro;
+  }
+  const produtos = [...m.values()].map((x) => ({ ...x, margem: x.lucro != null && x.faturamento > 0 ? x.lucro / x.faturamento : null }));
+  return { porCanal, total, totalHoje, produtos };
+}
+const margemDe = (t) => (t.comCusto > 0 ? t.lucro / t.comCusto : null);
+
+// ---------- desenho ----------
+function kpi(rot, icone, val, nota, extra, destaque) {
+  const k = el('div', 'kpi' + (destaque ? ' destaque' : ''));
+  const r = el('div', 'rot'); r.innerHTML = svgIco(icone); r.appendChild(document.createTextNode(rot));
+  k.append(r, el('div', 'val', val));
+  if (extra) k.appendChild(extra);
+  if (nota) k.appendChild(el('div', 'nota', nota));
+  return k;
+}
+function compara(atual, antes, rotulo, invertido) {
+  if (antes == null || !antes || atual == null) return null;
+  const d = (atual - antes) / Math.abs(antes); const bom = invertido ? d < 0 : d > 0;
+  return el('span', 'chip ' + (Math.abs(d) < 0.005 ? '' : bom ? 'sobe' : 'desce'), `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${pct(Math.abs(d), 0)} ${rotulo}`);
+}
+function esqueletos(id, n) { const b = $(id); b.innerHTML = ''; for (let i = 0; i < n; i++) { const k = el('div', 'kpi'); k.append(el('span', 'ds-esqueleto'), el('span', 'ds-esqueleto')); k.children[0].style.width = '55%'; k.children[1].style.cssText = 'height:26px;width:75%;margin-top:6px'; b.appendChild(k); } }
+function carregandoEm(id) { const b = $(id); b.innerHTML = ''; const c = el('div', 'esq-carga'); c.append(el('span', 'ds-esqueleto'), el('span', 'ds-esqueleto')); b.appendChild(c); }
+function vazioEm(id, titulo, texto) { const b = $(id); b.innerHTML = ''; const v = el('div', 'ds-vazio'); v.append(el('b', null, titulo)); if (texto) v.append(el('span', null, texto)); b.appendChild(v); }
+
+function pintarComercial(c, comp, rotulo) {
+  const box = $('kpisComercial'); box.innerHTML = '';
+  const t = per === 'hoje' ? c.totalHoje : c.total;
+  const ticket = t.pedidos ? t.faturamento / t.pedidos : null;
+  const rotC = per === 'hoje' ? 'vs ontem' : per === 'atual' ? 'vs mesmos dias do mês anterior' : 'vs período anterior';
+  box.append(
+    kpi(per === 'hoje' ? 'Faturamento de hoje' : `Faturamento ${nomePer(per, { rotulo })}`, 'fat', real(t.faturamento),
+      per === 'hoje' ? null : `média de ${real(t.faturamento / Math.max(1, Object.keys(Object.values(c.porCanal)[0]?.dias || {}).length || diasDe(per) || 1))} por dia`, compara(t.faturamento, comp?.faturamento, rotC), true),
+    kpi('Pedidos', 'pedidos', numero(t.pedidos), `${numero(t.unidades)} unidades`, compara(t.pedidos, comp?.pedidos, rotC)),
+    kpi('Ticket médio', 'ticket', real(ticket), 'faturamento ÷ pedidos', compara(ticket, comp?.pedidos ? comp.faturamento / comp.pedidos : null, rotC)),
+  );
+  if (per !== 'hoje') box.appendChild(kpi('Faturamento de hoje', 'hoje', real(c.totalHoje.faturamento), `${numero(c.totalHoje.pedidos)} pedido(s) até agora`));
+  else box.appendChild(kpi('Unidades vendidas', 'un', numero(t.unidades), 'hoje, todas as lojas'));
+}
+
+function pintarFinanceiro(c, placar) {
+  const box = $('kpisFinanceiro'); box.innerHTML = '';
+  const t = per === 'hoje' ? c.totalHoje : c.total;
+  const marg = margemDe(t);
+  const despesas = t.tarifa + t.frete;
+  const ads = placar?.total?.ads_gasto ?? null;
+  const cobertura = t.faturamento > 0 ? t.comCusto / t.faturamento : null;
+  box.append(
+    kpi('Lucro de contribuição', 'lucro', real(t.lucro), 'antes do Ads e das devoluções' + (cobertura != null && cobertura < 0.995 ? ` · ${pct(cobertura, 0)} das vendas têm custo` : ''), null, true),
+    kpi('Margem de contribuição', 'margem', pct(marg), 'lucro ÷ faturamento com custo'),
+    kpi('Despesas com marketplaces', 'taxa', real(despesas), t.faturamento ? `tarifas ${real(t.tarifa)} · frete ${real(t.frete)} · ${pct(despesas / t.faturamento)} do faturamento` : null),
+  );
+  if (placar) {
+    const pd = placar.dias;
+    box.append(kpi('Investimento em Ads', 'ads', real(ads), `últimos ${pd} dias` + (placar.total.tacos != null ? ` · TACOS ${pct(placar.total.tacos)}` : '')),
+      kpi('Lucro depois do Ads', 'lucro', real(placar.total.lucro_pos_ads), `últimos ${pd} dias · ${placar.total.faturamento ? pct(placar.total.lucro_pos_ads / placar.total.faturamento) + ' do faturamento' : ''}`));
+  } else {
+    const k = kpi('Investimento em Ads', 'ads', '…', 'lendo o Ads das lojas'); k.id = 'kpiAdsCarregando'; box.appendChild(k);
+  }
+}
+
+function pintarEvolucao(c) {
+  const box = $('grafEvolucao'); box.innerHTML = '';
+  const canais = ORDEM.filter((k) => c.porCanal[k]);
+  const datas = [...new Set(canais.flatMap((k) => Object.keys(c.porCanal[k].dias)))].sort();
+  if (!datas.length) { vazioEm('grafEvolucao', 'Nenhuma venda no período', 'Quando houver vendas, a evolução por dia aparece aqui.'); return; }
+  const tot = (d) => canais.reduce((s, k) => s + (c.porCanal[k].dias[d]?.faturamento || 0), 0);
+  const teto = Math.max(1, ...datas.map(tot));
+  const passo = escalaBonita(teto);
+  const W = 720, H = 240, ml = 54, mb = 24, mt = 8, larg = (W - ml) / datas.length, barra = Math.max(3, Math.min(34, larg * 0.68));
+  const y = (v) => mt + (H - mt - mb) * (1 - v / passo.max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Faturamento por dia, empilhado por marketplace">`;
+  for (let v = 0; v <= passo.max + 1e-9; v += passo.passo) s += `<line class="grade-l" x1="${ml}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo-t" x="${ml - 8}" y="${y(v) + 4}" text-anchor="end">${curtoBRL(v)}</text>`;
+  const marcas = Math.max(1, Math.ceil(datas.length / 8));
+  datas.forEach((d, i) => {
+    const x = ml + i * larg + (larg - barra) / 2; let base = 0;
+    s += `<g class="col" data-i="${i}">`;
+    const segs = canais.map((k) => [k, c.porCanal[k].dias[d]?.faturamento || 0]).filter(([, v]) => v > 0);
+    segs.forEach(([k, v], j) => {
+      const y1 = y(base + v), y0 = y(base); const h = Math.max(0, y0 - y1 - (j < segs.length - 1 ? 2 : 0));
+      const topo = j === segs.length - 1;
+      s += topo ? `<path class="seg" d="${caminhoTopo(x, y1, barra, h)}" fill="${MK[k].cor}"/>` : `<rect class="seg" x="${x}" y="${y1 + 2}" width="${barra}" height="${Math.max(0, h)}" fill="${MK[k].cor}"/>`;
+      base += v;
+    });
+    s += `<rect class="hit" x="${ml + i * larg}" y="${mt}" width="${larg}" height="${H - mt - mb}"/></g>`;
+    if (i % marcas === 0 || i === datas.length - 1) s += `<text class="eixo-t" x="${ml + i * larg + larg / 2}" y="${H - 6}" text-anchor="middle">${data(d)}</text>`;
+  });
+  s += '</svg>';
+  const g = el('div', 'graf'); g.innerHTML = s; box.appendChild(g);
+  box.appendChild(legenda(canais));
+  dicaGrafico(g, (i) => { const d = datas[i]; return { titulo: data(d) + (d === hojeBr() ? ' (hoje)' : ''), linhas: [...canais.map((k) => [MK[k].nome, MK[k].cor, real(c.porCanal[k].dias[d]?.faturamento || 0)]), ['Total', null, real(tot(d))]] }; });
+  $('subEvolucao').textContent = `Faturamento por dia em ${datas.length} dia(s), empilhado por marketplace`;
+}
+function caminhoTopo(x, y, w, h) { const r = Math.min(4, w / 2, h); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; }
+function escalaBonita(teto) { const bruto = teto / 4; const p10 = 10 ** Math.floor(Math.log10(bruto)); const f = bruto / p10; const passo = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p10; return { passo, max: Math.ceil(teto / passo) * passo }; }
+function curtoBRL(v) { return v >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : v >= 1e3 ? 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : 'R$ ' + Math.round(v); }
+function legenda(canais) { const l = el('div', 'legenda'); for (const k of canais) { const s = el('span'); const i = el('i'); i.style.background = MK[k].cor; s.append(i, MK[k].nome); l.appendChild(s); } return l; }
+function dicaGrafico(g, conteudo) {
+  let d = null;
+  g.addEventListener('mousemove', (ev) => {
+    const col = ev.target.closest('g.col'); if (!col) { d?.remove(); d = null; return; }
+    const c = conteudo(Number(col.dataset.i)); if (!d) { d = el('div', 'dica-g'); g.appendChild(d); }
+    d.innerHTML = ''; d.appendChild(el('b', null, c.titulo));
+    for (const [n, cor, v] of c.linhas) { const row = el('div'); const a = el('span'); if (cor) { const i = el('i'); i.style.background = cor; a.appendChild(i); } a.append(n); row.append(a, el('span', null, v)); d.appendChild(row); }
+    const r = g.getBoundingClientRect(); let x = ev.clientX - r.left + 14; if (x + 200 > r.width) x = ev.clientX - r.left - 200; d.style.left = Math.max(0, x) + 'px'; d.style.top = Math.max(0, ev.clientY - r.top - 20) + 'px';
+  });
+  g.addEventListener('mouseleave', () => { d?.remove(); d = null; });
+}
+
+function pintarParticipacao(c) {
+  const box = $('grafPart'); box.innerHTML = '';
+  const t = per === 'hoje' ? 'hoje' : 'periodo';
+  const canais = ORDEM.filter((k) => c.porCanal[k] && c.porCanal[k][t].faturamento > 0);
+  const total = canais.reduce((s, k) => s + c.porCanal[k][t].faturamento, 0);
+  if (!total) { vazioEm('grafPart', 'Sem faturamento no período'); $('subPart').textContent = ''; return; }
+  $('subPart').textContent = per === 'hoje' ? 'Hoje' : 'No período escolhido';
+  const R = 15.915; let acum = 25;
+  let s = `<svg viewBox="0 0 42 42" role="img" aria-label="Participação de cada marketplace no faturamento"><circle cx="21" cy="21" r="${R}" fill="none" stroke="var(--line)" stroke-width="5"/>`;
+  for (const k of canais) { const v = c.porCanal[k][t].faturamento / total * 100; const gap = canais.length > 1 ? 0.6 : 0;
+    s += `<circle cx="21" cy="21" r="${R}" fill="none" stroke="${MK[k].cor}" stroke-width="5" stroke-dasharray="${Math.max(0, v - gap)} ${100 - Math.max(0, v - gap)}" stroke-dashoffset="${acum}"><title>${MK[k].nome}: ${pct(v / 100)}</title></circle>`; acum -= v; }
+  s += `<text x="21" y="20" text-anchor="middle" style="font-size:3.6px;fill:var(--muted)">total</text><text x="21" y="25" text-anchor="middle" style="font-size:4.6px;font-weight:700;fill:var(--ink)">${curtoBRL(total)}</text></svg>`;
+  const ro = el('div', 'rosca'); ro.innerHTML = s;
+  const ul = el('ul');
+  for (const k of canais) { const x = c.porCanal[k][t]; const li = el('li'); const i = el('i'); i.style.background = MK[k].cor;
+    li.append(i, el('span', null, MK[k].nome), el('b', null, pct(x.faturamento / total, 1)), el('small', null, `${real(x.faturamento)} · ${numero(x.pedidos)} pedido(s)`)); ul.appendChild(li); }
+  ro.appendChild(ul); box.appendChild(ro);
+}
+
+function pintarTabela(c, placar, compCanal) {
+  const box = $('tabMarket'); box.innerHTML = '';
+  const t = per === 'hoje' ? 'hoje' : 'periodo';
+  const canais = ORDEM.filter((k) => c.porCanal[k]);
+  if (!canais.length) { vazioEm('tabMarket', 'Nenhuma loja conectada', 'Conecte as lojas em Integrações.'); return; }
+  const total = canais.reduce((s, k) => s + c.porCanal[k][t].faturamento, 0);
+  const adsDe = (k) => { if (!placar) return null; const ls = placar.lojas.filter((l) => canalDe(String(l.conta).replace(/^ml:/, '')) === k && l.ads);
+    if (!ls.length) return null; const g = ls.reduce((s, l) => s + (l.ads.gasto || 0), 0), v = ls.reduce((s, l) => s + (l.ads.vendas || 0), 0); return { gasto: g, roas: g > 0 ? v / g : null }; };
+  const tb = el('table'); const th = el('thead'); const tr = el('tr');
+  for (const h of ['Marketplace', 'Faturamento', 'Participação', 'Pedidos', 'Ticket médio', 'Lucro', 'Margem', compCanal ? 'vs anterior' : null, placar ? `Ads (${placar.dias}d)` : null, placar ? 'ROAS' : null].filter(Boolean)) tr.appendChild(el('th', null, h));
+  th.appendChild(tr); tb.appendChild(th); const corpo = el('tbody');
+  for (const k of canais) {
+    const x = c.porCanal[k][t]; const r = el('tr');
+    const nome = el('td', 'mk'); const i = el('i'); i.style.background = MK[k].cor; const a = el('a', null, MK[k].nome); a.href = MK[k].tela; a.style.color = 'inherit'; a.style.textDecoration = 'none';
+    nome.append(i, a); if (c.porCanal[k].contas.length > 1) nome.append(el('small', null, `${c.porCanal[k].contas.length} contas`));
+    const part = el('td'); part.append(pct(total ? x.faturamento / total : 0, 0)); const bar = el('span', 'barrinha'); const bi = el('i'); bi.style.width = (total ? x.faturamento / total * 100 : 0) + '%'; bi.style.background = MK[k].cor; bar.appendChild(bi); part.appendChild(bar);
+    const m = margemDe(x);
+    r.append(nome, el('td', null, real(x.faturamento)), part, el('td', null, numero(x.pedidos)), el('td', null, real(x.pedidos ? x.faturamento / x.pedidos : null)),
+      el('td', x.lucro < 0 ? 'neg' : null, real(x.lucro)), el('td', m != null && m < 0.1 ? 'neg' : null, pct(m)));
+    if (compCanal) { const td = el('td'); const ch = compara(x.faturamento, compCanal[k], ''); td.appendChild(ch || document.createTextNode('—')); r.appendChild(td); }
+    if (placar) { const ad = adsDe(k); r.append(el('td', null, ad ? real(ad.gasto) : '—'), el('td', null, ad?.roas != null ? ad.roas.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'x' : '—')); }
+    corpo.appendChild(r);
+  }
+  const tt = per === 'hoje' ? c.totalHoje : c.total; const rt = el('tr', 'total');
+  rt.append(el('td', null, 'Total'), el('td', null, real(tt.faturamento)), el('td', null, '100%'), el('td', null, numero(tt.pedidos)), el('td', null, real(tt.pedidos ? tt.faturamento / tt.pedidos : null)), el('td', null, real(tt.lucro)), el('td', null, pct(margemDe(tt))));
+  if (compCanal) { const td = el('td'); const ch = compara(tt.faturamento, Object.values(compCanal).reduce((s, v) => s + v, 0), ''); td.appendChild(ch || document.createTextNode('—')); rt.appendChild(td); }
+  if (placar) rt.append(el('td', null, real(placar.total.ads_gasto)), el('td', null, placar.total.ads_gasto > 0 ? (placar.total.ads_vendas / placar.total.ads_gasto).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'x' : '—'));
+  corpo.appendChild(rt); tb.appendChild(corpo); box.appendChild(tb);
+}
+
+function pintarCascata(c, placar) {
+  const box = $('cascata'); box.innerHTML = '';
+  const t = per === 'hoje' ? c.totalHoje : c.total;
+  if (!t.faturamento) { vazioEm('cascata', 'Sem vendas no período'); return; }
+  const linhas = [['Faturamento', t.faturamento, 'var(--acento,#2563eb)', 0], ['Tarifas', -t.tarifa], ['Frete', -t.frete], ['Custo dos produtos', -t.produto], ['Embalagem', -t.embalagem], ['Impostos', -t.imposto]];
+  let corrente = t.faturamento;
+  const max = t.faturamento;
+  const linha = (nome, v, inicio, fim, cor, total) => {
+    const l = el('div', 'l' + (total ? ' total' : '')); l.append(el('span', null, nome));
+    const tr = el('div', 'trilho'); const i = el('i'); const a = Math.min(inicio, fim), b = Math.max(inicio, fim);
+    i.style.left = Math.max(0, a / max * 100) + '%'; i.style.width = Math.max(0.6, (b - a) / max * 100) + '%'; i.style.background = cor; tr.appendChild(i);
+    const vb = el('b', null, (v < 0 ? '− ' : '') + real(Math.abs(v))); const p = el('span', 'p', ' ' + pct(Math.abs(v) / t.faturamento, 0)); vb.appendChild(p);
+    l.append(tr, vb); box.appendChild(l);
+  };
+  linha('Faturamento', t.faturamento, 0, t.faturamento, 'linear-gradient(90deg,#2563eb,#22d3ee)');
+  for (const [nome, v] of linhas.slice(1)) { if (!v) continue; linha(nome, v, corrente + v, corrente, 'color-mix(in srgb,var(--err,#dc2626) 70%,transparent)'); corrente += v; }
+  linha('Lucro de contribuição', t.lucro, 0, Math.max(0, t.lucro), 'var(--ok,#059669)', true);
+  if (placar && per !== 'hoje') {
+    const n = el('p', 'sub'); n.style.margin = '10px 0 0';
+    n.textContent = `Ads dos últimos ${placar.dias} dias: ${real(placar.total.ads_gasto)} · lucro depois do Ads nesse período: ${real(placar.total.lucro_pos_ads)}.`;
+    box.appendChild(n);
+  }
+}
+
+function pintarAds(placar, campanhas) {
+  const box = $('blocoAds'); box.innerHTML = '';
+  if (!placar) { carregandoEm('blocoAds'); return; }
+  const t = placar.total;
+  $('subAds').textContent = `Últimos ${placar.dias} dias · Mercado Livre e Shopee` + (per === 'hoje' || per === 'atual' || per === 'anterior' || ![7, 15, 30].includes(Number(per)) ? ' (o Ads só tem 7, 15 ou 30 dias)' : '');
+  const roas = t.ads_gasto > 0 ? t.ads_vendas / t.ads_gasto : null, acos = t.ads_vendas > 0 ? t.ads_gasto / t.ads_vendas : null;
+  const nums = el('div', 'ads-num');
+  for (const [r, v] of [['Investimento', real(t.ads_gasto)], ['Vendas atribuídas', real(t.ads_vendas)], ['ROAS', roas != null ? roas.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'x' : '—'],
+    ['ACOS', pct(acos)], ['TACOS', pct(t.tacos)]]) { const d = el('div'); d.append(el('small', null, r), el('b', null, v)); nums.appendChild(d); }
+  box.appendChild(nums);
+  const lojas = placar.lojas.filter((l) => l.ads && l.ads.gasto > 0).sort((a, b) => b.ads.gasto - a.ads.gasto);
+  if (!t.ads_gasto) { const v = el('div', 'ds-vazio'); v.append(el('b', null, 'Sem gasto de Ads no período')); box.appendChild(v); }
+  else {
+    const h = el('p', 'sub', 'Por loja'); h.style.margin = '0 0 4px'; box.appendChild(h);
+    const ul = el('ul', 'lista-simples');
+    for (const l of lojas) { const li = el('li'); const n = el('div', 'nome'); n.append(l.loja); n.appendChild(el('small', null, `vendas atribuídas ${real(l.ads.vendas)}`));
+      li.append(n, el('b', null, real(l.ads.gasto)), el('span', 'x', l.ads.roas != null ? `ROAS ${l.ads.roas.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x` : '—')); ul.appendChild(li); }
+    box.appendChild(ul);
+  }
+  if (campanhas?.length) {
+    const h = el('p', 'sub', 'Campanhas com melhor ROAS (conta do ML escolhida no topo)'); h.style.margin = '14px 0 4px'; box.appendChild(h);
+    const ul = el('ul', 'lista-simples');
+    for (const c of campanhas) { const li = el('li'); const n = el('div', 'nome'); n.append(c.nome || 'Campanha ' + c.id); n.appendChild(el('small', null, `investimento ${real(c.investimento)} · ${c.status === 'active' ? 'ativa' : c.status || ''}`));
+      li.append(n, el('b', null, real(c.receita)), el('span', 'x', `ROAS ${(c.receita / c.investimento).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x`)); ul.appendChild(li); }
+    box.appendChild(ul);
+  }
+}
+
+function pintarProdutos(c) {
+  const lista = (id, ordenados, valor) => {
+    const box = $(id); box.innerHTML = '';
+    if (!ordenados.length) { vazioEm(id, 'Nenhum produto no período'); return; }
+    for (const p of ordenados.slice(0, 8)) {
+      const l = el('div', 'prod-l'); const im = el('img'); im.alt = ''; im.loading = 'lazy'; if (p.foto) im.src = p.foto; else im.style.visibility = 'hidden';
+      const t = el('div', 't'); t.append(el('span', null, p.titulo || p.sku || 'sem título'), el('small', null, `${p.sku || 'sem SKU'} · ${[...p.canais].map((k) => MK[k].nome).join(', ')}`));
+      const v = el('div', 'v'); valor(v, p); l.append(im, t, v); box.appendChild(l);
+    }
+  };
+  lista('maisVendidos', [...c.produtos].sort((a, b) => b.faturamento - a.faturamento), (v, p) => { v.append(real(p.faturamento)); v.appendChild(el('small', null, `${numero(p.unidades)} un.`)); });
+  lista('maisLucrativos', c.produtos.filter((p) => p.lucro != null && p.lucro > 0).sort((a, b) => b.lucro - a.lucro), (v, p) => { v.append(real(p.lucro)); v.appendChild(el('small', null, `margem ${pct(p.margem)}`)); });
+}
+
+function pintarEstoque(at, capital, c) {
+  const box = $('kpisEstoque'); box.innerHTML = '';
+  const e = at?.estoque;
+  if (!e) box.appendChild(kpi('Estoque', 'estoque', '—', 'sem leitura do estoque'));
+  else if (!e.inicio) box.appendChild(kpi('Estoque', 'estoque', '—', 'aparece depois da 1ª contagem física (tela Estoque → Contagem)'));
+  else {
+    box.append(kpi('Valor do estoque', 'estoque', real(e.valor), `${numero(e.unidades)} unidades · ${numero(e.ativos)} produtos ativos`, null, true),
+      kpi('Repor agora', 'alerta', numero(e.repor), `${numero(e.proximo)} próximos de repor`),
+      kpi('Saldo negativo', 'alerta', numero(e.negativos || 0), 'produtos com saldo abaixo de zero'));
+    if (capital?.resumo) { const p = capital.resumo.parado_90; box.appendChild(kpi('Sem giro (90 dias)', 'parado', real(p.valor), `${numero(p.produtos)} produto(s) sem saída`)); }
+  }
+  const mais = [...(c?.produtos || [])].sort((a, b) => b.unidades - a.unidades)[0];
+  if (mais) box.appendChild(kpi('Maior saída no período', 'un', numero(mais.unidades) + ' un.', mais.titulo || mais.sku));
+  // atenção
+  const ul = $('atencao'); ul.innerHTML = '';
+  const item = (txt, n, link, tom) => { if (!n) return; const li = el('li'); const a = el('a'); a.href = link; a.append(el('span', 'ic' + (tom ? ' ' + tom : ''), '!'), txt, el('b', null, numero(n))); li.appendChild(a); ul.appendChild(li); };
+  const k = at?.comandas;
+  if (k) { item('Comandas com prazo vencido', k.atrasadas, '/comandas.html'); item('Comandas para imprimir', k.nao_impressas, '/comandas.html', 'am'); }
+  if (e?.inicio) { item('Produtos para repor agora', e.repor, '/estoque.html'); item('Produtos com saldo negativo', e.negativos, '/estoque.html'); item('Descontinuados com estoque (vender o restante)', e.vender_restante, '/estoque.html', 'am'); }
+  const m = at?.mensagens;
+  if (m) { item('Reclamações para responder', m.reclamacao, '/mensagens.html'); item('Perguntas sem resposta', m.pergunta, '/mensagens.html', 'am'); item('Mensagens pós-venda', m.mensagem, '/mensagens.html', 'am'); item('Chats da Shopee', m.chat, '/mensagens.html', 'am'); }
+  if (!ul.children.length) { const li = el('li'); const a = el('a'); a.href = '/comandas.html'; a.append(el('span', 'ic ok', '✓'), at ? 'Tudo em dia' : 'Lendo as pendências…'); li.appendChild(a); ul.appendChild(li); }
+}
+
+// ---------- comparação: o período anterior pela série diária ----------
+function comparacao(c, comp, rotulo) {
+  if (per === 'hoje') {
+    // ontem, pela série diária do próprio período (7 dias)
+    const ontem = new Date(Date.now() - 27 * 3600e3).toISOString().slice(0, 10); const r = { faturamento: 0, pedidos: 0 }, canal = {};
+    for (const [k, x] of Object.entries(c.porCanal)) { const d = x.dias[ontem]; if (d) { r.faturamento += d.faturamento; r.pedidos += d.pedidos; canal[k] = d.faturamento; } }
+    return r.faturamento ? { total: r, canal } : null;
+  }
+  if (!comp) return null;
+  const cc = consolidar(comp);
+  const r = { faturamento: 0, pedidos: 0 }, canal = {};
+  // dias do período atual (os mais recentes) ficam fora; mês: os mesmos dias do mês anterior
+  const diasAtual = new Set(Object.values(c.porCanal).flatMap((x) => Object.keys(x.dias)));
+  let usar = (d) => !diasAtual.has(d);
+  if (per === 'atual') { const n = new Set([...diasAtual].map((d) => d.slice(8))).size; usar = (d) => Number(d.slice(8)) <= n; }
+  for (const [k, x] of Object.entries(cc.porCanal)) for (const [d, v] of Object.entries(x.dias)) if (usar(d)) { r.faturamento += v.faturamento; r.pedidos += v.pedidos; canal[k] = (canal[k] || 0) + v.faturamento; }
+  void rotulo;
+  return r.faturamento ? { total: r, canal } : null;
+}
+
+// ---------- carga ----------
+async function carregar(recarregar) {
+  const minha = ++geracao;
+  erroTela(''); ultimo = null;
+  esqueletos('kpisComercial', 4); esqueletos('kpisFinanceiro', 5); esqueletos('kpisEstoque', 4);
+  for (const id of ['grafEvolucao', 'grafPart', 'tabMarket', 'cascata', 'blocoAds', 'maisVendidos', 'maisLucrativos']) carregandoEm(id);
+  const lido = $('lido'); lido.className = 'lido rodando'; lido.textContent = 'Lendo as vendas de cada loja…';
+  const q = qs(per);
+  let placar = null, campanhas = null, atencao = null, capital = null, compara = null, base = null;
+  const repintar = () => {
+    if (!base || minha !== geracao) return;
+    const c = consolidar(base); const cmp = comparacao(c, compara, base.rotulo);
+    pintarComercial(c, cmp?.total, base.rotulo); pintarFinanceiro(c, placar); pintarEvolucao(c); pintarParticipacao(c); pintarTabela(c, placar, cmp?.canal);
+    pintarCascata(c, placar); pintarProdutos(c); pintarEstoque(atencao, capital, c);
+    if (placar) pintarAds(placar, campanhas);
+    ultimo = c;
+  };
+  // em paralelo: Ads (placar), atenção, campanhas e estoque parado (quem tem o módulo)
+  const diasAds = [7, 15, 30].includes(Number(per)) ? Number(per) : per === 'hoje' ? 7 : 30;
+  api(`/api/placar?dias=${diasAds}${recarregar ? '&recarregar=1' : ''}`).then((p) => { placar = p; repintar(); if (!base) pintarAds(p, campanhas); })
+    .catch((e) => { if (minha === geracao) { vazioEm('blocoAds', 'Não li o Ads agora', e.message); $('kpiAdsCarregando')?.remove(); } });
+  api('/api/contas/atencao').then((a) => { atencao = a; repintar(); }).catch(() => { atencao = {}; repintar(); });
+  const pode = (pg) => eu?.admin || (eu?.paginas || []).includes(pg);
+  if (pode('/ads.html')) api(`/api/ads/historico?dias=${Math.max(7, diasAds)}`).then((h) => {
+    campanhas = h?.habilitado ? (h.campanhas || []).filter((c) => c.investimento > 0 && c.receita > 0).sort((a, b) => b.receita / b.investimento - a.receita / a.investimento).slice(0, 5) : null; repintar();
+  }).catch(() => {});
+  if (pode('/compras.html')) api('/api/estoque/capital').then((x) => { capital = x; repintar(); }).catch(() => {});
+  const r = await lerLojas(q, minha, (parcial) => { base = parcial; repintar(); });
+  if (!r || minha !== geracao) return;
+  base = r; repintar();
+  if (r.erros.length) erroTela('Algumas lojas não responderam: ' + r.erros.join(' · '));
+  lido.className = 'lido'; lido.textContent = `${r.lojas.length} loja(s) somada(s) · lido às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  // período anterior (só faturamento e pedidos), depois do principal
+  const qc = qsComparar(per);
+  if (qc) { const x = await lerLojas(qc, minha, null); if (x && minha === geracao) { compara = x; repintar(); } }
+}
+
+// ---------- período ----------
+function marcarPer() {
+  for (const b of $('segPer').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.per === per));
+  $('selOutro').value = ['15', '60', '90'].includes(per) ? per : '';
+}
+const mudarPer = (p) => { per = p; marcarPer(); window.guardarPeriodo?.(p); carregar(); };
+$('segPer').onclick = (ev) => { const b = ev.target.closest('button'); if (b) mudarPer(b.dataset.per); };
+$('selOutro').onchange = () => { if ($('selOutro').value) mudarPer($('selOutro').value); };
+$('btAtualizar').onclick = () => carregar(true);
+{
+  const ok = ['hoje', '7', '15', '30', '60', '90', 'atual', 'anterior'];
+  let g = null; try { g = localStorage.getItem('painel.periodo:/central.html'); } catch {}
+  const u = new URLSearchParams(location.search).get('dias');
+  per = [u, g].find((x) => x && ok.includes(x)) || 'hoje';
+}
+marcarPer();
+api('/api/eu').then((x) => { eu = x; }).catch(() => {}).finally(() => carregar());
+</script>
+<script src="/sino.js?v=6" defer></script>
+</body>
+</html>

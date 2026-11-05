@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrações</title>
+<style>
+  :root{--bg:#f3f5f9;--card:#fff;--ink:#0f172a;--muted:#56657d;--line:#e2e7ef;--brand:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Inter","Segoe UI",system-ui,sans-serif}
+  .resumo{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+  .resumo .p{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-size:13px}
+  .resumo .p b{font-variant-numeric:tabular-nums}
+  .ponto{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;background:#94a3b8}
+  .ponto.ok{background:#10b981}.ponto.atencao{background:#f59e0b}.ponto.erro{background:#ef4444}.ponto.off{background:#94a3b8}
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:14px}
+  .integ{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+  .integ-topo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .integ-topo > div:not(.logo){flex:1;min-width:150px}
+  .logo{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff;flex:none;letter-spacing:.02em}
+  .integ-topo h2{margin:0;font-size:15px;font-weight:650}
+  .integ-topo p{margin:0;font-size:12.5px;color:var(--muted)}
+  .integ-topo .estado{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap;border:1px solid var(--line)}
+  .estado.ok{color:#059669;background:rgba(16,185,129,.1);border-color:transparent}
+  .estado.atencao{color:#b45309;background:rgba(245,158,11,.12);border-color:transparent}
+  .estado.erro{color:#dc2626;background:rgba(239,68,68,.1);border-color:transparent}
+  .estado.off{color:var(--muted)}
+  dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+  dt{color:var(--muted)}
+  dd{margin:0;min-width:0;overflow-wrap:anywhere;text-align:right}
+  .contas{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .contas li{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);font-size:13px}
+  .contas li small{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+  .aviso-i{font-size:12.5px;padding:9px 11px;border-radius:10px;background:rgba(245,158,11,.1);color:#b45309}
+  .aviso-i.erro{background:rgba(239,68,68,.1);color:#dc2626}
+  .aviso-i.ok{background:rgba(16,185,129,.1);color:#059669}
+  .integ-acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:4px}
+  .integ-acoes a.bt{text-decoration:none}
+  .teste{font-size:12.5px;color:var(--muted)}
+  #msg{display:none;padding:12px 14px;margin-bottom:14px;font-size:13px}
+  .nota-seg{margin-top:22px;font-size:12px;color:var(--muted)}
+</style>
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=2">
+<link rel="stylesheet" href="/ds.css?v=1">
+<script src="/tema.js?v=2"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=40"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Integrações</h1>
+  <p class="cabecaNota">Marketplaces, ERP e serviços do painel num lugar só</p>
+  <div id="barraContas"></div>
+</header>
+<main>
+  <div id="msg" role="alert"></div>
+  <div class="resumo" id="resumo"><span class="carregando">Lendo a situação de cada integração…</span></div>
+  <div class="grade" id="grade"></div>
+  <p class="nota-seg">Chaves, segredos e tokens nunca aparecem aqui: eles ficam cifrados no banco e só são digitados na tela de configuração
+    de cada integração. "Testar conexão" faz só leituras (o mesmo diagnóstico de cada tela) e não muda nada nas lojas.</p>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=3"></script>
+<script>
+// Uma visão das integrações: o que está conectado, com qual conta, desde quando e o que precisa de atenção. Só leitura das rotas
+// de configuração de cada uma (sem segredo nenhum: elas só dizem "tem chave"); conectar, reconectar e configurar seguem nas
+// telas próprias. Tela do administrador.
+const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+const ESTADO = { ok: 'Conectada', atencao: 'Precisa de atenção', erro: 'Com erro', off: 'Não conectada' };
+const situacoes = [];
+
+function cartao({ nome, sigla, cor, desc, estado, linhas = [], contas = null, aviso = null, acoes = [], teste = null }) {
+  situacoes.push(estado);
+  const c = el('section', 'integ'); c.setAttribute('aria-label', nome);
+  const topo = el('div', 'integ-topo');
+  const logo = el('div', 'logo', sigla); logo.style.background = cor; logo.setAttribute('aria-hidden', 'true');
+  const t = el('div'); t.append(el('h2', null, nome), el('p', null, desc));
+  const st = el('span', 'estado ' + estado); st.append(el('i', 'ponto ' + estado), ESTADO[estado]);
+  topo.append(logo, t, st); c.appendChild(topo);
+  if (linhas.length) { const dl = el('dl'); for (const [k, v] of linhas) dl.append(el('dt', null, k), el('dd', null, v ?? '—')); c.appendChild(dl); }
+  if (contas?.length) { const ul = el('ul', 'contas'); for (const [n, s, est] of contas) { const li = el('li'); li.append(el('i', 'ponto ' + (est || 'ok')), n); if (s) li.appendChild(el('small', null, s)); ul.appendChild(li); } c.appendChild(ul); }
+  if (aviso) c.appendChild(el('div', 'aviso-i' + (aviso.tipo ? ' ' + aviso.tipo : ''), aviso.texto));
+  const ac = el('div', 'integ-acoes');
+  for (const [rot, href, prim] of acoes) { const a = el('a', 'bt' + (prim ? ' primario' : ''), rot); a.href = href; ac.appendChild(a); }
+  let saida = null;
+  if (teste) {
+    const b = el('button', 'bt', 'Testar conexão'); b.type = 'button';
+    saida = el('span', 'teste');
+    b.onclick = async () => {
+      b.disabled = true; saida.textContent = 'Testando…';
+      try { const r = await teste(); saida.textContent = r.texto; saida.style.color = r.ok ? 'var(--ok)' : 'var(--err)'; window.ui?.toast(`${nome}: ${r.texto}`, r.ok ? 'ok' : 'erro'); }
+      catch (e) { saida.textContent = 'Falhou: ' + e.message; saida.style.color = 'var(--err)'; window.ui?.toast(`${nome}: ${e.message}`, 'erro'); }
+      finally { b.disabled = false; }
+    };
+    ac.appendChild(b);
+  }
+  c.appendChild(ac); if (saida) c.appendChild(saida);
+  $('grade').appendChild(c);
+}
+// Diagnóstico de cada tela = { passo: resposta | { erro } }: conta quantas leituras deram certo
+function lerDiagnostico(d) {
+  const passos = Object.entries(d || {}).filter(([, v]) => v && typeof v === 'object');
+  const erros = passos.filter(([, v]) => v.erro);
+  if (!passos.length) return { ok: true, texto: 'Respondeu.' };
+  if (erros.length === passos.length) return { ok: false, texto: 'Não respondeu: ' + erros[0][1].erro };
+  if (erros.length) return { ok: true, texto: `Conectada; ${erros.length} de ${passos.length} leituras com aviso (${erros[0][1].erro})` };
+  return { ok: true, texto: `Conectada: ${passos.length} leituras de teste certas.` };
+}
+
+async function carregar() {
+  const ler = (u) => api(u).catch((e) => ({ _erro: e.message }));
+  const [cfg, contas, shopee, amazon, amzads, leroy, magalu, bling, email] = await Promise.all([
+    ler('/api/config/resumo'), ler('/api/accounts'), ler('/api/shopee/config'), ler('/api/amazon/config'), ler('/api/amazon-ads/config'),
+    ler('/api/leroy/config'), ler('/api/magalu/config'), ler('/api/bling/config'), ler('/api/email/config')]);
+  $('grade').innerHTML = '';
+
+  // Mercado Livre
+  {
+    const lista = contas.contas || [];
+    const pend = cfg.pendente;
+    const PEND = { credenciais: 'Falta o App ID e a chave secreta do aplicativo.', tunel: 'O endereço público do painel está desligado.',
+      url_mudou: 'O endereço público mudou: atualize a URL de retorno no aplicativo do Mercado Livre.', url: 'A URL de retorno ainda não está cadastrada no aplicativo.',
+      conta: 'Aplicativo pronto; falta conectar uma conta.' };
+    const estado = cfg._erro ? 'erro' : !lista.length ? 'off' : pend ? 'atencao' : 'ok';
+    cartao({ nome: 'Mercado Livre', sigla: 'ML', cor: '#c98500', desc: 'Vendas, anúncios, Ads, Full, devoluções e Mercado Pago', estado,
+      linhas: [['Aplicativo', cfg.tem_credenciais ? 'configurado' : 'falta configurar'], ['Endereço público', cfg.tunel?.url ? new URL(cfg.tunel.url).host : (cfg.tunel?.estado || '—')],
+        ['Contas', String(lista.length)]],
+      contas: lista.map((c) => [`${c.nickname} · ${c.site_id}`, 'desde ' + dataHora(c.conectada_em), contas.ativa === c.ml_user_id ? 'ok' : 'ok']),
+      aviso: pend ? { texto: PEND[pend] || pend } : cfg._erro ? { texto: cfg._erro, tipo: 'erro' } : null,
+      acoes: [['Configurações', '/configuracao.html', !lista.length || !!pend], ['Conectar outra conta', '/auth']] });
+  }
+  // Shopee
+  {
+    const lojas = shopee.lojas || [];
+    const estado = shopee._erro ? 'erro' : !shopee.tem_chave ? 'off' : !lojas.length ? 'atencao' : 'ok';
+    cartao({ nome: 'Shopee', sigla: 'SH', cor: '#d95926', desc: 'Pedidos, repasse, anúncios, campanhas, Ads e estoque', estado,
+      linhas: [['Aplicativo (Partner ID)', shopee.partner_id ? 'configurado' : 'falta configurar'], ['Ambiente', shopee.ambiente || '—'], ['Lojas', String(lojas.length)]],
+      contas: lojas.map((l) => [l.nome || 'Loja ' + l.shop_id, 'token renovado ' + dataHora(l.renovada_em || l.conectada_em)]),
+      aviso: shopee.tem_chave && !lojas.length ? { texto: 'Aplicativo pronto; falta autorizar uma loja.' } : null,
+      acoes: [[lojas.length ? 'Gerenciar lojas' : 'Conectar loja', '/shopee.html', !lojas.length]],
+      teste: lojas.length ? async () => { const rs = []; for (const l of lojas) rs.push([l.nome, lerDiagnostico(await api(`/api/shopee/diagnostico?loja=${l.shop_id}&dias=1`))]);
+        const ruim = rs.filter(([, r]) => !r.ok); return ruim.length ? { ok: false, texto: ruim.map(([n, r]) => `${n}: ${r.texto}`).join(' · ') } : { ok: true, texto: `${rs.length} loja(s) respondendo.` }; } : null });
+  }
+  // Amazon (SP-API)
+  {
+    const estado = amazon._erro ? 'erro' : amazon.conectada_em ? 'ok' : amazon.client_id ? 'atencao' : 'off';
+    cartao({ nome: 'Amazon', sigla: 'AZ', cor: '#6250d6', desc: 'Vendas (financeiro), pedidos, FBA, anúncios e concorrência', estado,
+      linhas: [['Vendedor', amazon.vendedor || '—'], ['Aplicativo', amazon.client_id ? 'configurado' : 'falta configurar'], ['Autorização', amazon.tem_refresh ? 'ativa' : 'falta'], ['Conectada em', dataHora(amazon.conectada_em)]],
+      aviso: !amazon.conectada_em && amazon.client_id ? { texto: 'Falta testar e gravar as credenciais na tela da Amazon.' } : null,
+      acoes: [[amazon.conectada_em ? 'Configuração' : 'Conectar', '/amazon.html', !amazon.conectada_em]],
+      teste: amazon.conectada_em ? async () => lerDiagnostico(await api('/api/amazon/diagnostico?dias=1')) : null });
+  }
+  // Amazon Ads
+  {
+    const estado = amzads._erro ? 'erro' : amzads.conectada ? (amzads.perfil ? 'ok' : 'atencao') : amzads.client_id ? 'atencao' : 'off';
+    cartao({ nome: 'Amazon Ads', sigla: 'AA', cor: '#4c3fb0', desc: 'Conexão do Login with Amazon (leitura de campanhas ainda em construção)', estado,
+      linhas: [['Perfil do Brasil', amzads.perfil ? 'escolhido' : '—'], ['Conectada em', dataHora(amzads.conectada_em)]],
+      aviso: amzads.conectada && !amzads.perfil ? { texto: 'Conectada, mas sem o perfil do Brasil escolhido.' } : null,
+      acoes: [[amzads.conectada ? 'Configuração' : 'Conectar', '/amazon-ads.html?conta=amazon', !amzads.conectada]],
+      teste: amzads.conectada ? async () => lerDiagnostico(await api('/api/amazon-ads/diagnostico')) : null });
+  }
+  // Leroy Merlin (Mirakl)
+  {
+    const estado = leroy._erro ? 'erro' : leroy.conectada_em ? 'ok' : leroy.tem_chave ? 'atencao' : 'off';
+    cartao({ nome: 'Leroy Merlin', sigla: 'LM', cor: '#008300', desc: 'Pedidos, repasses, ofertas, preço e estoque (Mirakl)', estado,
+      linhas: [['Loja', leroy.loja || '—'], ['Portal', leroy.host ? leroy.host.replace(/^https?:\/\//, '') : '—'], ['Conectada em', dataHora(leroy.conectada_em)]],
+      acoes: [[leroy.conectada_em ? 'Configuração' : 'Conectar', '/leroy.html', !leroy.conectada_em]],
+      teste: leroy.conectada_em ? async () => lerDiagnostico(await api('/api/leroy/diagnostico?dias=1')) : null });
+  }
+  // Magalu
+  {
+    const falta = magalu.escopos_faltando || [];
+    const estado = magalu._erro ? 'erro' : !magalu.conectada_em ? (magalu.client_id ? 'atencao' : 'off') : falta.length ? 'atencao' : 'ok';
+    cartao({ nome: 'Magalu', sigla: 'MG', cor: '#2a78d6', desc: 'Pedidos, financeiro, anúncios, preço, estoque e promoções', estado,
+      linhas: [['Loja', magalu.loja || '—'], ['Aplicativo', magalu.client_id ? 'configurado' : 'falta configurar'], ['Conectada em', dataHora(magalu.conectada_em)]],
+      aviso: falta.length ? { texto: `Faltam permissões na autorização (${falta.length}): reconecte a loja para liberar ${falta.join(', ')}.` } : null,
+      acoes: [[magalu.conectada_em ? (falta.length ? 'Reconectar' : 'Configuração') : 'Conectar', '/magalu.html', !magalu.conectada_em || !!falta.length]],
+      teste: magalu.conectada_em ? async () => lerDiagnostico(await api('/api/magalu/diagnostico?dias=1')) : null });
+  }
+  // Bling (ERP): uma conta por aplicativo
+  {
+    const cs = bling.contas || [];
+    const conectadas = cs.filter((c) => c.conectada);
+    const estado = bling._erro ? 'erro' : !conectadas.length ? (cs.some((c) => c.client_id) ? 'atencao' : 'off') : conectadas.length < cs.length ? 'atencao' : 'ok';
+    cartao({ nome: 'Bling', sigla: 'BL', cor: '#0f9f6e', desc: 'ERP: notas fiscais dos pedidos (nome curto, NCM e origem)', estado,
+      linhas: [['Contas conectadas', `${conectadas.length} de ${cs.length}`]],
+      contas: cs.map((c) => [`Conta ${c.conta}${c.nome ? ' · ' + c.nome : ''}`, c.conectada ? 'desde ' + dataHora(c.conectada_em) : c.client_id ? 'falta autorizar' : 'sem aplicativo', c.conectada ? 'ok' : 'off']),
+      acoes: [['Conexão das contas', '/bling-conexao.html', !conectadas.length], ['Notas fiscais', '/bling.html']],
+      teste: conectadas.length ? async () => { const rs = []; for (const c of conectadas) rs.push([`Conta ${c.conta}`, lerDiagnostico(await api(`/api/bling/diagnostico?conta=${c.conta}`))]);
+        const ruim = rs.filter(([, r]) => !r.ok); return ruim.length ? { ok: false, texto: ruim.map(([n, r]) => `${n}: ${r.texto}`).join(' · ') } : { ok: true, texto: `${rs.length} conta(s) respondendo.` }; } : null });
+  }
+  // Navegador do scraper (concorrentes e posição no ML)
+  {
+    cartao({ nome: 'Navegador do scraper', sigla: 'NV', cor: '#475569', desc: 'Busca e posição no Mercado Livre pelo navegador logado', estado: 'off',
+      linhas: [['Situação', 'clique em Testar para conferir']],
+      acoes: [['Abrir o navegador', '/navegador.html']],
+      teste: async () => { const s = await api('/api/scraper'); return s.ligado ? { ok: s.sessao !== 'expirada', texto: `Ligado · sessão ${s.sessao || '—'}${s.acao ? ' · ' + s.acao : ''}` } : { ok: false, texto: s.erro || 'Desligado' }; } });
+    situacoes.pop();   // não entra no resumo (só sabe depois do teste)
+  }
+  // E-mail de alertas
+  {
+    const estado = email._erro ? 'erro' : !email.tem_senha ? 'off' : email.erro ? 'erro' : 'ok';
+    cartao({ nome: 'E-mail de alertas', sigla: '@', cor: '#0e7490', desc: 'Alertas a cada 5 minutos e o relatório do dia às 7h30', estado,
+      linhas: [['Servidor', email.host ? `${email.host}:${email.porta}` : '—'], ['Destinatários', email.para ? String(email.para.split(',').filter(Boolean).length) : '0'],
+        ['Último relatório', dataHora(email.ultimo_relatorio)]],
+      aviso: email.erro ? { texto: 'Último envio falhou: ' + email.erro, tipo: 'erro' } : null,
+      acoes: [['Configurar e-mail', '/configuracao.html']] });
+  }
+  // resumo do topo
+  const conta = (s) => situacoes.filter((x) => x === s).length;
+  const r = $('resumo'); r.innerHTML = '';
+  for (const [s, rot] of [['ok', 'conectadas'], ['atencao', 'precisam de atenção'], ['erro', 'com erro'], ['off', 'não conectadas']]) {
+    const p = el('span', 'p'); p.append(el('i', 'ponto ' + s), el('b', null, String(conta(s))), rot); r.appendChild(p);
+  }
+}
+carregar().catch((e) => erroTela(e.message));
+</script>
+<script src="/sino.js?v=6" defer></script>
+</body>
+</html>

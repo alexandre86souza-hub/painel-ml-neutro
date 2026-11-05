@@ -15,8 +15,8 @@ const CANAIS = '(amazon|shopee|leroy|magalu)';
 const re = (s) => new RegExp(`^${s}$`);
 // Regras: "MÉTODOS /caminho" (regex). (/.*)? = a rota e as de baixo.
 const MODULOS = [
-  { id: 'vendas', nome: 'Vendas e relatórios', descricao: 'Dashboard, Todas as contas, Pedidos, Performance, ABC, Margem baixa, Promoções e Ads, Full, Devoluções e Reputação',
-    paginas: ['/inicio.html', '/geral.html', '/vendas.html', '/performance.html', '/abc.html', '/margem.html', '/placar.html', '/full.html', '/devolucoes.html',
+  { id: 'vendas', nome: 'Vendas e relatórios', descricao: 'Central de comando, Dashboard, Todas as contas, Pedidos, Performance, ABC, Margem baixa, Promoções e Ads, Full, Devoluções e Reputação',
+    paginas: ['/inicio.html', '/central.html', '/geral.html', '/vendas.html', '/performance.html', '/abc.html', '/margem.html', '/placar.html', '/full.html', '/devolucoes.html',
       '/shopee-devolucoes.html', '/devolucoes-canais.html', '/reputacao.html'],
     rotas: ['GET /api/(dashboard|vendas|performance|abc|margem|placar|contas/resumo|contas/lojas|contas/atencao|contas/devolucoes|full|reputacao|periodo|saude)(/.*)?',
       '(GET|POST|PUT) /api/devolucoes(/.*)?', `GET /api/${CANAIS}/(pedidos|performance|abc|vendas|full|devolucoes)(/.*)?`,

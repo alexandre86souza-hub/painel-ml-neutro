@@ -41,7 +41,7 @@ function escura(txt, uso) {
   const [h, s, l] = hsl(c);
   if (uso === 'fundo') {
     if (l < 0.8) return null;                                     // já é escuro/forte (botão, marca)
-    if (s < 0.2) return l >= 0.97 ? 'rgba(14,24,44,.72)' : 'rgba(125,211,252,.06)';
+    if (s < 0.2) return l >= 0.97 ? 'var(--card)' : 'var(--overlay)';
     return `hsla(${h0(h)},${h0(Math.min(s, 0.9) * 100)}%,60%,.14)`;
   }
   if (uso === 'texto') {

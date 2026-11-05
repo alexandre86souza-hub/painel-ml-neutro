@@ -489,6 +489,19 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   6 meses da média de saída (o excesso em R$). Média de saída da reposição (aqui e na tela Estoque) = saídas ÷ meses que a base cobre
   (`estoque.js#mesesDaBase`: 6, ou menos desde a 1ª saída/início da baixa — a planilha de movimentações nunca foi importada, então a
   base começa em 16/10/2026; antes dividia ~18 dias por 6 meses e a média saía ~10x menor).
+- Design system e navegação (redesign 05/11/2026, branch `melhorias`): `public/ds.css` é carregado POR ÚLTIMO em todas as telas (tokens de cor
+  azul-marinho/grafite + azul/ciano nos dois temas, tipografia, botões, campos, cartões, tabelas, chips, modais, carregando, vazio, toast, busca);
+  ele vence as camadas antigas (layout.css, tema-hn/painel/escuro) sem mexer no <style> de cada tela. `public/ui.js` (carregado pelo menu.js):
+  `ui.toast`, `ui.confirmar` (o navegador do painel não usa confirm()), ordenar qualquer tabela com <thead> e linhas simples clicando no
+  cabeçalho (só as linhas na tela; th.onclick da própria tela vence) e dica `data-dica`. Menu (`menu.js`): grupos por função (Visão geral,
+  Vendas, Expedição, Produtos e anúncios, Marketing e Ads, Precificação, Estoque, Financeiro, Inteligência, Integrações, Administração), recolhe
+  para só ícones (`html[data-menu="recolhido"]`, posto por tema.js, o grupo abre ao lado), gaveta no celular (botão no cabeçalho), caminho
+  Início › Grupo › Tela, busca de telas Ctrl+K ou "/" com as últimas abertas (`painel.recentes`). Tela nova = um item em GRUPOS (com ícone em ICONE).
+  Central de comando (`public/central.html`, módulo vendas): vendas de todas as lojas pelas mesmas rotas de "Todas as contas", Ads pelo
+  /api/placar, estoque e pendências pelo /api/contas/atencao; campanhas (/api/ads/historico) e estoque parado (/api/estoque/capital) só para
+  quem tem esses módulos. Comparação = série diária do período anterior (só faturamento e pedidos: o lucro não tem série por dia). Cores fixas
+  por marketplace (validadas para daltonismo na ordem ML, Amazon, Shopee, Magalu, Leroy). Integrações (`public/integracoes.html`, só o
+  administrador): um cartão por integração com as rotas de config (nunca segredo) e "Testar conexão" = o diagnóstico só de leitura de cada uma.
 - Tema e menu: menu lateral em GRUPOS que abrem e fecham (`public/menu.js#GRUPOS`; `contadorMenu` põe número num item).
   Tema escuro é o padrão (botão "Tema claro/escuro" no rodapé do menu, por navegador): `public/tema.js` (no <head>, põe
   `data-tema` e `data-pagina` no <html>), `public/tema-escuro.css` (componentes; só @media screen — a impressão fica
