@@ -2414,6 +2414,13 @@ const amazonAdsMod = require('./amazon-ads.js').criar({ D, urlPublica, novoEstad
 Object.assign(routes, amazonAdsMod.rotas);
 rotasParam.push(...amazonAdsMod.rotasParam);
 
+// ---------- Bling: as duas contas das notas fiscais (bling.js) ----------
+// Retorno da autorização em /bling/callback, pela porta pública (ver tratarPublico). Nada do Bling no MCP.
+const blingMod = require('./bling.js').criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth,
+  portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
+  pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
+Object.assign(routes, blingMod.rotas);
+
 // ---------- Financeiro: o dinheiro das vendas pelo Mercado Pago (financeiro.js) ----------
 // ---------- Cópia de segurança do banco (backup.js): rotas da Configuração; a cópia diária é
 // ligada por iniciar.js (npm start) e por "npm run painel", não pelos testes ----------
@@ -3752,6 +3759,8 @@ async function tratarPublico(req, res) {
   if (req.method === 'GET' && /^\/shopee\/callback\/[0-9a-f]{32}$/.test(url.pathname)) return shopeeMod.callback(res, url);
   // Retorno da autorização do Amazon Ads (endereço fixo: tem de estar em "Allowed Return URLs").
   if (req.method === 'GET' && url.pathname === '/amazon-ads/callback') return amazonAdsMod.callback(res, url);
+  // Retorno da autorização do Bling (endereço fixo: o "Link de redirecionamento" do aplicativo).
+  if (req.method === 'GET' && url.pathname === '/bling/callback') return blingMod.callback(res, url);
 
   // O painel inteiro, pela internet, com as regras de "online" (ver tratarPainel).
   if (painelOnline()) return tratarPainel(req, res, true);

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bling (notas fiscais)</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<script src="/tema.js?v=1"></script>
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  .passo{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;margin-right:8px}
+  .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .form input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;background:#fff;width:100%}
+  .form input.segredo:not(:placeholder-shown){-webkit-text-security:disc}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .dominio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .dominio code{font-size:14px;font-weight:700;word-break:break-all}
+  .diag{margin-top:12px;font-size:13px}
+  .diag dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 16px;margin:0 0 10px}
+  .diag dt{font-size:12px;color:var(--muted)}
+  .diag dd{margin:0;font-weight:700}
+  .diag pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-word}
+  .diag summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  .diag table{border-collapse:collapse;font-size:12px;margin:6px 0 10px}
+  .diag td,.diag th{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left}
+  ol.como{margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink)}
+  ol.como li{margin-bottom:4px}
+  .linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .contas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  .contas > section{min-width:0}
+  @media (max-width:1100px){ .contas{grid-template-columns:1fr} }
+  @media (max-width:700px){ .form{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=31"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Bling (notas fiscais)</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <div class="topo">
+    <p>Conexão das duas contas do Bling com o painel, para emitir as notas por aqui (nome curto do produto, sem código, com o NCM). Por enquanto esta tela só conecta e testa (leitura); a emissão entra na próxima etapa.</p>
+  </div>
+
+  <section class="bloco">
+    <h2><span class="passo">1</span>Criar o aplicativo em cada conta do Bling</h2>
+    <ol class="como">
+      <li>No Bling, abra <b>Central de Extensões → Área do Integrador</b> (não é o "Usuário API": ele foi descontinuado) e clique em <b>Criar aplicativo</b>, tipo <b>Aplicativo privado</b> (uso próprio).</li>
+      <li>No <b>Link de redirecionamento</b>, cole este endereço:</li>
+    </ol>
+    <div class="dominio"><code id="retorno">—</code><button type="button" class="bt" id="btCopiar">Copiar</button></div>
+    <ol class="como" start="3" style="margin-top:12px">
+      <li>Nos escopos, marque: <b>Pedidos de Venda</b>, <b>Notas Fiscais</b> (NF-e), <b>Produtos</b>, <b>Naturezas de Operação</b>, <b>Lojas / Canais de venda</b> e <b>Contatos</b> (leitura e escrita onde houver).</li>
+      <li>Salve e copie o <b>Client Id</b> e o <b>Client Secret</b> para o cartão da conta aqui embaixo. Faça o mesmo na outra conta do Bling.</li>
+    </ol>
+  </section>
+
+  <div class="contas" id="contas"></div>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=9"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—');
+const DICA = { '1': 'ex.: AMG Metais (Shopee AMG)', '2': 'ex.: Primor (Amazon, Leroy, Shopee Primor, Magalu)' };
+
+let cfg = null;
+async function carregar(){
+  try{
+    cfg = await api('/api/bling/config');
+    $('retorno').textContent = cfg.retorno || 'o endereço público do painel está fora do ar (confira em Configurações)';
+    $('btCopiar').disabled = !cfg.retorno;
+    const box = $('contas'); box.innerHTML = '';
+    for(const c of cfg.contas) box.appendChild(cartao(c));
+  }catch(e){ aviso(e.message); }
+}
+
+function cartao(c){
+  const s = el('section', 'bloco');
+  s.appendChild(el('h2', null, `Conta ${c.conta} do Bling${c.nome ? ' · ' + c.nome : ''}`));
+  const f = el('form', 'form'); f.autocomplete = 'off';
+  const campo = (rot, attrs) => { const l = el('label', null, rot); const i = el('input'); Object.assign(i, attrs); l.appendChild(i); f.appendChild(l); return i; };
+  const nome = campo('Nome da conta', { value: c.nome || '', placeholder: DICA[c.conta], maxLength: 60 });
+  const lojas = campo('Lojas que emitem nesta conta', { value: c.lojas || '', placeholder: c.conta === '1' ? 'Shopee AMG' : 'Amazon, Leroy, Shopee Primor, Magalu', maxLength: 200 });
+  const id = campo('Client Id', { value: c.client_id || '', required: true, spellcheck: false, name: `bling-${c.conta}-client-id` });
+  // segredo em texto mascarado (não password): com senha, o Chrome preencheria com a senha do painel
+  const seg = campo('Client Secret', { type: 'text', className: 'segredo', spellcheck: false, name: `bling-${c.conta}-client-secret`,
+    placeholder: c.tem_segredo ? 'já gravado — preencha só para trocar' : 'cole o Client Secret', required: !c.tem_segredo });
+  const salvar = el('button', 'bt', 'Salvar'); f.appendChild(salvar);
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    try{
+      const corpo = { conta: c.conta, nome: nome.value, lojas: lojas.value, client_id: id.value };
+      if(seg.value.trim()) corpo.client_secret = seg.value;
+      await enviar('PUT', '/api/bling/config', corpo);
+      aviso(`Conta ${c.conta} salva. Agora clique em "Conectar".`, 'ok'); carregar();
+    }catch(e){ aviso(e.message); }
+  };
+  s.appendChild(f);
+  const linha = el('div', 'linha');
+  const conectar = el('button', 'bt primario', c.conectada ? 'Conectar de novo' : 'Conectar'); conectar.type = 'button';
+  conectar.disabled = !(c.client_id && c.tem_segredo);
+  conectar.onclick = async () => {
+    conectar.disabled = true;
+    try{ const r = await enviar('POST', '/api/bling/conectar', { conta: c.conta }); location.href = r.url; }
+    catch(e){ aviso(e.message); conectar.disabled = false; }
+  };
+  linha.appendChild(conectar);
+  const diag = el('div', 'diag');
+  if(c.conectada){
+    linha.appendChild(el('span', 'sub', `Conectada em ${quando(c.conectada_em)}.`));
+    const testar = el('button', 'bt', 'Testar conexão'); testar.type = 'button'; testar.onclick = () => diagnostico(c.conta, diag, testar);
+    const remover = el('button', 'bt', 'Remover'); remover.type = 'button';
+    remover.onclick = async () => {
+      if(!confirm(`Desconectar a conta ${c.conta} do Bling?\n\nO painel esquece a autorização. Para voltar, é só conectar de novo.`)) return;
+      try{ await enviar('POST', '/api/bling/remover', { conta: c.conta }); aviso('Conta desconectada.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
+    };
+    linha.append(testar, remover);
+  } else linha.appendChild(el('span', 'sub', 'Ainda não conectada.'));
+  s.append(linha, diag);
+  return s;
+}
+
+const pares = (o) => Object.entries(o || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—';
+function tabelaItens(titulo, grupos){
+  const det = el('details'); det.appendChild(el('summary', null, titulo));
+  const t = el('table'), cab = el('tr');
+  for(const h of ['Descrição', 'Código', 'NCM', 'Qtd', 'Produto ligado']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  for(const g of grupos) for(const i of g.itens){
+    const tr = el('tr');
+    tr.append(el('td', null, i.descricao || '—'), el('td', null, i.codigo || '(vazio)'), el('td', null, i.ncm || '—'), el('td', null, i.quantidade ?? '—'), el('td', null, i.produto_vinculado ? 'sim' : 'não'));
+    t.appendChild(tr);
+  }
+  det.appendChild(t); return det;
+}
+
+// O que a API do Bling devolve: quantidades, situações, itens (só o produto) e a FORMA das respostas, sem dados do comprador.
+async function diagnostico(conta, box, bt){
+  bt.disabled = true; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Perguntando ao Bling…'));
+  try{
+    const r = await api('/api/bling/diagnostico?conta=' + conta);
+    box.innerHTML = '';
+    const dl = el('dl');
+    const par = (rot, valor) => { const d = el('div'); d.append(el('dt', null, rot), el('dd', null, valor)); dl.appendChild(d); };
+    par('Pedidos de venda (últimos 20)', r.pedidos.erro ? 'erro: ' + r.pedidos.erro : numero(r.pedidos.quantidade));
+    if(!r.pedidos.erro){ par('Pedidos por situação (id)', pares(r.pedidos.situacoes)); par('Pedidos por loja (id)', pares(r.pedidos.lojas)); }
+    par('Notas de saída (últimas 20)', r.notas.erro ? 'erro: ' + r.notas.erro : numero(r.notas.quantidade));
+    if(!r.notas.erro){ par('Notas por situação', pares(r.notas.situacoes)); par('Notas por loja (id)', pares(r.notas.lojas)); }
+    par('Naturezas de operação', r.naturezas.erro ? 'erro: ' + r.naturezas.erro : r.naturezas.map((z) => `${z.id} ${z.descricao || ''}${z.padrao ? ' (padrão)' : ''}`).join(' · ') || '—');
+    box.appendChild(dl);
+    if(r.itens_pedidos.length) box.appendChild(tabelaItens(`Itens dos últimos pedidos (${r.itens_pedidos.length})`, r.itens_pedidos));
+    if(r.itens_notas.length) box.appendChild(tabelaItens(`Itens das últimas notas (${r.itens_notas.length})`, r.itens_notas));
+    const det = el('details'); det.appendChild(el('summary', null, 'Ver a forma das respostas'));
+    det.appendChild(el('pre', null, JSON.stringify(r.forma, null, 2)));
+    box.appendChild(det);
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui testar: ' + e.message)); }
+  bt.disabled = false;
+}
+
+$('btCopiar').onclick = async () => {
+  try{ await navigator.clipboard.writeText(cfg.retorno); $('btCopiar').textContent = 'Copiado'; setTimeout(() => { $('btCopiar').textContent = 'Copiar'; }, 2000); }
+  catch{ prompt('Copie o endereço:', cfg.retorno); }
+};
+const ok = new URLSearchParams(location.search).get('conectado');
+if(ok) aviso(`Conta ${ok} do Bling conectada. Clique em "Testar conexão" no cartão dela.`, 'ok');
+carregar();
+</script>
+<script src="/sino.js?v=6" defer></script>
+</body>
+</html>

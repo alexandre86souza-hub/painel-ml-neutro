@@ -1659,7 +1659,8 @@ function vendasUnidadesPorItem(mlUserId, ids, de, ate) {
 // chave secreta do DevCenter. Mora na tabela estado; o que é segredo vai cifrado.
 const CONFIG_SECRETA = new Set(['ml_client_secret', 'shopee_partner_key', 'painel_2fa_segredo', 'painel_2fa_pendente',
   'amazon_lwa_client_secret', 'amazon_refresh_token', 'amzads_client_secret', 'amzads_refresh_token', 'leroy_api_key',
-  'magalu_client_secret', 'magalu_refresh_token', 'magalu_acesso', 'email_senha']);
+  'magalu_client_secret', 'magalu_refresh_token', 'magalu_acesso', 'email_senha',
+  'bling_1_client_secret', 'bling_1_refresh_token', 'bling_2_client_secret', 'bling_2_refresh_token']);
 
 function configLer(chave) {
   const v = db.prepare('SELECT valor FROM estado WHERE chave=?').get(chave)?.valor ?? null;

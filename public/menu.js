@@ -80,6 +80,7 @@
       ['/amazon.html', 'Amazon', 'amazon'],
       ['/leroy.html', 'Leroy Merlin', 'leroy'],
       ['/magalu.html', 'Magalu', 'magalu'],
+      ['/bling.html', 'Bling (notas)', 'bling'],
       ['/navegador.html', 'Navegador', 'navegador'],
       ['/usuarios.html', 'Usuários', 'usuarios'],
       ['/configuracao.html', 'Configurações', 'config']] },

@@ -69,6 +69,10 @@ function pedir(porta, caminho, { metodo = 'GET', headers = {}, corpo = null } = 
     r = await pedir(PUB, '/amazon-ads/callback?code=forjado&state=0123456789abcdef0123456789abcdef', { headers: { Host: 'teste-da-aula.trycloudflare.com' } });
     assert.strictEqual(r.status, 400, 'retorno sem state válido não conecta');
     assert.strictEqual(D.configLer('amzads_refresh_token'), null);
+    // retorno do Bling com state que o painel não emitiu: recusado, nada é gravado
+    r = await pedir(PUB, '/bling/callback?code=forjado&state=0123456789abcdef0123456789abcdef', { headers: { Host: 'teste-da-aula.trycloudflare.com' } });
+    assert.strictEqual(r.status, 400, 'retorno do Bling sem state válido não conecta');
+    assert.strictEqual(D.configLer('bling_1_refresh_token'), null);
     // Pela internet, ANTES de existir senha: nada de primeiro acesso por ali.
     const DE_FORA = { Host: 'teste-da-aula.trycloudflare.com', 'Cf-Connecting-Ip': '203.0.113.10' };
     const ORIGEM_TUNEL = { Origin: TUNEL };
