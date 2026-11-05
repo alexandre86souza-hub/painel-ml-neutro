@@ -56,7 +56,7 @@
   <aside class="lateral">
     <div class="marca" id="marcaPainel"></div>
     <nav id="menuPainel" aria-label="Telas do painel"></nav>
-    <script src="/menu.js?v=31"></script>
+    <script src="/menu.js?v=32"></script>
   </aside>
   <div class="conteudo">
 <header>
@@ -150,6 +150,7 @@ function cartao(c){
     const pend = el('button', 'bt primario', 'Notas pendentes'); pend.type = 'button';
     const caixaNotas = el('div', 'notas');
     pend.onclick = () => notasPendentes(c.conta, caixaNotas, pend);
+    s._abrirNotas = pend.onclick;   // ao abrir a tela, já lê as notas pendentes das contas conectadas
     linha.append(pend, testar, remover);
     s._notas = caixaNotas;
   } else linha.appendChild(el('span', 'sub', 'Ainda não conectada.'));
@@ -265,7 +266,7 @@ $('btCopiar').onclick = async () => {
 };
 const ok = new URLSearchParams(location.search).get('conectado');
 if(ok) aviso(`Conta ${ok} do Bling conectada. Clique em "Testar conexão" no cartão dela.`, 'ok');
-carregar();
+carregar().then(() => { for(const s of document.querySelectorAll('#contas > section')) s._abrirNotas?.(); });
 </script>
 <script src="/sino.js?v=6" defer></script>
 </body>

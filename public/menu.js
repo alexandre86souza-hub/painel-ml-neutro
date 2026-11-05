@@ -51,6 +51,7 @@
     { nome: 'Operação', itens: [
       ['/comandas.html', 'Comandas', 'comandas'],
       ['/etiquetas.html', 'Etiquetas de envio', 'etiquetas'],
+      ['/bling.html', 'Notas fiscais (Bling)', 'bling'],
       ['/estoque.html', 'Estoque', 'estoque'],
       ['/compras.html', 'Compras e capital parado', 'compras'],
       ['/mensagens.html', 'Mensagens', 'mensagens'],
@@ -80,7 +81,6 @@
       ['/amazon.html', 'Amazon', 'amazon'],
       ['/leroy.html', 'Leroy Merlin', 'leroy'],
       ['/magalu.html', 'Magalu', 'magalu'],
-      ['/bling.html', 'Bling (notas)', 'bling'],
       ['/navegador.html', 'Navegador', 'navegador'],
       ['/usuarios.html', 'Usuários', 'usuarios'],
       ['/configuracao.html', 'Configurações', 'config']] },
@@ -170,7 +170,7 @@
   };
   // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
   // fica na mesma tela, só com a loja escolhida na lista.
-  const DE_TODAS = ['/geral.html', '/metas.html', '/margem.html', '/placar.html', '/caixa.html', '/dre.html', '/compras.html', '/comandas.html', '/etiquetas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+  const DE_TODAS = ['/geral.html', '/metas.html', '/margem.html', '/placar.html', '/caixa.html', '/dre.html', '/compras.html', '/comandas.html', '/etiquetas.html', '/bling.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
     '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);
