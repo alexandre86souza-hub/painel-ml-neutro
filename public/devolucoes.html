@@ -227,7 +227,15 @@
   <section class="bloco" id="blocoNaoEnt" data-aba="naoent">
     <h2>Entregas não realizadas</h2>
     <p class="sub">Vendas que saíram para entrega, não foram entregues e voltaram (o ML cancela a venda, sem reclamação). O produto só volta ao estoque quando você clica em <b>Conferir</b> (chegou aqui). Últimos 60 dias.</p>
-    <label style="font-size:13px"><input type="checkbox" id="neConferidas"> mostrar também as já conferidas</label>
+    <div class="filtros">
+      <div class="seg" role="group" aria-label="Filtro das entregas não realizadas" id="segNe">
+        <button type="button" data-f="falta" aria-pressed="true">Falta conferir</button>
+        <button type="button" data-f="conferidas">Conferidas</button>
+        <button type="button" data-f="todas">Todas</button>
+      </div>
+      <input id="neBusca" type="search" placeholder="Buscar por nº da venda, pacote, envio ou produto (título, SKU, MLB)" aria-label="Buscar entrega não realizada" style="flex:1 1 280px;min-width:220px">
+      <select id="neEnvio" aria-label="Situação do envio"><option value="">Todas as situações do envio</option></select>
+    </div>
     <div class="tabela-rolagem" id="naoEnt"><p class="sub">lendo…</p></div>
   </section>
 
@@ -646,12 +654,43 @@ async function carregar(silencioso){
 
 // ---------- entregas não realizadas (nao-entregues.js) ----------
 const ST_ENVIO = { not_delivered: 'não entregue', cancelled: 'envio cancelado', shipped: 'a caminho (voltando)', delivered: 'entregue' };
+let neItens = null, neFiltro = 'falta';
+// lê tudo (conferidas também) e filtra aqui: Falta conferir / Conferidas / Todas, busca e situação do envio
 async function carregarNaoEntregues(){
   const box = $('naoEnt');
   try{
-    const r = await api('/api/devolucoes/nao-entregues' + ($('neConferidas').checked ? '?conferidas=1' : ''));
-    box.innerHTML = '';
-    if(!r.itens.length){ box.appendChild(el('p', 'sub', 'Nenhuma entrega não realizada nos últimos 60 dias.')); return; }
+    const r = await api('/api/devolucoes/nao-entregues?conferidas=1');
+    neItens = r.itens;
+    const sel = $('neEnvio'), atual = sel.value;
+    const sts = [...new Set(neItens.map((x) => x.status_envio).filter(Boolean))];
+    sel.innerHTML = '';
+    sel.appendChild(new Option('Todas as situações do envio', ''));
+    for(const s of sts) sel.appendChild(new Option(ST_ENVIO[s] || s, s));
+    sel.value = sts.includes(atual) ? atual : '';
+    pintarNaoEntregues();
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'sub', 'Não consegui ler as entregas não realizadas: ' + e.message)); }
+}
+function pintarNaoEntregues(){
+  const box = $('naoEnt');
+  if(!neItens) return;
+  box.innerHTML = '';
+  const q = ($('neBusca').value || '').trim().toLowerCase(), st = $('neEnvio').value;
+  const itens = neItens.filter((x) => {
+    if(neFiltro === 'falta' && x.conferido_em) return false;
+    if(neFiltro === 'conferidas' && !x.conferido_em) return false;
+    if(st && x.status_envio !== st) return false;
+    if(q && ![x.pedido, x.pacote, x.envio, x.titulo, x.sku, x.item_id].some((v) => v != null && String(v).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const faltam = neItens.filter((x) => !x.conferido_em).length;
+  for(const b of document.querySelectorAll('#segNe button')){
+    const n = b.dataset.f === 'falta' ? faltam : b.dataset.f === 'conferidas' ? neItens.length - faltam : neItens.length;
+    b.textContent = `${b.dataset.f === 'falta' ? 'Falta conferir' : b.dataset.f === 'conferidas' ? 'Conferidas' : 'Todas'} (${n})`;
+  }
+  {
+    const r = { itens };
+    if(!neItens.length){ box.appendChild(el('p', 'sub', 'Nenhuma entrega não realizada nos últimos 60 dias.')); return; }
+    if(!r.itens.length){ box.appendChild(el('p', 'sub', 'Nenhuma entrega não realizada com esse filtro.')); return; }
     const t = el('table'), cab = el('tr');
     for(const h of ['Produto', 'Venda', 'Qtd', 'Valor', 'Envio', 'Situação', '']) cab.appendChild(el('th', null, h));
     t.appendChild(el('thead')).appendChild(cab);
@@ -709,9 +748,15 @@ async function carregarNaoEntregues(){
       tb.appendChild(tr);
     }
     t.appendChild(tb); box.appendChild(t);
-  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'sub', 'Não consegui ler as entregas não realizadas: ' + e.message)); }
+  }
 }
-$('neConferidas').onchange = carregarNaoEntregues;
+for(const b of document.querySelectorAll('#segNe button')) b.onclick = () => {
+  neFiltro = b.dataset.f;
+  for(const o of document.querySelectorAll('#segNe button')) o.setAttribute('aria-pressed', String(o === b));
+  pintarNaoEntregues();
+};
+$('neBusca').oninput = pintarNaoEntregues;
+$('neEnvio').onchange = pintarNaoEntregues;
 
 carregarContas();
 carregar();
