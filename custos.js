@@ -533,6 +533,22 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       return p;
     },
 
+    // Custos em massa (Anúncios do ML, barra de seleção): os mesmos campos do PUT de um anúncio, nos ids marcados.
+    // { ids: [...], embalagem?, outro_custo?, custo_manual? } — campo ausente = não muda; null/'' = volta ao padrão
+    // (embalagem da empresa, sem outro custo, custo pelo SKU). Valida tudo antes de gravar o primeiro.
+    'POST /api/custos-anuncios/em-massa': async (_u, body) => {
+      const conta = contaOuErro();
+      const ids = [...new Set(Array.isArray(body?.ids) ? body.ids.map(String) : [])];
+      if (!ids.length || ids.length > 500) throw erro('Escolha de 1 a 500 anúncios.');
+      ids.forEach(exigeItemId);
+      const campos = {};
+      for (const k of ['embalagem', 'outro_custo', 'custo_manual']) if (k in body) campos[k] = body[k];
+      if (!Object.keys(campos).length) throw erro('Nada para mudar.');
+      numeroDeCusto(campos.embalagem, 'Custo de embalagem'); numeroDeCusto(campos.outro_custo, 'Outro custo'); numeroDeCusto(campos.custo_manual, 'Custo do produto');
+      for (const id of ids) gravarCustosAnuncio(conta, id, campos);
+      return { alterados: ids.length };
+    },
+
     'GET /api/custos-anuncios': async (url) => {
       const conta = contaOuErro();
       if (url.searchParams.get('recarregar')) cacheAnuncios = null;
@@ -928,26 +944,32 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
     { m: 'PUT', re: /^\/api\/custos-anuncios\/([A-Z]{3}\d+)$/, fn: async ([id], body) => {
       const conta = contaOuErro();
       exigeItemId(id);
-      const num = (v, nome) => {
-        if (v === '' || v == null) return null;
-        const n = Number(String(v).replace(',', '.'));
-        if (!Number.isFinite(n) || n < 0 || n > 1e6) throw erro(`${nome} inválido.`);
-        return Math.round(n * 100) / 100;
-      };
-      if ('embalagem' in (body || {})) D.embalagemGravar(conta.ml_user_id, id, num(body.embalagem, 'Custo de embalagem'));
-      if ('outro_custo' in (body || {})) D.extraGravar(conta.ml_user_id, id, num(body.outro_custo, 'Outro custo'));
-      if ('custo_manual' in (body || {})) {
-        const atual = D.custoObter(id);
-        const v = num(body.custo_manual, 'Custo do produto');
-        if (v == null) {   // apagar o manual: volta a valer o SKU
-          D.custoGravar(conta.ml_user_id, id, { custo: null, outros: atual?.outros ?? null });
-          D.db.prepare("UPDATE custos SET origem=NULL WHERE item_id=?").run(id);
-          cacheAnuncios = null;
-        } else D.custoGravar(conta.ml_user_id, id, { custo: v, outros: atual?.outros ?? null });
-      }
+      gravarCustosAnuncio(conta, id, body || {});
       return { ...D.custoObter(id), embalagem_padrao: empresaDe(conta).embalagem_padrao };
     } },
   ];
+
+  function numeroDeCusto(v, nome) {
+    if (v === '' || v == null) return null;
+    const n = Number(String(v).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0 || n > 1e6) throw erro(`${nome} inválido.`);
+    return Math.round(n * 100) / 100;
+  }
+  // Embalagem e outro custo por unidade do anúncio (etiqueta, brinde…), e custo manual opcional.
+  // Embalagem vazia = vale a embalagem padrão da empresa. Usado pelo PUT de um anúncio e pelo em massa.
+  function gravarCustosAnuncio(conta, id, body) {
+    if ('embalagem' in body) D.embalagemGravar(conta.ml_user_id, id, numeroDeCusto(body.embalagem, 'Custo de embalagem'));
+    if ('outro_custo' in body) D.extraGravar(conta.ml_user_id, id, numeroDeCusto(body.outro_custo, 'Outro custo'));
+    if ('custo_manual' in body) {
+      const atual = D.custoObter(id);
+      const v = numeroDeCusto(body.custo_manual, 'Custo do produto');
+      if (v == null) {   // apagar o manual: volta a valer o SKU
+        D.custoGravar(conta.ml_user_id, id, { custo: null, outros: atual?.outros ?? null });
+        D.db.prepare("UPDATE custos SET origem=NULL WHERE item_id=?").run(id);
+      } else D.custoGravar(conta.ml_user_id, id, { custo: v, outros: atual?.outros ?? null });
+      cacheAnuncios = null;
+    }
+  }
 
   return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa, anuncios: anunciosComSku, semCustoMl, descreverComposicao, trocarComposicao, vendasDaConta };
 }

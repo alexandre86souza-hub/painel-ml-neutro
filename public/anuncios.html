@@ -461,6 +461,7 @@
       <button type="button" id="btAtivarMassa" disabled>Reativar selecionados</button>
       <button type="button" id="btPrecoMassa" disabled title="Novo preço de cada anúncio selecionado pela margem de lucro desejada">Preço pela margem</button>
       <button type="button" id="btAtacadoMassa" disabled title="Preço de atacado (desconto por quantidade) nos anúncios selecionados">Preço de atacado</button>
+      <button type="button" id="btCustosMassa" disabled title="Embalagem, outro custo e custo do produto nos anúncios selecionados">Custos</button>
       <button type="button" class="ghost" id="btLimparSel" disabled>Limpar seleção</button>
     </span>
   </div>
@@ -487,6 +488,29 @@
       <button type="button" class="ghost" id="maFechar">Fechar</button>
       <div id="maConf" style="width:100%"></div>
       <span id="maInfo" class="nota" style="width:100%"></span>
+    </form>
+  </div>
+
+  <div class="massa-preco" id="massaCustos" hidden>
+    <form id="mcForm">
+      <b>Custos nos selecionados (por unidade vendida)</b>
+      <span class="nota" style="width:100%">Só muda o campo marcado; os outros ficam como estão em cada anúncio. Vale no lucro daqui em diante (Vendas, Campanhas, calculadora). Fica só no painel: nada muda no Mercado Livre.</span>
+      <div class="mc-campos" style="display:flex;flex-wrap:wrap;gap:12px;width:100%">
+        <fieldset class="mc-campo" data-campo="embalagem"><legend><label><input type="checkbox" class="mcUsar"> Embalagem (R$)</label></legend>
+          <input type="number" step="0.01" min="0" class="mcValor" aria-label="Embalagem em reais" disabled>
+          <label class="nota"><input type="checkbox" class="mcPadrao" disabled> voltar à embalagem padrão da empresa</label></fieldset>
+        <fieldset class="mc-campo" data-campo="outro_custo"><legend><label><input type="checkbox" class="mcUsar"> Outro custo (R$)</label></legend>
+          <input type="number" step="0.01" min="0" class="mcValor" placeholder="etiqueta, brinde…" aria-label="Outro custo em reais" disabled>
+          <label class="nota"><input type="checkbox" class="mcPadrao" disabled> apagar (sem outro custo)</label></fieldset>
+        <fieldset class="mc-campo" data-campo="custo_manual"><legend><label><input type="checkbox" class="mcUsar"> Custo do produto (R$)</label></legend>
+          <input type="number" step="0.01" min="0" class="mcValor" aria-label="Custo do produto em reais" disabled>
+          <label class="nota"><input type="checkbox" class="mcPadrao" disabled> voltar ao custo pelo SKU (tabela de Produtos)</label>
+          <span class="nota" style="display:block;max-width:22em">Custo digitado aqui não segue mais a tabela de Produtos (nem o custo médio do estoque) até voltar ao SKU.</span></fieldset>
+      </div>
+      <button type="submit" id="mcAplicar">Aplicar nos selecionados</button>
+      <button type="button" class="ghost" id="mcFechar">Fechar</button>
+      <div id="mcConf" style="width:100%"></div>
+      <span id="mcInfo" class="nota" style="width:100%"></span>
     </form>
   </div>
 
@@ -681,7 +705,7 @@ const selecionados = new Set();
 function pintarSelecao(){
   const n = selecionados.size;
   $('selCont').textContent = n ? `${n} anúncio(s) selecionado(s)` : 'Nenhum anúncio selecionado';
-  $('btPausarMassa').disabled = $('btAtivarMassa').disabled = $('btLimparSel').disabled = $('btPrecoMassa').disabled = $('btAtacadoMassa').disabled = !n;
+  $('btPausarMassa').disabled = $('btAtivarMassa').disabled = $('btLimparSel').disabled = $('btPrecoMassa').disabled = $('btAtacadoMassa').disabled = $('btCustosMassa').disabled = !n;
   const caixas = [...document.querySelectorAll('#lista .selItem')];
   for(const c of caixas){ const id = c.closest('li').dataset.id; c.checked = selecionados.has(id); c.closest('li').classList.toggle('selecionado', c.checked); }
   $('selPagina').checked = caixas.length > 0 && caixas.every((c) => c.checked);
@@ -776,6 +800,46 @@ function iniciarPrecoMassa(){
       .filter((f) => f.quantidade && f.pct);
     if(!faixas.length){ $('maInfo').textContent = 'Preencha pelo menos uma faixa (quantidade e %).'; return; }
     confirmarAtacado((n) => `Colocar o atacado ${faixas.map((f) => `${f.quantidade}+ un. = −${String(f.pct).replace('.', ',')}%`).join(', ')} em ${n} anúncio(s)?`, { faixas }, '/api/atacado/aplicar');
+  };
+  // Custos em massa: POST /api/custos-anuncios/em-massa (os mesmos campos do "Custos do anúncio" de cada um)
+  const camposCusto = () => [...document.querySelectorAll('#mcForm .mc-campo')];
+  for(const fs of camposCusto()){
+    const usar = fs.querySelector('.mcUsar'), val = fs.querySelector('.mcValor'), pad = fs.querySelector('.mcPadrao');
+    usar.onchange = () => { val.disabled = pad.disabled = !usar.checked || false; if(usar.checked && !pad.checked) val.focus(); if(!usar.checked) pad.checked = false; };
+    pad.onchange = () => { val.disabled = pad.checked; if(pad.checked) val.value = ''; };
+  }
+  $('btCustosMassa').onclick = () => { $('massaCustos').hidden = false; $('mcConf').innerHTML = ''; $('mcInfo').textContent = `${selecionados.size} anúncio(s) selecionado(s).`; };
+  $('mcFechar').onclick = () => { $('massaCustos').hidden = true; };
+  $('mcForm').onsubmit = (ev) => {
+    ev.preventDefault();
+    const box = $('mcConf'); box.innerHTML = '';
+    const corpo = {}, partes = [];
+    const NOME = { embalagem: 'embalagem', outro_custo: 'outro custo', custo_manual: 'custo do produto' };
+    const PADRAO = { embalagem: 'embalagem padrão da empresa', outro_custo: 'sem outro custo', custo_manual: 'custo pelo SKU' };
+    for(const fs of camposCusto()){
+      const k = fs.dataset.campo;
+      if(!fs.querySelector('.mcUsar').checked) continue;
+      if(fs.querySelector('.mcPadrao').checked){ corpo[k] = null; partes.push(`${NOME[k]}: ${PADRAO[k]}`); continue; }
+      const v = fs.querySelector('.mcValor').value;
+      if(v === '' || !(Number(v) >= 0)){ $('mcInfo').textContent = `Digite o valor de ${NOME[k]} (ou marque a opção de voltar ao padrão).`; return; }
+      corpo[k] = Number(v); partes.push(`${NOME[k]} = ${dinheiro(Number(v))}`);
+    }
+    if(!partes.length){ $('mcInfo').textContent = 'Marque pelo menos um custo para mudar.'; return; }
+    const ids = [...selecionados];
+    if(ids.length > 500){ box.textContent = 'No máximo 500 anúncios por vez: tire alguns da seleção.'; return; }
+    const p = document.createElement('p'); p.className = 'nota'; p.textContent = `Gravar ${partes.join(' · ')} em ${ids.length} anúncio(s)?`;
+    const sim = document.createElement('button'); sim.type = 'button'; sim.textContent = 'Confirmar';
+    const nao = document.createElement('button'); nao.type = 'button'; nao.className = 'ghost'; nao.textContent = 'Cancelar';
+    nao.onclick = () => { box.innerHTML = ''; };
+    sim.onclick = async () => {
+      sim.disabled = nao.disabled = true; $('mcInfo').textContent = 'Gravando…';
+      try{
+        const r = await api('/api/custos-anuncios/em-massa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corpo, ids }) });
+        box.innerHTML = ''; $('mcInfo').textContent = `Custos gravados em ${r.alterados} anúncio(s). A lista vai recarregar com o lucro novo.`;
+        carregar();
+      }catch(e){ $('mcInfo').textContent = 'Não gravou: ' + e.message; sim.disabled = nao.disabled = false; }
+    };
+    box.append(p, sim, nao);
   };
   $('maRemover').onclick = () => confirmarAtacado((n) => `Tirar o preço de atacado de ${n} anúncio(s)?`, {}, '/api/atacado/remover');
   $('btPrecoMassa').onclick = () => { $('massaPreco').hidden = false; $('mpInfo').textContent = `${selecionados.size} anúncio(s) selecionado(s). Escolha a margem e clique em Calcular.`; $('mpMargem').focus(); };
