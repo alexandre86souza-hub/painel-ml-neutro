@@ -35,6 +35,18 @@
   .linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
   .contas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
   .contas > section{min-width:0}
+  .notas{margin-top:12px;display:grid;gap:12px}
+  .nota{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+  .nota h3{margin:0 0 6px;font-size:14px}
+  .nota .rolar{overflow-x:auto}
+  .nota table{border-collapse:collapse;font-size:13px;width:100%}
+  .nota td,.nota th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+  .nota input,.nota select{font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d5dbe5;border-radius:6px;background:#fff;width:100%}
+  .nota input.ncm{width:110px}
+  .nota .antes{font-size:11px;color:var(--muted);margin-top:2px}
+  .nota .salvo{font-size:11px;color:#0b6b33}
+  .nota .res{font-size:13px;margin-top:6px}
+  .nota .res.erro{color:#b42318}
   @media (max-width:1100px){ .contas{grid-template-columns:1fr} }
   @media (max-width:700px){ .form{grid-template-columns:1fr} }
 </style>
@@ -57,7 +69,7 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
   <div class="topo">
-    <p>Conexão das duas contas do Bling com o painel, para emitir as notas por aqui (nome curto do produto, sem código, com o NCM). Por enquanto esta tela só conecta e testa (leitura); a emissão entra na próxima etapa.</p>
+    <p>Conexão das duas contas do Bling com o painel, para emitir as notas por aqui (nome curto do produto, sem código, com o NCM). Em cada conta, "Notas pendentes" mostra as notas que o Bling gerou dos pedidos e ainda não foram emitidas: ajuste o nome curto, o NCM e a origem, clique em "Corrigir itens no Bling" (o código sai vazio) e depois confira e emita a nota no Bling. O nome e o NCM ficam guardados por SKU para a próxima nota.</p>
   </div>
 
   <section class="bloco">
@@ -135,9 +147,15 @@ function cartao(c){
       if(!confirm(`Desconectar a conta ${c.conta} do Bling?\n\nO painel esquece a autorização. Para voltar, é só conectar de novo.`)) return;
       try{ await enviar('POST', '/api/bling/remover', { conta: c.conta }); aviso('Conta desconectada.', 'ok'); carregar(); }catch(e){ aviso(e.message); }
     };
-    linha.append(testar, remover);
+    const pend = el('button', 'bt primario', 'Notas pendentes'); pend.type = 'button';
+    const caixaNotas = el('div', 'notas');
+    pend.onclick = () => notasPendentes(c.conta, caixaNotas, pend);
+    linha.append(pend, testar, remover);
+    s._notas = caixaNotas;
   } else linha.appendChild(el('span', 'sub', 'Ainda não conectada.'));
-  s.append(linha, diag);
+  s.append(linha);
+  if(s._notas) s.appendChild(s._notas);
+  s.appendChild(diag);
   return s;
 }
 
@@ -176,6 +194,69 @@ async function diagnostico(conta, box, bt){
     box.appendChild(det);
   }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui testar: ' + e.message)); }
   bt.disabled = false;
+}
+
+// ---------- Notas pendentes: corrigir os itens (nome curto, sem código, NCM, origem) ----------
+const ORIGEM_TXT = { 0: '0 · Nacional', 1: '1 · Estrangeira, importação direta', 2: '2 · Estrangeira, adquirida no mercado interno' };
+const origemDe = (conta, nacional) => (nacional ? 0 : conta === '1' ? 1 : 2);
+const reais = (v) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
+
+async function notasPendentes(conta, box, bt){
+  bt.disabled = true; box.innerHTML = ''; box.appendChild(el('p', 'carregando', 'Lendo as notas pendentes no Bling…'));
+  try{
+    const r = await api('/api/bling/notas?conta=' + conta);
+    box.innerHTML = '';
+    if(!r.notas.length) box.appendChild(el('p', 'vazio', 'Nenhuma nota pendente nesta conta. Gere a nota do pedido no Bling (sem emitir) e clique de novo.'));
+    for(const n of r.notas) box.appendChild(cartaoNota(conta, n));
+    if(r.mais) box.appendChild(el('p', 'sub', 'Mostrando as 30 primeiras notas pendentes.'));
+  }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'vazio', 'Não consegui ler as notas: ' + e.message)); }
+  bt.disabled = false;
+}
+
+function cartaoNota(conta, n){
+  const d = el('div', 'nota');
+  d.appendChild(el('h3', null, `Nota ${n.numero || '(sem número)'}${n.pedido_loja ? ' · pedido da loja ' + n.pedido_loja : ''} · ${reais(n.valor)}`));
+  const rolar = el('div', 'rolar'), t = el('table'), cab = el('tr');
+  for(const h of ['Código (sai vazio)', 'Nome na nota', 'NCM', 'Origem do ICMS', 'Qtd']) cab.appendChild(el('th', null, h));
+  t.appendChild(cab);
+  const campos = [];
+  for(const it of n.itens){
+    const tr = el('tr');
+    tr.appendChild(el('td', null, it.codigo || '(vazio)'));
+    const tdNome = el('td'), nome = el('input'); nome.maxLength = 120; nome.value = it.sugestao.descricao; tdNome.appendChild(nome);
+    if(it.sugestao.salvo) tdNome.appendChild(el('div', 'salvo', 'nome guardado deste SKU'));
+    if(it.descricao && it.descricao !== it.sugestao.descricao) tdNome.appendChild(el('div', 'antes', 'veio: ' + it.descricao));
+    const tdNcm = el('td'), ncm = el('input', 'ncm'); ncm.value = it.sugestao.ncm; ncm.maxLength = 10; tdNcm.appendChild(ncm);
+    tdNcm.appendChild(el('div', 'antes', 'veio: ' + (it.ncm || 'vazio')));
+    const tdOr = el('td'), sel = el('select');
+    for(const nac of [false, true]){ const o = el('option', null, ORIGEM_TXT[origemDe(conta, nac)]); o.value = nac ? '1' : '0'; sel.appendChild(o); }
+    sel.value = it.sugestao.nacional ? '1' : '0'; tdOr.appendChild(sel);
+    tdOr.appendChild(el('div', 'antes', 'veio: ' + (it.origem == null ? '—' : (ORIGEM_TXT[it.origem] || it.origem))));
+    tr.append(tdNome, tdNcm, tdOr, el('td', null, it.quantidade ?? '—'));
+    t.appendChild(tr);
+    campos.push({ i: it.i, nome, ncm, sel });
+  }
+  rolar.appendChild(t); d.appendChild(rolar);
+  const linha = el('div', 'linha'), bt = el('button', 'bt primario', 'Corrigir itens no Bling'); bt.type = 'button';
+  const res = el('div', 'res');
+  bt.onclick = async () => {
+    const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, nacional: c.sel.value === '1' }));
+    const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — origem ${origemDe(conta, x.nacional)}`).join('\n');
+    if(!confirm(`Corrigir os itens da nota ${n.numero || ''} no Bling?\n\n${lista}\n\nO código do produto sai vazio. A nota NÃO é emitida: confira e emita no Bling depois.`)) return;
+    bt.disabled = true; res.className = 'res'; res.textContent = 'Corrigindo no Bling…';
+    try{
+      const r = await enviar('POST', '/api/bling/notas/corrigir', { conta, id: n.id, itens });
+      if(r.tudo_certo){ res.textContent = '✓ Itens corrigidos e conferidos no Bling. Agora abra a nota no Bling, confira e emita.'; }
+      else{
+        res.className = 'res erro';
+        res.textContent = 'O Bling aceitou, mas na releitura não bateu: ' + r.conferencia.filter((c) => !c.tudo)
+          .map((c) => `item ${c.i + 1} (${['nome', 'codigo', 'ncm', 'origem'].filter((k) => !c[k]).join(', ')})`).join('; ') + '. Confira a nota no Bling.';
+        bt.disabled = false;
+      }
+    }catch(e){ res.className = 'res erro'; res.textContent = 'Não corrigiu: ' + e.message; bt.disabled = false; }
+  };
+  linha.appendChild(bt); d.append(linha, res);
+  return d;
 }
 
 $('btCopiar').onclick = async () => {

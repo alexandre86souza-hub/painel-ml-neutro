@@ -50,6 +50,48 @@ const itensDoProduto = (itens) => (itens || []).map((i) => ({
   codigo: i.codigo ?? null, descricao: i.descricao ?? null, ncm: i.classificacaoFiscal ?? i.ncm ?? null,
   unidade: i.unidade ?? null, quantidade: i.quantidade ?? null, produto_vinculado: !!(i.produto?.id && Number(i.produto.id) > 0) }));
 
+// ---------- Correção da nota pendente (etapa 2, pedido do dono 05/11/2026) ----------
+// A nota que o Bling gera do pedido (situação 1 = Pendente) vem com o título longo do anúncio, o SKU no código e o NCM
+// vazio (medido na nota da Amazon). O vendedor troca o nome pelo curto, apaga o código, põe o NCM e a origem do ICMS.
+// Origem: produto importado = 1 (importação direta) na conta 1 (AMG, que importa) e 2 (adquirida no mercado interno) na
+// conta 2 (Primor, que compra da AMG); bucha e desempenadeira são nacionais = 0. O nome, o NCM e se é nacional ficam
+// guardados por SKU (estado bling_itens) a cada correção e voltam como sugestão na próxima nota do mesmo SKU.
+// A emissão (envio à Sefaz) continua no Bling, depois da conferência do vendedor.
+const NCM_PADRAO = '8481.80.19';
+const nacionalPeloNome = (d) => /\b(bucha|desempenadeira)/i.test(String(d || ''));
+const origemDoProduto = (conta, nacional) => (nacional ? 0 : conta === '1' ? 1 : 2);
+const origemDoItem = (it) => it?.origem ?? it?.impostos?.icms?.origem ?? null;
+function ncmValido(s) {
+  const d = String(s ?? '').replace(/\D/g, '');
+  if (d.length !== 8) throw erro(`NCM "${s ?? ''}" inválido: são 8 números (ex.: 8481.80.19).`);
+  return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6)}`;
+}
+function descricaoValida(s) {
+  const t = String(s ?? '').replace(/\s+/g, ' ').trim();
+  if (t.length < 3 || t.length > 120) throw erro('Nome do produto na nota: de 3 a 120 caracteres.');
+  return t;
+}
+// Sugestão para um item da nota pendente: o que foi salvo para o SKU; senão o nome que veio, o NCM padrão e a origem
+// pelo nome. Função pura: testada.
+function sugestaoDe(item, salvo) {
+  if (salvo) return { descricao: salvo.descricao, ncm: salvo.ncm, nacional: !!salvo.nacional, salvo: true };
+  return { descricao: String(item?.descricao || '').trim(), ncm: item?.classificacaoFiscal || NCM_PADRAO, nacional: nacionalPeloNome(item?.descricao), salvo: false };
+}
+// Corpo do PUT /nfe/{id}: a nota lida INTEIRA (o PUT do Bling usa o mesmo esquema do POST) e, nos itens mudados, código
+// vazio, nome, NCM e a origem (no item e no ICMS). mudancas = [{ i, descricao, ncm, nacional }]. Função pura: testada.
+function corpoCorrigido(nota, conta, mudancas) {
+  const b = JSON.parse(JSON.stringify(nota));
+  delete b.id;
+  b.itens = (nota.itens || []).map((it, i) => {
+    const m = mudancas.find((x) => x.i === i);
+    if (!m) return it;
+    const o = origemDoProduto(conta, m.nacional);
+    return { ...it, codigo: '', descricao: m.descricao, classificacaoFiscal: m.ncm, origem: o,
+      impostos: { ...(it.impostos || {}), icms: { ...(it.impostos?.icms || {}), origem: o } } };
+  });
+  return b;
+}
+
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
 
@@ -138,7 +180,61 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
   const publica = (n) => { const c = config(n); return { conta: n, client_id: c.client_id, tem_segredo: !!c.client_secret, conectada: !!c.refresh_token,
     nome: c.nome, lojas: c.lojas, conectada_em: c.conectada_em }; };
 
+  // nome curto, NCM e nacional por SKU (o código que veio na nota pendente), guardados a cada correção
+  const salvos = () => { try { return JSON.parse(D.configLer('bling_itens') || '{}') || {}; } catch { return {}; } };
+  const itemDaNota = (n, it, i, s) => ({ i, codigo: it.codigo || '', descricao: it.descricao || '', ncm: it.classificacaoFiscal || '',
+    origem: origemDoItem(it), quantidade: it.quantidade ?? null, valor: it.valorTotal ?? null,
+    sugestao: (() => { const g = sugestaoDe(it, it.codigo ? s[it.codigo] : null); return { ...g, origem: origemDoProduto(n, g.nacional) }; })() });
+  // só o que a tela precisa: nada do destinatário (contato, endereço, etiqueta)
+  const notaDaTela = (n, x, s) => ({ id: x.id, numero: x.numero ?? null, serie: x.serie ?? null, situacao: x.situacao ?? null,
+    data: x.dataEmissao ?? null, loja: x.loja?.id ?? null, pedido_loja: x.numeroPedidoLoja ?? null, valor: x.valorNota ?? null,
+    itens: (x.itens || []).map((it, i) => itemDaNota(n, it, i, s)) });
+
   const rotas = {
+    // Notas de saída PENDENTES (ainda não emitidas) da conta, com a sugestão de cada item.
+    'GET /api/bling/notas': async (url) => {
+      const n = contaValida(url.searchParams.get('conta'));
+      const lista = (await bling(n, '/nfe?pagina=1&limite=50&tipo=1&situacao=1')).data || [];
+      const s = salvos(), notas = [];
+      for (const x of lista.slice(0, 30)) {
+        const d = (await bling(n, `/nfe/${x.id}`)).data;
+        if (d && Number(d.situacao) === 1) notas.push(notaDaTela(n, d, s));
+      }
+      return { conta: publica(n), notas, mais: lista.length > 30 };
+    },
+    // { conta, id, itens: [{ i, descricao, ncm, nacional }] } — corrige os itens da nota PENDENTE no Bling (não emite).
+    'POST /api/bling/notas/corrigir': async (_u, body) => {
+      const n = contaValida(body?.conta);
+      const id = String(body?.id ?? '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
+      const nota = (await bling(n, `/nfe/${id}`)).data;
+      if (!nota) throw erro('O Bling não achou essa nota.', 404);
+      if (Number(nota.situacao) !== 1) throw erro('Essa nota não está mais pendente no Bling (já foi enviada ou emitida): nada foi mudado.', 409);
+      const itens = nota.itens || [];
+      const mudancas = (Array.isArray(body?.itens) ? body.itens : []).map((m) => {
+        const i = Number(m?.i);
+        if (!Number.isInteger(i) || i < 0 || i >= itens.length) throw erro('Item da nota inválido.');
+        return { i, descricao: descricaoValida(m.descricao), ncm: ncmValido(m.ncm), nacional: !!m.nacional };
+      });
+      if (!mudancas.length) throw erro('Nenhum item para corrigir.');
+      await bling(n, `/nfe/${id}`, { metodo: 'PUT', corpo: corpoCorrigido(nota, n, mudancas) });
+      // guarda por SKU (o código que veio no item) para a próxima nota
+      const s = salvos();
+      for (const m of mudancas) {
+        const sku = itens[m.i].codigo;
+        if (sku) s[sku] = { descricao: m.descricao, ncm: m.ncm, nacional: m.nacional, em: new Date().toISOString() };
+      }
+      D.configGravar('bling_itens', JSON.stringify(s));
+      // relê para conferir o que o Bling gravou
+      const depois = (await bling(n, `/nfe/${id}`)).data || {};
+      const conferencia = mudancas.map((m) => {
+        const it = (depois.itens || [])[m.i] || {};
+        const o = origemDoProduto(n, m.nacional);
+        const ok = { nome: it.descricao === m.descricao, codigo: !it.codigo, ncm: (it.classificacaoFiscal || '') === m.ncm, origem: Number(origemDoItem(it)) === o };
+        return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
+      });
+      return { nota: notaDaTela(n, depois, salvos()), conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
+    },
     'GET /api/bling/config': async () => ({ retorno: retorno(), contas: CONTAS.map(publica) }),
     // { conta, client_id, client_secret?, nome?, lojas? }
     'PUT /api/bling/config': async (_u, body) => {
@@ -211,4 +307,5 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
   return { rotas, rotasParam: [], callback, bling };
 }
 
-module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS };
+module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
+  sugestaoDe, corpoCorrigido, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };

@@ -29,6 +29,27 @@ assert.deepStrictEqual(it[0], { codigo: 'AMg-769.790', descricao: 'Ducha', ncm: 
 assert.strictEqual(it[1].produto_vinculado, true);
 assert.ok(!('contato' in it[0]) && !('valor' in it[0]));
 
+// correção da nota pendente
+assert.strictEqual(B.ncmValido('84818019'), '8481.80.19');
+assert.throws(() => B.ncmValido('8481.80'), /NCM/);
+assert.strictEqual(B.descricaoValida('  Ducha   Inox  '), 'Ducha Inox');
+assert.throws(() => B.descricaoValida('x'.repeat(121)), /120/);
+assert.strictEqual(B.origemDoProduto('1', false), 1, 'AMG importa direto');
+assert.strictEqual(B.origemDoProduto('2', false), 2, 'Primor compra o importado no Brasil');
+assert.strictEqual(B.origemDoProduto('2', true), 0);
+assert.ok(B.nacionalPeloNome('Bucha de Fixação 8mm') && B.nacionalPeloNome('Desempenadeira de aço') && !B.nacionalPeloNome('Ducha Inox'));
+const sg = B.sugestaoDe({ descricao: 'Ducha GW Comercial', classificacaoFiscal: '' }, null);
+assert.deepStrictEqual(sg, { descricao: 'Ducha GW Comercial', ncm: '8481.80.19', nacional: false, salvo: false });
+assert.deepStrictEqual(B.sugestaoDe({}, { descricao: 'Ducha', ncm: '8481.90.10', nacional: false }), { descricao: 'Ducha', ncm: '8481.90.10', nacional: false, salvo: true });
+const nota = { id: 9, numero: '1', contato: { nome: 'x' }, itens: [
+  { codigo: 'AMG-1', descricao: 'Longo', classificacaoFiscal: '', origem: 0, valor: 10, impostos: { icms: { st: 102, origem: 0 } } },
+  { codigo: 'AMG-2', descricao: 'Outro', valor: 5 }] };
+const cp = B.corpoCorrigido(nota, '2', [{ i: 0, descricao: 'Curto', ncm: '8481.80.19', nacional: false }]);
+assert.ok(!('id' in cp) && cp.contato.nome === 'x' && cp.numero === '1', 'a nota vai inteira, sem o id');
+assert.deepStrictEqual(cp.itens[0], { codigo: '', descricao: 'Curto', classificacaoFiscal: '8481.80.19', origem: 2, valor: 10, impostos: { icms: { st: 102, origem: 2 } } });
+assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
+assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
+
 // nota fiscal tem dado do comprador: nada do Bling no MCP
 assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/bling');
 

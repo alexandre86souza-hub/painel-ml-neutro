@@ -107,6 +107,10 @@ html[data-tema="escuro"][data-pagina="anuncios"] .calc-tab tr.calc-lucro td{colo
 html[data-tema="escuro"][data-pagina="bling"] #msg.ok{background:hsla(137,39%,60%,.14);color:hsl(145,81%,72%);border:1px solid hsla(136,40%,60%,.35)}
 html[data-tema="escuro"][data-pagina="bling"] .form input{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
 html[data-tema="escuro"][data-pagina="bling"] .dominio{background:hsla(216,56%,60%,.14)}
+html[data-tema="escuro"][data-pagina="bling"] .nota input,
+html[data-tema="escuro"][data-pagina="bling"] .nota select{border:1px solid hsla(218,24%,60%,.35);background:rgba(14,24,44,.72)}
+html[data-tema="escuro"][data-pagina="bling"] .nota .salvo{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .nota .res.erro{color:hsl(4,76%,72%)}
 /* caixa.html */
 html[data-tema="escuro"][data-pagina="caixa"] td.neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="caixa"] .agenda div{border:1px solid var(--line)}
