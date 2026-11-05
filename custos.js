@@ -74,18 +74,49 @@ const custoNaData = (p, data) => {
   return p.custo ?? null;
 };
 
+// Embalagem do produto numa data (db.js#embalagemProdutoGravar): null = vale a padrão da empresa.
+const embalagemNaData = (p, data) => {
+  const h = p?.emb_hist;
+  if (!h?.length) return null;
+  if (!data) return h[0].embalagem ?? null;
+  const x = h.find((e) => e.desde <= data);
+  return x ? x.embalagem ?? null : null;
+};
+
 // Custo de um SKU pela tabela. `porNumero` = Map(numero -> produto). Componente fora da
 // tabela ou sem custo deixa o total null e aparece em `faltando`. `data` (ISO da venda): o custo que valia nela.
+// embalagem = soma da embalagem das peças que têm embalagem própria (null = nenhuma tem: vale a padrão da empresa);
+// sem_embalagem = quantas peças do kit não têm (cada uma conta a padrão, ver embalagemDe).
 function custoDoSku(sku, porNumero, data = null) {
   const nums = componentes(sku);
-  if (!nums.length) return { custo: null, componentes: [], faltando: [], motivo: sku ? 'sku_sem_numero' : 'sem_sku' };
+  if (!nums.length) return { custo: null, componentes: [], faltando: [], motivo: sku ? 'sku_sem_numero' : 'sem_sku', embalagem: null, sem_embalagem: 0 };
   const comps = nums.map((n) => {
     const p = porNumero.get(n);
-    return { numero: n, sku: p?.sku || null, nome: p?.nome || null, custo: custoNaData(p, data) };
+    return { numero: n, sku: p?.sku || null, nome: p?.nome || null, custo: custoNaData(p, data), embalagem: embalagemNaData(p, data) };
   });
   const faltando = comps.filter((c) => c.custo == null).map((c) => c.sku || String(c.numero).padStart(3, '0'));
   const custo = faltando.length ? null : Math.round(comps.reduce((s, c) => s + c.custo, 0) * 100) / 100;
-  return { custo, componentes: comps, faltando, motivo: faltando.length ? 'componente_sem_custo' : null };
+  const comEmb = comps.filter((c) => c.embalagem != null);
+  const embalagem = comEmb.length ? Math.round(comEmb.reduce((s, c) => s + c.embalagem, 0) * 100) / 100 : null;
+  return { custo, componentes: comps, faltando, motivo: faltando.length ? 'componente_sem_custo' : null,
+    embalagem, sem_embalagem: embalagem == null ? 0 : comps.length - comEmb.length };
+}
+
+// Embalagem por unidade vendida de um SKU: a dos produtos (kit = soma das peças; peça sem embalagem própria conta a
+// padrão) ou, sem nenhuma peça com embalagem própria, a padrão da empresa. Pura: testada.
+function embalagemDe(cs, padrao) {
+  const p = Number(padrao) || 0;
+  if (cs?.embalagem == null) return p;
+  return Math.round((cs.embalagem + (cs.sem_embalagem || 0) * p) * 100) / 100;
+}
+
+// Embalagem de um anúncio do ML pelo SKU (média das variações; sem SKU = padrão). A do anúncio (custos.outros) vem antes, no chamador.
+function embalagemDoAnuncio(it, padrao, porNumero) {
+  if (!it) return Number(padrao) || 0;
+  const { base, variacoes } = skusDoAnuncio(it);
+  const skus = variacoes.length ? variacoes.map((v) => v.sku || base) : [base];
+  const vs = skus.map((s) => embalagemDe(s ? custoDoSku(s, porNumero) : null, padrao));
+  return Math.round(vs.reduce((a, b) => a + b, 0) / vs.length * 100) / 100;
 }
 
 // Troca UM produto dentro do SKU de um anúncio, sem mexer no resto: o fornecedor mudou e o
@@ -331,6 +362,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         custo_sku: c.custo, custo_variavel: c.variaveis,
         custo: manual ? atual.custo : c.custo, origem: manual ? 'manual' : (c.custo != null ? 'sku' : null),
         embalagem: atual?.outros ?? null, outro_custo: atual?.extra ?? null, embalagem_padrao: empresa.embalagem_padrao,
+        embalagem_produtos: c.skus.some((s) => s.embalagem != null) ? embalagemDoAnuncio(it, empresa.embalagem_padrao, mapa) : null,
         alerta: manual || c.custo != null ? null
           : c.sem_sku ? 'Anúncio sem SKU (ou SKU sem os números dos produtos)'
             : `Sem custo na tabela: ${c.faltando.join(', ')}`,
@@ -533,6 +565,22 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       return p;
     },
 
+    // Embalagem por produto em massa (tela Produtos): { numeros: [...], embalagem: R$ por peça | null = volta à padrão da empresa }.
+    // Vale em todas as lojas e contas (custos.js#embalagemDe); a 1ª vez de um produto vale também para as vendas antigas.
+    'POST /api/produtos/embalagem': async (_u, body) => {
+      contaOuErro();
+      const numeros = [...new Set((Array.isArray(body?.numeros) ? body.numeros : []).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
+      if (!numeros.length || numeros.length > 2000) throw erro('Escolha de 1 a 2.000 produtos.');
+      if (!('embalagem' in (body || {}))) throw erro('Informe a embalagem.');
+      const valor = numeroDeCusto(body.embalagem, 'Embalagem');
+      const existe = new Set(D.catalogoListar().map((p) => p.numero));
+      const fora = numeros.filter((n) => !existe.has(n));
+      if (fora.length) throw erro(`Produto(s) fora da tabela: ${fora.slice(0, 10).join(', ')}.`);
+      const alterados = D.embalagemProdutoGravar(numeros, valor);
+      cacheAnuncios = null;
+      return { alterados, pedidos: numeros.length, embalagem: valor };
+    },
+
     // Custos em massa (Anúncios do ML, barra de seleção): os mesmos campos do PUT de um anúncio, nos ids marcados.
     // { ids: [...], embalagem?, outro_custo?, custo_manual? } — campo ausente = não muda; null/'' = volta ao padrão
     // (embalagem da empresa, sem outro custo, custo pelo SKU). Valida tudo antes de gravar o primeiro.
@@ -662,7 +710,7 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
         const cSku = custoDoSku(l.sku || (composicoes.has(l.item_id) ? l.item_id : null), mapa, l.data);   // custo da época da venda
         const cItem = custos[l.item_id];
         const custoUnit = cItem?.origem === 'manual' ? cItem.custo : (cSku.custo ?? cItem?.custo ?? null);
-        const emb = (cItem?.outros ?? empresa.embalagem_padrao ?? 0) + (cItem?.extra || 0);   // embalagem + outro custo do anúncio
+        const emb = (cItem?.outros ?? embalagemDe(cSku, empresa.embalagem_padrao)) + (cItem?.extra || 0);   // embalagem (do anúncio › dos produtos › padrão) + outro custo
         const conta_ = contaDaLinha(l, { custo_unit: custoUnit, embalagem_unit: emb, imposto_pct: impostoPct });
         if (valida && custoUnit == null) {
           const k = l.item_id;
@@ -903,6 +951,8 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
       const p = produtoDoCorpo({ ...atual, ...(body || {}) }, numero);
       // custo novo vale a partir de agora (as vendas antigas guardam o da época); retroativo = corrigir erro de digitação
       D.catalogoGravar([p], { retroativo: body?.retroativo === true });
+      if (body && 'embalagem' in body) D.embalagemProdutoGravar([numero], numeroDeCusto(body.embalagem, 'Embalagem'));
+      p.embalagem = D.catalogoListar().find((x) => x.numero === numero)?.embalagem ?? null;
       const anuncios = await aplicarCatalogo(conta).catch(() => []);
       const afetados = anuncios.filter((a) => a.skus.some((s) => s.componentes.some((c) => c.numero === numero)));
       return { produto: p, anuncios_recalculados: afetados.length };
@@ -974,5 +1024,5 @@ function criar({ ml, emLotes, contaOuErro, exigeItemId, sincronizarVendas, janel
   return { rotas, rotasParam, composicao, idsComProduto, catalogoMapa, anuncios: anunciosComSku, semCustoMl, descreverComposicao, trocarComposicao, vendasDaConta };
 }
 
-module.exports = { criar, freteFlex, lerCatalogo, componentes, usarComposicoes, composicaoDe, custoDoSku, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
+module.exports = { criar, freteFlex, lerCatalogo, componentes, usarComposicoes, composicaoDe, custoDoSku, embalagemDe, embalagemDoAnuncio, skusDoAnuncio, trocarComponente, skuNaData, somarContas, topPorSku, validarEmpresa, lerEmpresa,
   impostoTotal, contaDaLinha, dinheiro, lucroPorAnuncio };

@@ -248,7 +248,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, janela, fret
     const c = D.custosDe([id])[id];
     if (c?.custo == null) throw erro('Este anúncio está sem custo do produto: cadastre o SKU ou o custo em Produtos.');
     const empresa = (() => { try { return JSON.parse(D.configLer(`empresa:${conta.ml_user_id}`) || '{}'); } catch { return {}; } })();
-    const embalagem = (c.outros ?? empresa.embalagem_padrao ?? 0) + (c.extra || 0);
+    const C = require('./custos.js');
+    const embalagem = (c.outros ?? C.embalagemDoAnuncio(item, empresa.embalagem_padrao, new Map(D.catalogoListar().map((p) => [p.numero, p])))) + (c.extra || 0);
     const impostoPct = D.impostoLer(conta.ml_user_id) || 0;
     const fr = await freteDoItem(conta, item, janela(60), 20).catch(() => null);
     if (fr?.por_unidade == null) throw erro('Não consegui medir o frete deste anúncio (sem vendas recentes nem estimativa do ML).');
@@ -291,7 +292,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, janela, fret
       const c = D.custosDe([id])[id];
       if (c?.custo == null) throw erro('Este anúncio está sem custo do produto: cadastre o SKU ou o custo em Produtos.');
       const empresa = (() => { try { return JSON.parse(D.configLer(`empresa:${conta.ml_user_id}`) || '{}'); } catch { return {}; } })();
-      const embalagem = (c.outros ?? empresa.embalagem_padrao ?? 0) + (c.extra || 0);   // embalagem + outro custo do anúncio
+      const C = require('./custos.js');
+      const embalagem = (c.outros ?? C.embalagemDoAnuncio(item, empresa.embalagem_padrao, new Map(D.catalogoListar().map((p) => [p.numero, p])))) + (c.extra || 0);   // embalagem (anúncio › produtos › padrão) + outro custo
       const impostoPct = D.impostoLer(conta.ml_user_id) || 0;
       const fr = await freteDoItem(conta, item, janela(60), 20).catch(() => null);
       const frete = fr?.por_unidade ?? null;

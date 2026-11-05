@@ -695,7 +695,7 @@ function criar({ D, janela, quem = () => null }) {
     const trocas = D.skuTrocas('amazon');   // troca de produto feita no painel (vale a partir da data)
     const linhas = comEtiquetas(D.amazonLancPeriodo(j.de, j.ate)).map((l) => {
       const cs = l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa, l.data) : { custo: null, componentes: [], faltando: [] };
-      const conta_ = contaDoLancamento(l, { custo_unit: cs.custo, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct });
+      const conta_ = contaDoLancamento(l, { custo_unit: cs.custo, embalagem_unit: C.embalagemDe(cs, empresa.embalagem_padrao), imposto_pct: impostoPct });
       if (l.tipo === 'venda' && cs.custo == null) {
         const s = semCusto.get(l.sku || '—') || { sku: l.sku, faltando: cs.faltando, vendas: 0 };
         s.vendas++; semCusto.set(l.sku || '—', s);
@@ -709,7 +709,8 @@ function criar({ D, janela, quem = () => null }) {
     const hojeDe = janelaVendas(1, janela).de;
     // mês passado não inclui hoje: as vendas de hoje lidas à parte
     const linhasHoje = j.ate <= hojeDe ? comEtiquetas(D.amazonLancPeriodo(hojeDe, new Date(Date.now() + 60e3).toISOString())).map((l) =>
-      ({ ...l, ...contaDoLancamento(l, { custo_unit: l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa, l.data).custo : null, embalagem_unit: empresa.embalagem_padrao || 0, imposto_pct: impostoPct }) }))
+      { const cs = l.sku ? C.custoDoSku(C.skuNaData(trocas, l.sku, l.data), mapa, l.data) : null;
+        return { ...l, ...contaDoLancamento(l, { custo_unit: cs?.custo ?? null, embalagem_unit: C.embalagemDe(cs, empresa.embalagem_padrao), imposto_pct: impostoPct }) }; })
       : linhas.filter((l) => l.data >= hojeDe);
     const porDia = new Map();
     for (const l of linhas) {
@@ -787,7 +788,7 @@ function criar({ D, janela, quem = () => null }) {
     const trocas = D.skuTrocas('amazon');
     const linhas = D.amazonVendasPeriodo(de, ate).map((v) => {
       const cs = v.sku ? C.custoDoSku(C.skuNaData(trocas, v.sku, v.data), mapa, v.data) : { custo: null, componentes: [], faltando: [] };
-      const emb = empresa.embalagem_padrao || 0;
+      const emb = C.embalagemDe(cs, empresa.embalagem_padrao);
       const conta_ = linhaDoPedido(v, { taxas, custo_unit: cs.custo, embalagem_unit: emb, imposto_pct: impostoPct,
         preco_unit_sku: precoSku.get(`${v.sku}|${v.canal}`) ?? precoSku.get(v.sku) ?? null });
       return { pedido: v.pedido, data: v.data, status: v.status, item_id: v.sku || v.pedido, sku: v.sku, asin: v.asin,
@@ -1103,7 +1104,7 @@ function criar({ D, janela, quem = () => null }) {
         estoque: disp.length ? estoque : null, canal: fba ? 'FBA' : 'proprio',
         vendas_30: v30.get(it.sku)?.u || 0, faturamento_30: r2(v30.get(it.sku)?.f || 0),
         custo_unit: cs.custo, tarifa_pct: m?.tarifa_pct ?? null, fixa_un: m?.fixa_un ?? null, frete_un: m?.frete_un ?? null, armazem_un: m?.armazem_un ?? 0,
-        embalagem_unit: fba ? 0 : (empresa.embalagem_padrao || 0), link: s.asin ? `https://www.amazon.com.br/dp/${s.asin}` : null };
+        embalagem_unit: fba ? 0 : C.embalagemDe(cs, empresa.embalagem_padrao), link: s.asin ? `https://www.amazon.com.br/dp/${s.asin}` : null };
     }).sort((a, b) => (b.vendas_30 - a.vendas_30) || String(a.titulo).localeCompare(String(b.titulo)));
     const dados = { itens, imposto_pct: impostoPct, em: new Date().toISOString() };
     cacheAnuncios = { em: Date.now(), dados };

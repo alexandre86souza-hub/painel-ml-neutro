@@ -77,13 +77,13 @@ function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' 
 // lucro estimado num preço: taxa média do SKU na Leroy (comissão, reembolsos e frete líquido), custo, embalagem e imposto
 function estimar(i, preco){
   if(preco == null || i.custo_unit == null || i.taxa_pct == null) return null;
-  const lucro = preco - preco * i.taxa_pct - i.custo_unit - (dados.embalagem_pedido || 0) - preco * (dados.imposto_pct || 0) / 100;
+  const lucro = preco - preco * i.taxa_pct - i.custo_unit - (i.embalagem_unit ?? dados.embalagem_pedido ?? 0) - preco * (dados.imposto_pct || 0) / 100;
   return { lucro, margem: preco > 0 ? lucro / preco : null };
 }
 function precoPelaMargem(i, m){
   if(i.custo_unit == null || i.taxa_pct == null) return null;
   const sobra = 1 - i.taxa_pct - (dados.imposto_pct || 0) / 100 - m;
-  return sobra > 0.01 ? Math.ceil((i.custo_unit + (dados.embalagem_pedido || 0)) / sobra * 100) / 100 : null;
+  return sobra > 0.01 ? Math.ceil((i.custo_unit + (i.embalagem_unit ?? dados.embalagem_pedido ?? 0)) / sobra * 100) / 100 : null;
 }
 const margemMax = () => (Number(String($('fMargemMax').value).replace(',', '.')) || 0) / 100;
 const txtMargem = (e) => (e ? `${real(e.lucro)} · ${pct(e.margem)}` : '—');

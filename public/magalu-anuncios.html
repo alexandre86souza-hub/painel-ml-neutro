@@ -91,7 +91,7 @@ let dados = null, filtro = 'publicados', mostrar = 200, espera = null;
 // no financeiro) − imposto − custo − embalagem (uma por pedido)
 function lucroDe(a){
   if(a.preco == null || a.custo_unit == null || a.taxa_pct == null) return null;
-  return a.preco - a.preco * a.taxa_pct - a.preco * (dados.imposto_pct || 0) / 100 - a.custo_unit - (dados.embalagem_pedido || 0);
+  return a.preco - a.preco * a.taxa_pct - a.preco * (dados.imposto_pct || 0) / 100 - a.custo_unit - (a.embalagem_unit ?? dados.embalagem_pedido ?? 0);
 }
 
 async function carregar(recarregar){
@@ -128,7 +128,7 @@ $('fMargemMax').oninput = () => { if(filtro !== 'baixa'){ $('segFiltro').querySe
 function precoPelaMargem(a, m){
   if(a.custo_unit == null || a.taxa_pct == null) return null;
   const sobra = 1 - a.taxa_pct - (dados.imposto_pct || 0) / 100 - m;
-  return sobra > 0.01 ? Math.ceil((a.custo_unit + (dados.embalagem_pedido || 0)) / sobra * 100) / 100 : null;
+  return sobra > 0.01 ? Math.ceil((a.custo_unit + (a.embalagem_unit ?? dados.embalagem_pedido ?? 0)) / sobra * 100) / 100 : null;
 }
 let naTela = [];
 $('btMargemMassa').onclick = () => {

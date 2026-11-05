@@ -182,3 +182,21 @@ console.log('custos, tabela de produtos, empresa, vendas, troca de SKU e soma da
   require('node:assert').ok(['X', 'Y'].includes(skuNaData(circulo, 'X', '2026-10-30')));
   console.log('trocas de SKU em corrente longa: ok');
 }
+
+// Embalagem por produto (05/11/2026): por peça, kit = soma; peça sem embalagem própria conta a padrão; nenhuma = padrão uma vez
+{
+  const assert = require('node:assert');
+  const m = new Map([
+    [889, { sku: 'AMG-889', custo: 5, emb_hist: [{ embalagem: 0.5, desde: '2026-11-05T12:00:00Z' }, { embalagem: 0.3, desde: '0000-01-01T00:00:00.000Z' }] }],
+    [879, { sku: 'AMG-879', custo: 4, emb_hist: [{ embalagem: 0.3, desde: '0000-01-01T00:00:00.000Z' }] }],
+    [408, { sku: 'BP-408', custo: 10 }],
+  ]);
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('AMG-879', m), 2), 0.3, 'produto com embalagem');
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('KIT-879.879', m), 2), 0.6, 'kit de 2 = soma');
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('KIT-879.408', m), 2), 2.3, 'peça sem embalagem conta a padrão');
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('BP-408', m), 2), 2, 'sem embalagem própria = padrão');
+  assert.strictEqual(C.embalagemDe(null, 1.5), 1.5, 'sem SKU = padrão');
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('AMG-889', m, '2026-10-01T00:00:00Z'), 2), 0.3, 'venda antiga: embalagem da época');
+  assert.strictEqual(C.embalagemDe(C.custoDoSku('AMG-889', m), 2), 0.5, 'hoje: a nova');
+  console.log('embalagem por produto: ok');
+}

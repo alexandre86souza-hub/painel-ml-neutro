@@ -137,7 +137,8 @@ function linhasDe(rows, ctx) {
       const frete = !valida ? 0 : fretePedido == null ? null : fretePedido * parte;
       const cs = i.sku ? C.custoDoSku(i.sku, ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
-      const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
+      // embalagem do produto: por peça vendida; sem ela, a padrão da loja = uma caixa por pedido, rateada pelo valor
+      const embalagem = !valida ? 0 : cs.embalagem != null ? C.embalagemDe(cs, ctx.embalagem_pedido) * q : (ctx.embalagem_pedido || 0) * parte;
       // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto)
       const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * fat : 0;
       const falta = [];

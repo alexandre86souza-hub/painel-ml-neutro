@@ -126,7 +126,8 @@ function linhasDe(pedidos, ctx) {
       const frete = !valida ? 0 : custoEntrega == null ? null : custoEntrega * parte - n(l.frete_cliente);
       const cs = l.sku ? C.custoDoSku(C.skuNaData(ctx.trocas, l.sku, p.data), ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
-      const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;   // uma caixa por pedido, rateada pelo valor
+      // embalagem do produto: por peça vendida; sem ela, a padrão da loja = uma caixa por pedido, rateada pelo valor
+      const embalagem = !valida ? 0 : cs.embalagem != null ? C.embalagemDe(cs, ctx.embalagem_pedido) * q : (ctx.embalagem_pedido || 0) * parte;
       // devolvida: o vendedor cancela a nota fiscal e o imposto volta (sem despesa de imposto). A nota da Leroy leva o FRETE
       // que o cliente pagou (confirmado pelo vendedor em 20/10/2026): o imposto incide sobre produto + frete do cliente.
       const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * (fat + n(l.frete_cliente)) : 0;
@@ -515,6 +516,7 @@ function criar({ D, janela }) {
           const ativo = o.desconto && (!o.desconto.fim || Date.parse(o.desconto.fim) > agora) && (!o.desconto.inicio || Date.parse(o.desconto.inicio) <= agora);
           return { ...o, foto: x?.foto || null, preco: ativo ? o.desconto.preco : o.cheio, em_desconto: !!ativo, vendas_30: x?.v30 || 0,
             custo_unit: cs.custo, faltando: cs.faltando, taxa_pct: x?.fat > 0 ? x.taxa / x.fat : media, taxa_do_produto: !!(x?.fat > 0),
+            embalagem_unit: C.embalagemDe(cs, e.embalagem_padrao),
             produtos: cs.componentes.map((c) => c.numero).filter((v) => v != null) };   // números do kit (filtro das campanhas)
         }).sort((a, b) => (b.vendas_30 - a.vendas_30) || String(a.titulo).localeCompare(String(b.titulo))) };
     },

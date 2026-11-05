@@ -126,8 +126,25 @@ assert.deepStrictEqual(D.urlsPublicasHistorico().map((u) => u.url), ['https://b.
   assert.strictEqual(C.custoDoSku('DQ-9901', mapa(), antes).custo, 11, 'retroativo vale para tudo');
 }
 
+// embalagem por produto: 1ª vez vale desde sempre; trocar vale a partir de agora; igual não grava; reimportar a tabela mantém
+{
+  D.catalogoGravar([{ numero: 889, sku: 'AMG-889', nome: 'Desempenadeira', custo: 5 }]);
+  assert.strictEqual(D.embalagemProdutoGravar([889], 0.3), 1);
+  assert.strictEqual(D.embalagemProdutoGravar([889], 0.3), 0, 'igual não grava');
+  let p = D.catalogoListar().find((x) => x.numero === 889);
+  assert.strictEqual(p.embalagem, 0.3); assert.strictEqual(p.emb_hist[0].desde, '0000-01-01T00:00:00.000Z');
+  D.embalagemProdutoGravar([889], 0.5);
+  D.catalogoGravar([{ numero: 889, sku: 'AMG-889', nome: 'Desempenadeira', custo: 6 }]);
+  p = D.catalogoListar().find((x) => x.numero === 889);
+  assert.strictEqual(p.embalagem, 0.5, 'reimportar a tabela não apaga a embalagem'); assert.strictEqual(p.emb_hist.length, 2);
+  D.embalagemProdutoGravar([889], null);
+  assert.strictEqual(D.catalogoListar().find((x) => x.numero === 889).embalagem, null, 'volta à padrão');
+  console.log('embalagem por produto (banco): ok');
+}
+
 D.db.close();
 for (const f of [process.env.ML_DB_FILE, process.env.ML_DB_FILE + '-wal', process.env.ML_DB_FILE + '-shm']) {
   try { require('node:fs').unlinkSync(f); } catch {}
 }
 console.log('OK — cifra, multi-conta, troca, isolamento, webhook, senha, sessão e URLs públicas');
+

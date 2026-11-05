@@ -189,7 +189,7 @@ function criar({ D, ml, amazon = null }) {
       fonte = m ? `médio da conta ${p.preco >= 79 ? 'acima' : 'abaixo'} de R$ 79 (${m.amostra} envio(s), 60 dias)` : 'sem frete medido na conta';
     }
     const custosAnuncio = item ? D.custosDe([item.id])[item.id] : null;
-    const embalagem = (custosAnuncio?.outros ?? empresa.embalagem_padrao ?? 0) + (custosAnuncio?.extra || 0);
+    const embalagem = (custosAnuncio?.outros ?? C.embalagemDe(p.cs, empresa.embalagem_padrao)) + (custosAnuncio?.extra || 0);
     const origemTxt = { editada: 'digitada neste cálculo', padrao: 'padrão da conta', categoria: tipo === 'gold_pro' ? 'Premium' : 'Clássico' };
     return { id: `ml:${id}`, canal: 'ml', conta_ml: id, nome: `Mercado Livre — ${conta.nickname}`, tarifa,
       tarifa_txt: tarifa ? `${String(tarifa.pct).replace('.', ',')}%${tarifa.fixa ? ` + R$ ${tarifa.fixa.toFixed(2).replace('.', ',')}` : ''} (${origemTxt[tarifa.origem]})`
@@ -204,7 +204,7 @@ function criar({ D, ml, amazon = null }) {
     return { id: `shopee:${loja.shop_id}`, canal: 'shopee', nome: `Shopee — ${loja.nome || loja.shop_id}`, tarifa: { pct: t.pct, fixa: r2(t.fixa_un + t.pedido), valor: t.valor },
       tarifa_txt: `${t.pct}% + R$ ${t.fixa_un.toFixed(2).replace('.', ',')} por unidade + R$ 0,49 (Devolução Fácil)`,
       frete: 0, frete_fonte: 'Shopee Xpress: a Shopee paga; Entrega Direta: ela repassa o que você paga ao entregador',
-      imposto_pct: C.impostoTotal(empresa), embalagem: empresa.embalagem_padrao || 0, avisos: [] };
+      imposto_pct: C.impostoTotal(empresa), embalagem: C.embalagemDe(p.cs, empresa.embalagem_padrao), avisos: [] };
   }
 
   // Lê as novidades do financeiro da Amazon antes (no máximo 8 s; a 1ª leitura de 92 dias leva ~1 min
@@ -239,7 +239,7 @@ function criar({ D, ml, amazon = null }) {
       frete_fonte: fba
         ? `tarifa de envio do FBA ${din(m.fixa_un)} + armazenagem e envio ao armazém ${din(m.armazem_un || 0)} por unidade — ${fonte}`
         : `etiqueta comprada na Amazon — ${fonte}`,
-      imposto_pct: C.impostoTotal(empresa), embalagem: fba ? 0 : (empresa.embalagem_padrao || 0), avisos };
+      imposto_pct: C.impostoTotal(empresa), embalagem: fba ? 0 : C.embalagemDe(p.cs, empresa.embalagem_padrao), avisos };
   }
 
   const rotas = {
@@ -258,7 +258,7 @@ function criar({ D, ml, amazon = null }) {
       const nome = cs?.componentes?.map((c) => c.nome).filter(Boolean).join(' + ') || (q.get('nome') || '').trim() || null;
       const item = /^MLB\d+$/i.test(q.get('item') || '') ? q.get('item').toUpperCase() : null;
       const categoria = /^MLB\d+$/i.test(q.get('categoria') || '') ? q.get('categoria').toUpperCase() : null;
-      const p = { preco, sku, nome, item, categoria, tipo: q.get('tipo'), envio: q.get('envio') === 'flex' ? 'flex' : 'me', amazon: q.get('amazon'),
+      const p = { preco, sku, nome, item, categoria, cs, tipo: q.get('tipo'), envio: q.get('envio') === 'flex' ? 'flex' : 'me', amazon: q.get('amazon'),
         tarifas: Object.fromEntries(D.contasListar().map((c) => [c.ml_user_id, pctValido(q.get(`t_${c.ml_user_id}`))]).filter(([, v]) => v != null)) };
       const so = q.get('canal');   // opcional: um canal só (ml:{id}, shopee:{loja}, amazon)
       const canais = [];

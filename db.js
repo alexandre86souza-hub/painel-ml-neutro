@@ -443,13 +443,48 @@ function catalogoGravar(linhas, { retroativo = false } = {}) {
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
+// Embalagem POR PRODUTO (pedido do dono, 05/11/2026: desempenadeira = R$ 0,30 em todas as lojas), por peça vendida; kit = soma
+// das peças. Histórico como o do custo: a 1ª embalagem de um produto vale "desde sempre" (as vendas estavam com a padrão);
+// trocar depois vale a partir de agora. embalagem NULL = volta à embalagem padrão da empresa (daquela data em diante).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS produtos_embalagem_hist (
+    numero    INTEGER NOT NULL,
+    embalagem REAL,
+    desde     TEXT NOT NULL,
+    PRIMARY KEY (numero, desde)
+  );
+`);
+function embalagemProdutoGravar(numeros, valor) {
+  const ultima = db.prepare('SELECT embalagem FROM produtos_embalagem_hist WHERE numero=? ORDER BY desde DESC LIMIT 1');
+  const ins = db.prepare('INSERT OR REPLACE INTO produtos_embalagem_hist (numero, embalagem, desde) VALUES (?,?,?)');
+  const em = agora();
+  let n = 0;
+  db.exec('BEGIN');
+  try {
+    for (const numero of numeros) {
+      const a = ultima.get(numero);
+      if (a ? (a.embalagem ?? null) === (valor ?? null) : valor == null) continue;
+      ins.run(numero, valor ?? null, a ? em : DESDE_SEMPRE);
+      n++;
+    }
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return n;
+}
 // Produtos com o histórico do custo (só quem teve troca): hist = [{ custo, desde }], o mais novo primeiro.
+// embalagem = a de hoje (null = padrão da empresa) e emb_hist = [{ embalagem, desde }], o mais novo primeiro.
 const catalogoListar = () => {
-  const hs = new Map();
+  const hs = new Map(), es = new Map();
   for (const h of db.prepare('SELECT numero, custo, desde FROM produtos_custo_hist ORDER BY numero, desde DESC').all()) {
     (hs.get(h.numero) || hs.set(h.numero, []).get(h.numero)).push({ custo: h.custo, desde: h.desde });
   }
-  return db.prepare('SELECT * FROM produtos_custo ORDER BY numero').all().map((p) => (hs.has(p.numero) ? { ...p, hist: hs.get(p.numero) } : p));
+  for (const h of db.prepare('SELECT numero, embalagem, desde FROM produtos_embalagem_hist ORDER BY numero, desde DESC').all()) {
+    (es.get(h.numero) || es.set(h.numero, []).get(h.numero)).push({ embalagem: h.embalagem, desde: h.desde });
+  }
+  return db.prepare('SELECT * FROM produtos_custo ORDER BY numero').all().map((p) => {
+    const e = es.get(p.numero);
+    return { ...p, ...(hs.has(p.numero) ? { hist: hs.get(p.numero) } : {}), embalagem: e ? e[0].embalagem : null, ...(e ? { emb_hist: e } : {}) };
+  });
 };
 const catalogoResumo = () => db.prepare(`SELECT COUNT(*) AS produtos, SUM(custo IS NULL) AS sem_custo,
                                                 MAX(atualizado_em) AS atualizado_em FROM produtos_custo`).get();
@@ -2314,7 +2349,7 @@ module.exports = {
   promoPedidosSemLeitura, promoPedidoGravar, promoOfertasSemPromocao, promoOfertaGravar,
   promoNomesFaltando, promoNomeGravar, promoResultado, promoTopItens,
   devolucaoGravar, devolucaoPackGravar, devolucaoAtualizadaEm, devolucoesListar, vendasUnidadesPorItem,
-  custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo,
+  custoAutoGravar, embalagemGravar, catalogoGravar, catalogoListar, catalogoResumo, embalagemProdutoGravar,
   vendasLinhas, vendasSemSku, enviosSemFreteConta, ultimasVendas, vendasDesde,
   avisoCriar, avisosListar, avisosNaoLidos, avisosMarcarLidos, avisosUltimoId, avisosDepoisDe, acessoGravar, acessosDoDia, acessosErrosDesde, auditoriaDoDia, defeitoGravar, defeitosDe, defeitoEmDe, defeitoProdutosDe, defeitoQtdsDe, defeitoFaltamDe, defeitoCanalGravar, defeitosCanalListar, devAcompGravar, devAcompListar, creditoManualGravar, creditosManuais,
   skusDosPedidos, extraGravar, pedidosSemNome, compradorNomeGravar, compradoresDosPedidos, compradorGravarPedido, logisticaGravar, enviosSemLogistica, vendasComLogistica,

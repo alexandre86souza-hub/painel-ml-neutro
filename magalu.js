@@ -190,7 +190,8 @@ function linhasDe(pedidos, ctx) {
       const skuPainel = C.skuNaData(ctx.trocas, (i.sku && ctx.vinculos?.get(i.sku)) || i.sku, p.data);
       const cs = skuPainel ? C.custoDoSku(skuPainel, ctx.mapa, p.data) : { custo: null, componentes: [], faltando: [] };
       const produto = !valida || devolvido ? 0 : cs.custo == null ? null : cs.custo * q;
-      const embalagem = valida ? (ctx.embalagem_pedido || 0) * parte : 0;
+      // embalagem do produto: por peça vendida; sem ela, a padrão da loja = uma caixa por pedido, rateada pelo valor
+      const embalagem = !valida ? 0 : cs.embalagem != null ? C.embalagemDe(cs, ctx.embalagem_pedido) * q : (ctx.embalagem_pedido || 0) * parte;
       const imposto = valida && !devolvido ? (ctx.imposto_pct || 0) / 100 * fat : 0;
       const falta = produto == null ? ['custo'] : [];
       const lucro = !valida ? 0 : falta.length ? null : fat - tarifa - frete - produto - embalagem - imposto;
@@ -473,6 +474,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
         preco_enviado_em: ev ? ev.em : null, preco_magalu: ev ? a.preco : null,
         estoque: a.estoque, preco_lido: !!a.lido_preco, custo_unit: cs.custo, produtos: cs.componentes.map((c) => c.numero).filter((v) => v != null), componentes: cs.componentes.map((c) => ({ sku: c.sku || String(c.numero), nome: c.nome, custo: c.custo })),
         faltando: cs.faltando, vendas_30: x?.v30 || 0, taxa_pct: x && x.fat > 0 ? x.tar / x.fat : media, taxa_do_produto: !!(x && x.fat > 0),
+        embalagem_unit: C.embalagemDe(cs, e.embalagem_padrao),
         foto: x?.foto || null, link: a.url };
     }).sort((a, b) => (b.vendas_30 - a.vendas_30) || (a.status === 'PUBLISHED' ? -1 : 1) - (b.status === 'PUBLISHED' ? -1 : 1) || String(a.titulo).localeCompare(String(b.titulo)));
     return { itens, imposto_pct: C.impostoTotal(e), embalagem_pedido: e.embalagem_padrao || 0 };
@@ -546,7 +548,7 @@ function criar({ D, janela, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, e
   const PCT_FIXO = new Set(['percentage_discount', 'fidelity_discount']);
   // lucro de uma unidade no preço: preço − taxa média do SKU (comissão, tarifa e frete) − imposto − custo − embalagem
   const lucroNoPreco = (a, ctx, preco) => (a && a.custo_unit != null && a.taxa_pct != null && preco > 0
-    ? r2(preco * (1 - a.taxa_pct - ctx.imposto_pct / 100) - a.custo_unit - (ctx.embalagem_pedido || 0)) : null);
+    ? r2(preco * (1 - a.taxa_pct - ctx.imposto_pct / 100) - a.custo_unit - (a.embalagem_unit ?? ctx.embalagem_pedido ?? 0)) : null);
   // data do formulário (AAAA-MM-DD, horário de Brasília) -> ISO
   const dataBR = (d, fimDoDia) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) throw erro('Informe as datas de início e fim.');

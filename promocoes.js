@@ -245,7 +245,7 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
     await emLotes(lotes, 4, async (lote) => {
       try {
         const r = await ml(`/items?ids=${lote.join(',')}&attributes=id,title,thumbnail,permalink,price,`
-          + 'available_quantity,status,category_id,listing_type_id,site_id,shipping');
+          + 'available_quantity,status,category_id,listing_type_id,site_id,shipping,attributes,seller_custom_field,variations');
         for (const x of r) if (x.code === 200) out[x.body.id] = x.body;
       } catch { /* título e foto são enfeite */ }
     });
@@ -309,7 +309,8 @@ function criar({ ml, mlPaciente, emLotes, contaOuErro, exigeItemId, sincronizarV
   async function lucroDe(conta, it, preco, meliPct, ctx) {
     const c = ctx.custos[it.id];
     const custo = c?.custo ?? null;
-    const embalagem = (c?.outros ?? ctx.empresa.embalagem_padrao ?? 0) + (c?.extra || 0);   // embalagem + outro custo do anúncio
+    ctx.mapa ||= new Map(D.catalogoListar().map((p) => [p.numero, p]));
+    const embalagem = (c?.outros ?? require('./custos.js').embalagemDoAnuncio(it, ctx.empresa.embalagem_padrao, ctx.mapa)) + (c?.extra || 0);   // embalagem (anúncio › produtos › padrão) + outro custo
     const [tPromo, tAtual, frete] = await Promise.all([tarifaEm(it, preco), tarifaEm(it, it.price), freteDe(conta, it)]);
     const base = { custo, embalagem, frete: frete?.valor ?? null, impostoPct: ctx.impostoPct };
     return {

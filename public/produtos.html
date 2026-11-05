@@ -161,7 +161,10 @@
     <h2>Tabela de produtos</h2>
     <p class="sub">Edite o custo (preço de compra), o nome, a situação ou o fornecedor direto na linha e clique em <b>Salvar</b>.
       O custo de todos os anúncios que usam o produto no SKU é recalculado na hora. O lucro das vendas já feitas continua com o custo
-      da época (para corrigir um custo digitado errado, marque "corrigir também as vendas antigas").</p>
+      da época (para corrigir um custo digitado errado, marque "corrigir também as vendas antigas").
+      <b>Embalagem</b>: custo por peça vendida, em todas as lojas e contas (kit = soma das peças). Em branco = vale a embalagem padrão
+      da tela Empresa. A 1ª embalagem de um produto vale também para as vendas antigas; trocar depois vale a partir de agora.
+      No Mercado Livre, a embalagem digitada no próprio anúncio (Detalhes) vem antes da do produto.</p>
     <div class="filtros">
       <input id="busca" type="search" placeholder="Buscar por SKU, nome ou fornecedor" aria-label="Buscar produto">
       <div class="seg" role="group" aria-label="Filtro" id="segFiltro">
@@ -171,6 +174,14 @@
         <button type="button" data-f="ativos">Situação ativa</button>
       </div>
     </div>
+    <form class="emb-massa" id="formEmb" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0">
+      <b>Embalagem nos produtos da busca:</b>
+      <label>R$ <input id="embValor" type="number" step="0.01" min="0" style="width:7em" aria-label="Embalagem por peça em reais"></label>
+      <button class="bt primario" id="embAplicar">Aplicar</button>
+      <button type="button" class="bt" id="embPadrao" title="Os produtos da busca voltam à embalagem padrão da tela Empresa">Voltar à padrão</button>
+      <span class="sub" id="embInfo"></span>
+    </form>
+    <div id="embConf"></div>
     <div class="tabela-rolagem" id="tabela"><p class="sub">Carregando… (conta os anúncios de cada produto no Mercado Livre)</p></div>
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
   </section>
@@ -241,7 +252,7 @@ const selConta = $('selConta');
 })();
 selConta.onchange = async () => { await enviar('POST', '/api/accounts/active', { ml_user_id: Number(selConta.value) }); location.reload(); };
 
-let produtos = [], filtro = 'todos', mostrar = 150;
+let produtos = [], filtro = 'todos', mostrar = 150, filtrados = [];
 // loja escolhida no topo (?conta=amazon | leroy | magalu | shopee-ID; sem = a conta do ML): a troca busca só nela,
 // a não ser com "Todas as lojas" marcado
 const LOJA = (new URLSearchParams(location.search).get('conta') || '').match(/^(amazon|leroy|magalu|shopee-\d+)$/)?.[0] || null;
@@ -253,6 +264,35 @@ $('segFiltro').onclick = (ev) => {
 };
 $('busca').oninput = () => { mostrar = 150; pintar(); };
 $('btMais').onclick = () => { mostrar += 300; pintar(); };
+// Embalagem em massa: os produtos da busca/filtro de agora (POST /api/produtos/embalagem), com confirmação aqui
+function confirmarEmb(valor){
+  const box = $('embConf'); box.innerHTML = '';
+  const nums = filtrados.map((p) => p.numero);
+  if(!nums.length) return aviso('Nenhum produto na busca.');
+  const exemplo = filtrados.slice(0, 5).map((p) => p.sku).join(', ') + (filtrados.length > 5 ? '…' : '');
+  const p = el('p', 'sub', (valor == null ? `Voltar à embalagem padrão da empresa em ${numero(nums.length)} produto(s)` : `Gravar embalagem de R$ ${valor.toFixed(2).replace('.', ',')} por peça em ${numero(nums.length)} produto(s)`) + ` (${exemplo})? Vale em todas as lojas e contas.`);
+  const sim = el('button', 'bt primario', 'Confirmar'); sim.type = 'button';
+  const nao = el('button', 'bt', 'Cancelar'); nao.type = 'button';
+  nao.onclick = () => { box.innerHTML = ''; };
+  sim.onclick = async () => {
+    sim.disabled = nao.disabled = true;
+    try{
+      const r = await enviar('POST', '/api/produtos/embalagem', { numeros: nums, embalagem: valor });
+      box.innerHTML = '';
+      for(const x of filtrados) x.embalagem = valor;
+      pintar();
+      $('embInfo').textContent = `Embalagem gravada: ${numero(r.alterados)} produto(s) mudaram (${numero(r.pedidos - r.alterados)} já estavam assim).`;
+    }catch(e){ sim.disabled = nao.disabled = false; aviso(e.message); }
+  };
+  box.append(p, sim, ' ', nao);
+}
+$('formEmb').onsubmit = (ev) => {
+  ev.preventDefault();
+  const v = $('embValor').value;
+  if(v === '' || !(Number(v) >= 0)) return aviso('Digite o valor da embalagem por peça (ex.: 0,30).');
+  confirmarEmb(Math.round(Number(v) * 100) / 100);
+};
+$('embPadrao').onclick = () => confirmarEmb(null);
 
 async function carregar(){
   try{
@@ -279,9 +319,11 @@ function pintar(){
     if(q && ![p.sku, p.nome, p.fornecedor, String(p.numero)].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
+  filtrados = lista;
+  $('embInfo').textContent = `${numero(lista.length)} produto(s) na busca`;
   if(!lista.length){ box.appendChild(el('p', 'sub', 'Nenhum produto com esse filtro.')); $('btMais').hidden = true; return; }
   const t = el('table'); const cab = el('tr');
-  for(const h of ['SKU', 'Produto', 'Custo (R$)', 'Situação', 'Fornecedor', 'Anúncios', 'Estoque', ''])
+  for(const h of ['SKU', 'Produto', 'Custo (R$)', 'Embalagem (R$)', 'Situação', 'Fornecedor', 'Anúncios', 'Estoque', ''])
     cab.appendChild(el('th', null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
@@ -305,6 +347,8 @@ function linha(p){
   if(p.situacao && ![...sit.options].some((o) => o.value === p.situacao)){ const o = el('option', null, p.situacao); o.value = p.situacao; sit.appendChild(o); }
   sit.value = p.situacao || ''; sit.onchange = () => tr.classList.add('sujo');
   const forn = campo(p.fornecedor, { 'aria-label': 'Fornecedor de ' + p.sku });
+  const emb = campo(p.embalagem ?? '', { type:'number', step:'0.01', min:'0', className:'custo', placeholder:'padrão', 'aria-label': 'Embalagem de ' + p.sku });
+  emb.title = 'Custo da embalagem por peça vendida, em todas as lojas. Em branco = embalagem padrão da tela Empresa.';
 
   const tdSku = el('td', 'sku', p.sku);
   if(p.custo == null && p.uso.anuncios) tdSku.appendChild(el('span', 'chip amarelo', ' sem custo'));
@@ -327,7 +371,7 @@ function linha(p){
   bt.onclick = async () => {
     bt.disabled = true;
     try{
-      const r = await enviar('PUT', `/api/produtos/${p.numero}`, { nome: nome.value, custo: custo.value, situacao: sit.value, fornecedor: forn.value,
+      const r = await enviar('PUT', `/api/produtos/${p.numero}`, { nome: nome.value, custo: custo.value, situacao: sit.value, fornecedor: forn.value, embalagem: emb.value,
         retroativo: !retro.hidden && cbRetro.checked });
       retro.hidden = true; cbRetro.checked = false;
       Object.assign(p, r.produto);
@@ -348,7 +392,8 @@ function linha(p){
   // saldo real (tela Estoque); a soma dos anúncios do ML fica só na dica (o mesmo estoque aparece em cada anúncio/kit)
   const tdEst = el('td', 'num', p.saldo != null ? `${numero(p.saldo)} un.` : '—');
   tdEst.title = 'Saldo no estoque do painel (tela Estoque).' + (p.uso.ativos ? ` Soma do estoque dos ${numero(p.uso.ativos)} anúncios ativos do ML com este produto: ${numero(p.uso.estoque)} (cada anúncio/kit mostra o mesmo estoque, por isso a soma é maior).` : '');
-  tr.append(tdSku, td(nome), tdC, td(sit), td(forn), tdUso, tdEst, tdAc);
+  const tdE = el('td', 'num'); tdE.appendChild(emb);
+  tr.append(tdSku, td(nome), tdC, tdE, td(sit), td(forn), tdUso, tdEst, tdAc);
   return tr;
 }
 

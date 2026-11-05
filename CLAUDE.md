@@ -132,6 +132,11 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   vendedor no /costs. Com `empresa.entrega_flex` (o que o vendedor paga à empresa de entrega)
   informado: frete = entrega − bônus (sem bônus ainda: média da conta para o caso, estimado).
   Sem ele, vale o /costs (comportamento antigo).
+- Embalagem por PRODUTO (pedido do dono 05/11/2026; tela Produtos, coluna Embalagem e "Embalagem nos produtos da busca" = `POST /api/produtos/embalagem`):
+  `produtos_embalagem_hist` (1ª vez = desde sempre, troca = a partir de agora, NULL = volta à padrão), por PEÇA vendida, kit = soma das peças
+  (peça sem embalagem própria conta a padrão; nenhuma = a padrão uma vez, como antes): `custoDoSku().embalagem` + `custos.js#embalagemDe`.
+  Vale em todas as lojas: ML (custos.outros do anúncio vem antes; `embalagemDoAnuncio` no preço/promoção), Amazon, e Shopee/Leroy/Magalu
+  (produto com embalagem = por peça; sem = a caixa por pedido rateada, como antes).
 - Custo por anúncio: `custos.outros` = embalagem (NULL = padrão da empresa) e `custos.extra` =
   outro custo; `custosDe().outros_total` é a soma para as contas que usam `A.economia`.
 - Mudanças nas campanhas do Ads: o ML não tem histórico; `server.js#registrarCampanhas` compara

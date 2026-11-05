@@ -325,7 +325,7 @@ async function carregarExtras(){
       const p = i.cheio ?? i.preco;
       const lucroEm = (v) => (!(v > 0) || i.custo_unit == null ? null : CANAL === 'amazon'
         ? (i.tarifa_pct == null ? null : v - v * i.tarifa_pct - ((i.fixa_un || 0) + (i.frete_un || 0) + (i.armazem_un || 0) + i.custo_unit + (i.embalagem_unit || 0)) - v * imp)
-        : (i.taxa_pct == null ? null : v - v * i.taxa_pct - i.custo_unit - (r.embalagem_pedido || 0) - v * imp));
+        : (i.taxa_pct == null ? null : v - v * i.taxa_pct - i.custo_unit - (i.embalagem_unit ?? r.embalagem_pedido ?? 0) - v * imp));
       const lucro = lucroEm(p);
       return [i.sku, { margem: lucro == null ? null : lucro / p, produtos: i.produtos || [], lucroEm }];
     }));
