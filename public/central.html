@@ -196,8 +196,8 @@
 
   <div class="secao-tit"><h2>Produtos</h2><a href="/abc.html">Curva ABC →</a></div>
   <div class="grade-meio">
-    <section class="bloco"><h3>Mais vendidos</h3><p class="sub">Por faturamento no período, todas as lojas</p><div id="maisVendidos"></div></section>
-    <section class="bloco"><h3>Mais lucrativos</h3><p class="sub">Por margem de contribuição no período (só produtos com custo)</p><div id="maisLucrativos"></div></section>
+    <section class="bloco"><h3>Mais vendidos</h3><p class="sub" id="subVendidos">Por faturamento no período, todas as lojas</p><div id="maisVendidos"></div></section>
+    <section class="bloco"><h3>Mais lucrativos</h3><p class="sub" id="subLucrativos">Por margem de contribuição no período (só produtos com custo)</p><div id="maisLucrativos"></div></section>
   </div>
 
   <div class="secao-tit"><h2>Estoque e pendências</h2><a href="/estoque.html">Estoque →</a></div>
@@ -311,6 +311,7 @@ function kpi(rot, icone, val, nota, extra, destaque) {
 }
 function compara(atual, antes, rotulo, invertido) {
   if (antes == null || !antes || atual == null) return null;
+  if (per === 'hoje') return null;   // hoje ainda não acabou: a referência de ontem vem sem seta (pintarComercial)
   const d = (atual - antes) / Math.abs(antes); const bom = invertido ? d < 0 : d > 0;
   return el('span', 'chip ' + (Math.abs(d) < 0.005 ? '' : bom ? 'sobe' : 'desce'), `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${pct(Math.abs(d), 0)} ${rotulo}`);
 }
@@ -323,11 +324,13 @@ function pintarComercial(c, comp, rotulo) {
   const t = per === 'hoje' ? c.totalHoje : c.total;
   const ticket = t.pedidos ? t.faturamento / t.pedidos : null;
   const rotC = per === 'hoje' ? 'vs ontem' : per === 'atual' ? 'vs mesmos dias do mês anterior' : 'vs período anterior';
+  const ref = (n, fmt) => (per === 'hoje' && n ? el('span', 'chip', `ontem (dia inteiro): ${fmt(n)}`) : null);
   box.append(
     kpi(per === 'hoje' ? 'Faturamento de hoje' : `Faturamento ${nomePer(per, { rotulo })}`, 'fat', real(t.faturamento),
-      per === 'hoje' ? null : `média de ${real(t.faturamento / Math.max(1, Object.keys(Object.values(c.porCanal)[0]?.dias || {}).length || diasDe(per) || 1))} por dia`, compara(t.faturamento, comp?.faturamento, rotC), true),
-    kpi('Pedidos', 'pedidos', numero(t.pedidos), `${numero(t.unidades)} unidades`, compara(t.pedidos, comp?.pedidos, rotC)),
-    kpi('Ticket médio', 'ticket', real(ticket), 'faturamento ÷ pedidos', compara(ticket, comp?.pedidos ? comp.faturamento / comp.pedidos : null, rotC)),
+      per === 'hoje' ? 'até agora, todas as lojas' : `média de ${real(t.faturamento / Math.max(1, Object.keys(Object.values(c.porCanal)[0]?.dias || {}).length || diasDe(per) || 1))} por dia`,
+      per === 'hoje' ? ref(comp?.faturamento, real) : compara(t.faturamento, comp?.faturamento, rotC), true),
+    kpi('Pedidos', 'pedidos', numero(t.pedidos), `${numero(t.unidades)} unidades`, per === 'hoje' ? ref(comp?.pedidos, numero) : compara(t.pedidos, comp?.pedidos, rotC)),
+    kpi('Ticket médio', 'ticket', real(ticket), 'faturamento ÷ pedidos', per === 'hoje' ? ref(comp?.pedidos ? comp.faturamento / comp.pedidos : null, real) : compara(ticket, comp?.pedidos ? comp.faturamento / comp.pedidos : null, rotC)),
   );
   if (per !== 'hoje') box.appendChild(kpi('Faturamento de hoje', 'hoje', real(c.totalHoje.faturamento), `${numero(c.totalHoje.pedidos)} pedido(s) até agora`));
   else box.appendChild(kpi('Unidades vendidas', 'un', numero(t.unidades), 'hoje, todas as lojas'));
@@ -347,8 +350,8 @@ function pintarFinanceiro(c, placar) {
   );
   if (placar) {
     const pd = placar.dias;
-    box.append(kpi('Investimento em Ads', 'ads', real(ads), `últimos ${pd} dias` + (placar.total.tacos != null ? ` · TACOS ${pct(placar.total.tacos)}` : '')),
-      kpi('Lucro depois do Ads', 'lucro', real(placar.total.lucro_pos_ads), `últimos ${pd} dias · ${placar.total.faturamento ? pct(placar.total.lucro_pos_ads / placar.total.faturamento) + ' do faturamento' : ''}`));
+    box.append(kpi(`Investimento em Ads (${pd} dias)`, 'ads', real(ads), placar.total.tacos != null ? `TACOS ${pct(placar.total.tacos)} do faturamento` : null),
+      kpi(`Lucro depois do Ads (${pd} dias)`, 'lucro', real(placar.total.lucro_pos_ads), placar.total.faturamento ? `${pct(placar.total.lucro_pos_ads / placar.total.faturamento)} do faturamento dos ${pd} dias` : null));
   } else {
     const k = kpi('Investimento em Ads', 'ads', '…', 'lendo o Ads das lojas'); k.id = 'kpiAdsCarregando'; box.appendChild(k);
   }
@@ -504,6 +507,8 @@ function pintarAds(placar, campanhas) {
 }
 
 function pintarProdutos(c) {
+  for (const [id, base] of [['subVendidos', 'Por faturamento'], ['subLucrativos', 'Por margem de contribuição']])
+    $(id).textContent = `${base} ${per === 'hoje' ? 'nos últimos 7 dias' : 'no período'}, todas as lojas` + (id === 'subLucrativos' ? ' (só produtos com custo)' : '');
   const lista = (id, ordenados, valor) => {
     const box = $(id); box.innerHTML = '';
     if (!ordenados.length) { vazioEm(id, 'Nenhum produto no período'); return; }
@@ -529,7 +534,7 @@ function pintarEstoque(at, capital, c) {
     if (capital?.resumo) { const p = capital.resumo.parado_90; box.appendChild(kpi('Sem giro (90 dias)', 'parado', real(p.valor), `${numero(p.produtos)} produto(s) sem saída`)); }
   }
   const mais = [...(c?.produtos || [])].sort((a, b) => b.unidades - a.unidades)[0];
-  if (mais) box.appendChild(kpi('Maior saída no período', 'un', numero(mais.unidades) + ' un.', mais.titulo || mais.sku));
+  if (mais) box.appendChild(kpi(per === 'hoje' ? 'Maior saída (7 dias)' : 'Maior saída no período', 'un', numero(mais.unidades) + ' un.', mais.titulo || mais.sku));
   // atenção
   const ul = $('atencao'); ul.innerHTML = '';
   const item = (txt, n, link, tom) => { if (!n) return; const li = el('li'); const a = el('a'); a.href = link; a.append(el('span', 'ic' + (tom ? ' ' + tom : ''), '!'), txt, el('b', null, numero(n))); li.appendChild(a); ul.appendChild(li); };
@@ -573,15 +578,24 @@ async function carregar(recarregar) {
   const repintar = () => {
     if (!base || minha !== geracao) return;
     const c = consolidar(base); const cmp = comparacao(c, compara, base.rotulo);
-    pintarComercial(c, cmp?.total, base.rotulo); pintarFinanceiro(c, placar); pintarEvolucao(c); pintarParticipacao(c); pintarTabela(c, placar, cmp?.canal);
+    pintarComercial(c, cmp?.total, base.rotulo); pintarFinanceiro(c, placar); pintarEvolucao(c); pintarParticipacao(c); pintarTabela(c, placar, per === 'hoje' ? null : cmp?.canal);
     pintarCascata(c, placar); pintarProdutos(c); pintarEstoque(atencao, capital, c);
     if (placar) pintarAds(placar, campanhas);
     ultimo = c;
   };
   // em paralelo: Ads (placar), atenção, campanhas e estoque parado (quem tem o módulo)
   const diasAds = [7, 15, 30].includes(Number(per)) ? Number(per) : per === 'hoje' ? 7 : 30;
-  api(`/api/placar?dias=${diasAds}${recarregar ? '&recarregar=1' : ''}`).then((p) => { placar = p; repintar(); if (!base) pintarAds(p, campanhas); })
-    .catch((e) => { if (minha === geracao) { vazioEm('blocoAds', 'Não li o Ads agora', e.message); $('kpiAdsCarregando')?.remove(); } });
+  // o placar lê em segundo plano: a rota responde "pronto: false" e a tela pergunta de novo (cada pergunta espera até 20 s), como em Promoções e Ads
+  (async () => {
+    let p = null;
+    for (let i = 0; i < 12; i++) {
+      p = await api(`/api/placar?dias=${diasAds}${recarregar && i === 0 ? '&recarregar=1' : ''}`);
+      if (minha !== geracao) return;
+      if (p.lojas) { placar = p; repintar(); }
+      if (p.pronto) break;
+    }
+    if (!p?.lojas) throw new Error(p?.erro || 'o Ads ainda está sendo lido; clique em Atualizar daqui a pouco');
+  })().catch((e) => { if (minha === geracao) { vazioEm('blocoAds', 'Não li o Ads agora', e.message); $('kpiAdsCarregando')?.remove(); } });
   api('/api/contas/atencao').then((a) => { atencao = a; repintar(); }).catch(() => { atencao = {}; repintar(); });
   const pode = (pg) => eu?.admin || (eu?.paginas || []).includes(pg);
   if (pode('/ads.html')) api(`/api/ads/historico?dias=${Math.max(7, diasAds)}`).then((h) => {
