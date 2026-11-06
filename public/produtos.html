@@ -64,6 +64,7 @@
   #atTabela input[type=checkbox]{width:16px;height:16px}
   #atTabela td.res{font-size:11px;white-space:normal;max-width:220px}
   .troca{display:grid;grid-template-columns:200px 200px auto;gap:8px;align-items:end;justify-content:start;margin-bottom:12px}
+  @media (max-width:560px){.troca{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.troca .bt,.troca .todas-lojas{grid-column:1/-1}.troca input{min-width:0;width:100%}}
   .troca label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
   .troca input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5dbe5;border-radius:8px;text-transform:uppercase}
   .troca-barra{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:13px;position:sticky;top:0;background:var(--card);padding:6px 0;z-index:1}
@@ -81,7 +82,7 @@
   .comp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .comp input{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #d5dbe5;border-radius:8px;width:120px;text-transform:uppercase;background:#fff}
   .ok-comp{font-size:12px;color:#0b6b33;margin-top:4px}
-  @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:1fr 1fr} }
+  @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .novo input,.novo select{min-width:0;width:100%} }
   label.retro-custo{display:block;font-size:11px;font-weight:400;color:var(--muted);margin-top:4px;white-space:nowrap;text-align:left}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
