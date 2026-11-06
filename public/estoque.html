@@ -79,6 +79,23 @@
   @media print{ body *{visibility:hidden} #impressaoPedido,#impressaoPedido *{visibility:visible} #impressaoPedido{position:absolute;left:0;top:0;width:100%} }
   #impressaoPedido{display:none}
   @media print{ #impressaoPedido{display:block;font:12pt Arial} #impressaoPedido table{width:100%;border-collapse:collapse} #impressaoPedido td,#impressaoPedido th{border:1px solid #000;padding:4px 6px} }
+  /* Reorganização (06/11/2026): abas numa linha em grupos, aviso da baixa compacto, colunas de reposição opcionais */
+  .abas{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:4px;align-items:center}
+  .abas button{white-space:nowrap;flex:none}
+  .abas .aba-sep{flex:none;width:1px;align-self:stretch;margin:4px 6px;background:var(--line)}
+  .aviso-caixa{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+  .aviso-caixa .ponto{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex:none}
+  .aviso-caixa.ok .ponto{background:#16a34a}
+  .aviso-caixa details{flex:1 1 100%}
+  .aviso-caixa summary{cursor:pointer;font-weight:600}
+  .aviso-caixa ul{margin:6px 0 0;padding-left:18px}
+  .aviso-caixa li{margin:2px 0}
+  [data-painel="saldo"] .filtros #sBusca{flex:1 1 260px}
+  [data-painel="saldo"] .filtros .acoes-dir{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  #btColunas[aria-pressed="true"]{border-color:var(--brand);color:var(--brand)}
+  #sLista:not(.todas) table :is(th,td):is(:nth-child(7),:nth-child(8),:nth-child(12),:nth-child(14)){display:none}
+  #sLista table :is(th,td):first-child{position:sticky;left:0;z-index:1;background:var(--card)}
+  #sLista table thead th:first-child{z-index:2}
 </style>
 </head>
 <body>
@@ -99,9 +116,11 @@
     <button type="button" role="tab" data-aba="lancar" aria-selected="false">Lançar entrada/saída</button>
     <button type="button" role="tab" data-aba="defeitos" aria-selected="false">Defeitos (troca)</button>
     <button type="button" role="tab" data-aba="anuncios" aria-selected="false">Estoque nos anúncios</button>
+    <span class="aba-sep" aria-hidden="true"></span>
     <button type="button" role="tab" data-aba="movs" aria-selected="false">Movimentações</button>
     <button type="button" role="tab" data-aba="rel" aria-selected="false">Relatórios</button>
     <button type="button" role="tab" data-aba="contagem" aria-selected="false">Contagem</button>
+    <span class="aba-sep" aria-hidden="true"></span>
     <button type="button" role="tab" data-aba="compras" aria-selected="false">Compras</button>
     <button type="button" role="tab" data-aba="cadastro" aria-selected="false">Cadastro e fornecedores</button>
     <button type="button" role="tab" data-aba="importar" aria-selected="false" id="abaImportar">Importar planilha</button>
@@ -117,9 +136,12 @@
       <select id="sForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sAtivos" checked> Só ativos</label>
       <label style="font-size:13px;display:flex;gap:6px;align-items:center" title="Produto que não vai mais ser comprado (descontinuado ou fornecedor descontinuado) e ainda tem saldo"><input type="checkbox" id="sDescEst"> Descontinuado com estoque</label>
+      <span class="acoes-dir">
       <label style="font-size:13px;display:flex;gap:6px;align-items:center" title="Peças que ficam guardadas: não vão para os anúncios. Vale para todo produto sem um valor próprio na coluna Segurança.">Segurança padrão <input id="sSegPadrao" type="number" min="0" step="1" style="width:64px"></label>
+      <button type="button" class="bt" id="btColunas" aria-pressed="false" title="Mostra também Mínimo, Máximo, Custo médio e Dias">Todas as colunas</button>
       <button type="button" class="bt" id="sCsv">Baixar CSV</button>
       <button type="button" class="bt" id="sReler">Dar baixa agora</button>
+      </span>
     </div>
     <div class="tabela-rolagem" id="sLista"><p class="carregando">Carregando…</p></div>
     <details id="pendBox" class="escondido" style="margin-top:12px"><summary id="pendTit"></summary><div class="tabela-rolagem" id="pendLista"></div></details>
@@ -699,8 +721,15 @@ async function carregarSaldo(recarregar){
   const caixa = el('div', 'aviso-caixa' + (visao.inicio ? ' ok' : ''));
   if(!visao.inicio) caixa.textContent = 'A baixa automática ainda não está ligada: o saldo começa na contagem física. Vá em "Contagem", conte os produtos e clique em "Finalizar contagem". '
     + (visao.importado_em ? `Planilha importada em ${quando(visao.importado_em)}.` : 'Antes, importe a planilha (aba "Importar planilha").');
-  else caixa.textContent = `Baixa automática ligada desde ${quando(visao.inicio)} (ML, Shopee, Amazon, Leroy e Magalu; Full e FBA não baixam). Última conferência: ${quando(visao.ultima_baixa)}${visao.baixando ? ' — conferindo agora…' : ''}.`
-    + (visao.erros?.length ? ' Não consegui ler: ' + visao.erros.join(' · ') : '');
+  else {
+    caixa.append(el('span', 'ponto'), el('span', null, `Baixa automática ligada desde ${quando(visao.inicio)} (ML, Shopee, Amazon, Leroy e Magalu; Full e FBA não baixam)`),
+      el('b', null, `Última conferência: ${quando(visao.ultima_baixa)}${visao.baixando ? ' — conferindo agora…' : ''}`));
+    if(visao.erros?.length){
+      caixa.classList.remove('ok');
+      const d = el('details'); d.appendChild(el('summary', null, `${visao.erros.length} leitura(s) com erro nesta conferência — ver detalhes`));
+      const ul = el('ul'); for(const e of visao.erros) ul.appendChild(el('li', null, e)); d.appendChild(ul); caixa.appendChild(d);
+    }
+  }
   sb.appendChild(caixa);
   const r = visao.resumo, cs = $('cartoes'); cs.innerHTML = '';
   // cartão com status (string; '' = todos os ativos) vira atalho: filtra a lista por ele e rola até ela
@@ -781,6 +810,11 @@ $('sSegPadrao').onchange = async () => {
   try{ await post('/api/estoque/seguranca-padrao', { qtd: Number(v) }, 'PUT'); aviso(`Segurança padrão: ${v} peça(s).`, 'ok'); carregarSaldo(); }catch(e){ aviso(e.message); }
 };
 $('sReler').onclick = () => carregarSaldo(true);
+{
+  const colunas = (sim) => { $('sLista').classList.toggle('todas', sim); $('btColunas').setAttribute('aria-pressed', String(sim)); try{ localStorage.setItem('painel.estoque.colunas', sim ? '1' : '0'); }catch{} };
+  let ini = false; try{ ini = localStorage.getItem('painel.estoque.colunas') === '1'; }catch{}
+  colunas(ini); $('btColunas').onclick = () => colunas(!$('sLista').classList.contains('todas'));
+}
 $('sCsv').onclick = () => csv(`estoque-${hoje()}.csv`, ['SKU', 'Produto', 'Fornecedor', 'Situação', 'Saldo', 'Saídas 6m', 'Média/mês', 'Prazo (meses)', 'Mínimo', 'Máximo', 'Em pedido', 'Sugestão', 'Status', 'Custo médio', 'Valor', 'Dias'],
   saldoFiltrado().map((p) => [p.sku, p.nome, p.fornecedor, p.situacao, p.saldo, p.saidas6m, String(p.media).replace('.', ','), p.prazo, p.minimo, p.maximo, p.em_pedido, p.sugestao, p.status,
     p.custo_medio == null ? '' : String(p.custo_medio).replace('.', ','), p.valor == null ? '' : String(p.valor).replace('.', ','), p.dias ?? '']));
