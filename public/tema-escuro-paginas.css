@@ -284,6 +284,7 @@ html[data-tema="escuro"][data-pagina="devolucoes"] .chip.verde{background:hsla(1
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.azul{background:hsla(218,90%,60%,.14);color:hsl(216,72%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="devolucoes"] .chip.vermelho{background:hsla(5,79%,60%,.14);color:hsl(3,71%,72%)}
+html[data-tema="escuro"][data-pagina="devolucoes"] .abas-dev .qtd.alerta{background:hsla(15,88%,60%,.14);color:hsl(15,71%,72%)}
 /* dre.html */
 html[data-tema="escuro"][data-pagina="dre"] td.neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="dre"] tr.total td{border-top:2px solid var(--line)}
