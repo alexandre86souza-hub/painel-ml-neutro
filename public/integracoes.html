@@ -77,15 +77,16 @@
 // telas próprias. Tela do administrador.
 const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 const ESTADO = { ok: 'Conectada', atencao: 'Precisa de atenção', erro: 'Com erro', off: 'Não conectada' };
+const ESTADO_EMAIL = { ok: 'Configurado', erro: 'Com erro', off: 'Não configurado' };
 const situacoes = [];
 
-function cartao({ nome, sigla, cor, desc, estado, linhas = [], contas = null, aviso = null, acoes = [], teste = null }) {
+function cartao({ nome, sigla, cor, desc, estado, linhas = [], contas = null, aviso = null, acoes = [], teste = null, rotulos = null }) {
   situacoes.push(estado);
   const c = el('section', 'integ'); c.setAttribute('aria-label', nome);
   const topo = el('div', 'integ-topo');
   const logo = el('div', 'logo', sigla); logo.style.background = cor; logo.setAttribute('aria-hidden', 'true');
   const t = el('div'); t.append(el('h2', null, nome), el('p', null, desc));
-  const st = el('span', 'estado ' + estado); st.append(el('i', 'ponto ' + estado), ESTADO[estado]);
+  const st = el('span', 'estado ' + estado); st.append(el('i', 'ponto ' + estado), (rotulos || ESTADO)[estado]);
   topo.append(logo, t, st); c.appendChild(topo);
   if (linhas.length) { const dl = el('dl'); for (const [k, v] of linhas) dl.append(el('dt', null, k), el('dd', null, v ?? '—')); c.appendChild(dl); }
   if (contas?.length) { const ul = el('ul', 'contas'); for (const [n, s, est] of contas) { const li = el('li'); li.append(el('i', 'ponto ' + (est || 'ok')), n); if (s) li.appendChild(el('small', null, s)); ul.appendChild(li); } c.appendChild(ul); }
@@ -142,21 +143,21 @@ async function carregar() {
   // Shopee
   {
     const lojas = shopee.lojas || [];
-    const estado = shopee._erro ? 'erro' : !shopee.tem_chave ? 'off' : !lojas.length ? 'atencao' : 'ok';
+    const estado = shopee._erro ? 'erro' : !shopee.tem_chave ? (lojas.length ? 'atencao' : 'off') : !lojas.length ? 'atencao' : 'ok';
     cartao({ nome: 'Shopee', sigla: 'SH', cor: '#d95926', desc: 'Pedidos, repasse, anúncios, campanhas, Ads e estoque', estado,
       linhas: [['Aplicativo (Partner ID)', shopee.partner_id ? 'configurado' : 'falta configurar'], ['Ambiente', shopee.ambiente || '—'], ['Lojas', String(lojas.length)]],
       contas: lojas.map((l) => [l.nome || 'Loja ' + l.shop_id, 'token renovado ' + dataHora(l.renovada_em || l.conectada_em)]),
-      aviso: shopee.tem_chave && !lojas.length ? { texto: 'Aplicativo pronto; falta autorizar uma loja.' } : null,
+      aviso: shopee.tem_chave && !lojas.length ? { texto: 'Aplicativo pronto; falta autorizar uma loja.' } : !shopee.tem_chave && lojas.length ? { texto: 'Lojas autorizadas, mas falta a Partner Key do aplicativo.' } : null,
       acoes: [[lojas.length ? 'Gerenciar lojas' : 'Conectar loja', '/shopee.html', !lojas.length]],
       teste: lojas.length ? async () => { const rs = []; for (const l of lojas) rs.push([l.nome, lerDiagnostico(await api(`/api/shopee/diagnostico?loja=${l.shop_id}&dias=1`))]);
         const ruim = rs.filter(([, r]) => !r.ok); return ruim.length ? { ok: false, texto: ruim.map(([n, r]) => `${n}: ${r.texto}`).join(' · ') } : { ok: true, texto: `${rs.length} loja(s) respondendo.` }; } : null });
   }
   // Amazon (SP-API)
   {
-    const estado = amazon._erro ? 'erro' : amazon.conectada_em ? 'ok' : amazon.client_id ? 'atencao' : 'off';
+    const estado = amazon._erro ? 'erro' : amazon.conectada_em ? (amazon.tem_refresh && amazon.tem_segredo ? 'ok' : 'atencao') : amazon.client_id ? 'atencao' : 'off';
     cartao({ nome: 'Amazon', sigla: 'AZ', cor: '#6250d6', desc: 'Vendas (financeiro), pedidos, FBA, anúncios e concorrência', estado,
       linhas: [['Vendedor', amazon.vendedor || '—'], ['Aplicativo', amazon.client_id ? 'configurado' : 'falta configurar'], ['Autorização', amazon.tem_refresh ? 'ativa' : 'falta'], ['Conectada em', dataHora(amazon.conectada_em)]],
-      aviso: !amazon.conectada_em && amazon.client_id ? { texto: 'Falta testar e gravar as credenciais na tela da Amazon.' } : null,
+      aviso: !amazon.conectada_em && amazon.client_id ? { texto: 'Falta testar e gravar as credenciais na tela da Amazon.' } : amazon.conectada_em && !(amazon.tem_refresh && amazon.tem_segredo) ? { texto: 'Falta o Client Secret ou o Refresh Token: grave de novo na tela da Amazon.' } : null,
       acoes: [[amazon.conectada_em ? 'Configuração' : 'Conectar', '/amazon.html', !amazon.conectada_em]],
       teste: amazon.conectada_em ? async () => lerDiagnostico(await api('/api/amazon/diagnostico?dias=1')) : null });
   }
@@ -210,7 +211,7 @@ async function carregar() {
   // E-mail de alertas
   {
     const estado = email._erro ? 'erro' : !email.tem_senha ? 'off' : email.erro ? 'erro' : 'ok';
-    cartao({ nome: 'E-mail de alertas', sigla: '@', cor: '#0e7490', desc: 'Alertas a cada 5 minutos e o relatório do dia às 7h30', estado,
+    cartao({ nome: 'E-mail de alertas', sigla: '@', cor: '#0e7490', desc: 'Alertas a cada 5 minutos e o relatório do dia às 7h30', estado, rotulos: ESTADO_EMAIL,
       linhas: [['Servidor', email.host ? `${email.host}:${email.porta}` : '—'], ['Destinatários', email.para ? String(email.para.split(',').filter(Boolean).length) : '0'],
         ['Último relatório', dataHora(email.ultimo_relatorio)]],
       aviso: email.erro ? { texto: 'Último envio falhou: ' + email.erro, tipo: 'erro' } : null,
