@@ -56,6 +56,23 @@
   .modelo b{font-size:14px}.modelo p{margin:4px 0 6px;font-size:13px;color:#334155;white-space:pre-wrap}
   .bt.pequeno{padding:4px 10px;font-size:12px}
   .vazio{color:#64748b;padding:14px}
+  /* Reorganização (06/11/2026): cartões que filtram, contagem e busca, tempo de espera em cada conversa, mensagens padrão recolhidas */
+  #cartoes .cartao.atalho{cursor:pointer}
+  #cartoes .cartao.atalho[aria-pressed="true"]{outline:2px solid var(--brand,#2563eb);outline-offset:1px}
+  .filtros #busca{flex:1 1 220px;min-width:180px}
+  .seg button .qtd{font-weight:500;opacity:.75;margin-left:4px}
+  .item .espera{margin-left:auto;font-weight:700;white-space:nowrap}
+  .item.velha{box-shadow:inset 3px 0 0 #e0a100}
+  .item.muito-velha{box-shadow:inset 3px 0 0 #d92d20}
+  .item.muito-velha .espera{color:#d92d20}
+  .item.velha .espera{color:#b07d00}
+  .item[aria-current="true"].velha,.item[aria-current="true"].muito-velha{box-shadow:inset 3px 0 0 #2563eb}
+  details.modelos-box > summary{cursor:pointer;list-style:none;display:flex;gap:10px;align-items:center}
+  details.modelos-box > summary::-webkit-details-marker{display:none}
+  details.modelos-box > summary h2{margin:0}
+  details.modelos-box > summary::after{content:"▸";color:var(--muted);transition:transform .15s}
+  details.modelos-box[open] > summary::after{transform:rotate(90deg)}
+  details.modelos-box > summary .qtd{font-size:12px;font-weight:700;border-radius:999px;padding:1px 8px;background:var(--line);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -91,6 +108,8 @@
         <button type="button" data-tipo="chat" aria-pressed="false">Chat Shopee</button>
       </div>
       <select id="selFiltroConta" aria-label="Conta"><option value="">Todas as contas</option></select>
+      <input type="search" id="busca" placeholder="Buscar texto, produto, comprador ou pedido" aria-label="Buscar conversa">
+      <select id="selOrdem" aria-label="Ordem"><option value="antigas">Esperando há mais tempo primeiro</option><option value="novas">Mais novas primeiro</option></select>
     </div>
     <div class="caixa">
       <div class="lista" id="lista"><p class="vazio">Carregando…</p></div>
@@ -99,8 +118,8 @@
     <p class="sub" id="erros"></p>
   </section>
 
-  <section class="bloco modelos">
-    <h2>Mensagens padrão</h2>
+  <details class="bloco modelos modelos-box" id="boxModelos">
+    <summary><h2>Mensagens padrão</h2><span class="qtd" id="qModelos"></span></summary>
     <p class="sub">Salve as respostas que você usa sempre. Na hora de responder, escolha uma: ela entra no campo de resposta e você pode editar antes de enviar.
       Use <b>{comprador}</b>, <b>{produto}</b> e <b>{pedido}</b> para o painel preencher sozinho.</p>
     <form class="form" id="formModelo">
@@ -117,7 +136,7 @@
         <button type="button" class="bt" id="mCancelar" hidden>Cancelar edição</button></div>
     </form>
     <div id="listaModelos"></div>
-  </section>
+  </details>
 </main>
   </div>
 </div>
@@ -134,8 +153,10 @@ const quando = (iso) => {
   return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
 };
 const post = (caminho, corpo) => api(caminho, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(corpo) });
-function cartao(rot, valor, nota, destaque){
+function cartao(rot, valor, nota, destaque, tipo){
   const c = el('div', 'cartao' + (destaque ? ' destaque' : ''));
+  if(tipo != null){ c.classList.add('atalho'); c.dataset.tipo = tipo; c.tabIndex = 0; c.setAttribute('role', 'button'); c.title = 'Clique para ver só estas';
+    c.onclick = c.onkeydown = (ev) => { if(ev.type === 'keydown' && ev.key !== 'Enter') return; escolherTipo(tipo); }; }
   const n = el('p', 'nota'); if(nota instanceof Node) n.appendChild(nota); else n.textContent = nota || '';
   c.append(el('p', 'rotulo', rot), el('div', 'valor', valor), n); return c;
 }
@@ -146,11 +167,11 @@ async function carregar(recarregar){
   try{
     dados = await api('/api/mensagens' + (recarregar ? '?recarregar=1' : ''));
     const p = dados.por_tipo, box = $('cartoes'); box.innerHTML = '';
-    box.append(cartao('Esperando resposta', numero(dados.itens.length), 'em todas as contas', true),
-      cartao('Perguntas', numero(p.pergunta), 'antes da compra (ML)'),
-      cartao('Pós-venda', numero(p.mensagem), 'mensagens de quem comprou (ML)'),
-      cartao('Reclamações', numero(p.reclamacao), 'em que a vez é sua (ML)'),
-      cartao('Chat Shopee', numero(p.chat), 'conversas sem resposta'));
+    box.append(cartao('Esperando resposta', numero(dados.itens.length), 'em todas as contas', true, ''),
+      cartao('Perguntas', numero(p.pergunta), 'antes da compra (ML)', false, 'pergunta'),
+      cartao('Pós-venda', numero(p.mensagem), 'mensagens de quem comprou (ML)', false, 'mensagem'),
+      cartao('Reclamações', numero(p.reclamacao), 'em que a vez é sua (ML)', false, 'reclamacao'),
+      cartao('Chat Shopee', numero(p.chat), 'conversas sem resposta', false, 'chat'));
     if(dados.amazon){ const a = el('a', null, 'Abrir no Seller Central'); a.href = dados.amazon.link; a.target = '_blank'; a.rel = 'noopener';
       const n = el('span'); n.append(document.createTextNode(dados.amazon.nota + ' '), a); box.appendChild(cartao('Amazon', '—', n)); }
     const contas = new Map(dados.itens.map((i) => [i.canal + ':' + i.conta, i.conta_nome]));
@@ -161,16 +182,41 @@ async function carregar(recarregar){
     pintarLista();
   }catch(e){ $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'vazio', 'Não foi possível carregar: ' + e.message)); }
 }
+// tempo esperando: mais de 12 h fica amarelo, mais de 24 h vermelho (pergunta sem resposta derruba a venda)
+function espera(iso){
+  if(!iso) return null;
+  const h = (Date.now() - new Date(iso).getTime()) / 36e5;
+  if(!(h >= 0)) return null;
+  const txt = h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`;
+  return { h, txt, classe: h >= 24 ? 'muito-velha' : h >= 12 ? 'velha' : '' };
+}
+function escolherTipo(tipo){
+  filtroTipo = tipo;
+  for(const x of $('segTipo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x.dataset.tipo === tipo));
+  if(dados) pintarLista();
+}
 function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   const fc = $('selFiltroConta').value;
-  const ls = dados.itens.filter((i) => (!filtroTipo || i.tipo === filtroTipo) && (!fc || i.canal + ':' + i.conta === fc));
+  const q = ($('busca').value || '').trim().toLowerCase();
+  const daConta = dados.itens.filter((i) => (!fc || i.canal + ':' + i.conta === fc)
+    && (!q || [i.texto, i.produto, i.comprador, i.pedido && String(i.pedido), i.conta_nome].some((t) => (t || '').toLowerCase().includes(q))));
+  for(const b of $('segTipo').querySelectorAll('button')){
+    let s0 = b.querySelector('.qtd'); if(!s0){ s0 = el('span', 'qtd'); b.appendChild(s0); }
+    s0.textContent = `(${numero(daConta.filter((i) => !b.dataset.tipo || i.tipo === b.dataset.tipo).length)})`;
+  }
+  for(const c of document.querySelectorAll('#cartoes .cartao.atalho')) c.setAttribute('aria-pressed', String(c.dataset.tipo === filtroTipo));
+  const ls = daConta.filter((i) => !filtroTipo || i.tipo === filtroTipo);
+  const t0 = (i) => (i.data ? new Date(i.data).getTime() : 0);
+  ls.sort((a, b) => ($('selOrdem').value === 'novas' ? t0(b) - t0(a) : t0(a) - t0(b)));
   for(const i of ls){
-    const b = el('button', 'item'); b.type = 'button';
+    const es = espera(i.data);
+    const b = el('button', 'item' + (es && es.classe ? ' ' + es.classe : '')); b.type = 'button';
     if(aberto && aberto.canal === i.canal && aberto.conta === i.conta && aberto.tipo === i.tipo && aberto.id === i.id) b.setAttribute('aria-current', 'true');
     const top = el('div', 'top');
     top.append(el('span', 'chip ' + (i.canal === 'ml' ? 'ml' : 'shopee'), i.conta_nome), el('span', 'chip ' + TIPOS[i.tipo][1], TIPOS[i.tipo][0]), document.createTextNode(quando(i.data)));
     if(i.prazo) top.appendChild(el('span', 'chip rec', 'prazo ' + new Date(i.prazo).toLocaleDateString('pt-BR')));
+    if(es){ const s1 = el('span', 'espera', 'há ' + es.txt); s1.title = 'Esperando a sua resposta'; top.appendChild(s1); }
     b.append(top, el('p', 'tx', i.texto || ''), el('p', 'pr', [i.produto, i.comprador].filter(Boolean).join(' · ')));
     b.onclick = () => abrir(i);
     box.appendChild(b);
@@ -180,6 +226,7 @@ function pintarLista(){
 
 async function abrir(i){
   aberto = i; pintarLista();
+  if(matchMedia('(max-width:900px)').matches) $('conversa').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const box = $('conversa'); box.innerHTML = '';
   const cab = el('h3', null, i.produto || (i.tipo === 'chat' ? 'Conversa na Shopee' : TIPOS[i.tipo][0]));
   const meta = el('p', 'meta', [i.conta_nome, TIPOS[i.tipo][0], i.pedido && `pedido ${i.pedido}`, i.comprador && `comprador ${i.comprador}`].filter(Boolean).join(' · ') + ' · ');
@@ -270,12 +317,13 @@ const abrirDeNovo = () => { const sm = $('conversa').querySelector('select.sel-m
 async function carregarModelos(){ try{ modelos = (await api('/api/mensagens/modelos')).modelos; pintarModelos(); }catch(e){ $('listaModelos').textContent = e.message; } }
 function pintarModelos(){
   const box = $('listaModelos'); box.innerHTML = '';
+  $('qModelos').textContent = numero(modelos.length);
   for(const m of modelos){
     const d = el('div', 'modelo');
     const t = el('div'); t.append(el('b', null, m.titulo), document.createTextNode(' '), el('span', 'chip', m.tipo ? TIPOS[m.tipo][0] : 'qualquer conversa'),
       document.createTextNode(m.usos ? `  usada ${m.usos} vez(es)` : ''));
     const ed = el('button', 'bt pequeno', 'Editar'); ed.type = 'button';
-    ed.onclick = () => { editando = m.id; $('mTitulo').value = m.titulo; $('mTipo').value = m.tipo || ''; $('mTexto').value = m.texto; $('mCancelar').hidden = false; $('mSalvar').textContent = 'Salvar alterações'; $('mTitulo').focus(); };
+    ed.onclick = () => { $('boxModelos').open = true; editando = m.id; $('mTitulo').value = m.titulo; $('mTipo').value = m.tipo || ''; $('mTexto').value = m.texto; $('mCancelar').hidden = false; $('mSalvar').textContent = 'Salvar alterações'; $('mTitulo').focus(); };
     const ap = el('button', 'bt pequeno', 'Apagar'); ap.type = 'button';
     ap.onclick = async () => { if(!confirm(`Apagar a mensagem padrão "${m.titulo}"?`)) return; modelos = (await post('/api/mensagens/modelos/apagar', { id: m.id })).modelos; pintarModelos(); };
     const ac = el('div', 'acoes'); ac.append(ed, ap);
@@ -293,9 +341,10 @@ $('formModelo').onsubmit = async (ev) => {
   }catch(e){ aviso(e.message); }
 };
 
-for(const b of $('segTipo').querySelectorAll('button')){
-  b.onclick = () => { filtroTipo = b.dataset.tipo; for(const x of $('segTipo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); if(dados) pintarLista(); };
-}
+for(const b of $('segTipo').querySelectorAll('button')) b.onclick = () => escolherTipo(b.dataset.tipo);
+$('busca').oninput = () => { if(dados) pintarLista(); };
+$('selOrdem').onchange = () => { try{ localStorage.setItem('painel.mensagens.ordem', $('selOrdem').value); }catch{} if(dados) pintarLista(); };
+try{ if(localStorage.getItem('painel.mensagens.ordem') === 'novas') $('selOrdem').value = 'novas'; }catch{}
 $('selFiltroConta').onchange = () => { if(dados) pintarLista(); };
 $('btReler').onclick = () => carregar(true);
 carregarModelos();

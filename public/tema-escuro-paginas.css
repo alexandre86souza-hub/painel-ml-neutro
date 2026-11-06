@@ -482,6 +482,7 @@ html[data-tema="escuro"][data-pagina="mensagens"] .modelos textarea{border:1px s
 html[data-tema="escuro"][data-pagina="mensagens"] .conta-car.passou{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="mensagens"] .modelo{border:1px solid var(--line);background:var(--card)}
 html[data-tema="escuro"][data-pagina="mensagens"] .modelo p{color:hsl(215,25%,72%)}
+html[data-tema="escuro"][data-pagina="mensagens"] .item.velha .espera{color:hsl(43,95%,72%)}
 /* metas.html */
 html[data-tema="escuro"][data-pagina="metas"] .abas button{border:1px solid hsla(218,24%,60%,.35);background:var(--card);color:hsl(222,45%,72%)}
 html[data-tema="escuro"][data-pagina="metas"] .linha-ctl label{color:var(--muted)}
