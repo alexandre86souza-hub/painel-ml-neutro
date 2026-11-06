@@ -368,7 +368,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   /shipments/{id}/sla (prazo de despacho), fora os substatus dropped_off/picked_up/in_hub/in_packing_list, atuais OU no substatus_history (`jaSaiuMl`: já saiu,
   mas o ML só muda para shipped depois); Shopee READY_TO_SHIP/PROCESSED (ship_by_date, recipient_address.name);
   Magalu entregas não despachadas (`mg(…, { pessoais: true })` só aqui); Leroy OR11 SHIPPING. Do cliente só o NOME
-  (vai impresso, em letra grande, para as câmeras). Cada item sai com a foto de capa (28 mm, preto e branco de alto contraste para a térmica: `brightness(.6) contrast(6)` — cinza claro sumia no papel, 06/11/2026): ML pictures[0] por /items?ids= (20 por chamada, memória), Shopee
+  (vai impresso, em letra grande, para as câmeras). Cada item sai com a foto de capa (28 mm, preto e branco de alto contraste para a térmica: `brightness(.72) contrast(4.5)` — cinza claro sumia no papel e .6/6 ficou escuro demais, 06/11/2026): ML pictures[0] por /items?ids= (20 por chamada, memória), Shopee
   image_info, Magalu info.images, Leroy product_medias ({host}/mmp…), Amazon amazon_fotos; a impressão espera as fotos (até 4 s). Impressão: @page 80 mm pelo diálogo do navegador; depois o vendedor
   confirma e a comanda vira "impressa" (`POST /api/comandas/impressas`). Comanda nova: `public/comandas-aviso.js`
   (injetado pelo sino.js em todas as telas, só para quem abre /comandas.html) confere `/api/comandas` a cada minuto e, para
