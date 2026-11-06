@@ -385,3 +385,15 @@ html[data-tema="escuro"][data-tema] button[aria-selected="true"]:not(.nav-tit),h
   .kpi{min-height:96px!important;padding:12px!important}
   .kpi .val{font-size:19px!important}
 }
+/* link "conectar Mercado Livre" escondido (hidden) continua escondido: o display do botão do topo não pode desfazer o [hidden] */
+html[data-tema] #barraContas > a[hidden],html[data-tema] .cab-dir [hidden]{display:none!important}
+/* logo da empresa: inteira, numa faixa branca (a maioria é larga, um nome desenhado); sem logo ficam as iniciais */
+html[data-tema] .sb-logo:has(img){width:auto;max-width:98px;height:40px;padding:3px 7px;background:#fff;border-radius:9px}
+html[data-tema] .sb-logo:has(img){display:flex;align-items:center;justify-content:center}
+html[data-tema] .sb-logo img{display:block;width:auto;height:auto;max-width:84px;max-height:34px;padding:0;object-fit:contain;background:transparent}
+@media (min-width:901px){
+  html[data-menu="recolhido"] .sb-logo:has(img){width:44px;max-width:44px;padding:3px}
+  html[data-menu="recolhido"] .sb-logo img{max-width:38px}
+}
+/* Promoções e Ads: a coluna da loja (com a nota de cada uma) não espreme em 10 linhas */
+@media screen{ html[data-pagina="placar"] main table td:first-child{min-width:200px} }
