@@ -108,6 +108,15 @@ function codigoNeutro(it) {
 function corpoCorrigido(nota, conta, mudancas) {
   const b = JSON.parse(JSON.stringify(nota));
   delete b.id;
+  // O GET da nota não traz o desconto (nem outras despesas), só o valorNota: devolvido sem ele, o Bling soma os itens e recusa
+  // "Total das parcelas difere do total da nota" (medido 06/11/2026: item 28,81, nota e parcelas 26,80 = cupom de 2,01).
+  // A diferença entre itens + frete e o valor da nota volta como desconto (ou despesas, se for para mais).
+  if (b.desconto == null && b.despesas == null && nota.valorNota != null) {
+    const itens = (nota.itens || []).reduce((t, i) => t + (Number(i.valorTotal) || Number(i.valor) * Number(i.quantidade) || 0), 0);
+    const dif = Math.round((itens + (Number(nota.valorFrete) || 0) - Number(nota.valorNota)) * 100) / 100;
+    if (dif > 0) b.desconto = dif;
+    else if (dif < 0) b.despesas = -dif;
+  }
   b.itens = (nota.itens || []).map((it, i) => {
     const m = mudancas.find((x) => x.i === i);
     if (!m) return it;

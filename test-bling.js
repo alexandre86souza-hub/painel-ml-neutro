@@ -56,6 +56,11 @@ assert.ok(!('id' in cp) && cp.contato.nome === 'x' && cp.numero === '1', 'a nota
 assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', classificacaoFiscal: '8481.80.19', cest: '10.079.00', origem: 2, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 2 } } });
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
+// desconto que o GET não traz volta pela diferença entre itens + frete e o valor da nota
+const comCupom = B.corpoCorrigido({ valorNota: 26.8, valorFrete: 0, itens: [{ codigo: 'AMG-750.831', cfop: '5405', valor: 28.81, quantidade: 1 }] }, '1',
+  [{ i: 0, descricao: 'Ducha', ncm: '8481.80.19', cest: '10.079.00', nacional: false }]);
+assert.strictEqual(comCupom.desconto, 2.01);
+assert.ok(!('desconto' in B.corpoCorrigido({ valorNota: 10, itens: [{ cfop: '5102', valor: 10, quantidade: 1 }] }, '2', [])), 'sem diferença, sem desconto');
 
 assert.ok(B.itemAjustado([{ codigo: 'CFOP5405', ncm: '8481.80.19', cest: '1007900', origem: 2, sugestao: { origem: 2, cest: '10.079.00' } }]), 'CEST com ou sem pontos');
 assert.ok(B.semCodigo('CFOP5405') && B.semCodigo('') && !B.semCodigo('AMG-1'));
