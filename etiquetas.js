@@ -109,7 +109,8 @@ function criar({ D, mlArquivo, daLoja, comandas }) {
       if (!s) continue;
       etiquetas.push({ chave: c.chave, canal: c.canal, loja: c.loja, grupo: grupoDe(c), categoria: c.categoria, numero: c.numero, dia: c.dia,
         pedido: c.pedido, envio: c.envio, cliente: c.cliente, prazo: c.prazo, situacao_prazo: c.situacao_prazo, unidades: c.unidades,
-        comanda_impressa_em: c.impressa_em, etiqueta_em: c.etiqueta_em || null, ...s });
+        comanda_impressa_em: c.impressa_em, etiqueta_em: c.etiqueta_em || null,
+        itens: (c.itens || []).map((i) => ({ qtd: i.qtd, sku: i.sku, titulo: i.titulo, variacao: i.variacao, foto: i.foto })), ...s });
     }
     return { em: f.em, erros: f.erros, etiquetas };
   }

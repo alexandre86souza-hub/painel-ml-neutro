@@ -58,6 +58,30 @@
   .res-zip.erro{border-color:#f3c3b1;background:#fdeee8;color:#b4441e}
   .res-zip ul{margin:4px 0 0;padding-left:18px;font-size:13px}
   .res-zip .acoes{align-items:center}
+  /* Reorganização (06/11/2026): resumo que filtra, linha marcada pelo prazo, Pedido junta a loja, produto com foto */
+  .resumo-fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px}
+  .resumo-fila button{font:inherit;text-align:left;display:flex;flex-direction:column;gap:2px;padding:10px 14px;border:1px solid var(--line);border-left-width:4px;border-radius:12px;background:var(--card,#fff);color:var(--ink);cursor:pointer}
+  .resumo-fila button small{font-size:12px;color:var(--muted);font-weight:600}
+  .resumo-fila button b{font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .resumo-fila button[aria-pressed="true"]{outline:2px solid var(--brand,#2563eb);outline-offset:1px}
+  .resumo-fila .r-fila{border-left-color:#c96f50}
+  .resumo-fila .r-atrasado{border-left-color:#d92d20}
+  .resumo-fila .r-espera{border-left-color:#94a3b8}
+  .resumo-fila .r-impressa{border-left-color:#1f9d63}
+  .resumo-fila button.zero b{color:var(--muted)}
+  @media (max-width:560px){ .resumo-fila{grid-template-columns:1fr 1fr;gap:8px} .resumo-fila button{padding:8px 10px} .resumo-fila button b{font-size:20px} }
+  tr.p-atrasado td{background:rgba(217,45,32,.07)}
+  tr.p-atrasado td:first-child{box-shadow:inset 4px 0 0 #d92d20}
+  tr.p-hoje td{background:rgba(224,161,0,.08)}
+  tr.p-hoje td:first-child{box-shadow:inset 4px 0 0 #e0a100}
+  tr.ja-impressa td{opacity:.7}
+  tr.ja-impressa td:last-child{opacity:1}
+  td.ped b{display:block}
+  td.itens-td{min-width:220px;max-width:320px}
+  .it-cel{display:flex;gap:10px;align-items:center}
+  .it-cel img{width:40px;height:40px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line);flex:none}
+  .it-cel .it-txt{min-width:0}
+  .it-cel .it-tit{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;line-height:1.3}
   .dlg-pe{padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #ece7dc}
 </style>
 </head>
@@ -82,6 +106,7 @@
     <p>A etiqueta da transportadora que o Mercado Livre e a Shopee liberam depois da nota fiscal, para a térmica 10×15. Ao lado, a comanda do mesmo envio. Magalu e Amazon ainda não.</p>
     <div class="acoes"><button type="button" class="bt" id="btReler">Atualizar agora</button></div>
   </div>
+  <div class="resumo-fila" id="resumoFila" role="group" aria-label="Resumo das etiquetas"></div>
   <div class="abas" id="abas" role="group" aria-label="Lojas"></div>
   <section class="bloco">
     <div class="filtros">
@@ -92,6 +117,7 @@
         <button type="button" data-f="todas" aria-pressed="false">Todas</button>
       </div>
       <input type="search" id="busca" placeholder="Buscar pedido, cliente ou comanda" aria-label="Buscar etiqueta">
+      <button type="button" class="bt" id="btMarcar" hidden title="Marca todas as liberadas e ainda não impressas desta loja">Selecionar as para imprimir</button>
       <button type="button" class="bt imprimir" id="btSel" disabled>Imprimir selecionadas</button>
       <button type="button" class="bt" id="btZip" disabled title="Um .txt (ZPL) por conta/loja, para mandar direto à térmica">Baixar ZIP (.txt)</button>
     </div>
@@ -137,7 +163,33 @@ async function carregar(recarregar){
   }catch(e){ aviso(e.message); $('lista').innerHTML = ''; }
 }
 
+// Resumo (todas as lojas): cada cartão filtra a lista
+const paraImprimir = (e) => e.situacao === 'liberada' && !impressa(e);
+function escolherSit(s0){
+  sit = s0; aba = 'Todas';
+  for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x.dataset.f === sit));
+  pintar();
+}
+function pintarResumo(){
+  const E = dados.etiquetas;
+  const cartoes = [
+    ['r-fila', 'Para imprimir', E.filter(paraImprimir).length, 'liberada'],
+    ['r-atrasado', 'Para imprimir com prazo vencido', E.filter((e) => paraImprimir(e) && e.situacao_prazo === 'atrasado').length, 'liberada'],
+    ['r-espera', 'Aguardando nota', E.filter((e) => e.situacao === 'aguardando').length, 'aguardando'],
+    ['r-impressa', 'Já impressas (na fila)', E.filter((e) => e.situacao === 'liberada' && impressa(e)).length, 'impressa'],
+  ];
+  const box = $('resumoFila'); box.innerHTML = '';
+  for(const [cl, rot, n, s0] of cartoes){
+    const b = el('button', cl + (n ? '' : ' zero')); b.type = 'button';
+    b.setAttribute('aria-pressed', String(cl !== 'r-atrasado' && aba === 'Todas' && sit === s0));
+    b.title = 'Clique para ver só estas, de todas as lojas';
+    b.append(el('small', null, rot), el('b', null, String(n)));
+    b.onclick = () => escolherSit(s0);
+    box.appendChild(b);
+  }
+}
 function pintar(){
+  pintarResumo();
   const abas = $('abas'); abas.innerHTML = '';
   const nomes = ['Todas', ...new Set(dados.etiquetas.map(nomeGrupo))];
   if(!nomes.includes(aba)) aba = 'Todas';
@@ -176,17 +228,23 @@ function pintarLista(){
   const lst = filtradas();
   const box = $('lista'); box.innerHTML = '';
   pintarSel();
-  if(!lst.length){ box.appendChild(el('p', 'vazio', sit === 'liberada' ? 'Nenhuma etiqueta liberada para imprimir aqui.' : 'Nenhuma etiqueta com esse filtro.')); return; }
+  if(!lst.length){ $('btMarcar').hidden = true; box.appendChild(el('p', 'vazio', sit === 'liberada' ? 'Nenhuma etiqueta liberada para imprimir aqui.' : 'Nenhuma etiqueta com esse filtro.')); return; }
   const podem = lst.filter((e) => e.situacao === 'liberada');
   const t = el('table'); const cab = el('tr');
   const thT = el('th'); const todas = el('input'); todas.type = 'checkbox'; todas.setAttribute('aria-label', 'Selecionar todas as mostradas');
   todas.disabled = !podem.length; todas.checked = podem.length > 0 && podem.every((e) => sel.has(e.chave));
   todas.onchange = () => { for(const e of podem) todas.checked ? sel.add(e.chave) : sel.delete(e.chave); pintarLista(); };
   thT.appendChild(todas); cab.appendChild(thT);
-  for(const h of ['Comanda', 'Pedido', 'Loja', 'Envio', 'Cliente', 'Prazo', 'Etiqueta', '']) cab.appendChild(el('th', null, h));
+  for(const h of ['Comanda', 'Pedido e loja', 'Envio', 'Cliente', 'Produto', 'Prazo', 'Etiqueta', '']) cab.appendChild(el('th', null, h));
+  // "Selecionar as para imprimir": as liberadas e não impressas da lista, ainda não marcadas
+  const livres = lst.filter((e) => paraImprimir(e) && !sel.has(e.chave));
+  $('btMarcar').hidden = !livres.length;
+  $('btMarcar').textContent = `Selecionar as ${livres.length} para imprimir`;
+  $('btMarcar').onclick = () => { for(const e of livres) sel.add(e.chave); pintarLista(); };
   t.appendChild(cab);
   for(const e of lst){
-    const tr = el('tr');
+    const tr = el('tr', impressa(e) && e.situacao === 'liberada' ? (sit === 'impressa' ? null : 'ja-impressa')
+      : e.situacao === 'liberada' && e.situacao_prazo === 'atrasado' ? 'p-atrasado' : e.situacao === 'liberada' && e.situacao_prazo === 'hoje' ? 'p-hoje' : null);
     const tdX = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = sel.has(e.chave); cb.disabled = e.situacao !== 'liberada';
     cb.setAttribute('aria-label', 'Selecionar ' + nomeComanda(e));
     cb.onchange = () => { cb.checked ? sel.add(e.chave) : sel.delete(e.chave); pintarSel(); };
@@ -206,8 +264,16 @@ function pintarLista(){
       b.onclick = () => imprimir([e.chave]);
       tdA.appendChild(b);
     }
-    tr.append(tdX, tdC, el('td', null, e.pedido), el('td', null, `${e.loja} · ${CANAL[e.canal] || e.canal}`), el('td', null, e.envio || '—'),
-      el('td', null, e.cliente || '—'), tdPr, tdS, tdA);
+    if(e.prazo) tdPr.dataset.valor = String(new Date(e.prazo).getTime());
+    const tdP = el('td', 'ped'); tdP.append(el('b', null, e.pedido), el('span', 'pequeno', `${e.loja} · ${CANAL[e.canal] || e.canal}`));
+    // produto: foto e nome do 1º item, para achar o pacote
+    const tdI = el('td', 'itens-td'); const ic = el('div', 'it-cel'); const its = e.itens || []; const i0 = its[0] || {};
+    if(/^https:\/\//.test(i0.foto || '')){ const im = el('img'); im.alt = ''; im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.src = i0.foto; im.onerror = () => im.remove(); ic.appendChild(im); }
+    const tx = el('div', 'it-txt');
+    tx.appendChild(el('span', 'it-tit', `${i0.qtd > 1 ? i0.qtd + '× ' : ''}${[i0.titulo, i0.variacao].filter(Boolean).join(' — ') || i0.sku || '—'}`));
+    tx.appendChild(el('span', 'pequeno', (its.length > 1 ? `+ ${its.length - 1} item(ns) · ` : '') + `${e.unidades ?? '—'} un.`));
+    ic.appendChild(tx); tdI.appendChild(ic);
+    tr.append(tdX, tdC, tdP, el('td', null, e.envio || '—'), el('td', null, e.cliente || '—'), tdI, tdPr, tdS, tdA);
     t.appendChild(tr);
   }
   box.appendChild(t);
@@ -434,7 +500,7 @@ function listaFalhas(falhas, porChave){
 }
 
 for(const b of $('segSit').querySelectorAll('button')) b.onclick = () => {
-  sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
+  sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintar(); };
 $('busca').oninput = () => pintarLista();
 $('btReler').onclick = () => carregar(true);
 $('btSel').onclick = () => imprimir([...sel]);
