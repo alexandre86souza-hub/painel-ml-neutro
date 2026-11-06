@@ -382,7 +382,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   nome CURTO do produto, SEM código e com o NCM (hoje o vendedor edita nota por nota). Etapa 2 = "Notas pendentes" (`GET /api/bling/notas?conta=`, situação 1) + "Corrigir itens no Bling" (`POST /api/bling/notas/corrigir`:
   só nota PENDENTE; PUT /nfe/{id} com a nota lida INTEIRA, `corpoCorrigido`: código vazio, nome curto, NCM, origem no item e no ICMS; relê e confere).
   Origem: importado = 1 na conta 1 (AMG importa direto), 2 na conta 2 (Primor compra no Brasil); bucha/desempenadeira = 0 (`nacionalPeloNome`).
-  Nome/NCM/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. A EMISSÃO segue no Bling.
+  Código vazio a API RECUSA: vai CFOP{cfop} (`codigoNeutro`, o mesmo que o Bling põe no XML quando o código é apagado). CEST (ST, CFOP 5405) por SKU, sugerido pelo NCM (`CEST_DO_NCM`: 8481.80.19 -> 10.079.00).
+  Nome/NCM/CEST/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. A EMISSÃO segue no Bling.
   Nota tem dado do comprador: nada no MCP (`test-bling.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas

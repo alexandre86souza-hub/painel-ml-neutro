@@ -39,14 +39,17 @@ assert.strictEqual(B.origemDoProduto('2', false), 2, 'Primor compra o importado 
 assert.strictEqual(B.origemDoProduto('2', true), 0);
 assert.ok(B.nacionalPeloNome('Bucha de Fixação 8mm') && B.nacionalPeloNome('Desempenadeira de aço') && !B.nacionalPeloNome('Ducha Inox'));
 const sg = B.sugestaoDe({ descricao: 'Ducha GW Comercial', classificacaoFiscal: '' }, null);
-assert.deepStrictEqual(sg, { descricao: 'Ducha GW Comercial', ncm: '8481.80.19', nacional: false, salvo: false });
-assert.deepStrictEqual(B.sugestaoDe({}, { descricao: 'Ducha', ncm: '8481.90.10', nacional: false }), { descricao: 'Ducha', ncm: '8481.90.10', nacional: false, salvo: true });
+assert.deepStrictEqual(sg, { descricao: 'Ducha GW Comercial', ncm: '8481.80.19', cest: '10.079.00', nacional: false, salvo: false });
+assert.strictEqual(B.cestValido('1007900'), '10.079.00');
+assert.strictEqual(B.cestValido(''), '');
+assert.throws(() => B.cestValido('123'), /CEST/);
+assert.deepStrictEqual(B.sugestaoDe({}, { descricao: 'Ducha', ncm: '8481.90.10', nacional: false }), { descricao: 'Ducha', ncm: '8481.90.10', cest: '', nacional: false, salvo: true });
 const nota = { id: 9, numero: '1', contato: { nome: 'x' }, itens: [
   { codigo: 'AMG-1', descricao: 'Longo', classificacaoFiscal: '', origem: 0, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 0 } } },
   { codigo: 'AMG-2', descricao: 'Outro', valor: 5 }] };
-const cp = B.corpoCorrigido(nota, '2', [{ i: 0, descricao: 'Curto', ncm: '8481.80.19', nacional: false }]);
+const cp = B.corpoCorrigido(nota, '2', [{ i: 0, descricao: 'Curto', ncm: '8481.80.19', cest: '10.079.00', nacional: false }]);
 assert.ok(!('id' in cp) && cp.contato.nome === 'x' && cp.numero === '1', 'a nota vai inteira, sem o id');
-assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', classificacaoFiscal: '8481.80.19', origem: 2, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 2 } } });
+assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', classificacaoFiscal: '8481.80.19', cest: '10.079.00', origem: 2, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 2 } } });
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
 

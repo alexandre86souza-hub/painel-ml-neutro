@@ -66,6 +66,15 @@ function ncmValido(s) {
   if (d.length !== 8) throw erro(`NCM "${s ?? ''}" inválido: são 8 números (ex.: 8481.80.19).`);
   return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6)}`;
 }
+// CEST (obrigatório com substituição tributária, ex.: CFOP 5405): 7 números -> "10.079.00"; vazio = sem CEST.
+// Sugestão pelo NCM: 8481.80.19 -> 10.079.00 (informado pelo dono, 06/11/2026). Funções puras: testadas.
+const CEST_DO_NCM = { '8481.80.19': '10.079.00' };
+function cestValido(s) {
+  const d = String(s ?? '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length !== 7) throw erro(`CEST "${s}" inválido: são 7 números (ex.: 10.079.00).`);
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+}
 function descricaoValida(s) {
   const t = String(s ?? '').replace(/\s+/g, ' ').trim();
   if (t.length < 3 || t.length > 120) throw erro('Nome do produto na nota: de 3 a 120 caracteres.');
@@ -74,8 +83,9 @@ function descricaoValida(s) {
 // Sugestão para um item da nota pendente: o que foi salvo para o SKU; senão o nome que veio, o NCM padrão e a origem
 // pelo nome. Função pura: testada.
 function sugestaoDe(item, salvo) {
-  if (salvo) return { descricao: salvo.descricao, ncm: salvo.ncm, nacional: !!salvo.nacional, salvo: true };
-  return { descricao: String(item?.descricao || '').trim(), ncm: item?.classificacaoFiscal || NCM_PADRAO, nacional: nacionalPeloNome(item?.descricao), salvo: false };
+  if (salvo) return { descricao: salvo.descricao, ncm: salvo.ncm, cest: salvo.cest ?? item?.cest ?? CEST_DO_NCM[salvo.ncm] ?? '', nacional: !!salvo.nacional, salvo: true };
+  const ncm = item?.classificacaoFiscal || NCM_PADRAO;
+  return { descricao: String(item?.descricao || '').trim(), ncm, cest: item?.cest || CEST_DO_NCM[ncm] || '', nacional: nacionalPeloNome(item?.descricao), salvo: false };
 }
 // Código "sem código": a API recusa o código vazio ("Codigo do produto … deve ser informado"), e o Bling, quando o
 // vendedor apaga o código na tela, põe no XML (cProd) "CFOP" + o CFOP do item (medido 06/11/2026 em 3 notas emitidas:
@@ -96,14 +106,14 @@ function corpoCorrigido(nota, conta, mudancas) {
     const m = mudancas.find((x) => x.i === i);
     if (!m) return it;
     const o = origemDoProduto(conta, m.nacional);
-    return { ...it, codigo: codigoNeutro(it), descricao: m.descricao, classificacaoFiscal: m.ncm, origem: o,
+    return { ...it, codigo: codigoNeutro(it), descricao: m.descricao, classificacaoFiscal: m.ncm, cest: m.cest, origem: o,
       impostos: { ...(it.impostos || {}), icms: { ...(it.impostos?.icms || {}), origem: o } } };
   });
   return b;
 }
 
 // A nota já está como o vendedor quer? Todo item sem código, com NCM e com a origem sugerida. Função pura: testada.
-const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo(i.codigo) && !!i.ncm && Number(i.origem) === i.sugestao.origem);
+const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo(i.codigo) && !!i.ncm && (i.cest || '') === (i.sugestao.cest || '') && Number(i.origem) === i.sugestao.origem);
 
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
@@ -195,7 +205,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
 
   // nome curto, NCM e nacional por SKU (o código que veio na nota pendente), guardados a cada correção
   const salvos = () => { try { return JSON.parse(D.configLer('bling_itens') || '{}') || {}; } catch { return {}; } };
-  const itemDaNota = (n, it, i, s) => ({ i, codigo: it.codigo || '', descricao: it.descricao || '', ncm: it.classificacaoFiscal || '',
+  const itemDaNota = (n, it, i, s) => ({ i, codigo: it.codigo || '', descricao: it.descricao || '', ncm: it.classificacaoFiscal || '', cest: it.cest || '',
     origem: origemDoItem(it), quantidade: it.quantidade ?? null, valor: it.valorTotal ?? null,
     sugestao: (() => { const g = sugestaoDe(it, it.codigo ? s[it.codigo] : null); return { ...g, origem: origemDoProduto(n, g.nacional) }; })() });
   // só o que a tela precisa: nada do destinatário (contato, endereço, etiqueta)
@@ -232,7 +242,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const mudancas = (Array.isArray(body?.itens) ? body.itens : []).map((m) => {
         const i = Number(m?.i);
         if (!Number.isInteger(i) || i < 0 || i >= itens.length) throw erro('Item da nota inválido.');
-        return { i, descricao: descricaoValida(m.descricao), ncm: ncmValido(m.ncm), nacional: !!m.nacional };
+        return { i, descricao: descricaoValida(m.descricao), ncm: ncmValido(m.ncm), cest: cestValido(m.cest), nacional: !!m.nacional };
       });
       if (!mudancas.length) throw erro('Nenhum item para corrigir.');
       await bling(n, `/nfe/${id}`, { metodo: 'PUT', corpo: corpoCorrigido(nota, n, mudancas) });
@@ -240,7 +250,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const s = salvos();
       for (const m of mudancas) {
         const sku = itens[m.i].codigo;
-        if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, nacional: m.nacional, em: new Date().toISOString() };
+        if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, cest: m.cest, nacional: m.nacional, em: new Date().toISOString() };
       }
       D.configGravar('bling_itens', JSON.stringify(s));
       // relê para conferir o que o Bling gravou
@@ -248,7 +258,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const conferencia = mudancas.map((m) => {
         const it = (depois.itens || [])[m.i] || {};
         const o = origemDoProduto(n, m.nacional);
-        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, origem: Number(origemDoItem(it)) === o };
+        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: (it.cest || '') === m.cest, origem: Number(origemDoItem(it)) === o };
         return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
       });
       return { nota: notaDaTela(n, depois, salvos()), conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
@@ -336,4 +346,4 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
 }
 
 module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
-  sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };
+  sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, cestValido, descricaoValida, origemDoProduto, nacionalPeloNome };

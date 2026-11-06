@@ -186,7 +186,7 @@ function cartaoNota(n){
   d.appendChild(cab);
 
   const rolar = el('div', 'rolar'), t = el('table'), tr0 = el('tr');
-  for(const h of ['Código', 'Nome na nota', 'NCM', 'Origem do ICMS', 'Qtd']) tr0.appendChild(el('th', null, h));
+  for(const h of ['Código', 'Nome na nota', 'NCM', 'CEST', 'Origem do ICMS', 'Qtd']) tr0.appendChild(el('th', null, h));
   t.appendChild(tr0);
   const campos = [], editavel = Number(n.situacao) === 1;
   for(const it of n.itens){
@@ -199,13 +199,15 @@ function cartaoNota(n){
     if(it.descricao && it.descricao !== it.sugestao.descricao){ nome.classList.add('mudou'); tdNome.appendChild(el('div', 'antes', 'na nota hoje: ' + it.descricao)); }
     const tdNcm = el('td'), ncm = el('input', 'ncm'); ncm.value = it.sugestao.ncm; ncm.maxLength = 10; ncm.disabled = !editavel; tdNcm.appendChild(ncm);
     if((it.ncm || '') !== it.sugestao.ncm){ ncm.classList.add('mudou'); tdNcm.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.ncm || 'vazio'))); }
+    const tdCest = el('td'), cest = el('input', 'ncm'); cest.value = it.sugestao.cest || ''; cest.maxLength = 9; cest.placeholder = 'sem CEST'; cest.disabled = !editavel; tdCest.appendChild(cest);
+    if((it.cest || '') !== (it.sugestao.cest || '')){ cest.classList.add('mudou'); tdCest.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.cest || 'vazio'))); }
     const tdOr = el('td'), sel = el('select'); sel.disabled = !editavel;
     for(const nac of [false, true]){ const o = el('option', null, ORIGEM_TXT[origemDe(n.conta, nac)]); o.value = nac ? '1' : '0'; sel.appendChild(o); }
     sel.value = it.sugestao.nacional ? '1' : '0'; tdOr.appendChild(sel);
     if(Number(it.origem) !== it.sugestao.origem){ sel.classList.add('mudou'); tdOr.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.origem == null ? '—' : (ORIGEM_TXT[it.origem] || it.origem)))); }
-    tr.append(tdCod, tdNome, tdNcm, tdOr, el('td', null, it.quantidade ?? '—'));
+    tr.append(tdCod, tdNome, tdNcm, tdCest, tdOr, el('td', null, it.quantidade ?? '—'));
     t.appendChild(tr);
-    campos.push({ i: it.i, nome, ncm, sel });
+    campos.push({ i: it.i, nome, ncm, cest, sel });
   }
   rolar.appendChild(t); d.appendChild(rolar);
 
@@ -213,8 +215,8 @@ function cartaoNota(n){
   if(editavel){
     const bt = el('button', 'bt primario', est === 'emitir' ? 'Ajustar de novo' : 'Ajustar no Bling'); bt.type = 'button';
     bt.onclick = async () => {
-      const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, nacional: c.sel.value === '1' }));
-      const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
+      const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));
+      const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — CEST ${x.cest.trim() || 'sem'} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
       if(!confirm(`Ajustar a nota ${n.numero || ''} no Bling (${n.nomeConta})?\n\n${lista}\n\nNo lugar do SKU vai CFOP + o número do CFOP (como o Bling faz quando o código é apagado). A nota NÃO é emitida: emita no Bling depois de conferir.`)) return;
       bt.disabled = true; res.className = 'res'; res.textContent = 'Ajustando no Bling…';
       try{
@@ -226,7 +228,7 @@ function cartaoNota(n){
         } else {
           res.className = 'res erro';
           res.textContent = 'O Bling aceitou, mas na releitura não bateu: ' + r.conferencia.filter((c) => !c.tudo)
-            .map((c) => `item ${c.i + 1} (${['nome', 'codigo', 'ncm', 'origem'].filter((k) => !c[k]).join(', ')})`).join('; ') + '. Confira a nota no Bling.';
+            .map((c) => `item ${c.i + 1} (${['nome', 'codigo', 'ncm', 'cest', 'origem'].filter((k) => !c[k]).join(', ')})`).join('; ') + '. Confira a nota no Bling.';
           bt.disabled = false;
         }
       }catch(e){ res.className = 'res erro'; res.textContent = 'Não ajustou: ' + e.message; bt.disabled = false; }
