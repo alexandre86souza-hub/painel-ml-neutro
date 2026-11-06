@@ -217,6 +217,7 @@ html[data-tema="escuro"][data-pagina="comandas"] .hist-filtros input{border:1px 
 html[data-tema="escuro"][data-pagina="comandas"] .campos input,
 html[data-tema="escuro"][data-pagina="comandas"] .campos select,
 html[data-tema="escuro"][data-pagina="comandas"] .itens input{border:1px solid var(--line)}
+html[data-tema="escuro"][data-pagina="comandas"] .resumo-fila button{background:var(--card,var(--card))}
 html[data-tema="escuro"][data-pagina="comandas"] .sel-loja{border:1px solid var(--line)}
 /* compras.html */
 html[data-tema="escuro"][data-pagina="compras"] .forn{border:1px solid var(--line)}

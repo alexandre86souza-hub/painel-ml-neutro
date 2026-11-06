@@ -92,6 +92,30 @@
     #impressao .comanda{box-shadow:none;margin:0 auto;page-break-after:always;break-after:page}
     #impressao .comanda:last-child{page-break-after:auto;break-after:auto}
   }
+  /* Reorganização (06/11/2026): resumo da fila que filtra, linha marcada pelo prazo, menos colunas, foto do item */
+  .resumo-fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px}
+  .resumo-fila button{font:inherit;text-align:left;display:flex;flex-direction:column;gap:2px;padding:10px 14px;border:1px solid var(--line);border-left-width:4px;border-radius:12px;background:var(--card,#fff);color:var(--ink);cursor:pointer}
+  .resumo-fila button small{font-size:12px;color:var(--muted);font-weight:600}
+  .resumo-fila button b{font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .resumo-fila button[aria-pressed="true"]{outline:2px solid var(--brand,#2563eb);outline-offset:1px}
+  .resumo-fila .r-fila{border-left-color:#c96f50}
+  .resumo-fila .r-atrasado{border-left-color:#d92d20}
+  .resumo-fila .r-hoje{border-left-color:#e0a100}
+  .resumo-fila .r-impressa{border-left-color:#1f9d63}
+  .resumo-fila button.zero b{color:var(--muted)}
+  @media (max-width:560px){ .resumo-fila{grid-template-columns:1fr 1fr;gap:8px} .resumo-fila button{padding:8px 10px} .resumo-fila button b{font-size:20px} }
+  tr.p-atrasado td{background:rgba(217,45,32,.07)}
+  tr.p-atrasado td:first-child{box-shadow:inset 4px 0 0 #d92d20}
+  tr.p-hoje td{background:rgba(224,161,0,.08)}
+  tr.p-hoje td:first-child{box-shadow:inset 4px 0 0 #e0a100}
+  tr.ja-impressa td{opacity:.7}
+  tr.ja-impressa td:last-child{opacity:1}
+  td.ped b{display:block}
+  td.itens-td{min-width:240px;max-width:340px}
+  .it-cel{display:flex;gap:10px;align-items:center}
+  .it-cel img{width:44px;height:44px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--line);flex:none}
+  .it-cel .it-txt{min-width:0}
+  .it-cel .it-tit{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;line-height:1.3}
   .sel-loja{font:inherit;font-size:14px;padding:8px 10px;border:1px solid #d5d7db;border-radius:9px;max-width:280px}
 </style>
 </head>
@@ -117,6 +141,7 @@
     <div class="acoes"><button type="button" class="bt imprimir" id="btManual">+ Comanda manual</button>
     <button type="button" class="bt" id="btReler">Atualizar agora</button></div>
   </div>
+  <div class="resumo-fila" id="resumoFila" role="group" aria-label="Resumo da fila"></div>
   <div class="abas" id="abas" role="group" aria-label="Categorias"></div>
   <section class="bloco">
     <div class="filtros">
@@ -129,6 +154,7 @@
       <div class="seg" role="group" aria-label="Prazo" id="segPrazo">
         <button type="button" data-p="todos" aria-pressed="true">Qualquer prazo</button>
         <button type="button" data-p="hoje" aria-pressed="false">Até hoje</button>
+        <button type="button" data-p="atrasado" aria-pressed="false">Vencidas</button>
       </div>
       <select id="selLoja" class="sel-loja" aria-label="Loja"><option value="">Todas as lojas</option></select>
       <input type="search" id="busca" placeholder="Buscar pedido, cliente ou SKU" aria-label="Buscar comanda">
@@ -223,8 +249,37 @@ function pintarLojas(){
   for(const l of lojas){ const o = el('option', null, l); o.value = l; sel.appendChild(o); }
   sel.value = lojaSel;
 }
+// Resumo da fila (todas as categorias, da loja escolhida): cada cartão é um atalho para o filtro
+const hojeBR = () => new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+function filtrarResumo(s0, p0){
+  sit = s0; prazo = p0; cat = 'Todas';
+  for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x.dataset.f === sit));
+  for(const x of $('segPrazo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x.dataset.p === prazo));
+  pintar();
+}
+function pintarResumo(){
+  const lst = dados.comandas.filter((c) => !lojaSel || lojaDe(c) === lojaSel);
+  const fila = lst.filter((c) => !c.impressa_em);
+  const hoje = hojeBR();
+  const cartoes = [
+    ['r-fila', 'Para imprimir', fila.length, 'aguarda', 'todos'],
+    ['r-atrasado', 'Prazo vencido', fila.filter((c) => c.situacao_prazo === 'atrasado').length, 'aguarda', 'atrasado'],
+    ['r-hoje', 'Vencem hoje (vencidas inclusas)', fila.filter((c) => ['atrasado', 'hoje'].includes(c.situacao_prazo)).length, 'aguarda', 'hoje'],
+    ['r-impressa', 'Impressas hoje', lst.filter((c) => c.impressa_em && dataBR(c.impressa_em) === hoje).length, 'impressa', 'todos'],
+  ];
+  const box = $('resumoFila'); box.innerHTML = '';
+  for(const [cl, rot, n, s0, p0] of cartoes){
+    const b = el('button', cl + (n ? '' : ' zero')); b.type = 'button';
+    b.setAttribute('aria-pressed', String(cat === 'Todas' && sit === s0 && prazo === p0));
+    b.title = 'Clique para ver só estas, de todas as categorias';
+    b.append(el('small', null, rot), el('b', null, String(n)));
+    b.onclick = () => filtrarResumo(s0, p0);
+    box.appendChild(b);
+  }
+}
 function pintar(){
   pintarLojas();
+  pintarResumo();
   const abas = $('abas'); abas.innerHTML = '';
   for(const k of [...dados.categorias, 'Todas']){
     const lst = dados.comandas.filter((c) => (k === 'Todas' || c.categoria === k) && (!lojaSel || lojaDe(c) === lojaSel));
@@ -254,6 +309,7 @@ function filtradas(){
     if(sit === 'aguarda' && c.impressa_em) return false;
     if(sit === 'impressa' && !c.impressa_em) return false;
     if(prazo === 'hoje' && !['atrasado', 'hoje'].includes(c.situacao_prazo)) return false;
+    if(prazo === 'atrasado' && c.situacao_prazo !== 'atrasado') return false;
     if(q && ![c.pedido, c.cliente, nomeComanda(c), c.loja, ...c.itens.map((i) => i.sku)].some((t) => String(t || '').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -271,12 +327,14 @@ function pintarLista(){
   todas.checked = lst.every((c) => sel.has(c.chave));
   todas.onchange = () => { for(const c of lst) todas.checked ? sel.add(c.chave) : sel.delete(c.chave); pintarLista(); };
   thT.appendChild(todas); cab.appendChild(thT);
-  for(const h of ['Comanda', 'Pedido', 'Compra', 'Loja', 'Envio', 'Cliente', 'Prazo', 'Itens', 'Situação', 'Ações']) cab.appendChild(el('th', null, h));
+  for(const h of ['Comanda', 'Pedido e loja', 'Envio', 'Cliente', 'Prazo', 'Itens', 'Situação', 'Ações']) cab.appendChild(el('th', null, h));
   t.appendChild(cab);
   for(const c of lst){
-    const tr = el('tr');
+    const tr = el('tr', c.cancelada ? null : c.impressa_em ? (sit === 'impressa' ? null : 'ja-impressa') : c.situacao_prazo === 'atrasado' ? 'p-atrasado' : c.situacao_prazo === 'hoje' ? 'p-hoje' : null);
     const tdC = el('td', 'num', nomeComanda(c)); tdC.appendChild(el('span', 'pequeno', dataBR(c.dia + 'T12:00:00Z')));
-    const tdP = el('td'); tdP.appendChild(el('b', null, c.pedido));
+    const tdP = el('td', 'ped'); tdP.appendChild(el('b', null, c.pedido));
+    tdP.appendChild(el('span', 'pequeno', lojaDe(c)));
+    if(c.comprado_em){ tdP.appendChild(el('span', 'pequeno', `comprado ${horaCompra(c.comprado_em)} · ${dataBR(c.comprado_em)}`)); tdP.dataset.valor = String(new Date(c.comprado_em).getTime()); }
     const tdPr = el('td'); tdPr.appendChild(document.createTextNode(c.prazo ? horaBR(c.prazo) : '—'));
     if(PRAZO[c.situacao_prazo]) tdPr.appendChild(el('span', 'chip ' + (c.situacao_prazo === 'amanhã' ? 'amanha' : c.situacao_prazo), PRAZO[c.situacao_prazo]));
     const tdS = el('td');
@@ -311,9 +369,15 @@ function pintarLista(){
     const tdX = el('td'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = sel.has(c.chave); cb.setAttribute('aria-label', 'Selecionar ' + nomeComanda(c));
     cb.onchange = () => { cb.checked ? sel.add(c.chave) : sel.delete(c.chave); pintarSel(); };
     tdX.appendChild(cb);
-    const tdCo = el('td', 'compra'); if(c.comprado_em){ tdCo.append(el('b', null, horaCompra(c.comprado_em)), el('span', 'pequeno', dataBR(c.comprado_em))); } else tdCo.textContent = '—';
-    tr.append(tdX, tdC, tdP, tdCo, el('td', null, `${c.loja} · ${CANAL[c.canal] || c.canal}`), el('td', null, c.envio), el('td', null, c.cliente || '—'), tdPr,
-      el('td', null, `${c.itens.length} item(ns) · ${c.unidades} un.`), tdS, tdA);
+    if(c.prazo) tdPr.dataset.valor = String(new Date(c.prazo).getTime());
+    // itens: foto e nome do 1º produto (a foto aqui é colorida; só o papel sai em preto e branco)
+    const tdI = el('td', 'itens-td'); const ic = el('div', 'it-cel'); const i0 = c.itens[0] || {};
+    if(/^https:\/\//.test(i0.foto || '')){ const im = el('img'); im.alt = ''; im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.src = i0.foto; im.onerror = () => im.remove(); ic.appendChild(im); }
+    const tx = el('div', 'it-txt');
+    tx.appendChild(el('span', 'it-tit', `${i0.qtd > 1 ? i0.qtd + '× ' : ''}${[i0.titulo, i0.variacao].filter(Boolean).join(' — ') || i0.sku || '—'}`));
+    tx.appendChild(el('span', 'pequeno', (c.itens.length > 1 ? `+ ${c.itens.length - 1} item(ns) · ` : '') + `${c.unidades} un.`));
+    ic.appendChild(tx); tdI.appendChild(ic); tdI.dataset.valor = String(c.unidades);
+    tr.append(tdX, tdC, tdP, el('td', null, c.envio), el('td', null, c.cliente || '—'), tdPr, tdI, tdS, tdA);
     t.appendChild(tr);
   }
   box.appendChild(t);
@@ -436,8 +500,8 @@ function pintarSel(){
 $('btSel').onclick = () => { const lst = dados.comandas.filter((c) => sel.has(c.chave)); if(lst.length) previa(lst); };
 $('btTodas').onclick = () => { const lst = filtradas().filter((c) => !c.impressa_em); if(lst.length) previa(lst); };
 $('segSit').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; sit = b.dataset.f; for(const x of $('segSit').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
-  if(sit === 'cancelada'){ canceladas = null; carregarCanceladas(); } pintarLista(); };
-$('segPrazo').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; prazo = b.dataset.p; for(const x of $('segPrazo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintarLista(); };
+  if(sit === 'cancelada'){ canceladas = null; carregarCanceladas(); } pintar(); };
+$('segPrazo').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; prazo = b.dataset.p; for(const x of $('segPrazo').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b)); pintar(); };
 $('busca').oninput = pintarLista;
 $('btReler').onclick = () => { $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Buscando os envios de todas as lojas…')); carregar(true); };
 // ---- histórico: pela data da impressão ou pelo número da venda
