@@ -116,7 +116,13 @@ const reais = (v) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { st
 const ORIGEM_TXT = { 0: '0 · Nacional', 1: '1 · Estrangeira, importação direta', 2: '2 · Estrangeira, adquirida no mercado interno' };
 const origemDe = (conta, nacional) => (nacional ? 0 : conta === '1' ? 1 : 2);
 // loja pelo formato do número do pedido (o Bling só dá o id da loja)
-const lojaPeloPedido = (p) => { const s = String(p || ''); if(/^\d{3}-\d{7}-\d{7}$/.test(s)) return 'Amazon'; if(/^\d{6}[0-9A-Z]{6,10}$/.test(s)) return 'Shopee'; if(/^LU-/i.test(s)) return 'Magalu'; return null; };
+// Amazon 702-1234567-1234567; Shopee 251105ABC123XY (data + letras); Leroy (Mirakl) …-A; Magalu só números (1584370110724588, 06/11/2026)
+const lojaPeloPedido = (p) => { const s = String(p || '').trim();
+  if(/^\d{3}-\d{7}-\d{7}$/.test(s)) return 'Amazon';
+  if(/^\d{6}(?=[0-9A-Z]*[A-Z])[0-9A-Z]{6,10}$/.test(s)) return 'Shopee';
+  if(/-[A-Z]$/.test(s)) return 'Leroy';
+  if(/^LU-/i.test(s) || /^\d{12,18}$/.test(s)) return 'Magalu';
+  return null; };
 
 let cfg = null, notas = [], filtro = null;
 // aba: '' = as duas contas, '1' = AMG, '2' = Primor (lembrada neste navegador)
