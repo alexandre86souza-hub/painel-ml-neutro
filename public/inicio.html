@@ -84,6 +84,10 @@
     .grafico{height:130px}
     .barra .dia{font-size:10px}
   }
+  .duas-dash{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  .duas-dash > .bloco{margin-bottom:20px}
+  @media (max-width:1000px){ .duas-dash{grid-template-columns:1fr;gap:0} }
+  .resumo30{margin-top:4px}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -113,6 +117,35 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
 
+  <!-- Reorganização (06/11/2026): hoje primeiro (cartões, gráfico, mais vendidos e pedidos lado a lado), depois os 30 dias e a saúde -->
+  <div class="cartoes" id="cartoes">
+    <div class="cartao destaque"><p class="rotulo">Faturamento de hoje</p>
+      <div class="valor esqueleto" id="vFat">—</div><div class="comparar" id="cFat"></div></div>
+    <div class="cartao"><p class="rotulo">Pedidos</p>
+      <div class="valor esqueleto" id="vPed">—</div><div class="comparar" id="cPed"></div></div>
+    <div class="cartao"><p class="rotulo">Unidades</p>
+      <div class="valor esqueleto" id="vUni">—</div><div class="comparar" id="cUni"></div></div>
+    <div class="cartao"><p class="rotulo">Ticket médio</p>
+      <div class="valor esqueleto" id="vTic">—</div><div class="comparar" id="cTic"></div></div>
+  </div>
+
+  <section class="bloco">
+    <h2 id="tGrafico">Últimos dias</h2>
+    <p class="sub" id="subGrafico">Faturamento por dia. A última barra é hoje, ainda em andamento.</p>
+    <div class="grafico" id="grafico" role="img" aria-labelledby="tGrafico"></div>
+  </section>
+
+  <div class="duas-dash">
+  <section class="bloco">
+    <h2 id="tTop">Mais vendidos hoje</h2>
+    <ul class="lista" id="top"></ul>
+  </section>
+  <section class="bloco">
+    <h2>Pedidos de hoje</h2>
+    <ul class="lista" id="recentes"></ul>
+  </section>
+  </div>
+
   <!-- Resumo de 30 dias: vendas, lucro, devoluções, ADS e Full (GET /api/dashboard/resumo) -->
   <section class="resumo30" aria-labelledby="tResumo">
     <div class="r-topo"><h2 id="tResumo">Últimos 30 dias</h2><span class="sub" id="rNota">carregando o resumo…</span></div>
@@ -124,17 +157,6 @@
       <a class="r-card" href="/full.html"><span class="r-rot">Vendas no Full</span><b id="rFull">—</b><small id="rFullN">&nbsp;</small></a>
     </div>
   </section>
-
-  <div class="cartoes" id="cartoes">
-    <div class="cartao destaque"><p class="rotulo">Faturamento de hoje</p>
-      <div class="valor esqueleto" id="vFat">—</div><div class="comparar" id="cFat"></div></div>
-    <div class="cartao"><p class="rotulo">Pedidos</p>
-      <div class="valor esqueleto" id="vPed">—</div><div class="comparar" id="cPed"></div></div>
-    <div class="cartao"><p class="rotulo">Unidades</p>
-      <div class="valor esqueleto" id="vUni">—</div><div class="comparar" id="cUni"></div></div>
-    <div class="cartao"><p class="rotulo">Ticket médio</p>
-      <div class="valor esqueleto" id="vTic">—</div><div class="comparar" id="cTic"></div></div>
-  </div>
 
   <!-- Saúde da conta: leitura do catálogo inteiro, não de uma venda. -->
   <section class="bloco saude-conta" id="saudeConta" hidden>
@@ -154,22 +176,6 @@
         <ul id="scMelhorar"></ul>
       </div>
     </div>
-  </section>
-
-  <section class="bloco">
-    <h2 id="tGrafico">Últimos dias</h2>
-    <p class="sub" id="subGrafico">Faturamento por dia. A última barra é hoje, ainda em andamento.</p>
-    <div class="grafico" id="grafico" role="img" aria-labelledby="tGrafico"></div>
-  </section>
-
-  <section class="bloco">
-    <h2 id="tTop">Mais vendidos hoje</h2>
-    <ul class="lista" id="top"></ul>
-  </section>
-
-  <section class="bloco">
-    <h2>Pedidos de hoje</h2>
-    <ul class="lista" id="recentes"></ul>
   </section>
 
   <div class="pe">
