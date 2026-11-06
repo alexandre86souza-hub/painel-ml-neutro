@@ -63,7 +63,9 @@
   .comanda .c-sku span{white-space:nowrap}
   .comanda .c-tit{font-size:9.5pt;font-weight:700;flex:1;min-width:0}
   .comanda .c-item-topo{display:flex;gap:2mm;align-items:center;margin-bottom:1mm}
-  .comanda .c-foto{width:24mm;height:24mm;object-fit:contain;flex:0 0 24mm;filter:grayscale(1) contrast(1.15)}
+  /* impressora térmica só tem preto e branco: produto cromado ou transparente em cinza claro sumia no papel (06/11/2026).
+     Escurece tudo o que não é fundo branco (o fundo continua branco); testado com fotos reais em simulação de pontilhado e de corte */
+  .comanda .c-foto{width:28mm;height:28mm;object-fit:contain;flex:0 0 28mm;filter:grayscale(1) brightness(.6) contrast(6)}
   .comanda .c-rodape{font-size:11pt;font-weight:900;text-align:center;margin-top:2.5mm;padding-top:1.5mm;border-top:0.5mm dashed #000}
   .comanda .c-rodape small{display:block;font-size:8pt;font-weight:700;letter-spacing:.15em}
   /* etiqueta da venda direta: o mesmo padrão da comanda + observação e volume */
