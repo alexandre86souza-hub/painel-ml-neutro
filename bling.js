@@ -219,6 +219,8 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     const itens = (x.itens || []).map((it, i) => itemDaNota(n, it, i, s));
     return { id: x.id, numero: x.numero ?? null, serie: x.serie ?? null, situacao: x.situacao ?? null,
       data: x.dataEmissao ?? null, loja: x.loja?.id ?? null, pedido_loja: x.numeroPedidoLoja ?? null, valor: x.valorNota ?? null,
+      totais: { frete: x.valorFrete ?? null, itens: (x.itens || []).reduce((t, i) => t + (Number(i.valorTotal) || Number(i.valor) * Number(i.quantidade) || 0), 0),
+        parcelas: (x.parcelas || []).reduce((t, p) => t + (Number(p.valor) || 0), 0), chaves: Object.keys(x).filter((k) => /valor|desconto|despesa|seguro|frete|outr/i.test(k)), transporte: Object.keys(x.transporte || {}) },
       itens, ajustada: itemAjustado(itens) };
   };
 
