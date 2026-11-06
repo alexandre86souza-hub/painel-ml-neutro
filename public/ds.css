@@ -23,6 +23,8 @@ html[data-tema]{
   --sb-bg:#0a1020; --sb-bg-2:#0e1629; --sb-linha:#1a2540; --sb-ink:#e8eef8; --sb-muted:#8d9bb5; --sb-faint:#5d6b85;
   --sb-hover:rgba(148,178,230,.08); --sb-ativo:rgba(59,130,246,.16); --sb-ativo-ink:#ffffff;
 }
+/* cores dos temas: só na TELA (impressão de qualquer tela fica clara, como antes) */
+@media screen{
 html[data-tema="escuro"]{
   color-scheme:dark;
   --bg:#0b1120; --card:#111a2c; --card-solido:#111a2c; --raised:#15203a; --overlay:#0e1727;
@@ -47,6 +49,7 @@ html[data-tema="claro"]{
   --marca-azul:#2563eb; --marca-azul-escuro:#1d4ed8; --marca-azul-claro:#e8efff;
 }
 
+}
 @media screen{
 /* ---------- base ---------- */
 html[data-tema] body{background:var(--bg);color:var(--ink);font-family:var(--fonte);font-size:var(--t-md);line-height:1.5;
