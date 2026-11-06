@@ -48,6 +48,7 @@
   // não ordena por conta própria (th.onclick). Ordena as linhas que estão na tela; a tela redesenhou = volta ao normal.
   const valorDe = (td) => {
     if (!td) return '';
+    if (td.dataset && td.dataset.valor != null && td.dataset.valor !== '') return Number(td.dataset.valor);
     const campo = td.querySelector('input,select'); const txt = (campo ? campo.value : td.textContent).trim();
     if (!txt || txt === '—' || txt === '-') return null;
     const data = /^(\d{2})\/(\d{2})(?:\/(\d{2,4}))?(?:\s+(\d{2}):(\d{2}))?/.exec(txt);

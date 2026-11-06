@@ -704,4 +704,5 @@ html[data-tema="escuro"][data-pagina="vendas"] .pos{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="vendas"] .chip{background:var(--overlay);color:var(--ink)}
 html[data-tema="escuro"][data-pagina="vendas"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}
 html[data-tema="escuro"][data-pagina="vendas"] button.bt{border:1px solid var(--line);background:var(--card)}
+html[data-tema="escuro"][data-pagina="vendas"] .legenda-comp .lucro b{color:hsl(145,81%,72%)}
 }

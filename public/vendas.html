@@ -69,6 +69,22 @@
   .mais{margin-top:12px;text-align:center}
   button.bt{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:7px 14px;cursor:pointer;
     border:1px solid #d5d7db;background:#fff;color:var(--ink)}
+  /* Reorganização (06/11/2026): custos numa coluna (detalhe embaixo) ou separados; a composição numa barra só */
+  #lista table:not(.detalhado) .c-det{display:none}
+  #lista table.detalhado .c-res{display:none}
+  td.c-res{white-space:normal;min-width:190px;max-width:260px;text-align:right}
+  td.c-res .pequeno{line-height:1.35}
+  .filtros .bt-det{margin-left:auto}
+  .filtros .bt-det[aria-pressed="true"]{border-color:var(--brand);color:var(--brand)}
+  .seg button .qtd{font-weight:500;opacity:.75;margin-left:4px}
+  .pilha{display:flex;height:16px;border-radius:8px;overflow:hidden;gap:2px;background:var(--line);margin:4px 0 14px}
+  .pilha i{display:block;height:100%;min-width:2px}
+  .legenda-comp{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 18px}
+  .legenda-comp div{display:grid;grid-template-columns:12px 1fr auto;gap:2px 8px;align-items:center;font-size:13px}
+  .legenda-comp i{width:12px;height:12px;border-radius:3px}
+  .legenda-comp b{font-variant-numeric:tabular-nums;text-align:right}
+  .legenda-comp small{grid-column:2/4;color:var(--muted);font-size:12px}
+  .legenda-comp .lucro b{color:#0b6b33}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} }
   @media (max-width:560px){
     .cartoes{grid-template-columns:1fr}
@@ -150,6 +166,7 @@
         <button type="button" data-f="full">Full</button>
         <button type="button" data-f="canceladas">Canceladas</button>
       </div>
+      <button type="button" class="bt bt-det" id="btDetalhar" aria-pressed="false" title="Mostra tarifa, frete, imposto, custo do produto e embalagem em colunas separadas">Detalhar custos</button>
     </div>
     <div class="tabela-rolagem" id="lista"></div>
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
@@ -218,6 +235,9 @@ $('segDias').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) r
 $('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; marcar($('segFiltro'), 'f', filtro); mostrar = 100; pintarLista(); };
 $('busca').oninput = () => { mostrar = 100; pintarLista(); };
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
+$('btDetalhar').setAttribute('aria-pressed', String(detalhado()));
+$('btDetalhar').onclick = () => { const novo = !detalhado(); try{ localStorage.setItem('painel.pedidos.detalhado', novo ? '1' : '0'); }catch{}
+  $('btDetalhar').setAttribute('aria-pressed', String(novo)); pintarLista(); };
 
 function pintarResumo(r){
   const s = r.resumo;
@@ -238,14 +258,25 @@ function pintarResumo(r){
   ];
   // Shopee: a taxa por item vendido aparece separada (ela já está dentro das tarifas)
   if(s.taxa_fixa != null) partes.splice(1, 0, ['   ↳ dentro: taxa fixa por item', s.taxa_fixa]);
-  const teto = Math.max(...partes.map((p) => Math.abs(p[1] || 0)), 1);
+  // uma barra só: o faturamento dividido entre os custos e o lucro (a taxa fixa da Shopee já está dentro das tarifas)
+  const CORES = ['#5b8def', '#8b7cf6', '#f59e0b', '#ef6c57', '#94a3b8', '#16a34a'];
+  const fat = s.faturamento || 0;
+  const pilha = el('div', 'pilha'); pilha.setAttribute('role', 'img');
+  const leg = el('div', 'legenda-comp');
+  let k = 0;
   for(const [rot, v, ehLucro] of partes){
-    const l = el('div', 'comp' + (ehLucro ? ' lucro' : ''));
-    const b = el('div', 'barra'); const i = el('i'); i.style.width = (Math.abs(v || 0) / teto * 100) + '%'; b.appendChild(i);
-    l.append(el('span', null, rot), b, el('b', ehLucro && v < 0 ? 'neg' : null, real(v)),
-      el('span', 'p', s.faturamento ? pct((v || 0) / s.faturamento) : '—'));
-    box.appendChild(l);
+    const dentro = rot.trim().startsWith('↳');
+    const cor = ehLucro ? CORES[5] : CORES[Math.min(k, 4)];
+    if(!dentro){
+      if(fat > 0 && v > 0){ const i = el('i'); i.style.width = (v / fat * 100) + '%'; i.style.background = cor; i.title = `${rot}: ${real(v)} (${pct(v / fat)})`; pilha.appendChild(i); }
+      if(!ehLucro) k++;
+    }
+    const d = el('div', ehLucro ? 'lucro' : null); const q = el('i'); q.style.background = dentro ? 'transparent' : cor;
+    d.append(q, el('span', null, rot.trim()), el('b', ehLucro && v < 0 ? 'neg' : null, real(v)), el('small', null, fat ? pct((v || 0) / fat) + ' do faturamento' : '—'));
+    leg.appendChild(d);
   }
+  pilha.setAttribute('aria-label', 'Do faturamento: ' + partes.map(([r, v]) => `${r.trim()} ${real(v)}`).join(', '));
+  box.append(pilha, leg);
   if(r.fretes_pendentes){
     box.appendChild(el('p', 'sub', `Ainda faltam ${numero(r.fretes_pendentes)} envios com frete a consultar. Atualize a página para continuar (o que já foi lido fica guardado).`));
   }
@@ -303,6 +334,22 @@ function campoFreteLeroy(v){
   return box;
 }
 
+// Custos detalhados (colunas separadas) ou em uma coluna; a escolha fica no navegador. A Leroy abre detalhada (frete digitado).
+function detalhado(){
+  let v = null; try{ v = localStorage.getItem('painel.pedidos.detalhado'); }catch{}
+  return v == null ? !!NA_LEROY : v === '1';
+}
+function contarFiltros(q){
+  if(!dados) return;
+  const casa = (v) => !q || [v.titulo, v.sku, v.item_id, String(v.pedido), v.pacote && String(v.pacote), v.envio && String(v.envio), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q));
+  const vs = dados.vendas.filter(casa);
+  const n = { todas: vs.filter((v) => v.valida).length, prejuizo: vs.filter((v) => v.valida && v.lucro < 0).length,
+    semcusto: vs.filter((v) => v.valida && v.custo_unit == null).length, full: vs.filter((v) => v.valida && v.full).length, canceladas: vs.filter((v) => !v.valida).length };
+  for(const b of document.querySelectorAll('#segFiltro button')){
+    let s = b.querySelector('.qtd'); if(!s){ s = el('span', 'qtd'); b.appendChild(s); }
+    s.textContent = n[b.dataset.f] != null ? `(${numero(n[b.dataset.f])})` : '';
+  }
+}
 function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
   if(!dados) return;
@@ -317,10 +364,13 @@ function pintarLista(){
     if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido), v.pacote && String(v.pacote), v.envio && String(v.envio), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
-  if(!itens.length){ box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
-  const t = el('table'); const cab = el('tr');
-  for(const h of ['Anúncio', 'Data', 'Qtd', 'Faturamento', 'Tarifa', 'Frete', 'Imposto', 'Custo produto', 'Embalagem', 'Lucro', 'Margem', ''])
-    cab.appendChild(el('th', null, h));
+  if(!itens.length){ contarFiltros(q); box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
+  const cab = el('tr');
+  // contagem de cada filtro rápido (sobre a busca de agora)
+  contarFiltros(q);
+  const t = el('table', detalhado() ? 'detalhado' : null);
+  for(const h of ['Anúncio', 'Data', 'Qtd', 'Faturamento', 'Custos', 'Tarifa', 'Frete', 'Imposto', 'Custo produto', 'Embalagem', 'Lucro', 'Margem', ''])
+    cab.appendChild(el('th', h === 'Custos' ? 'c-res' : ['Tarifa', 'Frete', 'Imposto', 'Custo produto', 'Embalagem'].includes(h) ? 'c-det' : null, h));
   const th = el('thead'); th.appendChild(cab); t.appendChild(th);
   const tb = el('tbody');
   for(const v of itens.slice(0, mostrar)){
@@ -343,7 +393,7 @@ function pintarLista(){
     }
     const freteTd = el('td', v.frete_estimado ? 'estimado' : null, v.frete == null ? (NA_LEROY ? '—' : '…') : (v.frete_estimado ? '≈ ' : '') + real(v.frete));
     if(v.frete == null && !NA_LEROY) freteTd.title = 'Frete ainda não consultado';
-    if(NA_LEROY && v.valida) freteTd.appendChild(campoFreteLeroy(v));
+    if(NA_LEROY && v.valida && detalhado()) freteTd.appendChild(campoFreteLeroy(v));
     const lucroTd = el('td', v.lucro == null ? null : v.lucro < 0 ? 'neg' : 'pos', v.lucro == null ? '—' : real(v.lucro));
     const link = el('td'); const a = el('a', null, 'Ver'); a.href = v.link; a.target = '_blank'; a.rel = 'noopener'; link.appendChild(a);
     // Amazon "Pending": sem preço até confirmar o pagamento -> último preço do SKU, com ≈
@@ -354,8 +404,18 @@ function pintarLista(){
     const tarifaTd = el('td', v.estimado ? 'estimado' : null, (v.estimado && v.tarifa != null ? '≈ ' : '') + real(v.tarifa));
     if(v.tarifa != null && v.faturamento > 0) tarifaTd.appendChild(el('span', 'pequeno', `${pct(v.tarifa / v.faturamento)} da venda`));
     if(v.taxa_fixa) tarifaTd.appendChild(el('span', 'pequeno', `inclui ${real(v.taxa_fixa)} de taxa fixa`));
-    tr.append(td, el('td', null, dataHora(v.data)), el('td', null, numero(v.quantidade)), fat, tarifaTd, freteTd, el('td', null, real(v.imposto)), prodTd,
-      el('td', null, real(v.embalagem)), lucroTd, el('td', v.margem != null && v.margem < 0 ? 'neg' : null, pct(v.margem)), link);
+    for(const c of [tarifaTd, freteTd, prodTd]) c.classList.add('c-det');
+    const impTd = el('td', 'c-det', real(v.imposto)), embTd = el('td', 'c-det', real(v.embalagem));
+    // resumo: o total dos custos e o detalhe embaixo (sem custo do produto = aviso no lugar do total)
+    const resTd = el('td', 'c-res');
+    const totalCustos = [v.tarifa, v.frete, v.imposto, v.produto, v.embalagem].reduce((s0, x) => s0 + (Number(x) || 0), 0);
+    if(v.custo_unit == null) resTd.appendChild(el('span', 'chip amarelo', 'sem custo do produto'));
+    else { resTd.appendChild(document.createTextNode((v.estimado || v.frete_estimado ? '≈ ' : '') + real(totalCustos))); resTd.dataset.valor = String(totalCustos); }
+    resTd.appendChild(el('span', 'pequeno', [['tarifa', v.tarifa], ['frete', v.frete], ['imposto', v.imposto], ['produto', v.produto], ['emb.', v.embalagem]]
+      .filter(([, x]) => x != null).map(([n, x]) => `${n} ${real(x)}`).join(' · ')));
+    if(NA_LEROY && v.valida && !detalhado()) resTd.appendChild(campoFreteLeroy(v));
+    tr.append(td, el('td', null, dataHora(v.data)), el('td', null, numero(v.quantidade)), fat, resTd, tarifaTd, freteTd, impTd, prodTd,
+      embTd, lucroTd, el('td', v.margem != null && v.margem < 0 ? 'neg' : null, pct(v.margem)), link);
     tb.appendChild(tr);
   }
   t.appendChild(tb); box.appendChild(t);
