@@ -77,6 +77,16 @@ function sugestaoDe(item, salvo) {
   if (salvo) return { descricao: salvo.descricao, ncm: salvo.ncm, nacional: !!salvo.nacional, salvo: true };
   return { descricao: String(item?.descricao || '').trim(), ncm: item?.classificacaoFiscal || NCM_PADRAO, nacional: nacionalPeloNome(item?.descricao), salvo: false };
 }
+// Código "sem código": a API recusa o código vazio ("Codigo do produto … deve ser informado"), e o Bling, quando o
+// vendedor apaga o código na tela, põe no XML (cProd) "CFOP" + o CFOP do item (medido 06/11/2026 em 3 notas emitidas:
+// CFOP6108, CFOP5405). O painel manda o mesmo. Função pura: testada.
+const semCodigo = (c) => !c || /^CFOP\d{4}$/.test(String(c));
+function codigoNeutro(it) {
+  const cfop = String(it?.cfop ?? '').replace(/\D/g, '');
+  if (cfop.length !== 4) throw erro(`O item "${it?.descricao || ''}" está sem CFOP na nota: confira a natureza de operação no Bling.`);
+  return `CFOP${cfop}`;
+}
+
 // Corpo do PUT /nfe/{id}: a nota lida INTEIRA (o PUT do Bling usa o mesmo esquema do POST) e, nos itens mudados, código
 // vazio, nome, NCM e a origem (no item e no ICMS). mudancas = [{ i, descricao, ncm, nacional }]. Função pura: testada.
 function corpoCorrigido(nota, conta, mudancas) {
@@ -86,14 +96,14 @@ function corpoCorrigido(nota, conta, mudancas) {
     const m = mudancas.find((x) => x.i === i);
     if (!m) return it;
     const o = origemDoProduto(conta, m.nacional);
-    return { ...it, codigo: '', descricao: m.descricao, classificacaoFiscal: m.ncm, origem: o,
+    return { ...it, codigo: codigoNeutro(it), descricao: m.descricao, classificacaoFiscal: m.ncm, origem: o,
       impostos: { ...(it.impostos || {}), icms: { ...(it.impostos?.icms || {}), origem: o } } };
   });
   return b;
 }
 
 // A nota já está como o vendedor quer? Todo item sem código, com NCM e com a origem sugerida. Função pura: testada.
-const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => !i.codigo && !!i.ncm && Number(i.origem) === i.sugestao.origem);
+const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo(i.codigo) && !!i.ncm && Number(i.origem) === i.sugestao.origem);
 
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
@@ -230,7 +240,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const s = salvos();
       for (const m of mudancas) {
         const sku = itens[m.i].codigo;
-        if (sku) s[sku] = { descricao: m.descricao, ncm: m.ncm, nacional: m.nacional, em: new Date().toISOString() };
+        if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, nacional: m.nacional, em: new Date().toISOString() };
       }
       D.configGravar('bling_itens', JSON.stringify(s));
       // relê para conferir o que o Bling gravou
@@ -238,7 +248,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const conferencia = mudancas.map((m) => {
         const it = (depois.itens || [])[m.i] || {};
         const o = origemDoProduto(n, m.nacional);
-        const ok = { nome: it.descricao === m.descricao, codigo: !it.codigo, ncm: (it.classificacaoFiscal || '') === m.ncm, origem: Number(origemDoItem(it)) === o };
+        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, origem: Number(origemDoItem(it)) === o };
         return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
       });
       return { nota: notaDaTela(n, depois, salvos()), conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
@@ -326,4 +336,4 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
 }
 
 module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
-  sugestaoDe, corpoCorrigido, itemAjustado, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };
+  sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, descricaoValida, origemDoProduto, nacionalPeloNome };

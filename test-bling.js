@@ -42,14 +42,17 @@ const sg = B.sugestaoDe({ descricao: 'Ducha GW Comercial', classificacaoFiscal: 
 assert.deepStrictEqual(sg, { descricao: 'Ducha GW Comercial', ncm: '8481.80.19', nacional: false, salvo: false });
 assert.deepStrictEqual(B.sugestaoDe({}, { descricao: 'Ducha', ncm: '8481.90.10', nacional: false }), { descricao: 'Ducha', ncm: '8481.90.10', nacional: false, salvo: true });
 const nota = { id: 9, numero: '1', contato: { nome: 'x' }, itens: [
-  { codigo: 'AMG-1', descricao: 'Longo', classificacaoFiscal: '', origem: 0, valor: 10, impostos: { icms: { st: 102, origem: 0 } } },
+  { codigo: 'AMG-1', descricao: 'Longo', classificacaoFiscal: '', origem: 0, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 0 } } },
   { codigo: 'AMG-2', descricao: 'Outro', valor: 5 }] };
 const cp = B.corpoCorrigido(nota, '2', [{ i: 0, descricao: 'Curto', ncm: '8481.80.19', nacional: false }]);
 assert.ok(!('id' in cp) && cp.contato.nome === 'x' && cp.numero === '1', 'a nota vai inteira, sem o id');
-assert.deepStrictEqual(cp.itens[0], { codigo: '', descricao: 'Curto', classificacaoFiscal: '8481.80.19', origem: 2, valor: 10, impostos: { icms: { st: 102, origem: 2 } } });
+assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', classificacaoFiscal: '8481.80.19', origem: 2, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 2 } } });
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
 
+assert.ok(B.semCodigo('CFOP5405') && B.semCodigo('') && !B.semCodigo('AMG-1'));
+assert.throws(() => B.codigoNeutro({ descricao: 'x' }), /CFOP/);
+assert.ok(B.itemAjustado([{ codigo: 'CFOP6108', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]));
 assert.ok(B.itemAjustado([{ codigo: '', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]));
 assert.ok(!B.itemAjustado([{ codigo: 'AMG-1', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]), 'código ainda no item');
 assert.ok(!B.itemAjustado([{ codigo: '', ncm: '', origem: 2, sugestao: { origem: 2 } }]), 'sem NCM');

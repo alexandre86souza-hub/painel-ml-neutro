@@ -87,7 +87,7 @@
 
   <ol class="passos">
     <li>No Bling, gere a <b>nota do pedido</b> (sem editar e sem emitir).</li>
-    <li>Aqui, confira <b>nome curto, NCM e origem</b> e clique em <b>Ajustar no Bling</b> (o código sai vazio).</li>
+    <li>Aqui, confira <b>nome curto, NCM e origem</b> e clique em <b>Ajustar no Bling</b> (no lugar do SKU vai CFOP + o número do CFOP, como o Bling faz quando você apaga o código).</li>
     <li>No Bling, abra a nota, confira e <b>emita</b>.</li>
   </ol>
 
@@ -192,7 +192,8 @@ function cartaoNota(n){
   for(const it of n.itens){
     const tr = el('tr');
     const tdCod = el('td', 'codigo');
-    if(it.codigo){ const s = el('s', null, it.codigo); tdCod.append(s, el('div', 'antes', editavel ? 'sai vazio' : '')); } else tdCod.appendChild(el('span', 'salvo', 'vazio ✓'));
+    if(it.codigo && !/^CFOP\d{4}$/.test(it.codigo)){ const s = el('s', null, it.codigo); tdCod.append(s, el('div', 'antes', editavel ? 'vira CFOP + nº do CFOP' : '')); }
+    else tdCod.appendChild(el('span', 'salvo', (it.codigo || 'vazio') + ' ✓'));
     const tdNome = el('td'), nome = el('input'); nome.maxLength = 120; nome.value = it.sugestao.descricao; nome.disabled = !editavel; tdNome.appendChild(nome);
     if(it.sugestao.salvo) tdNome.appendChild(el('div', 'salvo', 'nome guardado deste produto'));
     if(it.descricao && it.descricao !== it.sugestao.descricao){ nome.classList.add('mudou'); tdNome.appendChild(el('div', 'antes', 'na nota hoje: ' + it.descricao)); }
@@ -214,7 +215,7 @@ function cartaoNota(n){
     bt.onclick = async () => {
       const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, nacional: c.sel.value === '1' }));
       const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
-      if(!confirm(`Ajustar a nota ${n.numero || ''} no Bling (${n.nomeConta})?\n\n${lista}\n\nO código do produto sai vazio. A nota NÃO é emitida: emita no Bling depois de conferir.`)) return;
+      if(!confirm(`Ajustar a nota ${n.numero || ''} no Bling (${n.nomeConta})?\n\n${lista}\n\nNo lugar do SKU vai CFOP + o número do CFOP (como o Bling faz quando o código é apagado). A nota NÃO é emitida: emita no Bling depois de conferir.`)) return;
       bt.disabled = true; res.className = 'res'; res.textContent = 'Ajustando no Bling…';
       try{
         const r = await enviar('POST', '/api/bling/notas/corrigir', { conta: n.conta, id: n.id, itens });
