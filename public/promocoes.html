@@ -164,6 +164,11 @@
   .res-item{margin:6px 0 0;font-size:13px;font-weight:600}
   .res-item.ok{color:#0b6b33}
   .res-item.falha{color:#b42318}
+  /* Reorganização (06/11/2026): campanhas disponíveis (e os anúncios da escolhida) primeiro; resultado e por anúncio em abas */
+  .abas-promo{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;border-bottom:1px solid var(--line);margin:0 0 16px}
+  .abas-promo button{font:inherit;font-size:14px;font-weight:600;flex:none;white-space:nowrap;padding:10px 14px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+  .abas-promo button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brand,#2563eb)}
+  [data-aba].fora-aba{display:none!important}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -193,7 +198,13 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
 
-  <section class="bloco">
+  <div class="abas-promo" role="tablist" aria-label="Partes da tela" id="abasPromo">
+    <button type="button" role="tab" data-a="campanhas" aria-selected="true">Campanhas disponíveis</button>
+    <button type="button" role="tab" data-a="resultado" aria-selected="false">Quais venderam mais</button>
+    <button type="button" role="tab" data-a="anuncio" aria-selected="false">Promoções por anúncio</button>
+  </div>
+
+  <section class="bloco" data-aba="resultado">
     <div class="topo-bloco">
       <div>
         <h2>Quais promoções venderam mais</h2>
@@ -212,7 +223,7 @@
     <div id="resultado"><p class="carregando">Lendo as vendas e os descontos de cada pedido… Na primeira vez pode levar até um minuto.</p></div>
   </section>
 
-  <section class="bloco">
+  <section class="bloco" data-aba="campanhas">
     <div class="topo-bloco">
       <div>
         <h2>Campanhas disponíveis agora</h2>
@@ -232,7 +243,7 @@
     <div class="promos" id="promos"><p class="carregando">Carregando…</p></div>
   </section>
 
-  <section class="bloco" id="blocoItens" hidden>
+  <section class="bloco" id="blocoItens" data-aba="campanhas" hidden>
     <div class="topo-bloco">
       <div>
         <h2 id="tItens">Anúncios</h2>
@@ -283,7 +294,7 @@
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Carregar mais</button></div>
   </section>
 
-  <section class="bloco" id="blocoPorAnuncio">
+  <section class="bloco" id="blocoPorAnuncio" data-aba="anuncio">
     <h2>Promoções por anúncio</h2>
     <p class="sub">Todos os anúncios que estão ou podem entrar em alguma promoção, cada um com todas as promoções dele, o lucro em cada uma
       e os botões de entrar e sair. Ordenados pelos que mais venderam em 90 dias. Na primeira abertura o painel percorre todas as promoções (leva uns 30 segundos).</p>
@@ -326,6 +337,15 @@
 </div>
 
 <script>
+// abas: "fora-aba" não mexe no hidden que a tela já usa (anúncios da campanha); #resultado ou #anuncio abre direto
+function abaPromo(k){
+  if(!['campanhas', 'resultado', 'anuncio'].includes(k)) k = 'campanhas';
+  for(const b of document.querySelectorAll('#abasPromo button')) b.setAttribute('aria-selected', String(b.dataset.a === k));
+  for(const sct of document.querySelectorAll('main [data-aba]')) sct.classList.toggle('fora-aba', sct.dataset.aba !== k);
+  try{ localStorage.setItem('painel.promocoes.aba', k); }catch{}
+}
+document.getElementById('abasPromo').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abaPromo(b.dataset.a); };
+{ let k = location.hash.slice(1); if(!['campanhas', 'resultado', 'anuncio'].includes(k)){ try{ k = localStorage.getItem('painel.promocoes.aba'); }catch{} } abaPromo(k); }
 const $ = (id) => document.getElementById(id);
 const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
 const numero = (n) => (n || 0).toLocaleString('pt-BR');
@@ -543,7 +563,7 @@ async function carregarPromos(){
 }
 
 function abrirPromo(p){
-  promoAtual = p;
+  promoAtual = p; abaPromo('campanhas');
   $('blocoItens').hidden = false;
   $('tItens').textContent = p.nome;
   $('subItens').textContent = p.tipo_nome + (p.precisa_preco ? ' · você escolhe o preço promocional' : ' · o preço vem pronto do Mercado Livre');
