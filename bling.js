@@ -279,6 +279,15 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       for (const p of listaP.slice(0, 5)) { const d = await passo(() => bling(n, `/pedidos/vendas/${p.id}`)); if (d.data) detP.push(d.data); }
       for (const x of listaN.slice(0, 8)) { const d = await passo(() => bling(n, `/nfe/${x.id}`)); if (d.data) detN.push(d.data); }
       const naturezas = await passo(() => bling(n, '/naturezas-operacoes?pagina=1&limite=50'));
+      // o que vai no XML (cProd) das notas emitidas com o código vazio no Bling: só os códigos dos itens
+      const cprod = [];
+      for (const x of detN.filter((d) => /^https:\/\//.test(d.xml || '') && (d.itens || []).some((i) => !i.codigo)).slice(0, 3)) {
+        const r = await passo(async () => {
+          const t = await (await fetch(x.xml, { signal: AbortSignal.timeout(20000) })).text();
+          return { codigos: [...t.matchAll(/<cProd>([^<]*)<\/cProd>/g)].map((m) => m[1]), produtos: [...t.matchAll(/<xProd>([^<]*)<\/xProd>/g)].map((m) => m[1]) };
+        });
+        cprod.push(r);
+      }
       return {
         conta: publica(n),
         pedidos: pedidos.erro ? { erro: pedidos.erro } : { quantidade: listaP.length, situacoes: contar(listaP, (p) => p.situacao?.id), lojas: contar(listaP, (p) => p.loja?.id) },
@@ -286,6 +295,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
         // o que interessa para a emissão: o pedido chega sem produto ligado? a nota leva código e NCM?
         itens_pedidos: detP.map((p) => ({ tem_nota: !!(p.notaFiscal?.id), loja: p.loja?.id ?? null, itens: itensDoProduto(p.itens) })),
         itens_notas: detN.map((x) => ({ situacao: x.situacao ?? null, loja: x.loja?.id ?? null, natureza: x.naturezaOperacao?.id ?? null, itens: itensDoProduto(x.itens) })),
+        cprod_emitidas: cprod,
         naturezas: naturezas.erro ? { erro: naturezas.erro } : (naturezas.data || []).map((z) => ({ id: z.id, descricao: z.descricao ?? null, situacao: z.situacao ?? null, padrao: z.padrao ?? null })),
         forma: { pedido_lista: listaP[0] ? forma(listaP[0]) : null, pedido: detP[0] ? forma(detP[0]) : null,
           nota_lista: listaN[0] ? forma(listaN[0]) : null, nota: detN[0] ? forma(detN[0]) : null },
