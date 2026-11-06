@@ -70,9 +70,9 @@ function ncmValido(s) {
 }
 // CEST (obrigatório com substituição tributária, ex.: CFOP 5405): 7 números -> "10.079.00"; vazio = sem CEST.
 // Sugestão pelo NCM: 8481.80.19 -> 10.079.00 (informado pelo dono, 06/11/2026). Funções puras: testadas.
-const CEST_DO_NCM = { '8481.80.19': '10.079.00', '3926.90.90': '10.020.00' };
+const CEST_DO_NCM = { '8481.80.19': '10.079.00', '3926.90.90': '10.020.00', '3925.90.90': '10.020.00' };
 // NCM pelo nome do produto (informado pelo dono, 06/11/2026); o resto = NCM_PADRAO
-const NCM_DO_NOME = [[/desempenadeira/i, '3926.90.90']];
+const NCM_DO_NOME = [[/desempenadeira/i, '3926.90.90'], [/bucha/i, '3925.90.90']];
 const ncmPeloNome = (d) => (NCM_DO_NOME.find(([re]) => re.test(String(d || ''))) || [])[1] || null;
 function cestValido(s) {
   const d = String(s ?? '').replace(/\D/g, '');
