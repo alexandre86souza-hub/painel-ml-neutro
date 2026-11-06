@@ -523,8 +523,8 @@ html[data-tema="escuro"][data-pagina="produtos"] .seg{border:1px solid hsla(218,
 html[data-tema="escuro"][data-pagina="produtos"] .seg button{background:var(--card)}
 html[data-tema="escuro"][data-pagina="produtos"] .seg button+button{border-left:1px solid hsla(218,24%,60%,.35)}
 html[data-tema="escuro"][data-pagina="produtos"] button.bt{border:1px solid hsla(218,24%,60%,.35);background:var(--card)}
-html[data-tema="escuro"][data-pagina="produtos"] td input:hover,
-html[data-tema="escuro"][data-pagina="produtos"] td select:hover{border-color:hsla(218,24%,60%,.35)}
+html[data-tema="escuro"][data-pagina="produtos"] td input:not([type="checkbox"]),
+html[data-tema="escuro"][data-pagina="produtos"] td select{border:1px solid hsla(218,24%,60%,.35);background:var(--card)}
 html[data-tema="escuro"][data-pagina="produtos"] td input:focus,
 html[data-tema="escuro"][data-pagina="produtos"] td select:focus{background:var(--card)}
 html[data-tema="escuro"][data-pagina="produtos"] tr.sujo td{background:hsla(220,90%,60%,.14)}

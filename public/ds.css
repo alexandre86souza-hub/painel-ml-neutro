@@ -397,3 +397,9 @@ html[data-tema] .sb-logo img{display:block;width:auto;height:auto;max-width:84px
 }
 /* Promoções e Ads: a coluna da loja (com a nota de cada uma) não espreme em 10 linhas */
 @media screen{ html[data-pagina="placar"] main table td:first-child{min-width:200px} }
+/* Produtos: campos editáveis da tabela com borda visível e fundo de campo (pedido do dono, 06/11/2026) */
+@media screen{
+  html[data-tema="escuro"][data-pagina="produtos"] td input:not([type="checkbox"]),html[data-tema="escuro"][data-pagina="produtos"] td select{background-color:#0d1525;border-color:#26344f}
+  html[data-tema="escuro"][data-pagina="produtos"] td input:not([type="checkbox"]):hover,html[data-tema="escuro"][data-pagina="produtos"] td select:hover{border-color:#3b4d70}
+  html[data-tema][data-pagina="produtos"] td input:not([type="checkbox"]):focus,html[data-tema][data-pagina="produtos"] td select:focus{border-color:var(--acento);box-shadow:0 0 0 3px var(--acento-suave)}
+}
