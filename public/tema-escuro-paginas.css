@@ -549,6 +549,7 @@ html[data-tema="escuro"][data-pagina="produtos"] tr.duplica td{background:hsla(4
 html[data-tema="escuro"][data-pagina="produtos"] .alerta-troca{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%);border:1px solid hsla(45,76%,60%,.35)}
 html[data-tema="escuro"][data-pagina="produtos"] .comp input{border:1px solid hsla(218,24%,60%,.35);background:var(--card)}
 html[data-tema="escuro"][data-pagina="produtos"] .ok-comp{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="produtos"] .abas-prod .qtd{background:hsla(15,88%,60%,.14);color:hsl(15,71%,72%)}
 /* promocoes.html */
 html[data-tema="escuro"][data-pagina="promocoes"] .seg{border:1px solid var(--line);background:var(--card)}
 html[data-tema="escuro"][data-pagina="promocoes"] .seg button{background:var(--card)}

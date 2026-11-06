@@ -85,6 +85,19 @@
   .ok-comp{font-size:12px;color:#0b6b33;margin-top:4px}
   @media (max-width:900px){ .cartoes{grid-template-columns:repeat(2,minmax(0,1fr))} .novo{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .novo input,.novo select{min-width:0;width:100%} }
   label.retro-custo{display:block;font-size:11px;font-weight:400;color:var(--muted);margin-top:4px;white-space:nowrap;text-align:left}
+  /* Reorganização (06/11/2026): a tabela de produtos em primeiro; sem custo, troca de SKU e atacado em abas; cadastrar recolhido */
+  .abas-prod{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;border-bottom:1px solid var(--line);margin:0 0 16px}
+  .abas-prod button{font:inherit;font-size:14px;font-weight:600;flex:none;white-space:nowrap;padding:10px 14px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);cursor:pointer;display:flex;gap:8px;align-items:center;margin-bottom:-1px}
+  .abas-prod button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brand,#2563eb)}
+  .abas-prod .qtd{font-size:12px;font-weight:700;border-radius:999px;padding:1px 8px;background:#fde8e1;color:#b4441e}
+  .abas-prod .qtd:empty{display:none}
+  [data-aba][hidden]{display:none!important}
+  details.novo-box > summary{cursor:pointer;list-style:none;display:flex;gap:10px;align-items:center}
+  details.novo-box > summary::-webkit-details-marker{display:none}
+  details.novo-box > summary h2{margin:0;font-size:16px}
+  details.novo-box > summary::before{content:"+";font-weight:800;font-size:18px;color:var(--brand,#2563eb)}
+  details.novo-box[open] > summary{margin-bottom:10px}
+  #cartoesProd .cartao.atalho{cursor:pointer}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -114,14 +127,21 @@
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
 
-  <div class="cartoes">
+  <div class="cartoes" id="cartoesProd">
     <div class="cartao"><p class="rotulo">Produtos na tabela</p><div class="valor" id="vTotal">—</div></div>
     <div class="cartao"><p class="rotulo">Em uso nos anúncios</p><div class="valor" id="vUso">—</div></div>
     <div class="cartao"><p class="rotulo">Sem custo</p><div class="valor" id="vSem">—</div></div>
     <div class="cartao"><p class="rotulo">Usados sem custo</p><div class="valor" id="vUsoSem">—</div></div>
   </div>
 
-  <section class="bloco" id="sem-custo">
+  <div class="abas-prod" role="tablist" aria-label="Partes da tela" id="abasProd">
+    <button type="button" role="tab" data-a="tabela" aria-selected="true">Tabela de produtos</button>
+    <button type="button" role="tab" data-a="sem-custo" aria-selected="false">Vendidos sem custo <span class="qtd" id="qSem"></span></button>
+    <button type="button" role="tab" data-a="troca" aria-selected="false">Trocar produto no SKU</button>
+    <button type="button" role="tab" data-a="atacado" aria-selected="false">Atacado em massa</button>
+  </div>
+
+  <section class="bloco" id="sem-custo" data-aba="sem-custo">
     <h2>Anúncios vendidos sem custo (últimos 30 dias)</h2>
     <p class="sub">Todas as contas e lojas. O SKU do anúncio não diz os produtos certos? Escolha aqui os produtos que vão no anúncio
       (ex.: DB-005.4 = <b>DQ-005 + BP-408</b>): o painel passa a usar esses produtos no custo, lucro, estoque e comandas, e o
@@ -130,7 +150,7 @@
     <details id="compBox" style="margin-top:10px"><summary>Produtos escolhidos no painel (<span id="compN">0</span>)</summary><div id="compLista"></div></details>
   </section>
 
-  <section class="bloco" id="blocoTroca">
+  <section class="bloco" id="blocoTroca" data-aba="troca">
     <h2>Trocar um produto no SKU dos anúncios</h2>
     <p class="sub">Mudou o fornecedor e o produto ganhou outro código? Informe o produto antigo e o novo, escolha os anúncios e o painel troca
       <b>só esse número</b> dentro do SKU de cada um (ex.: KIT-<b>795</b>.713 vira KIT-<b>854</b>.713). O resto do SKU não muda.
@@ -147,8 +167,8 @@
     <div id="trocaLista"></div>
   </section>
 
-  <section class="bloco">
-    <h2>Cadastrar produto</h2>
+  <details class="bloco novo-box" data-aba="tabela" id="boxNovo">
+    <summary><h2>Cadastrar produto</h2></summary>
     <p class="sub">O número do SKU é a chave usada nos anúncios: DQ-943 vira o "943" do SKU KIT-943.408.</p>
     <form class="novo" id="formNovo">
       <label>SKU<input id="nSku" placeholder="DQ-943" required></label>
@@ -158,9 +178,9 @@
       <label>Fornecedor<input id="nForn"></label>
       <button class="bt primario">Cadastrar</button>
     </form>
-  </section>
+  </details>
 
-  <section class="bloco">
+  <section class="bloco" data-aba="tabela">
     <h2>Tabela de produtos</h2>
     <p class="sub">Edite o custo (preço de compra), o nome, a situação ou o fornecedor direto na linha e clique em <b>Salvar</b>.
       O custo de todos os anúncios que usam o produto no SKU é recalculado na hora. O lucro das vendas já feitas continua com o custo
@@ -189,7 +209,7 @@
     <div class="mais"><button type="button" class="bt" id="btMais" hidden>Mostrar mais</button></div>
   </section>
 
-  <section class="bloco" id="blocoAtacado">
+  <section class="bloco" id="blocoAtacado" data-aba="atacado">
     <h2>Preço de atacado em massa</h2>
     <p class="sub">Defina as faixas de desconto por quantidade, marque os anúncios e aplique em todos de uma vez. O desconto é em % sobre o preço de cada anúncio,
       então as mesmas faixas servem para anúncios de preços diferentes. Aplicar substitui o atacado que o anúncio já tiver.</p>
@@ -387,7 +407,7 @@ function linha(p){
   tdAc.append(bt);
   if(p.uso.anuncios){
     const tr2 = el('button', 'bt', 'Trocar SKU'); tr2.type = 'button'; tr2.title = 'Trocar este produto por outro no SKU dos anúncios';
-    tr2.onclick = () => { $('tDe').value = p.sku; $('tPara').value = ''; $('trocaLista').innerHTML = ''; $('blocoTroca').scrollIntoView({ behavior:'smooth', block:'start' }); $('tPara').focus(); };
+    tr2.onclick = () => { $('tDe').value = p.sku; $('tPara').value = ''; $('trocaLista').innerHTML = ''; abaProd('troca'); $('blocoTroca').scrollIntoView({ behavior:'smooth', block:'start' }); $('tPara').focus(); };
     tdAc.append(' ', tr2);
   }
   tdAc.append(el('br'), salvo);
@@ -805,11 +825,23 @@ function editorProdutos(inicial, aoSalvar, rotuloBotao = 'Vincular'){
   return box;
 }
 const gravarComposicao = (sku, lista) => enviar('PUT', '/api/produtos/composicoes', { sku, produtos: lista });
+// abas: a escolhida fica no navegador; #sem-custo (link do "Precisa de atenção"), #troca ou #atacado abrem direto
+const ABAS_PROD = ['tabela', 'sem-custo', 'troca', 'atacado'];
+function abaProd(k){
+  if(!ABAS_PROD.includes(k)) k = 'tabela';
+  for(const b of $('abasProd').querySelectorAll('button')) b.setAttribute('aria-selected', String(b.dataset.a === k));
+  for(const sct of document.querySelectorAll('[data-aba]')) sct.hidden = sct.dataset.aba !== k;
+  try{ localStorage.setItem('painel.produtos.aba', k); }catch{}
+}
+$('abasProd').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abaProd(b.dataset.a); };
+{ let ini = location.hash.slice(1); if(!ABAS_PROD.includes(ini)){ try{ ini = localStorage.getItem('painel.produtos.aba'); }catch{} } abaProd(ini); }
+window.addEventListener('hashchange', () => { const k = location.hash.slice(1); if(ABAS_PROD.includes(k)) abaProd(k); });
 async function carregarSemCusto(){
   const box = $('semCusto');
   let r; try{ r = await api('/api/produtos/sem-custo'); }catch(e){ box.innerHTML = ''; box.appendChild(el('p', 'sub', 'Não foi possível ler: ' + e.message)); return; }
   box.innerHTML = '';
   for(const e of r.erros || []) box.appendChild(el('p', 'alerta-troca', e));
+  $('qSem').textContent = r.itens.length ? numero(r.itens.length) : '';
   if(!r.itens.length){ box.appendChild(el('p', 'sub', 'Nenhum anúncio vendido sem custo nos últimos 30 dias.')); return; }
   const t = el('table'); const cab = el('tr');
   for(const h of ['Conta', 'Anúncio', 'Vendas', 'Falta na tabela', 'Produtos do anúncio']) cab.appendChild(el('th', null, h));
