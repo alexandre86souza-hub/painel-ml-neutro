@@ -630,6 +630,8 @@ html[data-tema="escuro"][data-pagina="publicar"] #drop{background:hsla(210,25%,6
 html[data-tema="escuro"][data-pagina="publicar"] #drop:hover{background:hsla(216,90%,60%,.14)}
 html[data-tema="escuro"][data-pagina="publicar"] #drop.dentro{background:hsla(220,79%,60%,.14)}
 html[data-tema="escuro"][data-pagina="publicar"] #thumbs li{background:var(--card)}
+html[data-tema="escuro"][data-pagina="publicar"] .passos{background:var(--bg,var(--card))}
+html[data-tema="escuro"][data-pagina="publicar"] #form > .acoes{background:var(--card,var(--card))}
 /* reputacao.html */
 html[data-tema="escuro"][data-pagina="reputacao"] .cartao.alerta .valor{color:hsl(26,90%,72%)}
 html[data-tema="escuro"][data-pagina="reputacao"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}

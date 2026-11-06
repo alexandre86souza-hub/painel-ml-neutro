@@ -73,6 +73,14 @@
   #thumbs .x{position:absolute;top:4px;right:4px;width:24px;height:24px;padding:0;border-radius:50%;
     background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;display:grid;place-items:center}
   #thumbs .carregando{display:grid;place-items:center;height:100%;font-size:12px;color:var(--muted)}
+  /* Reorganização (06/11/2026): passos do formulário no topo (pula para a parte) e o botão de publicar sempre à vista */
+  .passos{position:sticky;top:0;z-index:6;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding:8px 0;margin:0 0 12px;background:var(--bg,#fff);border-bottom:1px solid var(--line)}
+  .passos a{flex:none;white-space:nowrap;font-size:13px;font-weight:600;text-decoration:none;color:var(--muted);padding:6px 12px;border:1px solid var(--line);border-radius:999px;display:flex;gap:6px;align-items:center}
+  .passos a .n{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--line);color:var(--ink);font-size:11px}
+  .passos a.atual{color:var(--ink);border-color:var(--brand,#2563eb)}
+  .passos a.atual .n{background:var(--brand,#2563eb);color:#fff}
+  #form fieldset{scroll-margin-top:64px}
+  #form > .acoes{position:sticky;bottom:0;z-index:5;background:var(--card,#fff);padding:12px 0;border-top:1px solid var(--line)}
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -101,6 +109,7 @@
 
 
 <main>
+<nav class="passos" id="passos" aria-label="Partes do anúncio"></nav>
 <form id="form" novalidate>
 
   <fieldset>
@@ -755,5 +764,32 @@ $('form').onsubmit = async (ev) => {
 </script>
 <script src="/aviso.js?v=2" defer></script>
 <script src="/sino.js?v=6" defer></script>
+<script>
+// passos: uma pílula por parte visível do formulário (ficha técnica e medidas só aparecem quando a categoria pede)
+(function(){
+  const nav = document.getElementById('passos');
+  const partes = () => [...document.querySelectorAll('#form > fieldset')].filter((f) => !f.hidden);
+  function pintar(){
+    nav.innerHTML = '';
+    partes().forEach((f, k) => {
+      if(!f.id) f.id = 'parte' + k;
+      const a = document.createElement('a'); a.href = '#' + f.id;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = String(k + 1);
+      a.append(n, document.createTextNode((f.querySelector('legend')?.firstChild?.textContent || 'Parte').trim()));
+      a.onclick = (ev) => { ev.preventDefault(); f.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      nav.appendChild(a);
+    });
+    marcar();
+  }
+  function marcar(){
+    const ps = partes(); let atual = ps[0];
+    for(const f of ps) if(f.getBoundingClientRect().top < 120) atual = f;
+    for(const a of nav.querySelectorAll('a')) a.classList.toggle('atual', a.getAttribute('href') === '#' + (atual && atual.id));
+  }
+  new MutationObserver(pintar).observe(document.getElementById('form'), { attributes: true, subtree: true, attributeFilter: ['hidden'] });
+  addEventListener('scroll', marcar, { passive: true, capture: true });
+  pintar();
+})();
+</script>
 </body>
 </html>
