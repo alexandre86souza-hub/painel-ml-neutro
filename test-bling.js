@@ -71,6 +71,13 @@ assert.ok(!B.itemAjustado([{ codigo: 'AMG-1', ncm: '8481.80.19', origem: 2, suge
 assert.ok(!B.itemAjustado([{ codigo: '', ncm: '', origem: 2, sugestao: { origem: 2 } }]), 'sem NCM');
 assert.ok(!B.itemAjustado([{ codigo: '', ncm: '8481.80.19', origem: 0, sugestao: { origem: 2 } }]), 'origem diferente');
 
+// nota da Shopee vai à loja pelo painel (o Bling não tem envio automático para a Shopee)
+assert.ok(B.ehShopee('Shopee AMG', null));
+assert.ok(!B.ehShopee('Leroy Merlin', '251106ABC123XY'));
+assert.ok(B.ehShopee(null, '251106ABC123XY'));
+assert.ok(!B.ehShopee(null, '702-1234567-1234567'));
+assert.deepStrictEqual(B.SHOPEE_DA_CONTA, { 1: '445620092', 2: '717079477' });
+
 // nota fiscal tem dado do comprador: nada do Bling no MCP
 assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/bling');
 

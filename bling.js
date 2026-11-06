@@ -133,7 +133,12 @@ const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
 
-function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPainel, enviarHtml, redirecionar, pagina, esc }) {
+// Loja da Shopee de cada conta do Bling (conta 1 = Shopee AMG, conta 2 = Shopee Primor).
+const SHOPEE_DA_CONTA = { 1: '445620092', 2: '717079477' };
+const PEDIDO_SHOPEE = /^\d{6}(?=[0-9A-Z]*[A-Z])[0-9A-Z]{6,10}$/;
+const ehShopee = (lojaNome, pedidoLoja) => (lojaNome ? /shopee/i.test(lojaNome) : PEDIDO_SHOPEE.test(String(pedidoLoja || '').trim()));
+
+function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, portaPainel, enviarHtml, redirecionar, pagina, esc }) {
   const config = (n) => ({
     client_id: D.configLer(chave(n, 'client_id')) || null,
     client_secret: D.configLer(chave(n, 'client_secret')) || null,
@@ -273,7 +278,43 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
     return m;
   }
 
+  // Manda o XML da nota AUTORIZADA ao pedido da Shopee (v2.order.upload_invoice_doc, file_type 4 = XML). O Bling não tem
+  // envio automático para a Shopee. O XML (tem dado do comprador) só passa pela memória: não é guardado.
+  async function enviarNotaShopee(n, nota) {
+    const lojaNome = (await lojasDe(n))[nota.loja?.id] || null;
+    if (!ehShopee(lojaNome, nota.numeroPedidoLoja)) return { aplica: false };
+    const shop = SHOPEE_DA_CONTA[n];
+    const pedido = String(nota.numeroPedidoLoja || '').trim();
+    if (!shop || !shopee) return { aplica: true, enviada: false, motivo: 'Loja da Shopee desta conta não configurada no painel.' };
+    if (!pedido) return { aplica: true, enviada: false, motivo: 'A nota não tem o número do pedido da Shopee.' };
+    if (![5, 6, 7].includes(Number(nota.situacao))) return { aplica: true, enviada: false, motivo: 'A nota ainda não está autorizada.' };
+    if (!/^https:\/\//.test(nota.xml || '')) return { aplica: true, enviada: false, motivo: 'O Bling não deu o link do XML da nota.' };
+    try {
+      const r = await fetch(nota.xml, { signal: AbortSignal.timeout(20000) });
+      const xml = Buffer.from(await r.arrayBuffer());
+      if (!r.ok || !/<(nfeProc|NFe)\b/.test(xml.subarray(0, 4000).toString('utf8'))) throw erro('O link do XML do Bling não devolveu o XML da nota.', 502);
+      if (xml.length > 1024 * 1024) throw erro('O XML passa de 1 MB (limite da Shopee).', 400);
+      const fd = new FormData();
+      fd.append('order_sn', pedido);
+      fd.append('file_type', '4');
+      fd.append('file', new Blob([xml], { type: 'text/xml' }), `${nota.chaveAcesso || nota.numero || 'nota'}.xml`);
+      await shopee(shop, '/api/v2/order/upload_invoice_doc', {}, fd);
+      return { aplica: true, enviada: true, pedido };
+    } catch (e) { return { aplica: true, enviada: false, pedido, motivo: e.message }; }
+  }
+
   const rotas = {
+    // { conta, id } — (re)envia à Shopee o XML de uma nota já AUTORIZADA (clique na tela).
+    'POST /api/bling/notas/enviar-shopee': async (_u, body) => {
+      const n = contaValida(body?.conta);
+      const id = String(body?.id ?? '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
+      const nota = (await bling(n, `/nfe/${id}`)).data;
+      if (!nota) throw erro('O Bling não achou essa nota.', 404);
+      const r = await enviarNotaShopee(n, nota);
+      if (!r.aplica) throw erro('Essa nota não é de pedido da Shopee.', 409);
+      return r;
+    },
     // Notas de saída PENDENTES (ainda não emitidas) da conta, com a sugestão de cada item.
     'GET /api/bling/notas': async (url) => {
       const n = contaValida(url.searchParams.get('conta'));
@@ -307,8 +348,10 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
         if (![1, 3, 8, 10].includes(Number(d.situacao))) break;
       }
       const sit = Number(d.situacao);
+      const autorizada = [5, 6, 7].includes(sit);
+      const shopeeEnvio = autorizada ? await enviarNotaShopee(n, d) : null;
       return { id: d.id, numero: d.numero ?? null, situacao: sit, situacao_nome: SITUACAO_NF[sit] || String(sit),
-        autorizada: [5, 6, 7].includes(sit), rejeitada: sit === 4, aguardando: [1, 3, 8, 10].includes(sit) };
+        autorizada, rejeitada: sit === 4, aguardando: [1, 3, 8, 10].includes(sit), shopee: shopeeEnvio?.aplica ? shopeeEnvio : null };
     },
     'POST /api/bling/notas/corrigir': async (_u, body) => {
       const n = contaValida(body?.conta);
@@ -449,5 +492,5 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
   return { rotas, rotasParam: [], callback, bling };
 }
 
-module.exports = { criar, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
+module.exports = { criar, ehShopee, SHOPEE_DA_CONTA, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
   sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, cestValido, descricaoValida, origemDoProduto, nacionalPeloNome };

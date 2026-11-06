@@ -115,7 +115,9 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const qs = new URLSearchParams({ partner_id: c.partner_id, timestamp: String(ts), access_token: l.access_token,
         shop_id: String(l.shop_id), sign: assinar(c.partner_key, c.partner_id, caminho, ts, l.access_token, l.shop_id) });
       for (const [k, v] of Object.entries(params)) if (v != null && v !== '') qs.set(k, Array.isArray(v) ? v.join(',') : String(v));
-      return pedir(`${c.host}${caminho}?${qs}`, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : {}, arquivo);
+      const opts = corpo instanceof FormData ? { method: 'POST', body: corpo }
+        : corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : {};
+      return pedir(`${c.host}${caminho}?${qs}`, opts, arquivo);
     };
     try { return await chamar(loja); }
     catch (e) {

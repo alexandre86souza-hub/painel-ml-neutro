@@ -2426,7 +2426,7 @@ rotasParam.push(...amazonAdsMod.rotasParam);
 // ---------- Bling: as duas contas das notas fiscais (bling.js) ----------
 // Retorno da autorização em /bling/callback, pela porta pública (ver tratarPublico). Nada do Bling no MCP.
 const blingMod = require('./bling.js').criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth,
-  portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
+  shopee: (...a) => shopeeMod.daLoja(...a), portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
   pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, blingMod.rotas);
 

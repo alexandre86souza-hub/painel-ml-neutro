@@ -274,7 +274,24 @@ Conferiu cliente, valores, frete e itens?`)) return;
         em.disabled = true; bt.disabled = true; res.className = 'res'; res.textContent = 'Enviando para a Sefaz pelo Bling… (até 30 s)';
         try{
           const r = await enviar('POST', '/api/bling/notas/emitir', { conta: n.conta, id: n.id });
-          if(r.autorizada){ aviso(`✓ Nota ${r.numero || n.numero} ${r.situacao_nome.toLowerCase()} pela Sefaz.`, 'ok'); notas = notas.filter((x) => x !== n); desenhar(); return; }
+          if(r.autorizada){
+            const ok = `✓ Nota ${r.numero || n.numero} ${r.situacao_nome.toLowerCase()} pela Sefaz.`;
+            if(r.shopee && !r.shopee.enviada){
+              // autorizada, mas a Shopee não recebeu: fica o botão para tentar de novo
+              res.className = 'res erro'; res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${r.shopee.motivo || 'erro'} `;
+              const de = el('button', 'bt', 'Enviar nota para a Shopee'); de.type = 'button';
+              de.onclick = async () => {
+                de.disabled = true;
+                try{ const x = await enviar('POST', '/api/bling/notas/enviar-shopee', { conta: n.conta, id: n.id });
+                  if(x.enviada){ aviso(`✓ Nota ${r.numero || n.numero} enviada ao pedido ${x.pedido} da Shopee.`, 'ok'); notas = notas.filter((y) => y !== n); desenhar(); }
+                  else{ res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${x.motivo || 'erro'} `; res.appendChild(de); de.disabled = false; } }
+                catch(e){ res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${e.message} `; res.appendChild(de); de.disabled = false; }
+              };
+              res.appendChild(de); return;
+            }
+            aviso(r.shopee?.enviada ? `${ok} Enviada também ao pedido ${r.shopee.pedido} da Shopee.` : ok, 'ok');
+            notas = notas.filter((x) => x !== n); desenhar(); return;
+          }
           if(r.rejeitada){ n.situacao = 4; aviso(`A Sefaz rejeitou a nota ${r.numero || n.numero}: abra no Bling para ver o motivo.`); desenhar(); return; }
           res.className = 'res'; res.textContent = `Enviada. Situação no Bling: ${r.situacao_nome}. Clique em Atualizar daqui a pouco.`;
         }catch(e){ res.className = 'res erro'; res.textContent = 'Não emitiu: ' + e.message; em.disabled = false; bt.disabled = false; }
