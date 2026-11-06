@@ -43,6 +43,11 @@
   .editor label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
   @media (max-width:700px){ .editor{grid-template-columns:1fr} }
   td.dinheiro{white-space:nowrap;text-align:right}
+  /* Reorganização (06/11/2026): as abas com o mesmo desenho das outras telas (sublinhado), não como botões de período */
+  #segAba{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;border:0;border-radius:0;border-bottom:1px solid var(--line);background:none;margin:0 0 16px}
+  #segAba button{font:inherit;font-size:14px;font-weight:600;flex:none;white-space:nowrap;padding:10px 14px;border:0;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);margin-bottom:-1px}
+  #segAba button+button{border-left:0}
+  #segAba button[aria-selected="true"]{color:var(--ink);background:none;border-bottom-color:var(--brand,#2563eb)}
 </style>
 </head>
 <body>
@@ -174,7 +179,7 @@
 <script src="/comum.js?v=10"></script>
 <script>
 const params = new URLSearchParams(location.search);
-let aba = ['resumo', 'extrato', 'conferencia'].includes(params.get('aba')) ? params.get('aba') : 'resumo';
+let aba = ['resumo', 'extrato', 'conferencia'].includes(params.get('aba')) ? params.get('aba') : (() => { try{ const g = localStorage.getItem('painel.financeiro.aba'); return ['resumo', 'extrato', 'conferencia'].includes(g) ? g : 'resumo'; }catch{ return 'resumo'; } })();
 let dias = periodoInicial('segDias', 30), dados = null, filtro = '', mostrar = 200;
 let extrato = null, mostrarExt = 200, timerExtrato = null;
 let conf = null, filtroConf = 'pendente', mostrarConf = 200, editando = null;
@@ -488,7 +493,7 @@ async function carregar(recarregar){
   }catch(e){ erroTela(e.message); }
 }
 function mostrarAba(nova){
-  aba = nova;
+  aba = nova; try{ localStorage.setItem('painel.financeiro.aba', aba); }catch{}
   for(const b of $('segAba').querySelectorAll('button')) { b.setAttribute('aria-pressed', String(b.dataset.aba === aba)); b.setAttribute('aria-selected', String(b.dataset.aba === aba)); }
   $('abaResumo').hidden = aba !== 'resumo'; $('abaExtrato').hidden = aba !== 'extrato'; $('abaConf').hidden = aba !== 'conferencia';
   $('bt120').hidden = aba !== 'conferencia';
