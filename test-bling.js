@@ -40,6 +40,8 @@ assert.strictEqual(B.origemDoProduto('2', true), 0);
 assert.ok(B.nacionalPeloNome('Bucha de Fixação 8mm') && B.nacionalPeloNome('Desempenadeira de aço') && !B.nacionalPeloNome('Ducha Inox'));
 const sg = B.sugestaoDe({ descricao: 'Ducha GW Comercial', classificacaoFiscal: '' }, null);
 assert.deepStrictEqual(sg, { descricao: 'Ducha GW Comercial', ncm: '8481.80.19', cest: '10.079.00', nacional: false, salvo: false });
+const dz = B.sugestaoDe({ descricao: 'Desempenadeira Plástica Lisa 18x30' }, null);
+assert.deepStrictEqual([dz.ncm, dz.cest, dz.nacional], ['3926.90.90', '10.020.00', true], 'desempenadeira: NCM, CEST e nacional');
 assert.strictEqual(B.cestValido('1007900'), '10.079.00');
 assert.strictEqual(B.cestValido(''), '');
 assert.throws(() => B.cestValido('123'), /CEST/);

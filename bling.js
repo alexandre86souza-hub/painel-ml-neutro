@@ -70,7 +70,10 @@ function ncmValido(s) {
 }
 // CEST (obrigatório com substituição tributária, ex.: CFOP 5405): 7 números -> "10.079.00"; vazio = sem CEST.
 // Sugestão pelo NCM: 8481.80.19 -> 10.079.00 (informado pelo dono, 06/11/2026). Funções puras: testadas.
-const CEST_DO_NCM = { '8481.80.19': '10.079.00' };
+const CEST_DO_NCM = { '8481.80.19': '10.079.00', '3926.90.90': '10.020.00' };
+// NCM pelo nome do produto (informado pelo dono, 06/11/2026); o resto = NCM_PADRAO
+const NCM_DO_NOME = [[/desempenadeira/i, '3926.90.90']];
+const ncmPeloNome = (d) => (NCM_DO_NOME.find(([re]) => re.test(String(d || ''))) || [])[1] || null;
 function cestValido(s) {
   const d = String(s ?? '').replace(/\D/g, '');
   if (!d) return '';
@@ -87,7 +90,7 @@ function descricaoValida(s) {
 // pelo nome. Função pura: testada.
 function sugestaoDe(item, salvo) {
   if (salvo) return { descricao: salvo.descricao, ncm: salvo.ncm, cest: salvo.cest ?? item?.cest ?? CEST_DO_NCM[salvo.ncm] ?? '', nacional: !!salvo.nacional, salvo: true };
-  const ncm = item?.classificacaoFiscal || NCM_PADRAO;
+  const ncm = item?.classificacaoFiscal || ncmPeloNome(item?.descricao) || NCM_PADRAO;
   return { descricao: String(item?.descricao || '').trim(), ncm, cest: item?.cest || CEST_DO_NCM[ncm] || '', nacional: nacionalPeloNome(item?.descricao), salvo: false };
 }
 // Código "sem código": a API recusa o código vazio ("Codigo do produto … deve ser informado"), e o Bling, quando o
