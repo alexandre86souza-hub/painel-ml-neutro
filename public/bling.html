@@ -22,6 +22,9 @@
   .num b{display:block;font-size:26px;line-height:1.1}
   .num span{font-size:13px;color:var(--muted)}
   .num.ajustar b{color:#b54708}
+  .num.gerar b{color:#1570ef}
+  .nota.ped{border-left-color:#2e90fa}
+  .etq.gerar{background:#d1e9ff;color:#175cd3}
   .num.emitir b{color:#0b6b33}
   .num.rejeitada b{color:#b42318}
   .num.ativo{outline:2px solid var(--brand);outline-offset:-1px}
@@ -86,13 +89,14 @@
   <div id="msg" role="status" aria-live="polite"></div>
 
   <ol class="passos">
-    <li>No Bling, gere a <b>nota do pedido</b> (sem editar e sem emitir).</li>
-    <li>Aqui, confira <b>nome curto, NCM e origem</b> e clique em <b>Ajustar no Bling</b> (no lugar do SKU vai CFOP + o número do CFOP, como o Bling faz quando você apaga o código).</li>
-    <li>Confira e clique em <b>Emitir nota</b> (ou emita no Bling).</li>
+    <li>Os <b>pedidos sem nota</b> do Bling aparecem aqui sozinhos (o pedido precisa estar importado no Bling).</li>
+    <li>Confira <b>nome curto, NCM, CEST e origem</b> e clique em <b>Gerar nota</b>: o painel gera a nota no Bling já ajustada (no lugar do SKU vai CFOP + o número do CFOP).</li>
+    <li>Confira e clique em <b>Emitir nota</b>.</li>
   </ol>
 
   <div class="abas" id="abas" role="tablist" aria-label="Conta do Bling"></div>
   <div class="resumo" id="resumo">
+    <button type="button" class="num gerar" data-f="gerar"><b id="nGerar">—</b><span>pedidos sem nota</span></button>
     <button type="button" class="num ajustar" data-f="ajustar"><b id="nAjustar">—</b><span>falta ajustar</span></button>
     <button type="button" class="num emitir" data-f="emitir"><b id="nEmitir">—</b><span>ajustadas · falta emitir no Bling</span></button>
     <button type="button" class="num rejeitada" data-f="rej"><b id="nRej">—</b><span>rejeitadas pela Sefaz</span></button>
@@ -127,19 +131,19 @@ const lojaPeloPedido = (p) => { const s = String(p || '').trim();
 let cfg = null, notas = [], filtro = null;
 // aba: '' = as duas contas, '1' = AMG, '2' = Primor (lembrada neste navegador)
 let aba = (() => { try{ return localStorage.getItem('bling_aba') || ''; }catch{ return ''; } })();
-const estado = (n) => (Number(n.situacao) === 4 ? 'rej' : n.ajustada ? 'emitir' : 'ajustar');
+const estado = (n) => (n.tipo === 'pedido' ? 'gerar' : Number(n.situacao) === 4 ? 'rej' : n.ajustada ? 'emitir' : 'ajustar');
 
 // ---------- notas das duas contas ----------
 async function lerNotas(){
   $('btAtualizar').disabled = true;
   const contas = (cfg?.contas || []).filter((c) => c.conectada);
   if(!contas.length){ $('lista').innerHTML = ''; const v = vazio('Nenhuma conta do Bling conectada', ''); const a = el('a', null, 'Conectar em Conexões e sistema → Bling (conexão)'); a.href = '/bling-conexao.html'; v.appendChild(a); $('lista').appendChild(v); $('btAtualizar').disabled = false; return; }
-  $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Lendo as notas no Bling…'));
+  $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Lendo os pedidos e as notas no Bling…'));
   const erros = [];
-  const partes = await Promise.all(contas.map(async (c) => {
-    try{ const r = await api('/api/bling/notas?conta=' + c.conta); return r.notas.map((n) => ({ ...n, conta: c.conta, nomeConta: c.nome || ('Conta ' + c.conta) })); }
-    catch(e){ erros.push(`${c.nome || 'Conta ' + c.conta}: ${e.message}`); return []; }
-  }));
+  const partes = await Promise.all(contas.flatMap((c) => [['notas', 'notas', 'nota'], ['pedidos', 'pedidos', 'pedido']].map(async ([rota, campo, tipo]) => {
+    try{ const r = await api(`/api/bling/${rota}?conta=` + c.conta); return r[campo].map((n) => ({ ...n, tipo, conta: c.conta, nomeConta: c.nome || ('Conta ' + c.conta) })); }
+    catch(e){ erros.push(`${c.nome || 'Conta ' + c.conta} (${rota}): ${e.message}`); return []; }
+  })));
   notas = partes.flat().sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
   aviso(erros.length ? 'Não consegui ler: ' + erros.join(' · ') : '');
   $('lidoEm').textContent = 'Lido às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
@@ -167,50 +171,52 @@ function desenharAbas(){
 function desenhar(){
   desenharAbas();
   const daAba = notas.filter((n) => !aba || n.conta === aba);
-  const conta = { ajustar: 0, emitir: 0, rej: 0 };
+  const conta = { gerar: 0, ajustar: 0, emitir: 0, rej: 0 };
   for(const n of daAba) conta[estado(n)]++;
+  $('nGerar').textContent = conta.gerar;
   $('nAjustar').textContent = conta.ajustar; $('nEmitir').textContent = conta.emitir; $('nRej').textContent = conta.rej;
   for(const b of document.querySelectorAll('.num')) b.classList.toggle('ativo', b.dataset.f === filtro);
   const box = $('lista'); box.innerHTML = '';
   const mostrar = daAba.filter((n) => !filtro || estado(n) === filtro);
-  if(!daAba.length){ box.appendChild(vazio('Tudo em dia ✓', 'Nenhuma nota pendente no Bling. Gere a nota do pedido no Bling e clique em Atualizar.')); return; }
+  if(!daAba.length){ box.appendChild(vazio('Tudo em dia ✓', 'Nenhum pedido sem nota e nenhuma nota pendente no Bling. Pedido novo aparece aqui depois de importado no Bling: clique em Atualizar.')); return; }
   if(!mostrar.length){ box.appendChild(vazio('Nada neste filtro', 'Clique em "Mostrar todas".')); return; }
   // as que faltam ajustar primeiro
-  const ordem = { ajustar: 0, rej: 1, emitir: 2 };
+  const ordem = { gerar: 0, ajustar: 1, rej: 2, emitir: 3 };
   for(const n of mostrar.slice().sort((a, b) => ordem[estado(a)] - ordem[estado(b)])) box.appendChild(cartaoNota(n));
 }
 
 function cartaoNota(n){
   const est = estado(n);
-  const d = el('article', 'nota' + (est === 'emitir' ? ' ok' : est === 'rej' ? ' rej' : ''));
+  const ped = n.tipo === 'pedido';
+  const d = el('article', 'nota' + (est === 'emitir' ? ' ok' : est === 'rej' ? ' rej' : ped ? ' ped' : ''));
   const cab = el('header');
-  cab.appendChild(el('h3', null, `Nota ${n.numero || '(sem número)'}`));
-  cab.appendChild(el('span', 'etq ' + (est === 'rej' ? 'rej' : est), est === 'ajustar' ? 'Falta ajustar' : est === 'emitir' ? 'Ajustada · falta emitir no Bling' : 'Rejeitada · corrigir no Bling'));
+  cab.appendChild(el('h3', null, ped ? `Pedido ${n.numero || ''}` : `Nota ${n.numero || '(sem número)'}`));
+  cab.appendChild(el('span', 'etq ' + (est === 'rej' ? 'rej' : est), ped ? 'Sem nota · gerar' : est === 'ajustar' ? 'Falta ajustar' : est === 'emitir' ? 'Ajustada · falta emitir' : 'Rejeitada · corrigir no Bling'));
   cab.appendChild(el('span', 'etq', n.nomeConta));
-  const loja = lojaPeloPedido(n.pedido_loja);
+  const loja = n.loja_nome || lojaPeloPedido(n.pedido_loja);
   cab.appendChild(el('span', 'info', [loja, n.pedido_loja ? 'pedido ' + n.pedido_loja : null, dia(n.data), reais(n.valor)].filter(Boolean).join(' · ')));
   d.appendChild(cab);
 
   const rolar = el('div', 'rolar'), t = el('table'), tr0 = el('tr');
   for(const h of ['Código', 'Nome na nota', 'NCM', 'CEST', 'Origem do ICMS', 'Qtd']) tr0.appendChild(el('th', null, h));
   t.appendChild(tr0);
-  const campos = [], editavel = Number(n.situacao) === 1;
+  const campos = [], editavel = ped || Number(n.situacao) === 1;
   for(const it of n.itens){
     const tr = el('tr');
     const tdCod = el('td', 'codigo');
-    if(it.codigo && !/^CFOP\d{4}$/.test(it.codigo)){ const s = el('s', null, it.codigo); tdCod.append(s, el('div', 'antes', editavel ? 'vira CFOP + nº do CFOP' : '')); }
+    if(it.codigo && !/^CFOP\d{4}$/.test(it.codigo)){ const s = el('s', null, it.codigo); tdCod.append(s, el('div', 'antes', editavel ? 'na nota vira CFOP + nº do CFOP' : '')); }
     else tdCod.appendChild(el('span', 'salvo', (it.codigo || 'vazio') + ' ✓'));
     const tdNome = el('td'), nome = el('input'); nome.maxLength = 120; nome.value = it.sugestao.descricao; nome.disabled = !editavel; tdNome.appendChild(nome);
     if(it.sugestao.salvo) tdNome.appendChild(el('div', 'salvo', 'nome guardado deste produto'));
-    if(it.descricao && it.descricao !== it.sugestao.descricao){ nome.classList.add('mudou'); tdNome.appendChild(el('div', 'antes', 'na nota hoje: ' + it.descricao)); }
+    if(!ped && it.descricao && it.descricao !== it.sugestao.descricao){ nome.classList.add('mudou'); tdNome.appendChild(el('div', 'antes', 'na nota hoje: ' + it.descricao)); }
     const tdNcm = el('td'), ncm = el('input', 'ncm'); ncm.value = it.sugestao.ncm; ncm.maxLength = 10; ncm.disabled = !editavel; tdNcm.appendChild(ncm);
-    if((it.ncm || '') !== it.sugestao.ncm){ ncm.classList.add('mudou'); tdNcm.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.ncm || 'vazio'))); }
+    if(!ped && (it.ncm || '') !== it.sugestao.ncm){ ncm.classList.add('mudou'); tdNcm.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.ncm || 'vazio'))); }
     const tdCest = el('td'), cest = el('input', 'ncm'); cest.value = it.sugestao.cest || ''; cest.maxLength = 9; cest.placeholder = 'sem CEST'; cest.disabled = !editavel; tdCest.appendChild(cest);
-    if((it.cest || '') !== (it.sugestao.cest || '')){ cest.classList.add('mudou'); tdCest.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.cest || 'vazio'))); }
+    if(!ped && (it.cest || '') !== (it.sugestao.cest || '')){ cest.classList.add('mudou'); tdCest.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.cest || 'vazio'))); }
     const tdOr = el('td'), sel = el('select'); sel.disabled = !editavel;
     for(const nac of [false, true]){ const o = el('option', null, ORIGEM_TXT[origemDe(n.conta, nac)]); o.value = nac ? '1' : '0'; sel.appendChild(o); }
     sel.value = it.sugestao.nacional ? '1' : '0'; tdOr.appendChild(sel);
-    if(Number(it.origem) !== it.sugestao.origem){ sel.classList.add('mudou'); tdOr.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.origem == null ? '—' : (ORIGEM_TXT[it.origem] || it.origem)))); }
+    if(!ped && Number(it.origem) !== it.sugestao.origem){ sel.classList.add('mudou'); tdOr.appendChild(el('div', 'antes', 'na nota hoje: ' + (it.origem == null ? '—' : (ORIGEM_TXT[it.origem] || it.origem)))); }
     tr.append(tdCod, tdNome, tdNcm, tdCest, tdOr, el('td', null, it.quantidade ?? '—'));
     t.appendChild(tr);
     campos.push({ i: it.i, nome, ncm, cest, sel });
@@ -218,7 +224,24 @@ function cartaoNota(n){
   rolar.appendChild(t); d.appendChild(rolar);
 
   const acoes = el('div', 'acoes'), res = el('div', 'res');
-  if(editavel){
+  if(ped){
+    const g = el('button', 'bt primario', 'Gerar nota no Bling'); g.type = 'button';
+    g.onclick = async () => {
+      const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));
+      const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — CEST ${x.cest.trim() || 'sem'} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
+      if(!confirm(`Gerar a nota do pedido ${n.numero || ''} no Bling (${n.nomeConta}, ${reais(n.valor)})?\n\n${lista}\n\nA nota é gerada já ajustada e fica PENDENTE: a emissão é no próximo botão.`)) return;
+      g.disabled = true; res.className = 'res'; res.textContent = 'Gerando a nota no Bling…';
+      try{
+        const r = await enviar('POST', '/api/bling/pedidos/gerar', { conta: n.conta, id: n.id, itens });
+        const nova = { ...r.nota, tipo: 'nota', conta: n.conta, nomeConta: n.nomeConta };
+        notas = notas.map((x) => (x === n ? nova : x));
+        if(r.tudo_certo) aviso(`Nota ${nova.numero || ''} gerada e ajustada. Confira e emita.`, 'ok');
+        else aviso(`Nota ${nova.numero || ''} gerada, mas na releitura algo não bateu: confira os itens e clique em "Ajustar de novo".`);
+        desenhar();
+      }catch(e){ res.className = 'res erro'; res.textContent = 'Não gerou: ' + e.message; g.disabled = false; }
+    };
+    acoes.appendChild(g);
+  } else if(editavel){
     const bt = el('button', 'bt primario', est === 'emitir' ? 'Ajustar de novo' : 'Ajustar no Bling'); bt.type = 'button';
     bt.onclick = async () => {
       const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));

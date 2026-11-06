@@ -222,6 +222,46 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       itens, ajustada: itemAjustado(itens) };
   };
 
+  // Ajusta os itens de uma nota PENDENTE (lida inteira) e confere relendo. mudancas brutas da tela: [{ i, descricao, ncm, cest, nacional }].
+  async function ajustarNota(n, nota, brutas) {
+    const id = nota.id;
+    if (Number(nota.situacao) !== 1) throw erro('Essa nota não está mais pendente no Bling (já foi enviada ou emitida): nada foi mudado.', 409);
+    const itens = nota.itens || [];
+    const mudancas = (Array.isArray(brutas) ? brutas : []).map((m) => {
+      const i = Number(m?.i);
+      if (!Number.isInteger(i) || i < 0 || i >= itens.length) throw erro('Item da nota inválido.');
+      return { i, descricao: descricaoValida(m.descricao), ncm: ncmValido(m.ncm), cest: cestValido(m.cest), nacional: !!m.nacional };
+    });
+    if (!mudancas.length) throw erro('Nenhum item para corrigir.');
+    await bling(n, `/nfe/${id}`, { metodo: 'PUT', corpo: corpoCorrigido(nota, n, mudancas) });
+    // guarda por SKU (o código que veio no item) para a próxima nota
+    const s = salvos();
+    for (const m of mudancas) {
+      const sku = itens[m.i].codigo;
+      if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, cest: m.cest, nacional: m.nacional, em: new Date().toISOString() };
+    }
+    D.configGravar('bling_itens', JSON.stringify(s));
+    // relê para conferir o que o Bling gravou
+    const depois = (await bling(n, `/nfe/${id}`)).data || {};
+    const conferencia = mudancas.map((m) => {
+      const it = (depois.itens || [])[m.i] || {};
+      const o = origemDoProduto(n, m.nacional);
+      const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: soDigitos(it.cest) === soDigitos(m.cest), origem: Number(origemDoItem(it)) === o };
+      return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
+    });
+    return { nota: { ...notaDaTela(n, depois, salvos()), loja_nome: (await lojasDe(n))[depois.loja?.id] || null }, conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
+  }
+
+  // nome de cada loja (canal de venda) do Bling, por id; 1 h em memória
+  const canais = {};
+  async function lojasDe(n) {
+    if (canais[n] && Date.now() - canais[n].em < 3600e3) return canais[n].m;
+    const m = {};
+    try { for (const c of (await bling(n, '/canais-venda?pagina=1&limite=100')).data || []) m[c.id] = c.descricao || c.nome || null; } catch { /* sem nome: a tela usa o formato do pedido */ }
+    canais[n] = { em: Date.now(), m };
+    return m;
+  }
+
   const rotas = {
     // Notas de saída PENDENTES (ainda não emitidas) da conta, com a sugestão de cada item.
     'GET /api/bling/notas': async (url) => {
@@ -229,10 +269,10 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       // 1 = Pendente (falta ajustar e/ou emitir); 4 = Rejeitada pela Sefaz (corrigir no Bling)
       const lista = [...((await bling(n, '/nfe?pagina=1&limite=50&tipo=1&situacao=1')).data || []),
         ...((await bling(n, '/nfe?pagina=1&limite=20&tipo=1&situacao=4')).data || [])];
-      const s = salvos(), notas = [];
+      const s = salvos(), notas = [], lojas = await lojasDe(n);
       for (const x of lista.slice(0, 30)) {
         const d = (await bling(n, `/nfe/${x.id}`)).data;
-        if (d && [1, 4].includes(Number(d.situacao))) notas.push(notaDaTela(n, d, s));
+        if (d && [1, 4].includes(Number(d.situacao))) notas.push({ ...notaDaTela(n, d, s), loja_nome: lojas[d.loja?.id] || null });
       }
       return { conta: publica(n), notas, mais: lista.length > 30 };
     },
@@ -265,31 +305,56 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
       const nota = (await bling(n, `/nfe/${id}`)).data;
       if (!nota) throw erro('O Bling não achou essa nota.', 404);
-      if (Number(nota.situacao) !== 1) throw erro('Essa nota não está mais pendente no Bling (já foi enviada ou emitida): nada foi mudado.', 409);
-      const itens = nota.itens || [];
-      const mudancas = (Array.isArray(body?.itens) ? body.itens : []).map((m) => {
-        const i = Number(m?.i);
-        if (!Number.isInteger(i) || i < 0 || i >= itens.length) throw erro('Item da nota inválido.');
-        return { i, descricao: descricaoValida(m.descricao), ncm: ncmValido(m.ncm), cest: cestValido(m.cest), nacional: !!m.nacional };
-      });
-      if (!mudancas.length) throw erro('Nenhum item para corrigir.');
-      await bling(n, `/nfe/${id}`, { metodo: 'PUT', corpo: corpoCorrigido(nota, n, mudancas) });
-      // guarda por SKU (o código que veio no item) para a próxima nota
-      const s = salvos();
-      for (const m of mudancas) {
-        const sku = itens[m.i].codigo;
-        if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, cest: m.cest, nacional: m.nacional, em: new Date().toISOString() };
+      return ajustarNota(n, nota, body?.itens);
+    },
+    // Pedidos de venda SEM nota (últimos 15 dias), com a sugestão de cada item — para gerar a nota pelo painel.
+    'GET /api/bling/pedidos': async (url) => {
+      const n = contaValida(url.searchParams.get('conta'));
+      const desde = new Date(Date.now() - 15 * 864e5).toISOString().slice(0, 10);
+      const lista = [];
+      for (let p = 1; p <= 3; p++) {
+        const d = (await bling(n, `/pedidos/vendas?pagina=${p}&limite=100&dataInicial=${desde}`)).data || [];
+        lista.push(...d);
+        if (d.length < 100) break;
       }
-      D.configGravar('bling_itens', JSON.stringify(s));
-      // relê para conferir o que o Bling gravou
-      const depois = (await bling(n, `/nfe/${id}`)).data || {};
-      const conferencia = mudancas.map((m) => {
-        const it = (depois.itens || [])[m.i] || {};
-        const o = origemDoProduto(n, m.nacional);
-        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: soDigitos(it.cest) === soDigitos(m.cest), origem: Number(origemDoItem(it)) === o };
-        return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
+      // 9 = Atendido (já tem nota), 12 = Cancelado
+      const cand = lista.filter((p) => ![9, 12].includes(Number(p.situacao?.id)));
+      const s = salvos(), lojas = await lojasDe(n), pedidos = [];
+      for (const p of cand.slice(0, 40)) {
+        const d = (await bling(n, `/pedidos/vendas/${p.id}`)).data;
+        if (!d || d.notaFiscal?.id) continue;
+        pedidos.push({ id: d.id, numero: d.numero ?? null, pedido_loja: d.numeroLoja ?? null, data: d.data ?? null, valor: d.total ?? null,
+          loja: d.loja?.id ?? null, loja_nome: lojas[d.loja?.id] || null, situacao: d.situacao?.id ?? null,
+          itens: (d.itens || []).map((it, i) => { const g = sugestaoDe({ descricao: it.descricao }, it.codigo ? s[it.codigo] : null);
+            return { i, codigo: it.codigo || '', descricao: it.descricao || '', quantidade: it.quantidade ?? null, valor: it.valor ?? null,
+              sugestao: { ...g, origem: origemDoProduto(n, g.nacional) } }; }) });
+      }
+      return { conta: publica(n), pedidos, mais: cand.length > 40 };
+    },
+    // { conta, id, itens: [{ i, descricao, ncm, cest, nacional }] } — GERA a nota do pedido no Bling (pendente, não emite) e já
+    // ajusta os itens (i = posição no pedido). Escrita só pelo clique, com confirmação na tela.
+    'POST /api/bling/pedidos/gerar': async (_u, body) => {
+      const n = contaValida(body?.conta);
+      const id = String(body?.id ?? '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Pedido inválido.');
+      const ped = (await bling(n, `/pedidos/vendas/${id}`)).data;
+      if (!ped) throw erro('O Bling não achou esse pedido.', 404);
+      if (ped.notaFiscal?.id) throw erro('Esse pedido já tem nota no Bling: nada foi gerado. Clique em Atualizar.', 409);
+      const g = await bling(n, `/pedidos/vendas/${id}/gerar-nfe`, { metodo: 'POST' });
+      let idNota = g?.data?.id ?? g?.data?.idNotaFiscal ?? g?.data?.notaFiscal?.id ?? null;
+      if (!idNota) idNota = (await bling(n, `/pedidos/vendas/${id}`)).data?.notaFiscal?.id ?? null;
+      if (!idNota) throw erro('O Bling gerou, mas não disse qual nota: clique em Atualizar e ajuste na lista de notas.', 502);
+      const nota = (await bling(n, `/nfe/${idNota}`)).data;
+      if (!nota) throw erro('Nota gerada, mas não consegui ler: clique em Atualizar.', 502);
+      // item do pedido -> item da nota pelo código (SKU), senão pela posição
+      const itensP = ped.itens || [], itensN = nota.itens || [];
+      const mud = (Array.isArray(body?.itens) ? body.itens : []).map((m) => {
+        const cod = itensP[Number(m?.i)]?.codigo;
+        const k = cod ? itensN.findIndex((x) => x.codigo === cod) : -1;
+        return { ...m, i: k >= 0 ? k : Number(m?.i) };
       });
-      return { nota: notaDaTela(n, depois, salvos()), conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
+      const r = await ajustarNota(n, nota, mud);
+      return { ...r, gerada: true };
     },
     'GET /api/bling/config': async () => ({ retorno: retorno(), contas: CONTAS.map(publica) }),
     // { conta, client_id, client_secret?, nome?, lojas? }

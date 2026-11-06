@@ -383,7 +383,8 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   só nota PENDENTE; PUT /nfe/{id} com a nota lida INTEIRA, `corpoCorrigido`: código vazio, nome curto, NCM, origem no item e no ICMS; relê e confere).
   Origem: importado = 1 na conta 1 (AMG importa direto), 2 na conta 2 (Primor compra no Brasil); bucha/desempenadeira = 0 (`nacionalPeloNome`).
   Código vazio a API RECUSA: vai CFOP{cfop} (`codigoNeutro`, o mesmo que o Bling põe no XML quando o código é apagado). CEST (ST, CFOP 5405) por SKU, sugerido pelo NCM (`CEST_DO_NCM`: 8481.80.19 -> 10.079.00).
-  Nome/NCM/CEST/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. Emitir (`POST /api/bling/notas/emitir`, só nota pendente JÁ ajustada, clique + confirmação): POST /nfe/{id}/enviar e relê a situação por ~25 s (5/6 autorizada, 4 rejeitada).
+  Nome/NCM/CEST/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. Pedidos SEM nota (`GET /api/bling/pedidos?conta=`, 15 dias, fora situação 9/12) + "Gerar nota" (`POST /api/bling/pedidos/gerar`: POST /pedidos/vendas/{id}/gerar-nfe e já `ajustarNota`, item ligado pelo SKU); envio à loja NÃO tem API (ligar "Enviar automaticamente os dados fiscais" nas Regras de operação de cada loja no Bling; Amazon não tem). Nome da loja por /canais-venda (`lojasDe`).
+  Emitir (`POST /api/bling/notas/emitir`, só nota pendente JÁ ajustada, clique + confirmação): POST /nfe/{id}/enviar e relê a situação por ~25 s (5/6 autorizada, 4 rejeitada).
   Nota tem dado do comprador: nada no MCP (`test-bling.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas
