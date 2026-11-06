@@ -321,6 +321,43 @@
   .atacado-tab td.num{text-align:right;white-space:nowrap}
   .atq-barra{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
   .atq-barra button{font-size:13px;padding:7px 12px}
+  /* ===== Reorganização (06/11/2026): só o arranjo; os campos, botões e ids são os mesmos ===== */
+  /* cartão: em cima foto + título + situação/ações; embaixo os números do período e os campos de editar */
+  .item{grid-template-columns:72px minmax(0,1fr) auto;grid-template-areas:"foto info acoes" "foto per campos";column-gap:18px;row-gap:12px;align-items:start;padding:14px 16px}
+  .item > img{grid-area:foto;align-self:start}
+  .item > img + div{grid-area:info;min-width:0}
+  .item > .acoes{grid-area:acoes;justify-content:flex-end;align-self:start}
+  .item > .campos{grid-area:campos;align-self:end;justify-content:flex-end}
+  .item > .periodo{grid-area:per;grid-column:auto;align-self:end;margin:0}
+  .item > .detalhes,.item > .analise{grid-column:1/-1}
+  .item .meta{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:center}
+  /* filtros: a busca primeiro e mais larga; Concorrentes e Produto do kit em "Mais filtros" */
+  .painel{align-items:flex-end;gap:12px 14px}
+  .painel > div:has(#fBusca){order:-1;flex:2 1 320px}
+  .painel .mais-filtros{flex:1 1 100%;display:flex;gap:12px 14px;flex-wrap:wrap;align-items:flex-end;padding-top:12px;border-top:1px dashed var(--line)}
+  .painel .mais-filtros[hidden]{display:none}
+  .painel .bt-filtro{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:600}
+  .painel .bt-filtro[aria-expanded="true"],.painel .bt-filtro[aria-pressed="true"]{border-color:var(--brand);color:var(--brand)}
+  #resumoPeriodo:not(:empty){margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:600}
+  /* ações em massa: com anúncio selecionado, a barra de ações flutua embaixo da tela */
+  .massa .massa-cont{display:none;font-weight:700;white-space:nowrap}
+  .massa.tem-sel .massa-acoes{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;
+    margin:0;padding:10px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.35);
+    align-items:center;max-width:calc(100vw - 32px);animation:sobeMassa .16s ease}
+  .massa.tem-sel .massa-cont{display:inline}
+  @keyframes sobeMassa{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+  main{padding-bottom:110px}
+  /* visão compacta: sem os minigráficos, menos espaço */
+  #lista.compacta .item{padding:10px 14px;row-gap:8px}
+  #lista.compacta .item > img{width:52px;height:52px}
+  #lista.compacta .item{grid-template-columns:52px minmax(0,1fr) auto}
+  #lista.compacta .periodo .mini,#lista.compacta .saude{display:none}
+  @media (max-width:980px){
+    .item{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"foto info" "acoes acoes" "per per" "campos campos"}
+    .item > img{width:56px;height:56px}
+    .item > .acoes,.item > .campos{justify-content:flex-start}
+  }
+  @media (max-width:560px){ .massa.tem-sel .massa-acoes{left:16px;right:16px;transform:none;max-width:none;justify-content:center} @keyframes sobeMassa{from{opacity:0}to{opacity:1}} }
 </style>
 <link rel="stylesheet" href="/layout.css?v=2">
 <link rel="stylesheet" href="/tema-hn.css?v=4">
@@ -386,18 +423,6 @@
       <input id="fBusca" placeholder="iMac, camiseta…">
     </div>
     <div>
-      <label for="fConc">Concorrentes</label>
-      <select id="fConc">
-        <option value="">Todos os anúncios</option>
-        <option value="1">Com concorrentes marcados</option>
-      </select>
-    </div>
-    <div style="flex:0 1 170px">
-      <label for="fProduto">Produto do kit</label>
-      <input id="fProduto" placeholder="ex.: DQ-407" list="listaProdutos" autocomplete="off">
-      <datalist id="listaProdutos"></datalist>
-    </div>
-    <div>
       <label for="fDias">Período</label>
       <select id="fDias">
         <option value="15">Últimos 15 dias</option>
@@ -438,7 +463,23 @@
       </select>
     </div>
     <button id="btnFiltrar">Filtrar</button>
+    <button type="button" class="bt-filtro" id="btMaisFiltros" aria-expanded="false" aria-controls="maisFiltros">Mais filtros</button>
+    <button type="button" class="bt-filtro" id="btCompacto" aria-pressed="false" title="Esconde os minigráficos e aperta o espaço da lista">Visão compacta</button>
     <span id="total" style="font-size:13px;color:var(--muted)"></span>
+    <div class="mais-filtros" id="maisFiltros" hidden>
+    <div>
+      <label for="fConc">Concorrentes</label>
+      <select id="fConc">
+        <option value="">Todos os anúncios</option>
+        <option value="1">Com concorrentes marcados</option>
+      </select>
+    </div>
+    <div style="flex:0 1 170px">
+      <label for="fProduto">Produto do kit</label>
+      <input id="fProduto" placeholder="ex.: DQ-407" list="listaProdutos" autocomplete="off">
+      <datalist id="listaProdutos"></datalist>
+    </div>
+    </div>
   </div>
   <div class="rapidos" role="group" aria-label="Filtros rápidos" id="fRapido">
     <button type="button" data-f="" aria-pressed="true">Todos</button>
@@ -458,6 +499,7 @@
     <button type="button" class="ghost" id="selFiltro">Selecionar todos do filtro</button>
     <span id="selCont">Nenhum anúncio selecionado</span>
     <span class="massa-acoes">
+      <span class="massa-cont" id="selCont2"></span>
       <button type="button" id="btPausarMassa" disabled>Pausar selecionados</button>
       <button type="button" id="btAtivarMassa" disabled>Reativar selecionados</button>
       <button type="button" id="btPrecoMassa" disabled title="Novo preço de cada anúncio selecionado pela margem de lucro desejada">Preço pela margem</button>
@@ -706,6 +748,7 @@ const selecionados = new Set();
 function pintarSelecao(){
   const n = selecionados.size;
   $('selCont').textContent = n ? `${n} anúncio(s) selecionado(s)` : 'Nenhum anúncio selecionado';
+  $('selCont2').textContent = `${n} selecionado(s)`; $('massa').classList.toggle('tem-sel', n > 0);
   $('btPausarMassa').disabled = $('btAtivarMassa').disabled = $('btLimparSel').disabled = $('btPrecoMassa').disabled = $('btAtacadoMassa').disabled = $('btCustosMassa').disabled = !n;
   const caixas = [...document.querySelectorAll('#lista .selItem')];
   for(const c of caixas){ const id = c.closest('li').dataset.id; c.checked = selecionados.has(id); c.closest('li').classList.toggle('selecionado', c.checked); }
@@ -3341,6 +3384,26 @@ carregarContas(); carregar(); carregarQualidade();
 </script>
 <script src="/aviso-flutuante.js?v=1"></script>
 <script src="/aviso.js?v=2" defer></script>
+<script>
+// Reorganização da tela (06/11/2026): só mostra/esconde e rola; nenhuma regra muda.
+(function () {
+  const mf = document.getElementById('maisFiltros'), bMf = document.getElementById('btMaisFiltros');
+  const abrirMf = (sim) => { mf.hidden = !sim; bMf.setAttribute('aria-expanded', String(sim)); };
+  bMf.onclick = () => abrirMf(mf.hidden);
+  // filtro escolhido lá dentro (ou vindo no endereço) fica à vista
+  const temFiltro = () => !!(document.getElementById('fConc').value || document.getElementById('fProduto').value);
+  abrirMf(temFiltro()); setTimeout(() => { if (temFiltro()) abrirMf(true); }, 1500);
+  const lista = document.getElementById('lista'), bC = document.getElementById('btCompacto');
+  const compacta = (sim) => { lista.classList.toggle('compacta', sim); bC.setAttribute('aria-pressed', String(sim)); try { localStorage.setItem('painel.anuncios.compacta', sim ? '1' : '0'); } catch {} };
+  let ini = false; try { ini = localStorage.getItem('painel.anuncios.compacta') === '1'; } catch {}
+  compacta(ini); bC.onclick = () => compacta(!lista.classList.contains('compacta'));
+  // a barra de ações flutua: ao abrir Preço pela margem, Atacado ou Custos, a tela rola até o painel
+  for (const [b, painel] of [['btPrecoMassa', 'massaPreco'], ['btAtacadoMassa', 'massaAtacado'], ['btCustosMassa', 'massaCustos']]) {
+    document.getElementById(b)?.addEventListener('click', () => setTimeout(() => { const el = document.getElementById(painel);
+      if (el && !el.hidden) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60));
+  }
+})();
+</script>
 <script src="/sino.js?v=6" defer></script>
 </body>
 </html>
