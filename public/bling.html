@@ -88,7 +88,7 @@
   <ol class="passos">
     <li>No Bling, gere a <b>nota do pedido</b> (sem editar e sem emitir).</li>
     <li>Aqui, confira <b>nome curto, NCM e origem</b> e clique em <b>Ajustar no Bling</b> (no lugar do SKU vai CFOP + o número do CFOP, como o Bling faz quando você apaga o código).</li>
-    <li>No Bling, abra a nota, confira e <b>emita</b>.</li>
+    <li>Confira e clique em <b>Emitir nota</b> (ou emita no Bling).</li>
   </ol>
 
   <div class="abas" id="abas" role="tablist" aria-label="Conta do Bling"></div>
@@ -234,7 +234,25 @@ function cartaoNota(n){
       }catch(e){ res.className = 'res erro'; res.textContent = 'Não ajustou: ' + e.message; bt.disabled = false; }
     };
     acoes.appendChild(bt);
-    if(est === 'emitir') acoes.appendChild(el('span', 'res ok', '✓ Pronta: abra no Bling, confira e emita.'));
+    if(est === 'emitir'){
+      const em = el('button', 'bt primario', 'Emitir nota'); em.type = 'button';
+      em.onclick = async () => {
+        if(!confirm(`EMITIR a nota ${n.numero || ''} (${n.nomeConta}, ${reais(n.valor)})?
+
+O Bling envia a nota para a Sefaz. Nota autorizada não volta atrás: só com cancelamento.
+
+Conferiu cliente, valores, frete e itens?`)) return;
+        em.disabled = true; bt.disabled = true; res.className = 'res'; res.textContent = 'Enviando para a Sefaz pelo Bling… (até 30 s)';
+        try{
+          const r = await enviar('POST', '/api/bling/notas/emitir', { conta: n.conta, id: n.id });
+          if(r.autorizada){ aviso(`✓ Nota ${r.numero || n.numero} ${r.situacao_nome.toLowerCase()} pela Sefaz.`, 'ok'); notas = notas.filter((x) => x !== n); desenhar(); return; }
+          if(r.rejeitada){ n.situacao = 4; aviso(`A Sefaz rejeitou a nota ${r.numero || n.numero}: abra no Bling para ver o motivo.`); desenhar(); return; }
+          res.className = 'res'; res.textContent = `Enviada. Situação no Bling: ${r.situacao_nome}. Clique em Atualizar daqui a pouco.`;
+        }catch(e){ res.className = 'res erro'; res.textContent = 'Não emitiu: ' + e.message; em.disabled = false; bt.disabled = false; }
+      };
+      acoes.appendChild(em);
+      acoes.appendChild(el('span', 'res ok', '✓ Ajustada: confira e emita.'));
+    }
   } else acoes.appendChild(el('span', 'res erro', 'A Sefaz rejeitou esta nota: veja o motivo e corrija no Bling.'));
   acoes.appendChild(res);
   d.appendChild(acoes);

@@ -58,6 +58,8 @@ const itensDoProduto = (itens) => (itens || []).map((i) => ({
 // guardados por SKU (estado bling_itens) a cada correção e voltam como sugestão na próxima nota do mesmo SKU.
 // A emissão (envio à Sefaz) continua no Bling, depois da conferência do vendedor.
 const NCM_PADRAO = '8481.80.19';
+const SITUACAO_NF = { 1: 'Pendente', 2: 'Cancelada', 3: 'Aguardando recibo', 4: 'Rejeitada', 5: 'Autorizada', 6: 'Emitida DANFE', 7: 'Registrada',
+  8: 'Aguardando protocolo', 9: 'Denegada', 10: 'Consulta situação', 11: 'Bloqueada' };
 const nacionalPeloNome = (d) => /\b(bucha|desempenadeira)/i.test(String(d || ''));
 const origemDoProduto = (conta, nacional) => (nacional ? 0 : conta === '1' ? 1 : 2);
 const origemDoItem = (it) => it?.origem ?? it?.impostos?.icms?.origem ?? null;
@@ -75,6 +77,7 @@ function cestValido(s) {
   if (d.length !== 7) throw erro(`CEST "${s}" inválido: são 7 números (ex.: 10.079.00).`);
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
 }
+const soDigitos = (s) => String(s ?? '').replace(/\D/g, '');
 function descricaoValida(s) {
   const t = String(s ?? '').replace(/\s+/g, ' ').trim();
   if (t.length < 3 || t.length > 120) throw erro('Nome do produto na nota: de 3 a 120 caracteres.');
@@ -113,7 +116,7 @@ function corpoCorrigido(nota, conta, mudancas) {
 }
 
 // A nota já está como o vendedor quer? Todo item sem código, com NCM e com a origem sugerida. Função pura: testada.
-const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo(i.codigo) && !!i.ncm && (i.cest || '') === (i.sugestao.cest || '') && Number(i.origem) === i.sugestao.origem);
+const itemAjustado = (itens) => itens.length > 0 && itens.every((i) => semCodigo(i.codigo) && !!i.ncm && soDigitos(i.cest) === soDigitos(i.sugestao.cest) && Number(i.origem) === i.sugestao.origem);
 
 // Conta quantos de cada valor. Função pura.
 const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '—'); m[k] = (m[k] || 0) + 1; return m; }, {});
@@ -231,6 +234,28 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       return { conta: publica(n), notas, mais: lista.length > 30 };
     },
     // { conta, id, itens: [{ i, descricao, ncm, nacional }] } — corrige os itens da nota PENDENTE no Bling (não emite).
+    // { conta, id } — EMITE a nota (envia à Sefaz pelo Bling). Escrita fiscal: só pelo clique, com confirmação na tela, e só
+    // nota PENDENTE já ajustada (sem SKU no código, com NCM, CEST e origem). Espera a resposta da Sefaz por até ~25 s.
+    'POST /api/bling/notas/emitir': async (_u, body) => {
+      const n = contaValida(body?.conta);
+      const id = String(body?.id ?? '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
+      const nota = (await bling(n, `/nfe/${id}`)).data;
+      if (!nota) throw erro('O Bling não achou essa nota.', 404);
+      if (Number(nota.situacao) !== 1) throw erro(`Essa nota não está pendente no Bling (situação: ${SITUACAO_NF[nota.situacao] || nota.situacao}): nada foi enviado.`, 409);
+      const tela = notaDaTela(n, nota, salvos());
+      if (!tela.ajustada) throw erro('Ajuste os itens antes de emitir (código, NCM, CEST e origem).', 409);
+      await bling(n, `/nfe/${id}/enviar?enviarEmail=false`, { metodo: 'POST' });
+      let d = nota;
+      for (let k = 0; k < 8; k++) {
+        await new Promise((ok) => setTimeout(ok, 3000));
+        d = (await bling(n, `/nfe/${id}`)).data || d;
+        if (![1, 3, 8, 10].includes(Number(d.situacao))) break;
+      }
+      const sit = Number(d.situacao);
+      return { id: d.id, numero: d.numero ?? null, situacao: sit, situacao_nome: SITUACAO_NF[sit] || String(sit),
+        autorizada: [5, 6, 7].includes(sit), rejeitada: sit === 4, aguardando: [1, 3, 8, 10].includes(sit) };
+    },
     'POST /api/bling/notas/corrigir': async (_u, body) => {
       const n = contaValida(body?.conta);
       const id = String(body?.id ?? '');
@@ -258,7 +283,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, portaPaine
       const conferencia = mudancas.map((m) => {
         const it = (depois.itens || [])[m.i] || {};
         const o = origemDoProduto(n, m.nacional);
-        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: (it.cest || '') === m.cest, origem: Number(origemDoItem(it)) === o };
+        const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: soDigitos(it.cest) === soDigitos(m.cest), origem: Number(origemDoItem(it)) === o };
         return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
       });
       return { nota: notaDaTela(n, depois, salvos()), conferencia, tudo_certo: conferencia.every((c) => c.tudo) };

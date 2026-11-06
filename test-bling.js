@@ -53,6 +53,7 @@ assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', cl
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
 
+assert.ok(B.itemAjustado([{ codigo: 'CFOP5405', ncm: '8481.80.19', cest: '1007900', origem: 2, sugestao: { origem: 2, cest: '10.079.00' } }]), 'CEST com ou sem pontos');
 assert.ok(B.semCodigo('CFOP5405') && B.semCodigo('') && !B.semCodigo('AMG-1'));
 assert.throws(() => B.codigoNeutro({ descricao: 'x' }), /CFOP/);
 assert.ok(B.itemAjustado([{ codigo: 'CFOP6108', ncm: '8481.80.19', origem: 2, sugestao: { origem: 2 } }]));
