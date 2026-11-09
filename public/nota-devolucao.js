@@ -18,7 +18,8 @@
     dialog.nfdev .msg{font-size:13px;margin-top:8px}
     dialog.nfdev .msg.erro{color:var(--err)}
     dialog.nfdev .msg.ok{color:var(--ok);font-weight:600}
-    dialog.nfdev .rolar{overflow-x:auto}`;
+    dialog.nfdev .rolar{overflow-x:auto}
+    dialog.nfdev .ml-box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;display:grid;gap:8px;justify-items:start}`;
   document.head.appendChild(css);
   const mk = (t, c, x) => { const e = document.createElement(t); if(c) e.className = c; if(x != null) e.textContent = x; return e; };
   const reais = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -67,6 +68,16 @@
           ac.appendChild(botaoEmitir(p, msg));
         }
         ac.appendChild(f); corpo.append(msg, ac); return;
+      }
+      // venda pelo Faturador do ML: a devolução pode sair no próprio ML (a API não emite; o painel abre a tela do ML no pedido)
+      if(p.ml_emitir){
+        const box = mk('div', 'ml-box');
+        box.appendChild(mk('b', null, 'Pelo Faturador do Mercado Livre (recomendado para venda do ML)'));
+        box.appendChild(mk('div', 'sub', 'O ML não deixa emitir a devolução pela API: o painel abre a tela de devolução do ML já neste pedido; lá você confere as unidades e o CST e clica em "Emitir NF-e de devolução". Use UM caminho só: ou o ML, ou o Bling abaixo.'));
+        const a = mk('a', 'bt primario', 'Abrir a emissão no Mercado Livre ↗'); a.href = p.ml_emitir; a.target = '_blank'; a.rel = 'noopener';
+        box.appendChild(a);
+        corpo.appendChild(box);
+        corpo.appendChild(mk('p', null, 'Ou pelo Bling:'));
       }
       if(p.gerada?.cancelada) corpo.appendChild(mk('p', 'sub', `A devolução anterior (nº ${p.gerada.numero || '?'}) foi cancelada: dá para gerar outra.`));
 

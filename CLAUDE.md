@@ -395,6 +395,9 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `comandas.esquecerEnvio` faz a fila reler o envio (a etiqueta libera). A resposta leva só número, série, chave e situação; nada no MCP.
 - Nota de DEVOLUÇÃO pelo Bling (`devolucao-nf.js`, botão "Nota de devolução" de `public/nota-devolucao.js` nas telas de devoluções do ML,
   Shopee, Amazon/Leroy/Magalu; só o administrador; pedido do dono 09/11/2026). O Faturador do ML NÃO emite devolução pela API (só consulta).
+  O botão "Emitir NF-e de devolução" do site do ML usa um GraphQL interno do site (vendedores.mercadolivre.com.br/invoices/api/v2, sessão do
+  navegador, visto 09/11/2026): para venda do ML a janela leva direto à tela do ML (`ml_emitir` = /invoices/order/{pedido}/devolution/{id da
+  nota de venda}?source=ml) e o Bling fica como alternativa.
   Venda: ML = XML do Faturador (`/users/{id}/invoices/orders/{pedido}` -> xml_location, `mlArquivo`); outras = nota do Bling por
   `/nfe?numeroLoja=` nas duas contas; sem achar, o vendedor cola a chave (`/nfe?chaveAcesso=`). Conta do Bling = a do CNPJ do emitente
   (`/empresas/me/dados-basicos`: ML AMG -> Bling AMG, Primor -> Primor). Gerar (`POST /api/devolucao-nf/gerar`) = POST /nfe tipo 0,

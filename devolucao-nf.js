@@ -121,7 +121,10 @@ function criar({ D, ml, mlArquivo, bling }) {
         if (String(n?.status || '').toLowerCase() !== 'authorized') throw erro(`A nota de venda do pedido no Faturador do ML não está autorizada (${n?.status || '?'}).`, 409);
         const caminho = String(n.attributes?.xml_location || `/users/${u}/invoices/documents/xml/${n.id}/authorized`).replace(/^https?:\/\/[^/]+/, '');
         const buf = await mlArquivo(caminho, u);
-        return { xml: Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf), origem: 'Faturador do ML' };
+        // a devolução pelo próprio Faturador só existe no site do ML (sistema interno do site, com a sessão do navegador; visto
+        // 09/11/2026): o painel leva direto à tela dele já neste pedido e nota de venda
+        const mlEmitir = n.id != null ? `https://vendedores.mercadolivre.com.br/invoices/order/${encodeURIComponent(pedido)}/devolution/${encodeURIComponent(n.id)}?source=ml` : null;
+        return { xml: Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf), origem: 'Faturador do ML', ml_emitir: mlEmitir };
       }
       throw erro('Não achei a nota de venda deste pedido no Faturador do ML. Se ela saiu por outro sistema, cole a chave de acesso da venda.', 404);
     }
@@ -175,7 +178,7 @@ function criar({ D, ml, mlArquivo, bling }) {
       .map((z) => ({ id: z.id, descricao: z.descricao || '' }));
     const salva = D.configLer(`devolucao_natureza_${conta}`);
     const sugerida = nat.find((z) => String(z.id) === String(salva)) || nat.find((z) => /devolu/i.test(z.descricao)) || null;
-    return { canal: e.canal, loja: NOME_CANAL[e.canal], pedido: e.pedido, conta_bling: conta, origem: v.origem,
+    return { canal: e.canal, loja: NOME_CANAL[e.canal], pedido: e.pedido, conta_bling: conta, origem: v.origem, ml_emitir: v.ml_emitir || null,
       venda: { numero: venda.numero, serie: venda.serie, emissao: venda.emissao, chave: venda.chave, cliente: venda.destinatario.nome,
         itens: venda.itens.map(({ n, codigo, descricao, ncm, unidade, quantidade, unitario }) => ({ n, codigo, descricao, ncm, unidade, quantidade, unitario })) },
       naturezas: nat, natureza_sugerida: sugerida?.id ?? null, gerada: await geradaDe(e.k) };
