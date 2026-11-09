@@ -42,6 +42,9 @@
   .nota.rej{border-left-color:#d92d20}
   .nota header{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:0;background:none;border:0;position:static}
   .nota h3{margin:0;font-size:15px}
+  .nota .quem{flex-basis:100%;display:flex;gap:6px 12px;flex-wrap:wrap;align-items:baseline;font-size:14px}
+  .nota .quem b{font-size:15px}
+  .nota .quem .pl{font-family:ui-monospace,Consolas,monospace;font-size:13px}
   .etq{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:#eef2f7;color:#344054;white-space:nowrap}
   .etq.ajustar{background:#fef0c7;color:#93370d}
   .etq.emitir{background:#d1fadf;color:#05603a}
@@ -251,7 +254,13 @@ function cartaoNota(n){
   cab.appendChild(el('span', 'etq ' + (est === 'rej' ? 'rej' : est), ped ? 'Sem nota · gerar' : est === 'shopee' ? 'Autorizada · falta enviar à Shopee' : est === 'ajustar' ? 'Falta ajustar' : est === 'emitir' ? 'Ajustada · falta emitir' : 'Rejeitada · corrigir no Bling'));
   cab.appendChild(el('span', 'etq', n.nomeConta));
   const loja = n.loja_nome || lojaPeloPedido(n.pedido_loja);
-  cab.appendChild(el('span', 'info', [loja, n.pedido_loja ? 'pedido ' + n.pedido_loja : null, dia(n.data), reais(n.valor)].filter(Boolean).join(' · ')));
+  cab.appendChild(el('span', 'info', [dia(n.data), reais(n.valor)].filter(Boolean).join(' · ')));
+  // de quem é: cliente e número do pedido na loja (dado do cliente só na tela; nada do Bling vai ao MCP)
+  const quem = el('div', 'quem');
+  quem.appendChild(el('b', null, n.cliente || 'Cliente não informado'));
+  if(n.pedido_loja){ quem.appendChild(el('span', null, (loja ? loja + ' · ' : '') + 'pedido')); quem.appendChild(el('span', 'pl', n.pedido_loja)); }
+  else if(loja) quem.appendChild(el('span', null, loja));
+  cab.appendChild(quem);
   d.appendChild(cab);
 
   const rolar = el('div', 'rolar'), t = el('table'), tr0 = el('tr');

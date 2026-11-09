@@ -234,7 +234,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   // só o que a tela precisa: nada do destinatário (contato, endereço, etiqueta)
   const notaDaTela = (n, x, s) => {
     const itens = (x.itens || []).map((it, i) => itemDaNota(n, it, i, s));
-    return { id: x.id, numero: x.numero ?? null, serie: x.serie ?? null, situacao: x.situacao ?? null,
+    return { id: x.id, numero: x.numero ?? null, cliente: x.contato?.nome || null, serie: x.serie ?? null, situacao: x.situacao ?? null,
       data: x.dataEmissao ?? null, loja: x.loja?.id ?? null, pedido_loja: x.numeroPedidoLoja ?? null, valor: x.valorNota ?? null,
       totais: { frete: x.valorFrete ?? null, itens: (x.itens || []).reduce((t, i) => t + (Number(i.valorTotal) || Number(i.valor) * Number(i.quantidade) || 0), 0),
         parcelas: (x.parcelas || []).reduce((t, p) => t + (Number(p.valor) || 0), 0), chaves: Object.keys(x).filter((k) => /valor|desconto|despesa|seguro|frete|outr/i.test(k)), transporte: Object.keys(x.transporte || {}) },
@@ -380,7 +380,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       for (const p of cand.slice(0, 40)) {
         const d = (await bling(n, `/pedidos/vendas/${p.id}`)).data;
         if (!d || d.notaFiscal?.id) continue;
-        pedidos.push({ id: d.id, numero: d.numero ?? null, pedido_loja: d.numeroLoja ?? null, data: d.data ?? null, valor: d.total ?? null,
+        pedidos.push({ id: d.id, numero: d.numero ?? null, pedido_loja: d.numeroLoja ?? null, cliente: d.contato?.nome || null, data: d.data ?? null, valor: d.total ?? null,
           loja: d.loja?.id ?? null, loja_nome: lojas[d.loja?.id] || null, situacao: d.situacao?.id ?? null,
           itens: (d.itens || []).map((it, i) => { const g = sugestaoDe({ descricao: it.descricao }, it.codigo ? s[it.codigo] : null);
             return { i, codigo: it.codigo || '', descricao: it.descricao || '', quantidade: it.quantidade ?? null, valor: it.valor ?? null,
