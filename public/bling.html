@@ -400,8 +400,9 @@ function cartaoNota(n){
         notas = notas.map((x) => (x === n ? nova : x));
         const txt = r.tudo_certo ? `Nota ${nova.numero || ''} gerada e ajustada` : `Nota ${nova.numero || ''} gerada, mas na releitura algo não bateu: confira e clique em "Ajustar de novo"`;
         if(!lote){ aviso(txt + (r.tudo_certo ? '. Confira e emita.' : '.'), r.tudo_certo ? 'ok' : ''); desenhar(); }
+        else if(!r.tudo_certo) throw Object.assign(new Error(txt), { jaTratado: true });
         return txt;
-      }catch(e){ falhou([g], 'Não gerou: ', e); }
+      }catch(e){ if(e.jaTratado) throw e; falhou([g], 'Não gerou: ', e); }
     };
     let fazerGerarEmitir = null;
     if(est === 'pronto'){

@@ -260,14 +260,21 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, cest: m.cest, nacional: m.nacional, em: new Date().toISOString() };
     }
     D.configGravar('bling_itens', JSON.stringify(s));
-    // relê para conferir o que o Bling gravou
-    const depois = (await bling(n, `/nfe/${id}`)).data || {};
-    const conferencia = mudancas.map((m) => {
+    // relê para conferir o que o Bling gravou. Logo depois do PUT o GET às vezes ainda devolve a nota antiga (medido 09/11/2026:
+    // 6 notas "não bateram" e estavam certas um minuto depois): relê até 3 vezes, com 2 s e 4 s de espera, antes de dizer que não bateu.
+    const conferir = (depois) => mudancas.map((m) => {
       const it = (depois.itens || [])[m.i] || {};
       const o = origemDoProduto(n, m.nacional);
-      const ok = { nome: it.descricao === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: soDigitos(it.cest) === soDigitos(m.cest), origem: Number(origemDoItem(it)) === o };
+      const ok = { nome: String(it.descricao || '').trim() === m.descricao, codigo: semCodigo(it.codigo), ncm: (it.classificacaoFiscal || '') === m.ncm, cest: soDigitos(it.cest) === soDigitos(m.cest), origem: Number(origemDoItem(it)) === o };
       return { i: m.i, ...ok, tudo: Object.values(ok).every(Boolean) };
     });
+    let depois = {}, conferencia = [];
+    for (let k = 0; k < 3; k++) {
+      if (k) await new Promise((ok) => setTimeout(ok, 2000 * k));
+      depois = (await bling(n, `/nfe/${id}`)).data || {};
+      conferencia = conferir(depois);
+      if (conferencia.every((c) => c.tudo)) break;
+    }
     return { nota: { ...notaDaTela(n, depois, salvos()), loja_nome: (await lojasDe(n))[depois.loja?.id] || null }, conferencia, tudo_certo: conferencia.every((c) => c.tudo) };
   }
 
