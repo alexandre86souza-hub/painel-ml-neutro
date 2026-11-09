@@ -239,7 +239,32 @@ function criar({ D, ml, mlArquivo, bling }) {
     });
   }
 
+  // Diagnóstico só de leitura (administrador): como a API do ML liga a nota de devolução emitida no site ao pedido. Só a forma:
+  // id, tipo, situação, número e as referências; nada do comprador.
+  async function diagnosticoMl(q) {
+    const pedido = String(q?.pedido || ''), inv = String(q?.invoice || '');
+    if (!/^\d{6,20}$/.test(pedido) || (inv && !/^\d{3,20}$/.test(inv))) throw erro('pedido/invoice inválidos');
+    const forma = (n) => (n ? { id: n.id, status: n.status, tipo: n.fiscal_data?.transaction_type, invoice_type: n.attributes?.invoice_type,
+      numero: n.invoice_number, serie: n.invoice_series, refs: n.attributes?.reference_invoices, ref: n.attributes?.reference_invoice,
+      itens_ref: (n.items || []).map((i) => i.reference_item || null), chaves: Object.keys(n) } : null);
+    const out = {};
+    for (const c of D.contasListar()) {
+      const u = String(c.ml_user_id);
+      const tenta = async (nome, caminho) => {
+        try { const r = await ml(caminho, {}, u); out[`${u} ${nome}`] = Array.isArray(r) ? r.map(forma) : r?.results ? { results: r.results.map(forma), paging: r.paging } : forma(r); }
+        catch (e) { out[`${u} ${nome}`] = { erro: e.status || e.message }; }
+      };
+      await tenta('orders', `/users/${u}/invoices/orders/${pedido}`);
+      if (inv) await tenta('invoice', `/users/${u}/invoices/${inv}`);
+      await tenta('orders?type=devolution', `/users/${u}/invoices/orders/${pedido}?transaction_type=devolution`);
+      await tenta('orders/devolution', `/users/${u}/invoices/orders/${pedido}/devolution`);
+      await tenta('orders/invoices', `/users/${u}/invoices/orders/${pedido}/invoices`);
+    }
+    return out;
+  }
+
   const rotas = {
+    'GET /api/devolucao-nf/diagnostico-ml': async (url) => diagnosticoMl(Object.fromEntries(url.searchParams)),
     // ?canal=&pedido=[&chave=] — a nota de venda (itens) e as naturezas da conta do Bling; só leitura
     'GET /api/devolucao-nf/previa': async (url) => previa(Object.fromEntries(url.searchParams)),
     // { canal, pedido, chave?, natureza, itens: [{ n, quantidade }] } — GERA a devolução PENDENTE no Bling (clique + confirmação)
