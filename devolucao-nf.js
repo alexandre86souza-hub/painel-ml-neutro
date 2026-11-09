@@ -245,7 +245,7 @@ function criar({ D, ml, mlArquivo, bling }) {
     const pedido = String(q?.pedido || ''), inv = String(q?.invoice || '');
     if (!/^\d{6,20}$/.test(pedido) || (inv && !/^\d{3,20}$/.test(inv))) throw erro('pedido/invoice inválidos');
     const forma = (n) => (n ? { id: n.id, status: n.status, tipo: n.fiscal_data?.transaction_type, invoice_type: n.attributes?.invoice_type,
-      numero: n.invoice_number, serie: n.invoice_series, refs: n.attributes?.reference_invoices, ref: n.attributes?.reference_invoice,
+      envio: n.shipment?.id ?? null, logistica: n.shipment?.logistic_type ?? null, numero: n.invoice_number, serie: n.invoice_series, refs: n.attributes?.reference_invoices, ref: n.attributes?.reference_invoice,
       itens_ref: (n.items || []).map((i) => i.reference_item || null), chaves: Object.keys(n) } : null);
     const out = {};
     for (const c of D.contasListar()) {
@@ -256,6 +256,8 @@ function criar({ D, ml, mlArquivo, bling }) {
       };
       await tenta('orders', `/users/${u}/invoices/orders/${pedido}`);
       if (inv) await tenta('invoice', `/users/${u}/invoices/${inv}`);
+      const env = out[`${u} invoice`]?.envio;
+      if (env) await tenta('shipments(envio da devolução)', `/users/${u}/invoices/shipments/${env}`);
       await tenta('orders?type=devolution', `/users/${u}/invoices/orders/${pedido}?transaction_type=devolution`);
       await tenta('orders/devolution', `/users/${u}/invoices/orders/${pedido}/devolution`);
       await tenta('orders/invoices', `/users/${u}/invoices/orders/${pedido}/invoices`);
