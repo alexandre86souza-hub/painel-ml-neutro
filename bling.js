@@ -139,6 +139,9 @@ const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '
 // Loja da Shopee de cada conta do Bling (conta 1 = Shopee AMG, conta 2 = Shopee Primor).
 const SHOPEE_DA_CONTA = { 1: '445620092', 2: '717079477' };
 const PEDIDO_SHOPEE = /^\d{6}(?=[0-9A-Z]*[A-Z])[0-9A-Z]{6,10}$/;
+// Amazon: o Bling NÃO manda a nota sozinho (sem "Exportação de vendas"); o vendedor envia no Bling e marca no painel.
+const PEDIDO_AMAZON = /^\d{3}-\d{7}-\d{7}$/;
+const ehAmazon = (lojaNome, pedidoLoja) => (lojaNome ? /amazon/i.test(lojaNome) : PEDIDO_AMAZON.test(String(pedidoLoja || '').trim()));
 const ehShopee = (lojaNome, pedidoLoja) => (lojaNome ? /shopee/i.test(lojaNome) : PEDIDO_SHOPEE.test(String(pedidoLoja || '').trim()));
 
 function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, portaPainel, enviarHtml, redirecionar, pagina, esc }) {
@@ -326,6 +329,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   }
 
   const ajustesFeitos = () => { try { return JSON.parse(D.configLer('bling_ajustes') || '{}') || {}; } catch { return {}; } };
+  const amazonMarcadas = () => { try { return JSON.parse(D.configLer('bling_amazon_enviadas') || '{}') || {}; } catch { return {}; } };
   const enviadasShopee = () => { try { return JSON.parse(D.configLer('bling_shopee_enviadas') || '{}') || {}; } catch { return {}; } };
 
   // notas autorizadas dos últimos dias (lista da tela "emitidas"); o detalhe de cada uma é lido (3/s), então fica 5 min em memória
@@ -337,13 +341,14 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
     const lista = [];
     for (const sit of [5, 6]) lista.push(...((await bling(n, `/nfe?pagina=1&limite=100&tipo=1&situacao=${sit}&dataEmissaoInicial=${desde}`)).data || []));
     lista.sort((a, b) => String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')));
-    const lojas = await lojasDe(n), env = enviadasShopee(), notas = [];
+    const lojas = await lojasDe(n), env = enviadasShopee(), amz = amazonMarcadas(), notas = [];
     for (const x of lista.slice(0, 40)) {
       const d = (await bling(n, `/nfe/${x.id}`)).data || x;
       const lojaNome = lojas[d.loja?.id] || null;
       notas.push({ id: d.id, numero: d.numero ?? null, data: d.dataEmissao ?? null, cliente: d.contato?.nome || null, loja_nome: lojaNome,
         pedido_loja: d.numeroPedidoLoja ?? null, valor: d.valorNota ?? null, situacao: Number(d.situacao), situacao_nome: SITUACAO_NF[d.situacao] || String(d.situacao),
         shopee: ehShopee(lojaNome, d.numeroPedidoLoja), shopee_enviada: env[d.id] || null,
+        amazon: ehAmazon(lojaNome, d.numeroPedidoLoja), amazon_enviada: amz[d.id] || null,
         itens: (d.itens || []).map((i) => ({ descricao: i.descricao || '', quantidade: i.quantidade ?? null })) });
     }
     emitidasCache[`${n}:${dias}`] = { em: Date.now(), notas };
@@ -351,6 +356,19 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   }
 
   const rotas = {
+    // { conta, id, enviada } — o vendedor marca que mandou a nota da Amazon pelo Bling ("Enviar dados para loja virtual"). Só o painel guarda.
+    'POST /api/bling/notas/amazon-enviada': async (_u, body) => {
+      const n = contaValida(body?.conta);
+      const id = String(body?.id ?? '');
+      if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
+      const m = amazonMarcadas();
+      if (body?.enviada === false) delete m[id]; else m[id] = { em: new Date().toISOString() };
+      const ks = Object.keys(m);
+      for (const k of ks.slice(0, Math.max(0, ks.length - 500))) delete m[k];
+      D.configGravar('bling_amazon_enviadas', JSON.stringify(m));
+      for (const k of Object.keys(emitidasCache)) if (k.startsWith(`${n}:`)) delete emitidasCache[k];
+      return { ok: true, id, enviada: body?.enviada !== false };
+    },
     // Notas AUTORIZADAS dos últimos dias (1–7), com o envio à Shopee feito pelo painel. Só leitura.
     'GET /api/bling/emitidas': async (url) => {
       const n = contaValida(url.searchParams.get('conta'));
@@ -568,5 +586,5 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   return { rotas, rotasParam: [], callback, bling };
 }
 
-module.exports = { criar, ehShopee, SHOPEE_DA_CONTA, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
+module.exports = { criar, ehShopee, ehAmazon, SHOPEE_DA_CONTA, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
   sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, cestValido, descricaoValida, origemDoProduto, nacionalPeloNome };

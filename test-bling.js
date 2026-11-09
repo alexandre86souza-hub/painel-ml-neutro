@@ -81,6 +81,9 @@ assert.ok(B.ehShopee('Shopee AMG', null));
 assert.ok(!B.ehShopee('Leroy Merlin', '251106ABC123XY'));
 assert.ok(B.ehShopee(null, '251106ABC123XY'));
 assert.ok(!B.ehShopee(null, '702-1234567-1234567'));
+assert.ok(B.ehAmazon(null, '702-1234567-1234567'));
+assert.ok(B.ehAmazon('Amazon Marketplace', null));
+assert.ok(!B.ehAmazon(null, '251106ABC123XY'));
 assert.deepStrictEqual(B.SHOPEE_DA_CONTA, { 1: '445620092', 2: '717079477' });
 
 // nota fiscal tem dado do comprador: nada do Bling no MCP
