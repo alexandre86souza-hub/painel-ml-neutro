@@ -109,4 +109,20 @@ assert.deepStrictEqual(B.SHOPEE_DA_CONTA, { 1: '445620092', 2: '717079477' });
 // nota fiscal tem dado do comprador: nada do Bling no MCP
 assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/bling');
 
+// Notas do ML pelo Faturador (ml-notas.js)
+{
+  const { situacaoNota, pedidosDoEnvio } = require('./ml-notas.js');
+  const a = situacaoNota({ id: 9, status: 'authorized', invoice_number: 123, invoice_series: '1', attributes: { invoice_key: 'K' } });
+  assert.strictEqual(a.situacao, 'autorizada'); assert.strictEqual(a.numero, 123); assert.strictEqual(a.chave, 'K');
+  const r = situacaoNota({ status: 'rejected', errors: [{ code: '01', description: 'NCM inválido' }] });
+  assert.strictEqual(r.situacao, 'rejeitada'); assert.strictEqual(r.motivo, 'NCM inválido');
+  assert.strictEqual(situacaoNota({ status: 'pending' }).situacao, 'processando');
+  assert.strictEqual(situacaoNota({}).situacao, 'processando');
+  // pacote: todas as vendas numa nota só, sem repetir; sem lista, o pedido
+  assert.deepStrictEqual(pedidosDoEnvio({ pedidos: ['2000001234567', '2000001234568', '2000001234567'] }), [2000001234567, 2000001234568]);
+  assert.deepStrictEqual(pedidosDoEnvio({ pedido: '2000001234567' }), [2000001234567]);
+  assert.deepStrictEqual(pedidosDoEnvio({ pedido: 'abc' }), []);
+  assert.ok(!/\/api\/ml-notas/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/ml-notas');
+}
+
 console.log('test-bling: ok');

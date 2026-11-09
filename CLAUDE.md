@@ -386,6 +386,13 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   Nome/NCM/CEST/nacional guardados por SKU (código que veio na nota) em `estado` bling_itens e sugeridos na próxima. Pedidos SEM nota (`GET /api/bling/pedidos?conta=`, 15 dias, fora situação 9/12) + "Gerar nota" (`POST /api/bling/pedidos/gerar`: POST /pedidos/vendas/{id}/gerar-nfe e já `ajustarNota`, item ligado pelo SKU); Shopee: o PAINEL manda o XML da nota autorizada ao pedido (`enviarNotaShopee`, `v2.order.upload_invoice_doc` multipart file_type 4, logo depois do Emitir; falhou = botão "Enviar nota para a Shopee" = `POST /api/bling/notas/enviar-shopee`; conta 1 = loja 445620092, conta 2 = 717079477; o XML não é guardado); nas outras lojas o envio NÃO tem API no Bling (ligar "Enviar automaticamente os dados fiscais" nas Regras de operação de cada loja no Bling; Amazon não tem). Nome da loja por /canais-venda (`lojasDe`).
   Emitir (`POST /api/bling/notas/emitir`, só nota pendente JÁ ajustada, clique + confirmação): POST /nfe/{id}/enviar e relê a situação por ~25 s (5/6 autorizada, 4 rejeitada).
   Nota tem dado do comprador: nada no MCP (`test-bling.js`).
+- Notas do Mercado Livre pelo Faturador do ML (`ml-notas.js`, tela `public/ml-notas.html`, menu Expedição, só o administrador; pedido do dono
+  09/11/2026): envios da fila das comandas (as duas contas, Mercado Envios coleta/agência e Flex; Full o ML emite sozinho) com substatus
+  `invoice_pending`. Emitir (`POST /api/ml-notas/emitir {chave: "ml:{envio}"}`, clique + confirmação, trava por envio) = POST
+  /users/{id}/invoices/orders `{orders:[todas as vendas do pacote]}` com a configuração fiscal dos produtos que está NO ML (o dono não quer
+  ajuste no painel); antes relê o envio (tem de seguir invoice_pending) e GET /users/{id}/invoices/orders/{order} (já tem nota = não emite);
+  sem "authorized" relê /users/{id}/invoices/{id} por ~25 s; erro = message + error_code -> /users/invoices/errors/MLB/{code}. Depois
+  `comandas.esquecerEnvio` faz a fila reler o envio (a etiqueta libera). A resposta leva só número, série, chave e situação; nada no MCP.
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas
   (`comandas.js#fila`) com o número da comanda. ML: substatus ready_to_print/printed, `GET /shipment_labels?shipment_ids=&response_type=pdf`

@@ -72,7 +72,8 @@
     { nome: 'Expedição', icone: 'comandas', itens: [
       ['/comandas.html', 'Comandas', 'comandas'],
       ['/etiquetas.html', 'Etiquetas de envio', 'etiquetas'],
-      ['/bling.html', 'Notas fiscais (Bling)', 'bling']] },
+      ['/bling.html', 'Notas fiscais (Bling)', 'bling'],
+      ['/ml-notas.html', 'Notas fiscais (Mercado Livre)', 'bling']] },
     { nome: 'Produtos e anúncios', icone: 'produtos', itens: [
       ['/produtos.html', 'Produtos e SKUs', 'produtos'],
       ['/anuncios.html', 'Anúncios', 'anuncios'],
@@ -199,7 +200,7 @@
   };
   // Telas que valem para TODAS as contas (a tabela de produtos, o estoque, as comandas…): trocar a loja no topo
   // fica na mesma tela, só com a loja escolhida na lista.
-  const DE_TODAS = ['/central.html', '/integracoes.html', '/geral.html', '/metas.html', '/margem.html', '/placar.html', '/caixa.html', '/dre.html', '/compras.html', '/comandas.html', '/etiquetas.html', '/bling.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
+  const DE_TODAS = ['/central.html', '/integracoes.html', '/geral.html', '/metas.html', '/margem.html', '/placar.html', '/caixa.html', '/dre.html', '/compras.html', '/comandas.html', '/etiquetas.html', '/bling.html', '/ml-notas.html', '/estoque.html', '/produtos.html', '/mensagens.html', '/calculadora.html',
     '/usuarios.html', '/navegador.html', '/configuracao.html'];
   const telaDaConta = (ext) => {
     if (DE_TODAS.includes(location.pathname)) return location.pathname + '?conta=' + encodeURIComponent(ext);

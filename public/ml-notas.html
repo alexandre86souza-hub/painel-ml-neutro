@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas fiscais (Mercado Livre)</title>
+<link rel="stylesheet" href="/paginas.css?v=1">
+<link rel="stylesheet" href="/layout.css?v=2">
+<link rel="stylesheet" href="/tema-hn.css?v=4">
+<link rel="stylesheet" href="/tema-painel.css?v=3">
+<link rel="stylesheet" href="/tema-escuro.css?v=4">
+<link rel="stylesheet" href="/tema-escuro-paginas.css?v=1">
+<link rel="stylesheet" href="/ds.css?v=3">
+<script src="/tema.js?v=2"></script>
+<style>
+  #msg.ok{display:block;background:#e6f4ea;color:#0b6b33;border:1px solid #a8dab5}
+  button.bt.primario{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.bt:disabled{opacity:.5;cursor:default}
+  .barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .barra .sub{font-size:12px;color:var(--muted)}
+  .lote{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .lote b{font-size:14px}
+  .abas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line)}
+  .abas button{font:inherit;font-size:14px;font-weight:600;padding:9px 16px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+  .abas button.ativa{color:var(--brand);border-bottom-color:var(--brand)}
+  .abas button span{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef2f7;color:#344054;font-size:12px}
+  .lista{display:grid;gap:12px}
+  .envio{border:1px solid var(--line);border-left:5px solid #f79009;border-radius:12px;padding:12px 14px;background:#fff;min-width:0}
+  .envio.ok{border-left-color:#12b76a}
+  .envio.rej{border-left-color:#d92d20}
+  .envio header{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:0;background:none;border:0;position:static}
+  .envio h3{margin:0;font-size:15px}
+  .envio header input.marca{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--brand)}
+  .envio .quem{flex-basis:100%;display:flex;gap:6px 12px;flex-wrap:wrap;align-items:baseline;font-size:14px}
+  .envio .quem b{font-size:15px}
+  .pl{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+  .etq{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:#eef2f7;color:#344054;white-space:nowrap}
+  .etq.atrasada{background:#fee4e2;color:#912018}
+  .etq.hoje{background:#fef0c7;color:#93370d}
+  .info{font-size:12px;color:var(--muted)}
+  .itens{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+  .itens li{display:flex;gap:10px;align-items:center;font-size:13px;min-width:0}
+  .itens img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:0 0 auto;background:#f2f4f7}
+  .itens .t{min-width:0}
+  .itens .t div{overflow-wrap:anywhere}
+  .acoes{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .res{font-size:13px}
+  .res.erro{color:#b42318}
+  .res.ok{color:#0b6b33;font-weight:600}
+  .vazio-grande{border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--muted)}
+  .vazio-grande b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+  ol.passos{display:flex;gap:10px;flex-wrap:wrap;list-style:none;padding:0;margin:0 0 14px;counter-reset:p}
+  ol.passos li{flex:1 1 200px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:8px 10px;counter-increment:p}
+  ol.passos li::before{content:counter(p);display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;margin-right:6px}
+  ol.passos b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca" id="marcaPainel"></div>
+    <nav id="menuPainel" aria-label="Telas do painel"></nav>
+    <script src="/menu.js?v=41"></script>
+  </aside>
+  <div class="conteudo">
+<header>
+  <h1>Notas fiscais (Mercado Livre)</h1>
+  <div id="barraContas">
+    <label for="selConta" id="rotuloConta">Conta</label>
+    <select id="selConta" aria-describedby="rotuloConta"></select>
+  </div>
+</header>
+<main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <ol class="passos">
+    <li>Aqui aparecem os envios do <b>Mercado Envios</b> (coleta, agência e Flex) das contas do ML que estão <b>aguardando a nota fiscal</b>. O Full o ML emite sozinho.</li>
+    <li>Marque e clique em <b>Emitir</b>: o <b>Faturador do Mercado Livre</b> emite a nota com a configuração fiscal dos produtos que já está no ML (a mesma de quando você emite pelo site).</li>
+    <li>Com a nota autorizada, o ML libera a etiqueta: imprima em <a href="/etiquetas.html">Etiquetas de envio</a>.</li>
+  </ol>
+
+  <div class="abas" id="abas" role="tablist" aria-label="Conta do Mercado Livre"></div>
+  <div class="barra">
+    <button type="button" class="bt" id="btAtualizar">Atualizar</button>
+    <span class="sub" id="lidoEm"></span>
+  </div>
+  <div class="barra lote" id="lote">
+    <button type="button" class="bt primario" id="btTodas" disabled>Emitir todas</button>
+    <b id="loteN">Nenhuma marcada</b>
+    <button type="button" class="bt" id="btMarcar">Marcar todas</button>
+    <button type="button" class="bt primario" id="btMarcadas" disabled>Emitir marcadas</button>
+    <button type="button" class="bt" id="btLimpar">Desmarcar</button>
+    <span class="sub" id="loteInfo"></span>
+  </div>
+  <div class="lista" id="lista"><p class="carregando">Lendo os envios no Mercado Livre…</p></div>
+</main>
+  </div>
+</div>
+<script src="/comum.js?v=9"></script>
+<script>
+const enviar = (m, caminho, corpo) => api(caminho, { method: m, headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo || {}) });
+function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none'; if(t) m.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+const quando = (s) => { if(!s) return ''; const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); };
+const PRAZO = { atrasada: ['atrasada', 'Prazo de despacho vencido'], hoje: ['hoje', 'Despachar hoje'] };
+
+let envios = [];
+const resultado = new Map();   // chave -> { tipo: ok|rej|info, txt }
+const marcadas = new Set();
+// aba: '' = todas as contas, ou o apelido da conta (lembrada neste navegador)
+let aba = (() => { try{ return localStorage.getItem('mlnotas_aba') || ''; }catch{ return ''; } })();
+const daAba = () => envios.filter((e) => !aba || e.loja === aba);
+const pendente = (e) => resultado.get(e.chave)?.tipo !== 'ok';
+
+async function ler(recarregar){
+  $('btAtualizar').disabled = true;
+  $('lista').innerHTML = ''; $('lista').appendChild(el('p', 'carregando', 'Lendo os envios no Mercado Livre…'));
+  try{
+    const r = await api('/api/ml-notas/pendentes' + (recarregar ? '?recarregar=1' : ''));
+    envios = r.envios.sort((a, b) => String(a.comprado_em || '').localeCompare(String(b.comprado_em || '')));
+    for(const k of [...resultado.keys()]) if(!envios.some((e) => e.chave === k) || resultado.get(k).tipo !== 'ok') resultado.delete(k);
+    aviso(r.erros?.length ? 'Algumas lojas não responderam: ' + r.erros.join(' · ') : '');
+    $('lidoEm').textContent = 'Lido às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  }catch(e){ envios = []; aviso('Não consegui ler: ' + e.message); }
+  $('btAtualizar').disabled = false;
+  desenhar();
+}
+
+function desenharAbas(){
+  const lojas = [...new Set(envios.map((e) => e.loja))];
+  if(aba && !lojas.includes(aba)) aba = '';
+  const box = $('abas'); box.innerHTML = '';
+  for(const [v, rot] of [['', 'Todas'], ...lojas.map((l) => [l, l])]){
+    const b = el('button', v === aba ? 'ativa' : null, rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', v === aba);
+    b.appendChild(el('span', null, String(envios.filter((e) => (!v || e.loja === v) && pendente(e)).length)));
+    b.onclick = () => { aba = v; try{ localStorage.setItem('mlnotas_aba', v); }catch{} desenhar(); };
+    box.appendChild(b);
+  }
+}
+
+function desenhar(){
+  desenharAbas();
+  const box = $('lista'); box.innerHTML = '';
+  const lista = daAba();
+  if(!lista.length){
+    const v = el('div', 'vazio-grande'); v.appendChild(el('b', null, 'Nenhum envio aguardando nota fiscal'));
+    v.appendChild(el('span', null, 'Venda nova do Mercado Envios aparece aqui quando o ML pedir a nota. Clique em Atualizar.'));
+    box.appendChild(v);
+  }
+  for(const e of lista) box.appendChild(cartao(e));
+  barraLote();
+}
+
+function cartao(e){
+  const r = resultado.get(e.chave);
+  const d = el('article', 'envio' + (r?.tipo === 'ok' ? ' ok' : r?.tipo === 'rej' ? ' rej' : ''));
+  const cab = el('header');
+  if(pendente(e)){
+    const cb = el('input', 'marca'); cb.type = 'checkbox'; cb.checked = marcadas.has(e.chave); cb.title = 'Marcar para emitir várias de uma vez';
+    cb.setAttribute('aria-label', 'Marcar o pedido ' + e.pedido);
+    cb.onchange = () => { if(cb.checked) marcadas.add(e.chave); else marcadas.delete(e.chave); barraLote(); };
+    cab.appendChild(cb);
+  }
+  cab.appendChild(el('h3', null, `Pedido ${e.pedido}`));
+  cab.appendChild(el('span', 'etq', e.loja));
+  cab.appendChild(el('span', 'etq', e.categoria));
+  if(e.numero) cab.appendChild(el('span', 'etq', `Comanda ${e.numero}`));
+  const p = PRAZO[e.situacao_prazo]; if(p) cab.appendChild(el('span', 'etq ' + p[0], p[1]));
+  cab.appendChild(el('span', 'info', [e.comprado_em ? 'comprado ' + quando(e.comprado_em) : '', e.prazo ? 'despachar até ' + quando(e.prazo) : ''].filter(Boolean).join(' · ')));
+  // de quem é (o nome sai na comanda também; nada disto vai ao MCP)
+  const quem = el('div', 'quem');
+  quem.appendChild(el('b', null, e.cliente || 'Cliente não informado'));
+  if(e.pedidos.length > 1){ quem.appendChild(el('span', null, `carrinho com ${e.pedidos.length} vendas (uma nota só):`)); quem.appendChild(el('span', 'pl', e.pedidos.join(', '))); }
+  cab.appendChild(quem);
+  d.appendChild(cab);
+
+  const ul = el('ul', 'itens');
+  for(const i of e.itens){
+    const li = el('li');
+    const im = el('img'); im.alt = ''; im.loading = 'lazy'; if(i.foto) im.src = i.foto; li.appendChild(im);
+    const t = el('div', 't');
+    t.appendChild(el('div', null, `${i.qtd}× ${i.titulo || ''}`));
+    t.appendChild(el('div', 'info', [i.sku ? 'SKU ' + i.sku : '', i.variacao || ''].filter(Boolean).join(' · ')));
+    li.appendChild(t); ul.appendChild(li);
+  }
+  d.appendChild(ul);
+
+  const acoes = el('div', 'acoes'), res = el('div', 'res');
+  if(r){ res.className = 'res ' + (r.tipo === 'ok' ? 'ok' : r.tipo === 'rej' ? 'erro' : ''); res.textContent = r.txt; }
+  if(pendente(e)){
+    const b = el('button', 'bt primario', r?.tipo === 'rej' ? 'Tentar de novo' : 'Emitir nota'); b.type = 'button';
+    b.onclick = async () => {
+      if(!confirm(`EMITIR a nota fiscal do pedido ${e.pedido} (${e.loja}, ${e.cliente || 'cliente'}) pelo Faturador do Mercado Livre?\n\n${e.itens.map((i) => `• ${i.qtd}× ${i.titulo || ''}`).join('\n')}\n\nO ML envia a nota para a Sefaz com a configuração fiscal dos produtos que está no ML. Nota autorizada não volta atrás: só com cancelamento.`)) return;
+      b.disabled = true; res.className = 'res'; res.textContent = 'Emitindo pelo Faturador do ML… (até 30 s)';
+      try{ await emitir(e); }catch{}
+      desenhar();
+    };
+    acoes.appendChild(b);
+  } else {
+    const a = el('a', 'bt', 'Imprimir etiqueta'); a.href = '/etiquetas.html'; acoes.appendChild(a);
+  }
+  acoes.appendChild(res);
+  d.appendChild(acoes);
+  return d;
+}
+
+// emite um envio; grava o resultado (para o cartão) e devolve o texto; erro = lança
+async function emitir(e){
+  try{
+    const r = await enviar('POST', '/api/ml-notas/emitir', { chave: e.chave });
+    const num = r.numero ? `Nota ${r.numero}${r.serie ? ' série ' + r.serie : ''}` : 'Nota';
+    if(r.situacao === 'autorizada'){
+      const txt = `✓ ${num} ${r.ja_tinha ? 'já estava emitida no ML' : 'autorizada'}. O ML libera a etiqueta em instantes.`;
+      resultado.set(e.chave, { tipo: 'ok', txt }); marcadas.delete(e.chave); return `Pedido ${e.pedido}: ${num} autorizada`;
+    }
+    if(r.situacao === 'processando'){
+      const txt = `${num} ${r.ja_tinha ? 'já foi pedida ao ML' : 'enviada'} e ainda em processamento na Sefaz. Clique em Atualizar daqui a pouco.`;
+      resultado.set(e.chave, { tipo: 'ok', txt }); marcadas.delete(e.chave); return `Pedido ${e.pedido}: em processamento`;
+    }
+    throw new Error(`${r.situacao === 'cancelada' ? 'nota cancelada' : 'a Sefaz rejeitou'}${r.motivo ? ': ' + r.motivo : ''}`);
+  }catch(x){
+    resultado.set(e.chave, { tipo: 'rej', txt: 'Não emitiu: ' + x.message });
+    throw new Error(`Pedido ${e.pedido}: ${x.message}`);
+  }
+}
+
+// ---------- várias de uma vez (uma por vez, uma confirmação; trava nesta e nas outras abas) ----------
+let rodando = false;
+const LOTE_CHAVE = 'mlnotas_lote_em';
+const loteEmOutraAba = () => { try{ return !rodando && Date.now() - (Number(localStorage.getItem(LOTE_CHAVE)) || 0) < 20000; }catch{ return false; } };
+window.addEventListener('storage', (ev) => { if(ev.key === LOTE_CHAVE) barraLote(); });
+setInterval(() => { if(!rodando) barraLote(); }, 5000);
+
+function barraLote(){
+  const naTela = daAba().filter(pendente);
+  for(const k of [...marcadas]) if(!naTela.some((e) => e.chave === k)) marcadas.delete(k);
+  $('loteN').textContent = marcadas.size ? `${marcadas.size} marcada${marcadas.size > 1 ? 's' : ''}` : 'Nenhuma marcada';
+  $('btMarcadas').textContent = `Emitir marcadas (${marcadas.size})`; $('btMarcadas').disabled = !marcadas.size;
+  $('btTodas').textContent = `Emitir todas (${naTela.length})`; $('btTodas').disabled = !naTela.length;
+  $('btMarcar').disabled = !naTela.length;
+  const bloquear = rodando || loteEmOutraAba();
+  if(bloquear) for(const b of document.querySelectorAll('#lote button, .envio .acoes button')) b.disabled = true;
+  if(!rodando && loteEmOutraAba()) $('loteInfo').textContent = 'Emissão em andamento em outra aba: os botões voltam quando ela terminar.';
+  else if(!rodando && /outra aba/.test($('loteInfo').textContent)) $('loteInfo').textContent = '';
+}
+
+async function rodarLote(alvo){
+  if(rodando || loteEmOutraAba()){ aviso('Já tem uma emissão em andamento (nesta ou em outra aba): espere terminar.'); return; }
+  if(!alvo.length) return;
+  if(!confirm(`EMITIR ${alvo.length} nota(s) fiscal(is) pelo Faturador do Mercado Livre?\n\n${alvo.map((e) => `• Pedido ${e.pedido} (${e.loja}, ${e.cliente || 'cliente'})`).join('\n')}\n\nCada nota vai para a Sefaz com a configuração fiscal dos produtos que está no ML, uma de cada vez. Nota autorizada não volta atrás: só com cancelamento.`)) return;
+  rodando = true;
+  const bate = () => { try{ localStorage.setItem(LOTE_CHAVE, String(Date.now())); }catch{} };
+  bate(); const batida = setInterval(bate, 5000);
+  barraLote();
+  const feitos = [], falhas = [];
+  let i = 0;
+  try{
+    for(const e of alvo){
+      $('loteInfo').textContent = `${++i} de ${alvo.length}: pedido ${e.pedido}…`;
+      try{ feitos.push(await emitir(e)); }catch(x){ falhas.push(x.message); }
+    }
+  } finally {
+    clearInterval(batida); rodando = false;
+    try{ localStorage.removeItem(LOTE_CHAVE); }catch{}
+  }
+  $('loteInfo').textContent = '';
+  desenhar();
+  aviso([feitos.length ? `✓ ${feitos.length} emitida(s): ${feitos.join(' · ')}` : '', falhas.length ? `✗ Não emitiu: ${falhas.join(' · ')}` : ''].filter(Boolean).join('  —  '), falhas.length ? '' : 'ok');
+}
+$('btMarcadas').onclick = () => rodarLote(daAba().filter((e) => pendente(e) && marcadas.has(e.chave)));
+$('btTodas').onclick = () => rodarLote(daAba().filter(pendente));
+$('btMarcar').onclick = () => { for(const e of daAba().filter(pendente)) marcadas.add(e.chave); desenhar(); };
+$('btLimpar').onclick = () => { marcadas.clear(); desenhar(); };
+$('btAtualizar').onclick = () => ler(true);
+
+ler(false);
+</script>
+<script src="/sino.js?v=6" defer></script>
+</body>
+</html>

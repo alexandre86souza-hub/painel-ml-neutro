@@ -3369,6 +3369,9 @@ Object.assign(routes, comandasMod.rotas);
 // Etiquetas de envio (etiquetas.js): a etiqueta liberada pelo ML e pela Shopee, em PDF para a térmica 10×15.
 const etiquetasMod = require('./etiquetas.js').criar({ D, mlArquivo, daLoja: shopeeMod.daLoja, comandas: comandasMod });
 Object.assign(routes, etiquetasMod.rotas);
+// Notas fiscais do ML pelo Faturador do ML (ml-notas.js): envios aguardando nota, emitir pelo clique. Só o administrador; nada no MCP.
+const mlNotasMod = require('./ml-notas.js').criar({ D, ml, comandas: comandasMod });
+Object.assign(routes, mlNotasMod.rotas);
 // "Precisa de atenção" da tela Todas as contas: resumo do estoque (situação de reposição) e da fila de
 // comandas. Cada parte que falhar ou demorar vem null. Fora do MCP (estoque e comandas não vão ao Claude).
 routes['GET /api/contas/atencao'] = async () => {

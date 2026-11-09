@@ -447,7 +447,9 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       atrasadas: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'atrasado').length,
       hoje: fila.filter((c) => situacaoPrazo(c.prazo, agora) === 'hoje').length };
   }
-  return { rotas, rotasParam: [], resumoFila, fila };
+  // nota emitida pelo painel (ml-notas.js): a próxima leitura da fila relê o envio, sem esperar os 3 min
+  const esquecerEnvio = (id) => { cacheEnvio.delete(Number(id)); cacheEnvio.delete(String(id)); };
+  return { rotas, rotasParam: [], resumoFila, fila, esquecerEnvio };
 }
 
 module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, prazoDoDia, CATEGORIAS };
