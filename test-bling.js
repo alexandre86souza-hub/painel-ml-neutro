@@ -86,6 +86,25 @@ assert.ok(B.ehAmazon('Amazon Marketplace', null));
 assert.ok(!B.ehAmazon(null, '251106ABC123XY'));
 assert.deepStrictEqual(B.SHOPEE_DA_CONTA, { 1: '445620092', 2: '717079477' });
 
+// DANFE simplificada: campos do XML autorizado (chave, protocolo, emitente, destinatário sem endereço, itens)
+{
+  const xml = '<nfeProc><NFe><infNFe Id="NFe35261124330502000149550010000131861493504858"><ide><serie>1</serie><nNF>13186</nNF><dhEmi>2026-11-09T10:52:36-03:00</dhEmi><tpNF>1</tpNF></ide>'
+    + '<emit><CNPJ>24330502000149</CNPJ><xNome>Loja &amp; Cia</xNome><enderEmit><UF>SP</UF></enderEmit><IE>123</IE></emit><dest><CPF>11122233344</CPF><xNome>Fulano</xNome><enderDest><xLgr>Rua X</xLgr><UF>PA</UF></enderDest></dest>'
+    + '<det nItem="1"><prod><xProd>Ducha</xProd><qCom>2.0000</qCom><uCom>UN</uCom></prod></det><total><ICMSTot><vNF>197.12</vNF></ICMSTot></total></infNFe></NFe>'
+    + '<protNFe><infProt><chNFe>35261124330502000149550010000131861493504858</chNFe><dhRecbto>2026-11-09T10:52:40-03:00</dhRecbto><nProt>135260000000001</nProt></infProt></protNFe></nfeProc>';
+  const d = B.danfeDoXml(xml);
+  assert.strictEqual(d.chave.length, 44);
+  assert.strictEqual(d.protocolo, '135260000000001');
+  assert.strictEqual(d.emitente.nome, 'Loja & Cia');
+  assert.strictEqual(d.destinatario.uf, 'PA');
+  assert.ok(!JSON.stringify(d).includes('Rua X'), 'a etiqueta não leva o endereço do destinatário');
+  assert.deepStrictEqual(d.itens, [{ descricao: 'Ducha', quantidade: 2, unidade: 'UN' }]);
+  assert.throws(() => B.danfeDoXml(xml.replace(/<nProt>[^<]*<\/nProt>/, '')), /protocolo/);
+  const C = require('./public/codigo128.js');
+  assert.strictEqual(C.largurasC('35261124330502000149550010000131861493504858').length, 151, 'chave em 22 pares + início, verificador e parada');
+  assert.strictEqual(C.largurasC('123'), null, 'conjunto C só com número par de dígitos');
+}
+
 // nota fiscal tem dado do comprador: nada do Bling no MCP
 assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/bling');
 

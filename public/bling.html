@@ -153,6 +153,7 @@ const lojaPeloPedido = (p) => { const s = String(p || '').trim();
   return null; };
 
 let cfg = null, notas = [], filtro = null, feitas = null;
+const danfeSel = new Set();   // notas emitidas marcadas para a DANFE simplificada (conta:id)
 const GRUPO = { gerar: 'ajustar', ajustar: 'ajustar', pronto: 'emitir', emitir: 'emitir', shopee: 'emitir', rej: 'rej' };
 // seleção para fazer várias de uma vez: chave conta:tipo:id -> marcada; acoesLote = o que cada cartão desenhado sabe fazer
 const marcadas = new Set(), acoesLote = new Map();
@@ -199,11 +200,30 @@ function desenharFeitas(box){
   for(const e of daAba.filter((n) => n.erro)) box.appendChild(el('p', 'res erro', 'Não consegui ler: ' + e.erro));
   const lista = daAba.filter((n) => !n.erro);
   if(!lista.length){ box.appendChild(vazio('Nenhuma nota emitida nos últimos 3 dias', '')); return; }
+  // DANFE simplificada (etiqueta 10×15): marcar e abrir a página de impressão
+  const chaveF = (n) => `${n.conta}:${n.id}`;
+  for(const k of [...danfeSel]) if(!lista.some((n) => chaveF(n) === k)) danfeSel.delete(k);
+  const bar = el('div', 'barra');
+  const btD = el('button', 'bt primario', `Imprimir DANFE simplificada (${danfeSel.size})`); btD.type = 'button'; btD.disabled = !danfeSel.size;
+  btD.onclick = () => {
+    const por = {}; for(const k of danfeSel){ const [c, id] = k.split(':'); (por[c] = por[c] || []).push(id); }
+    window.open('/danfe-simplificada.html?n=' + Object.entries(por).map(([c, ids]) => `${c}:${ids.join(',')}`).join(';'), '_blank');
+  };
+  const btLA = el('button', 'bt', 'Marcar Leroy e Amazon'); btLA.type = 'button';
+  btLA.onclick = () => { for(const n of lista) if(n.amazon || /leroy/i.test(n.loja_nome || '') || lojaPeloPedido(n.pedido_loja) === 'Leroy') danfeSel.add(chaveF(n)); desenhar(); };
+  const btT = el('button', 'bt', danfeSel.size ? 'Desmarcar' : 'Marcar todas'); btT.type = 'button';
+  btT.onclick = () => { if(danfeSel.size) danfeSel.clear(); else for(const n of lista) danfeSel.add(chaveF(n)); desenhar(); };
+  bar.append(btD, btLA, btT);
+  box.appendChild(bar);
   const rolar = el('div', 'rolar'), t = el('table', 'feitas-tab'), tr0 = el('tr');
+  tr0.appendChild(el('th', null, ''));
   for(const h of ['Nota', 'Cliente · produtos', 'Loja · pedido', 'Emitida', 'Valor', 'Situação', 'Envio à loja']) tr0.appendChild(el('th', null, h));
   t.appendChild(tr0);
   for(const n of lista){
     const tr = el('tr');
+    const tdM = el('td'), cb = el('input'); cb.type = 'checkbox'; cb.checked = danfeSel.has(chaveF(n)); cb.setAttribute('aria-label', 'Marcar a nota ' + (n.numero || ''));
+    cb.onchange = () => { if(cb.checked) danfeSel.add(chaveF(n)); else danfeSel.delete(chaveF(n)); btD.textContent = `Imprimir DANFE simplificada (${danfeSel.size})`; btD.disabled = !danfeSel.size; btT.textContent = danfeSel.size ? 'Desmarcar' : 'Marcar todas'; };
+    tdM.appendChild(cb); tr.appendChild(tdM);
     tr.appendChild(el('td', null, `${n.numero || '—'}${aba ? '' : ' · ' + n.nomeConta}`));
     const tdC = el('td'); tdC.appendChild(el('div', null, n.cliente || '—'));
     for(const i of n.itens || []) tdC.appendChild(el('div', 'antes', `${i.quantidade ?? ''}× ${i.descricao}`));

@@ -24,6 +24,21 @@
     [...w].forEach((d, i) => { const n = Number(d); if (i % 2 === 0) barras += `<rect x="${x}" y="0" width="${n}" height="${altura}"/>`; x += n; });
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x + 10} ${altura}" preserveAspectRatio="none" role="img" aria-label="Código de barras ${String(texto).replace(/[<&"]/g, '')}"><g fill="#000">${barras}</g></svg>`;
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { larguras, codigo128Svg, PADROES: P };
-  else window.codigo128Svg = codigo128Svg;
+  // Conjunto C (só dígitos, de dois em dois): a chave de acesso da NF-e (44 dígitos) vira 22 símbolos — metade da largura
+  // do conjunto B, legível na térmica de 203 dpi (DANFE simplificada).
+  function largurasC(digitos) {
+    const s = String(digitos);
+    if (!s.length || s.length % 2 || /\D/.test(s)) return null;
+    const vals = s.match(/\d\d/g).map(Number);
+    const soma = vals.reduce((a, v, i) => a + v * (i + 1), 105);
+    return [105, ...vals, soma % 103, 106].map((v) => P[v]).join('');
+  }
+  function svgDe(w, texto, altura) {
+    let x = 10, barras = '';
+    [...w].forEach((d, i) => { const n = Number(d); if (i % 2 === 0) barras += `<rect x="${x}" y="0" width="${n}" height="${altura}"/>`; x += n; });
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x + 10} ${altura}" preserveAspectRatio="none" role="img" aria-label="Código de barras ${String(texto).replace(/[<&"]/g, '')}"><g fill="#000">${barras}</g></svg>`;
+  }
+  function codigo128CSvg(digitos, altura = 50) { const w = largurasC(digitos); return w ? svgDe(w, digitos, altura) : ''; }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { larguras, largurasC, codigo128Svg, codigo128CSvg, PADROES: P };
+  else { window.codigo128Svg = codigo128Svg; window.codigo128CSvg = codigo128CSvg; }
 })();

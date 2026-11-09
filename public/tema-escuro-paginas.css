@@ -258,6 +258,9 @@ html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-row{backgroun
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-icon{background:hsla(169,53%,60%,.14);color:hsl(177,82%,72%)}
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-security-action{background:var(--card)}
 html[data-tema="escuro"][data-pagina="configuracao"] .cfg-password-form{background:var(--card)}
+/* danfe-simplificada.html */
+html[data-tema="escuro"][data-pagina="danfe-simplificada"]{color:var(--ink);background:var(--overlay)}
+html[data-tema="escuro"][data-pagina="danfe-simplificada"] .etq{background:var(--card)}
 /* devolucoes-canais.html */
 html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip{background:hsla(218,31%,60%,.14);color:var(--muted)}
 html[data-tema="escuro"][data-pagina="devolucoes-canais"] .chip.amarelo{background:hsla(44,90%,60%,.14);color:hsl(42,95%,72%)}

@@ -139,6 +139,24 @@ const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '
 // Loja da Shopee de cada conta do Bling (conta 1 = Shopee AMG, conta 2 = Shopee Primor).
 const SHOPEE_DA_CONTA = { 1: '445620092', 2: '717079477' };
 const PEDIDO_SHOPEE = /^\d{6}(?=[0-9A-Z]*[A-Z])[0-9A-Z]{6,10}$/;
+// DANFE Simplificado – Etiqueta: os campos saem do XML autorizado (o Bling não tem esse documento na API). Só o que a etiqueta
+// leva: do destinatário nome, CPF/CNPJ, IE e UF (sem endereço). Função pura: testada.
+function danfeDoXml(xml) {
+  const des = (t) => String(t ?? '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&').trim();
+  const bloco = (x, t) => (String(x || '').match(new RegExp(`<${t}[\\s>][\\s\\S]*?</${t}>`)) || [''])[0];
+  const tag = (x, t) => { const m = String(x || '').match(new RegExp(`<${t}>([^<]*)</${t}>`)); return m ? des(m[1]) : null; };
+  const ide = bloco(xml, 'ide'), emit = bloco(xml, 'emit'), dest = bloco(xml, 'dest'), prot = bloco(xml, 'infProt'), tot = bloco(xml, 'ICMSTot');
+  const chave = tag(prot, 'chNFe') || (String(xml).match(/Id="NFe(\d{44})"/) || [])[1] || null;
+  if (!chave || !/^\d{44}$/.test(chave)) throw erro('XML sem a chave de acesso.');
+  const nProt = tag(prot, 'nProt');
+  if (!nProt) throw erro('A nota ainda não tem protocolo de autorização no XML.');
+  const pessoa = (b, end) => ({ nome: tag(b, 'xNome'), cnpj: tag(b, 'CNPJ'), cpf: tag(b, 'CPF'), ie: tag(b, 'IE'), uf: tag(bloco(b, end), 'UF') });
+  const itens = [...String(xml).matchAll(/<det [^>]*>([\s\S]*?)<\/det>/g)].map((m) => { const pr = bloco(m[1], 'prod'); return { descricao: tag(pr, 'xProd'), quantidade: Number(tag(pr, 'qCom')) || null, unidade: tag(pr, 'uCom') }; });
+  return { chave, numero: tag(ide, 'nNF'), serie: tag(ide, 'serie'), emissao: tag(ide, 'dhEmi'), tipo: tag(ide, 'tpNF'),
+    protocolo: nProt, autorizada_em: tag(prot, 'dhRecbto'), valor: Number(tag(tot, 'vNF')) || null,
+    emitente: pessoa(emit, 'enderEmit'), destinatario: pessoa(dest, 'enderDest'), itens };
+}
+
 // Amazon: o Bling NÃO manda a nota sozinho (sem "Exportação de vendas"); o vendedor envia no Bling e marca no painel.
 const PEDIDO_AMAZON = /^\d{3}-\d{7}-\d{7}$/;
 const ehAmazon = (lojaNome, pedidoLoja) => (lojaNome ? /amazon/i.test(lojaNome) : PEDIDO_AMAZON.test(String(pedidoLoja || '').trim()));
@@ -356,6 +374,29 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   }
 
   const rotas = {
+    // { notas: [{ conta, id }] } — dados da DANFE Simplificado – Etiqueta de notas AUTORIZADAS, lidos do XML na hora (não guarda).
+    // Tem dado do destinatário (nome, CPF): só para imprimir na tela; nada do Bling no MCP.
+    'POST /api/bling/danfe-simplificada': async (_u, body) => {
+      const pedidas = (Array.isArray(body?.notas) ? body.notas : []).slice(0, 50);
+      if (!pedidas.length) throw erro('Escolha as notas.');
+      const saida = [];
+      for (const p of pedidas) {
+        const id = String(p?.id ?? '');
+        try {
+          const n = contaValida(p?.conta);
+          if (!/^\d{1,20}$/.test(id)) throw erro('Nota inválida.');
+          const nota = (await bling(n, `/nfe/${id}`)).data;
+          if (!nota) throw erro('O Bling não achou a nota.');
+          if (![5, 6, 7].includes(Number(nota.situacao))) throw erro(`a nota ${nota.numero || ''} não está autorizada`);
+          if (!/^https:\/\//.test(nota.xml || '')) throw erro('o Bling não deu o link do XML');
+          const r = await fetch(nota.xml, { signal: AbortSignal.timeout(20000) });
+          const xml = await r.text();
+          if (!r.ok || !/<(nfeProc|NFe)\b/.test(xml.slice(0, 4000))) throw erro('o link do XML não devolveu a nota');
+          saida.push({ conta: n, id, pedido_loja: nota.numeroPedidoLoja ?? null, loja_nome: (await lojasDe(n))[nota.loja?.id] || null, ...danfeDoXml(xml) });
+        } catch (e) { saida.push({ conta: String(p?.conta ?? ''), id, erro: e.message }); }
+      }
+      return { notas: saida };
+    },
     // { conta, id, enviada } — o vendedor marca que mandou a nota da Amazon pelo Bling ("Enviar dados para loja virtual"). Só o painel guarda.
     'POST /api/bling/notas/amazon-enviada': async (_u, body) => {
       const n = contaValida(body?.conta);
@@ -600,5 +641,5 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
   return { rotas, rotasParam: [], callback, bling };
 }
 
-module.exports = { criar, ehShopee, ehAmazon, SHOPEE_DA_CONTA, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
+module.exports = { criar, ehShopee, ehAmazon, danfeDoXml, SHOPEE_DA_CONTA, validarConfig, urlAutorizacao, itensDoProduto, contaValida, CONTAS,
   sugestaoDe, corpoCorrigido, itemAjustado, semCodigo, codigoNeutro, ncmValido, cestValido, descricaoValida, origemDoProduto, nacionalPeloNome };

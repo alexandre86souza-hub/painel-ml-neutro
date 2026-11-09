@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DANFE simplificada</title>
+<style>
+  /* DANFE Simplificado – Etiqueta, 10×15 cm (térmica Elgin pelo driver). Sempre clara: é papel. */
+  @page{size:100mm 150mm;margin:0}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000;background:#e5e7eb}
+  .barra{position:sticky;top:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#1f2937;color:#fff;font-size:14px}
+  .barra button{font:inherit;font-weight:700;padding:7px 14px;border:0;border-radius:8px;background:#c96f50;color:#fff;cursor:pointer}
+  .barra .erro{color:#fecaca}
+  .folhas{display:flex;flex-wrap:wrap;gap:12px;padding:14px;justify-content:center}
+  .etq{width:100mm;height:150mm;background:#fff;padding:4mm;display:flex;flex-direction:column;gap:2mm;overflow:hidden;page-break-after:always;break-after:page}
+  .etq h1{margin:0;font-size:13pt;text-align:center;letter-spacing:.02em;border-bottom:.4mm solid #000;padding-bottom:1.5mm}
+  .cb{height:16mm}
+  .cb svg{width:100%;height:100%;display:block}
+  .chave{font-family:"Courier New",monospace;font-size:8.6pt;text-align:center;letter-spacing:.02em}
+  .rot{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+  .caixa{border:.3mm solid #000;padding:1.5mm 2mm;font-size:8.5pt;line-height:1.25}
+  .linha{display:flex;gap:3mm;flex-wrap:wrap}
+  .linha > div{flex:1 1 auto}
+  .grande{font-size:11pt;font-weight:700}
+  .itens{font-size:8pt;line-height:1.2;flex:1 1 auto;overflow:hidden}
+  .itens div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ped{font-size:7.5pt;text-align:center}
+  @media print{
+    body{background:#fff}
+    .barra{display:none}
+    .folhas{display:block;padding:0}
+    .etq{margin:0}
+  }
+</style>
+</head>
+<body>
+<div class="barra"><span id="info">Lendo as notas no Bling…</span><button type="button" id="btImprimir" hidden>Imprimir</button></div>
+<div class="folhas" id="folhas"></div>
+<script src="/codigo128.js?v=2"></script>
+<script>
+// ?n=2:111,222;1:333  (conta:ids das notas). Os dados vêm do XML autorizado, lidos na hora pelo painel; nada é guardado.
+const $ = (id) => document.getElementById(id);
+const el = (t, c, txt) => { const e = document.createElement(t); if(c) e.className = c; if(txt != null) e.textContent = txt; return e; };
+const doc = (p) => { const c = p?.cnpj, f = p?.cpf;
+  if(c) return 'CNPJ ' + c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  if(f) return 'CPF ' + f.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  return ''; };
+const dataHora = (s) => { if(!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+const reais = (v) => (v == null ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+function pessoa(rot, p){
+  const c = el('div', 'caixa');
+  c.appendChild(el('div', 'rot', rot));
+  c.appendChild(el('div', 'grande', p?.nome || ''));
+  c.appendChild(el('div', null, [doc(p), p?.ie ? 'IE ' + p.ie : '', p?.uf ? 'UF ' + p.uf : ''].filter(Boolean).join('   ')));
+  return c;
+}
+
+function etiqueta(n){
+  const d = el('section', 'etq');
+  d.appendChild(el('h1', null, 'DANFE SIMPLIFICADO - ETIQUETA'));
+  const cb = el('div', 'cb'); cb.innerHTML = window.codigo128CSvg(n.chave, 60); d.appendChild(cb);
+  const ch = el('div', 'chave'); ch.appendChild(el('div', 'rot', 'Chave de acesso')); ch.appendChild(el('div', null, n.chave.match(/\d{4}/g).join(' '))); d.appendChild(ch);
+  const ap = el('div', 'caixa');
+  ap.appendChild(el('div', 'rot', 'Protocolo de autorização'));
+  ap.appendChild(el('div', null, `${n.protocolo}   ${dataHora(n.autorizada_em)}`));
+  d.appendChild(ap);
+  const nf = el('div', 'caixa linha');
+  const col = (r, v, g) => { const x = el('div'); x.appendChild(el('div', 'rot', r)); x.appendChild(el('div', g ? 'grande' : null, v)); return x; };
+  nf.append(col('NF-e nº', String(n.numero || '').padStart(9, '0').replace(/^(\d{3})(\d{3})(\d{3})$/, '$1.$2.$3'), true), col('Série', n.serie || ''),
+    col('Emissão', dataHora(n.emissao)), col('Tipo', n.tipo === '0' ? '0 - Entrada' : '1 - Saída'));
+  d.appendChild(nf);
+  d.appendChild(pessoa('Emitente', n.emitente));
+  d.appendChild(pessoa('Destinatário', n.destinatario));
+  const vt = el('div', 'caixa linha'); vt.append(col('Valor total da nota', reais(n.valor), true)); d.appendChild(vt);
+  const it = el('div', 'caixa itens'); it.appendChild(el('div', 'rot', 'Itens'));
+  for(const i of n.itens || []) it.appendChild(el('div', null, `${i.quantidade ?? ''} ${i.unidade || ''} · ${i.descricao || ''}`));
+  d.appendChild(it);
+  if(n.pedido_loja) d.appendChild(el('div', 'ped', `${n.loja_nome ? n.loja_nome + ' · ' : ''}pedido ${n.pedido_loja}`));
+  return d;
+}
+
+async function carregar(){
+  const notas = String(new URLSearchParams(location.search).get('n') || '').split(';').flatMap((g) => {
+    const [conta, ids] = g.split(':'); return String(ids || '').split(',').filter((x) => /^\d+$/.test(x)).map((id) => ({ conta, id }));
+  });
+  if(!notas.length){ $('info').textContent = 'Nenhuma nota escolhida: volte em Notas fiscais (Bling) → emitidas.'; return; }
+  try{
+    const r = await fetch('/api/bling/danfe-simplificada', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notas }) });
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || j.erro || ('HTTP ' + r.status));
+    const ok = j.notas.filter((n) => !n.erro), falhas = j.notas.filter((n) => n.erro);
+    for(const n of ok) $('folhas').appendChild(etiqueta(n));
+    $('info').textContent = `${ok.length} DANFE${ok.length === 1 ? '' : 's'} para imprimir (10×15 cm).` ;
+    if(falhas.length) $('info').appendChild(el('span', 'erro', '  Não deu: ' + falhas.map((f) => `nota ${f.id}: ${f.erro}`).join(' · ')));
+    if(ok.length){ $('btImprimir').hidden = false; $('btImprimir').onclick = () => window.print(); setTimeout(() => window.print(), 400); }
+  }catch(e){ $('info').textContent = 'Não consegui ler as notas: ' + e.message; }
+}
+carregar();
+</script>
+</body>
+</html>
