@@ -131,6 +131,8 @@ html[data-tema="escuro"][data-pagina="bling"] .num.ajustar b{color:hsl(22,92%,72
 html[data-tema="escuro"][data-pagina="bling"] .etq.gerar{background:hsla(209,90%,60%,.14)}
 html[data-tema="escuro"][data-pagina="bling"] .num.emitir b{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .num.rejeitada b{color:hsl(4,76%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .num.feitas b{color:var(--muted)}
+html[data-tema="escuro"][data-pagina="bling"] .feitas-tab .ok{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .abas button span{background:hsla(213,36%,60%,.14);color:hsl(218,24%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .abas button span.tem{background:hsla(45,90%,60%,.14);color:hsl(19,84%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .nota{background:var(--card)}

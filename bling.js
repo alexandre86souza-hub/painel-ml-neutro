@@ -302,11 +302,46 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       fd.append('file_type', '4');
       fd.append('file', new Blob([xml], { type: 'text/xml' }), `${nota.chaveAcesso || nota.numero || 'nota'}.xml`);
       await shopee(shop, '/api/v2/order/upload_invoice_doc', {}, fd);
+      const env = enviadasShopee();
+      env[nota.id] = { pedido, em: new Date().toISOString() };
+      const ids = Object.keys(env);
+      for (const k of ids.slice(0, Math.max(0, ids.length - 500))) delete env[k];   // só as 500 mais novas
+      D.configGravar('bling_shopee_enviadas', JSON.stringify(env));
       return { aplica: true, enviada: true, pedido };
     } catch (e) { return { aplica: true, enviada: false, pedido, motivo: e.message }; }
   }
 
+  const enviadasShopee = () => { try { return JSON.parse(D.configLer('bling_shopee_enviadas') || '{}') || {}; } catch { return {}; } };
+
+  // notas autorizadas dos últimos dias (lista da tela "emitidas"); o detalhe de cada uma é lido (3/s), então fica 5 min em memória
+  const emitidasCache = {};
+  async function emitidas(n, dias) {
+    const c = emitidasCache[`${n}:${dias}`];
+    if (c && Date.now() - c.em < 5 * 60e3) return c.notas;
+    const desde = new Date(Date.now() - (dias - 1) * 864e5 - 3 * 3600e3).toISOString().slice(0, 10);   // dia em Brasília
+    const lista = [];
+    for (const sit of [5, 6]) lista.push(...((await bling(n, `/nfe?pagina=1&limite=100&tipo=1&situacao=${sit}&dataEmissaoInicial=${desde}`)).data || []));
+    lista.sort((a, b) => String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')));
+    const lojas = await lojasDe(n), env = enviadasShopee(), notas = [];
+    for (const x of lista.slice(0, 40)) {
+      const d = (await bling(n, `/nfe/${x.id}`)).data || x;
+      const lojaNome = lojas[d.loja?.id] || null;
+      notas.push({ id: d.id, numero: d.numero ?? null, data: d.dataEmissao ?? null, cliente: d.contato?.nome || null, loja_nome: lojaNome,
+        pedido_loja: d.numeroPedidoLoja ?? null, valor: d.valorNota ?? null, situacao: Number(d.situacao), situacao_nome: SITUACAO_NF[d.situacao] || String(d.situacao),
+        shopee: ehShopee(lojaNome, d.numeroPedidoLoja), shopee_enviada: env[d.id] || null });
+    }
+    emitidasCache[`${n}:${dias}`] = { em: Date.now(), notas };
+    return notas;
+  }
+
   const rotas = {
+    // Notas AUTORIZADAS dos últimos dias (1–7), com o envio à Shopee feito pelo painel. Só leitura.
+    'GET /api/bling/emitidas': async (url) => {
+      const n = contaValida(url.searchParams.get('conta'));
+      const dias = Math.min(7, Math.max(1, Number(url.searchParams.get('dias')) || 3));
+      if (url.searchParams.get('recarregar')) delete emitidasCache[`${n}:${dias}`];
+      return { conta: publica(n), dias, notas: await emitidas(n, dias) };
+    },
     // { conta, id } — (re)envia à Shopee o XML de uma nota já AUTORIZADA (clique na tela).
     'POST /api/bling/notas/enviar-shopee': async (_u, body) => {
       const n = contaValida(body?.conta);
@@ -353,6 +388,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       const sit = Number(d.situacao);
       const autorizada = [5, 6, 7].includes(sit);
       const shopeeEnvio = autorizada ? await enviarNotaShopee(n, d) : null;
+      for (const k of Object.keys(emitidasCache)) if (k.startsWith(`${n}:`)) delete emitidasCache[k];
       return { id: d.id, numero: d.numero ?? null, situacao: sit, situacao_nome: SITUACAO_NF[sit] || String(sit),
         autorizada, rejeitada: sit === 4, aguardando: [1, 3, 8, 10].includes(sit), shopee: shopeeEnvio?.aplica ? shopeeEnvio : null };
     },

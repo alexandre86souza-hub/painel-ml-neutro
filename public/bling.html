@@ -27,6 +27,13 @@
   .etq.gerar{background:#d1e9ff;color:#175cd3}
   .num.emitir b{color:#0b6b33}
   .num.rejeitada b{color:#b42318}
+  .num.feitas b{color:#475467}
+  .feitas-tab{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+  .feitas-tab th,.feitas-tab td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:middle}
+  .feitas-tab th{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .feitas-tab .pl{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .feitas-tab .ok{color:#0b6b33;font-weight:600}
+  .feitas-tab .bt{padding:4px 10px;font-size:12px}
   .num.ativo{outline:2px solid var(--brand);outline-offset:-1px}
   .abas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line)}
   .abas button{font:inherit;font-size:14px;font-weight:600;padding:9px 16px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);cursor:pointer;margin-bottom:-1px}
@@ -104,6 +111,7 @@
   <div class="resumo" id="resumo">
     <button type="button" class="num ajustar" data-f="ajustar"><b id="nAjustar">—</b><span>falta ajustar · produto novo ou nota sem ajuste</span></button>
     <button type="button" class="num emitir" data-f="emitir"><b id="nEmitir">—</b><span>ajustados · falta emitir</span></button>
+    <button type="button" class="num feitas" data-f="feitas"><b id="nFeitas">—</b><span>emitidas · últimos 3 dias</span></button>
     <button type="button" class="num rejeitada" data-f="rej"><b id="nRej">—</b><span>rejeitadas pela Sefaz</span></button>
   </div>
   <div class="barra">
@@ -141,7 +149,7 @@ const lojaPeloPedido = (p) => { const s = String(p || '').trim();
   if(/^LU-/i.test(s) || /^\d{12,18}$/.test(s)) return 'Magalu';
   return null; };
 
-let cfg = null, notas = [], filtro = null;
+let cfg = null, notas = [], filtro = null, feitas = null;
 const GRUPO = { gerar: 'ajustar', ajustar: 'ajustar', pronto: 'emitir', emitir: 'emitir', shopee: 'emitir', rej: 'rej' };
 // seleção para fazer várias de uma vez: chave conta:tipo:id -> marcada; acoesLote = o que cada cartão desenhado sabe fazer
 const marcadas = new Set(), acoesLote = new Map();
@@ -168,6 +176,60 @@ async function lerNotas(){
   $('lidoEm').textContent = 'Lido às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   desenhar();
   $('btAtualizar').disabled = false;
+  lerFeitas(contas, false);
+}
+
+// notas já emitidas (autorizadas) dos últimos 3 dias, das contas conectadas
+async function lerFeitas(contas, recarregar){
+  feitas = null; if(filtro === 'feitas') desenhar(); else $('nFeitas').textContent = '…';
+  const partes = await Promise.all(contas.map(async (c) => {
+    try{ const r = await api(`/api/bling/emitidas?conta=${c.conta}&dias=3${recarregar ? '&recarregar=1' : ''}`); return r.notas.map((n) => ({ ...n, conta: c.conta, nomeConta: c.nome || ('Conta ' + c.conta) })); }
+    catch(e){ return [{ erro: `${c.nome || 'Conta ' + c.conta}: ${e.message}`, conta: c.conta }]; }
+  }));
+  feitas = partes.flat();
+  desenhar();
+}
+
+function desenharFeitas(box){
+  if(!feitas){ box.appendChild(el('p', 'carregando', 'Lendo as notas emitidas no Bling…')); return; }
+  const daAba = feitas.filter((n) => !aba || n.conta === aba);
+  for(const e of daAba.filter((n) => n.erro)) box.appendChild(el('p', 'res erro', 'Não consegui ler: ' + e.erro));
+  const lista = daAba.filter((n) => !n.erro);
+  if(!lista.length){ box.appendChild(vazio('Nenhuma nota emitida nos últimos 3 dias', '')); return; }
+  const rolar = el('div', 'rolar'), t = el('table', 'feitas-tab'), tr0 = el('tr');
+  for(const h of ['Nota', 'Cliente', 'Loja · pedido', 'Emitida', 'Valor', 'Situação', 'Shopee']) tr0.appendChild(el('th', null, h));
+  t.appendChild(tr0);
+  for(const n of lista){
+    const tr = el('tr');
+    tr.appendChild(el('td', null, `${n.numero || '—'}${aba ? '' : ' · ' + n.nomeConta}`));
+    tr.appendChild(el('td', null, n.cliente || '—'));
+    const tdP = el('td'); tdP.appendChild(el('span', null, (n.loja_nome || lojaPeloPedido(n.pedido_loja) || '—') + (n.pedido_loja ? ' · ' : '')));
+    if(n.pedido_loja) tdP.appendChild(el('span', 'pl', n.pedido_loja));
+    tr.appendChild(tdP);
+    tr.appendChild(el('td', null, dia(n.data)));
+    tr.appendChild(el('td', null, reais(n.valor)));
+    tr.appendChild(el('td', null, n.situacao_nome));
+    const tdS = el('td');
+    if(!n.shopee) tdS.textContent = '—';
+    else if(n.shopee_enviada) tdS.appendChild(el('span', 'ok', '✓ enviada pelo painel'));
+    else{
+      // emitida pelo Bling (ou o envio falhou): o painel não sabe se a Shopee já tem a nota
+      tdS.appendChild(el('span', 'sub', 'não enviada pelo painel '));
+      const b = el('button', 'bt', 'Enviar à Shopee'); b.type = 'button';
+      b.onclick = async () => {
+        if(!confirm(`Enviar o XML da nota ${n.numero || ''} ao pedido ${n.pedido_loja || ''} da Shopee?\n\nSe ela já foi enviada pelo Bling, a Shopee pode recusar ou trocar pela mesma nota.`)) return;
+        b.disabled = true;
+        try{ const x = await enviar('POST', '/api/bling/notas/enviar-shopee', { conta: n.conta, id: n.id });
+          if(x.enviada){ n.shopee_enviada = { pedido: x.pedido }; aviso(`✓ Nota ${n.numero || ''} enviada ao pedido ${x.pedido} da Shopee.`, 'ok'); desenhar(); }
+          else{ aviso(`A Shopee NÃO recebeu a nota ${n.numero || ''}: ${x.motivo || 'erro'}`); b.disabled = false; } }
+        catch(e){ aviso(`A Shopee NÃO recebeu a nota ${n.numero || ''}: ${e.message}`); b.disabled = false; }
+      };
+      tdS.appendChild(b);
+    }
+    tr.appendChild(tdS);
+    t.appendChild(tr);
+  }
+  rolar.appendChild(t); box.appendChild(rolar);
 }
 
 function vazio(t, sub){ const d = el('div', 'vazio-grande'); d.appendChild(el('b', null, t)); if(sub) d.appendChild(el('span', null, sub)); return d; }
@@ -194,8 +256,10 @@ function desenhar(){
   for(const n of daAba) conta[GRUPO[estado(n)]]++;
   $('nAjustar').textContent = conta.ajustar; $('nEmitir').textContent = conta.emitir; $('nRej').textContent = conta.rej;
   for(const b of document.querySelectorAll('.num')) b.classList.toggle('ativo', b.dataset.f === filtro);
+  $('nFeitas').textContent = feitas ? feitas.filter((n) => !n.erro && (!aba || n.conta === aba)).length : '…';
   const box = $('lista'); box.innerHTML = '';
   acoesLote.clear();
+  if(filtro === 'feitas'){ barraLote(); desenharFeitas(box); return; }
   const mostrar = daAba.filter((n) => !filtro || GRUPO[estado(n)] === filtro);
   if(!daAba.length){ barraLote(); box.appendChild(vazio('Tudo em dia ✓', 'Nenhum pedido sem nota e nenhuma nota pendente no Bling. Pedido novo aparece aqui depois de importado no Bling: clique em Atualizar.')); return; }
   if(!mostrar.length){ barraLote(); box.appendChild(vazio('Nada neste filtro', 'Clique em "Mostrar todas".')); return; }
