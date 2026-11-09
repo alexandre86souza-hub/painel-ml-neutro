@@ -198,12 +198,14 @@ function desenharFeitas(box){
   const lista = daAba.filter((n) => !n.erro);
   if(!lista.length){ box.appendChild(vazio('Nenhuma nota emitida nos últimos 3 dias', '')); return; }
   const rolar = el('div', 'rolar'), t = el('table', 'feitas-tab'), tr0 = el('tr');
-  for(const h of ['Nota', 'Cliente', 'Loja · pedido', 'Emitida', 'Valor', 'Situação', 'Shopee']) tr0.appendChild(el('th', null, h));
+  for(const h of ['Nota', 'Cliente · produtos', 'Loja · pedido', 'Emitida', 'Valor', 'Situação', 'Shopee']) tr0.appendChild(el('th', null, h));
   t.appendChild(tr0);
   for(const n of lista){
     const tr = el('tr');
     tr.appendChild(el('td', null, `${n.numero || '—'}${aba ? '' : ' · ' + n.nomeConta}`));
-    tr.appendChild(el('td', null, n.cliente || '—'));
+    const tdC = el('td'); tdC.appendChild(el('div', null, n.cliente || '—'));
+    for(const i of n.itens || []) tdC.appendChild(el('div', 'antes', `${i.quantidade ?? ''}× ${i.descricao}`));
+    tr.appendChild(tdC);
     const tdP = el('td'); tdP.appendChild(el('span', null, (n.loja_nome || lojaPeloPedido(n.pedido_loja) || '—') + (n.pedido_loja ? ' · ' : '')));
     if(n.pedido_loja) tdP.appendChild(el('span', 'pl', n.pedido_loja));
     tr.appendChild(tdP);

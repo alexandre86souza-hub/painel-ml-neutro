@@ -335,7 +335,8 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       const lojaNome = lojas[d.loja?.id] || null;
       notas.push({ id: d.id, numero: d.numero ?? null, data: d.dataEmissao ?? null, cliente: d.contato?.nome || null, loja_nome: lojaNome,
         pedido_loja: d.numeroPedidoLoja ?? null, valor: d.valorNota ?? null, situacao: Number(d.situacao), situacao_nome: SITUACAO_NF[d.situacao] || String(d.situacao),
-        shopee: ehShopee(lojaNome, d.numeroPedidoLoja), shopee_enviada: env[d.id] || null });
+        shopee: ehShopee(lojaNome, d.numeroPedidoLoja), shopee_enviada: env[d.id] || null,
+        itens: (d.itens || []).map((i) => ({ descricao: i.descricao || '', quantidade: i.quantidade ?? null })) });
     }
     emitidasCache[`${n}:${dias}`] = { em: Date.now(), notas };
     return notas;
