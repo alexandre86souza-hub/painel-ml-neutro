@@ -505,7 +505,9 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       if (!cods.length) throw erro('Informe os códigos.');
       const qs = cods.map((c) => `codigos[]=${encodeURIComponent(c)}`).join('&');
       const r = (await bling(n, `/produtos?pagina=1&limite=100&${qs}`)).data || [];
-      return { conta: publica(n), produtos: r.map((p) => ({ id: p.id, codigo: p.codigo ?? null, nome: p.nome ?? null, situacao: p.situacao ?? null, tipo: p.tipo ?? null })) };
+      const sv = salvos();
+      return { conta: publica(n), produtos: r.map((p) => ({ id: p.id, codigo: p.codigo ?? null, nome: p.nome ?? null, situacao: p.situacao ?? null, tipo: p.tipo ?? null })),
+        guardados: Object.fromEntries(cods.filter((c) => sv[c]).map((c) => [c, sv[c]])) };
     },
     'GET /api/bling/diagnostico': async (url) => {
       const n = contaValida(url.searchParams.get('conta'));
