@@ -139,22 +139,33 @@ const contar = (lista, f) => lista.reduce((m, x) => { const k = String(f(x) ?? '
 // Loja da Shopee de cada conta do Bling (conta 1 = Shopee AMG, conta 2 = Shopee Primor).
 const SHOPEE_DA_CONTA = { 1: '445620092', 2: '717079477' };
 const PEDIDO_SHOPEE = /^\d{6}(?=[0-9A-Z]*[A-Z])[0-9A-Z]{6,10}$/;
-// DANFE Simplificado – Etiqueta: os campos saem do XML autorizado (o Bling não tem esse documento na API). Só o que a etiqueta
-// leva: do destinatário nome, CPF/CNPJ, IE e UF (sem endereço). Função pura: testada.
+// DANFE Simplificado – Etiqueta: os campos saem do XML autorizado (o Bling não tem esse documento na API), no mesmo desenho do
+// que o Bling imprime (emitente com endereço, itens com CFOP, acréscimos/desconto, consumidor com endereço, informações
+// adicionais). Tem dado do comprador: só para imprimir; não é guardado. Função pura: testada.
 function danfeDoXml(xml) {
   const des = (t) => String(t ?? '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&').trim();
   const bloco = (x, t) => (String(x || '').match(new RegExp(`<${t}[\\s>][\\s\\S]*?</${t}>`)) || [''])[0];
   const tag = (x, t) => { const m = String(x || '').match(new RegExp(`<${t}>([^<]*)</${t}>`)); return m ? des(m[1]) : null; };
+  const num = (x, t) => { const v = tag(x, t); return v == null ? null : Number(v); };
   const ide = bloco(xml, 'ide'), emit = bloco(xml, 'emit'), dest = bloco(xml, 'dest'), prot = bloco(xml, 'infProt'), tot = bloco(xml, 'ICMSTot');
   const chave = tag(prot, 'chNFe') || (String(xml).match(/Id="NFe(\d{44})"/) || [])[1] || null;
   if (!chave || !/^\d{44}$/.test(chave)) throw erro('XML sem a chave de acesso.');
   const nProt = tag(prot, 'nProt');
   if (!nProt) throw erro('A nota ainda não tem protocolo de autorização no XML.');
-  const pessoa = (b, end) => ({ nome: tag(b, 'xNome'), cnpj: tag(b, 'CNPJ'), cpf: tag(b, 'CPF'), ie: tag(b, 'IE'), uf: tag(bloco(b, end), 'UF') });
-  const itens = [...String(xml).matchAll(/<det [^>]*>([\s\S]*?)<\/det>/g)].map((m) => { const pr = bloco(m[1], 'prod'); return { descricao: tag(pr, 'xProd'), quantidade: Number(tag(pr, 'qCom')) || null, unidade: tag(pr, 'uCom') }; });
+  const endereco = (b) => ({ logradouro: tag(b, 'xLgr'), numero: tag(b, 'nro'), complemento: tag(b, 'xCpl'), bairro: tag(b, 'xBairro'), municipio: tag(b, 'xMun'), uf: tag(b, 'UF'), cep: tag(b, 'CEP') });
+  const pessoa = (b, end) => { const e = endereco(bloco(b, end)); return { nome: tag(b, 'xNome'), fantasia: tag(b, 'xFant'), cnpj: tag(b, 'CNPJ'), cpf: tag(b, 'CPF'), estrangeiro: tag(b, 'idEstrangeiro'), ie: tag(b, 'IE'), uf: e.uf, endereco: e }; };
+  const itens = [...String(xml).matchAll(/<det [^>]*>([\s\S]*?)<\/det>/g)].map((m) => {
+    const pr = bloco(m[1], 'prod');
+    return { codigo: tag(pr, 'cProd'), descricao: tag(pr, 'xProd'), cfop: tag(pr, 'CFOP'), quantidade: num(pr, 'qCom'), unidade: tag(pr, 'uCom'),
+      unitario: num(pr, 'vUnCom'), valor: num(pr, 'vProd'), info: tag(m[1], 'infAdProd') };
+  });
+  const vNF = num(tot, 'vNF'), vProd = num(tot, 'vProd');
   return { chave, numero: tag(ide, 'nNF'), serie: tag(ide, 'serie'), emissao: tag(ide, 'dhEmi'), tipo: tag(ide, 'tpNF'),
-    protocolo: nProt, autorizada_em: tag(prot, 'dhRecbto'), valor: Number(tag(tot, 'vNF')) || null,
-    emitente: pessoa(emit, 'enderEmit'), destinatario: pessoa(dest, 'enderDest'), itens };
+    protocolo: nProt, autorizada_em: tag(prot, 'dhRecbto'), valor: vNF, valor_produtos: vProd,
+    // ACRÉSCIMOS (IPI, ST, FRETE, SEGURO E OUTRAS DESPESAS)/DESCONTO = total da nota − produtos (o Bling mostra assim)
+    acrescimos: vNF != null && vProd != null ? Math.round((vNF - vProd) * 100) / 100 : null,
+    emitente: pessoa(emit, 'enderEmit'), destinatario: pessoa(dest, 'enderDest'), itens,
+    info_adicional: tag(bloco(xml, 'infAdic'), 'infCpl') };
 }
 
 // Amazon: o Bling NÃO manda a nota sozinho (sem "Exportação de vendas"); o vendedor envia no Bling e marca no painel.

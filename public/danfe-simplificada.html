@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DANFE simplificada</title>
 <style>
-  /* DANFE Simplificado – Etiqueta, 10×15 cm (térmica Elgin pelo driver). Sempre clara: é papel. */
+  /* DANFE Simplificado – Etiqueta, 10×15 cm (térmica Elgin pelo driver), no desenho da que o Bling imprime. Sempre clara: é papel. */
   @page{size:100mm 150mm;margin:0}
   *{box-sizing:border-box}
   body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000;background:#e5e7eb}
@@ -13,24 +13,31 @@
   .barra button{font:inherit;font-weight:700;padding:7px 14px;border:0;border-radius:8px;background:#c96f50;color:#fff;cursor:pointer}
   .barra .erro{color:#fecaca}
   .folhas{display:flex;flex-wrap:wrap;gap:12px;padding:14px;justify-content:center}
-  .etq{width:100mm;height:150mm;background:#fff;padding:4mm;display:flex;flex-direction:column;gap:2mm;overflow:hidden;page-break-after:always;break-after:page}
-  .etq h1{margin:0;font-size:13pt;text-align:center;letter-spacing:.02em;border-bottom:.4mm solid #000;padding-bottom:1.5mm}
-  .cb{height:16mm}
+  .etq{width:100mm;height:150mm;background:#fff;padding:3mm 3mm 2mm;display:flex;flex-direction:column;overflow:hidden;page-break-after:always;break-after:page;font-size:7.6pt;line-height:1.22}
+  .sec{border-bottom:.35mm dashed #000;padding:1.3mm 0}
+  .sec:first-child{border-top:.35mm dashed #000}
+  .sec:last-child{border-bottom:0}
+  .titulo{text-align:center;font-weight:700;font-size:8.6pt}
+  .emit{display:flex;gap:2.5mm;align-items:center}
+  .logo{flex:0 0 31mm;height:15mm;background:#d1d5db;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:8pt;line-height:1.1;padding:1mm;overflow:hidden}
+  .emit .dados{flex:1 1 auto;min-width:0}
+  .centro{text-align:center}
+  .cb{height:13mm;margin:.5mm 4mm}
   .cb svg{width:100%;height:100%;display:block}
-  .chave{font-family:"Courier New",monospace;font-size:8.6pt;text-align:center;letter-spacing:.02em}
-  .rot{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-  .caixa{border:.3mm solid #000;padding:1.5mm 2mm;font-size:8.5pt;line-height:1.25}
-  .linha{display:flex;gap:3mm;flex-wrap:wrap}
-  .linha > div{flex:1 1 auto}
-  .grande{font-size:11pt;font-weight:700}
-  .itens{font-size:8pt;line-height:1.2;flex:1 1 auto;overflow:hidden}
-  .itens div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ped{font-size:7.5pt;text-align:center}
+  .chave{font-size:7.8pt;letter-spacing:.02em}
+  .pequeno{font-size:6.6pt}
+  .itens{display:flex;flex-direction:column;gap:.8mm}
+  .lin{display:flex;justify-content:space-between;gap:2mm}
+  .lin > :first-child{flex:1 1 auto;min-width:0}
+  .lin > :last-child{flex:0 0 auto;text-align:right}
+  .cab{font-weight:700}
+  .info{font-size:6.8pt}
+  .forte{font-weight:700}
+  .sub{font-weight:700;text-align:center}
   @media print{
     body{background:#fff}
     .barra{display:none}
     .folhas{display:block;padding:0}
-    .etq{margin:0}
   }
 </style>
 </head>
@@ -42,42 +49,76 @@
 // ?n=2:111,222;1:333  (conta:ids das notas). Os dados vêm do XML autorizado, lidos na hora pelo painel; nada é guardado.
 const $ = (id) => document.getElementById(id);
 const el = (t, c, txt) => { const e = document.createElement(t); if(c) e.className = c; if(txt != null) e.textContent = txt; return e; };
-const doc = (p) => { const c = p?.cnpj, f = p?.cpf;
-  if(c) return 'CNPJ ' + c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-  if(f) return 'CPF ' + f.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
-  return ''; };
-const dataHora = (s) => { if(!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
-const reais = (v) => (v == null ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-
-function pessoa(rot, p){
-  const c = el('div', 'caixa');
-  c.appendChild(el('div', 'rot', rot));
-  c.appendChild(el('div', 'grande', p?.nome || ''));
-  c.appendChild(el('div', null, [doc(p), p?.ie ? 'IE ' + p.ie : '', p?.uf ? 'UF ' + p.uf : ''].filter(Boolean).join('   ')));
-  return c;
-}
+const cnpjF = (c) => String(c || '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+const cpfF = (c) => String(c || '').replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+const docDe = (p) => (p?.cnpj ? cnpjF(p.cnpj) : p?.cpf ? cpfF(p.cpf) : p?.estrangeiro || '');
+const num2 = (v) => (v == null ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const dataBr = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+// como o Bling: 09/11/2026 10:52:35-03:00 (a hora do XML, sem converter)
+const protHora = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2})(.*)$/); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}${m[5]}` : (s || ''); };
+const enderecoDe = (e) => {
+  if(!e) return '';
+  const rua = [e.logradouro, e.numero].filter(Boolean).join(', ');
+  return [rua, e.complemento, e.bairro].filter(Boolean).join(', ') + (e.municipio ? ` - ${e.municipio}` : '') + (e.uf ? ` - ${e.uf}` : '');
+};
+const sec = (c) => el('div', 'sec' + (c ? ' ' + c : ''));
 
 function etiqueta(n){
   const d = el('section', 'etq');
-  d.appendChild(el('h1', null, 'DANFE SIMPLIFICADO - ETIQUETA'));
-  const cb = el('div', 'cb'); cb.innerHTML = window.codigo128CSvg(n.chave, 60); d.appendChild(cb);
-  const ch = el('div', 'chave'); ch.appendChild(el('div', 'rot', 'Chave de acesso')); ch.appendChild(el('div', null, n.chave.match(/\d{4}/g).join(' '))); d.appendChild(ch);
-  const ap = el('div', 'caixa');
-  ap.appendChild(el('div', 'rot', 'Protocolo de autorização'));
-  ap.appendChild(el('div', null, `${n.protocolo}   ${dataHora(n.autorizada_em)}`));
-  d.appendChild(ap);
-  const nf = el('div', 'caixa linha');
-  const col = (r, v, g) => { const x = el('div'); x.appendChild(el('div', 'rot', r)); x.appendChild(el('div', g ? 'grande' : null, v)); return x; };
-  nf.append(col('NF-e nº', String(n.numero || '').padStart(9, '0').replace(/^(\d{3})(\d{3})(\d{3})$/, '$1.$2.$3'), true), col('Série', n.serie || ''),
-    col('Emissão', dataHora(n.emissao)), col('Tipo', n.tipo === '0' ? '0 - Entrada' : '1 - Saída'));
-  d.appendChild(nf);
-  d.appendChild(pessoa('Emitente', n.emitente));
-  d.appendChild(pessoa('Destinatário', n.destinatario));
-  const vt = el('div', 'caixa linha'); vt.append(col('Valor total da nota', reais(n.valor), true)); d.appendChild(vt);
-  const it = el('div', 'caixa itens'); it.appendChild(el('div', 'rot', 'Itens'));
-  for(const i of n.itens || []) it.appendChild(el('div', null, `${i.quantidade ?? ''} ${i.unidade || ''} · ${i.descricao || ''}`));
-  d.appendChild(it);
-  if(n.pedido_loja) d.appendChild(el('div', 'ped', `${n.loja_nome ? n.loja_nome + ' · ' : ''}pedido ${n.pedido_loja}`));
+  const s1 = sec('titulo'); s1.textContent = 'DANFE Simplificado - Etiqueta'; d.appendChild(s1);
+
+  // emitente: caixa com o nome (no lugar do logo) + nome, CNPJ, IE e endereço
+  const em = n.emitente || {};
+  const s2 = sec('emit');
+  s2.appendChild(el('div', 'logo', em.fantasia || em.nome || ''));
+  const dd = el('div', 'dados');
+  dd.appendChild(el('div', null, em.nome || ''));
+  dd.appendChild(el('div', null, `CNPJ:${cnpjF(em.cnpj)}${em.ie ? ' IE:' + em.ie : ''}`));
+  dd.appendChild(el('div', null, enderecoDe(em.endereco)));
+  s2.appendChild(dd); d.appendChild(s2);
+
+  // chave, protocolo, tipo/número/série, emissão
+  const s3 = sec('centro');
+  const cb = el('div', 'cb'); cb.innerHTML = window.codigo128CSvg(n.chave, 60); s3.appendChild(cb);
+  s3.appendChild(el('div', 'chave', n.chave.match(/\d{4}/g).join(' ')));
+  s3.appendChild(el('div', 'pequeno', 'Protocolo de autorização de uso'));
+  s3.appendChild(el('div', null, `${n.protocolo} ${protHora(n.autorizada_em)}`));
+  s3.appendChild(el('div', null, `TIPO: ${n.tipo === '0' ? '0 - Entrada' : '1 - Saída'} | Nº NFe: ${String(n.numero || '').padStart(6, '0')} | SERIE: ${n.serie || ''}`));
+  s3.appendChild(el('div', null, `Data de emissão: ${dataBr(n.emissao)}`));
+  d.appendChild(s3);
+
+  // itens: código - descrição - qtd UN X unitário | valor
+  const s4 = sec('itens');
+  const c = el('div', 'lin cab'); c.append(el('span', null, 'ITEM'), el('span', null, 'VL. ITEM')); s4.appendChild(c);
+  for(const i of n.itens || []){
+    const l = el('div', 'lin');
+    l.append(el('span', null, `${i.codigo ? i.codigo + ' - ' : ''}${i.descricao || ''} - ${num2(i.quantidade)} ${i.unidade || ''} X ${num2(i.unitario)}`), el('span', null, num2(i.valor)));
+    s4.appendChild(l);
+    if(i.info) s4.appendChild(el('div', 'info', i.info));
+  }
+  d.appendChild(s4);
+
+  // totais
+  const s5 = sec('itens');
+  const t1 = el('div', 'lin'); t1.append(el('span', null, 'QTD. TOTAL DE ITENS'), el('span', null, String((n.itens || []).length))); s5.appendChild(t1);
+  const t2 = el('div', 'lin'); t2.append(el('span', null, 'ACRÉSCIMOS (IPI, ST, FRETE, SEGURO E OUTRAS DESPESAS)/DESCONTO R$'), el('span', null, num2(n.acrescimos))); s5.appendChild(t2);
+  const t3 = el('div', 'lin forte'); t3.append(el('span', null, 'VALOR NOTA R$'), el('span', null, num2(n.valor))); s5.appendChild(t3);
+  d.appendChild(s5);
+
+  // consumidor
+  const de = n.destinatario || {};
+  const s6 = sec('centro');
+  s6.appendChild(el('div', 'sub', 'CONSUMIDOR'));
+  s6.appendChild(el('div', null, `CNPJ/CPF/ID Estrangeiro: ${docDe(de)} ${de.nome || ''}`));
+  s6.appendChild(el('div', null, enderecoDe(de.endereco)));
+  d.appendChild(s6);
+
+  // informações adicionais (+ pedido da loja, para achar o pacote)
+  const s7 = sec();
+  s7.appendChild(el('div', 'forte', 'INFORMAÇÕES ADICIONAIS DE INTERESSE DO CONTRIBUINTE'));
+  if(n.info_adicional) for(const p of String(n.info_adicional).split(/\s*;\s*|\n/).filter(Boolean)) s7.appendChild(el('div', null, p));
+  if(n.pedido_loja) s7.appendChild(el('div', null, `${n.loja_nome ? n.loja_nome + ' · ' : ''}Pedido ${n.pedido_loja}`));
+  d.appendChild(s7);
   return d;
 }
 
@@ -92,9 +133,9 @@ async function carregar(){
     if(!r.ok) throw new Error(j.error || j.erro || ('HTTP ' + r.status));
     const ok = j.notas.filter((n) => !n.erro), falhas = j.notas.filter((n) => n.erro);
     for(const n of ok) $('folhas').appendChild(etiqueta(n));
-    $('info').textContent = `${ok.length} DANFE${ok.length === 1 ? '' : 's'} para imprimir (10×15 cm).` ;
+    $('info').textContent = `${ok.length} DANFE${ok.length === 1 ? '' : 's'} para imprimir (10×15 cm).`;
     if(falhas.length) $('info').appendChild(el('span', 'erro', '  Não deu: ' + falhas.map((f) => `nota ${f.id}: ${f.erro}`).join(' · ')));
-    if(ok.length){ $('btImprimir').hidden = false; $('btImprimir').onclick = () => window.print(); setTimeout(() => window.print(), 400); }
+    if(ok.length){ $('btImprimir').hidden = false; $('btImprimir').onclick = () => window.print(); if(!/[?&]ver=1/.test(location.search)) setTimeout(() => window.print(), 400); }
   }catch(e){ $('info').textContent = 'Não consegui ler as notas: ' + e.message; }
 }
 carregar();
