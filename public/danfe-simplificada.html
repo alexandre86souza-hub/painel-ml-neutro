@@ -38,9 +38,9 @@
   .etq + .etq{page-break-before:always;break-before:page}
   @media print{
     html,body{margin:0;padding:0;height:auto;background:#fff}
-    /* a impressora reserva margem (Elgin: ~1 mm em cima, 0,5 mm embaixo): a etiqueta fica abaixo da área útil e não
+    /* a impressora reserva margem (Elgin: 1 mm em cima, 0,5 mm embaixo, 4 mm à esquerda e 3 mm à direita): a etiqueta fica abaixo da área útil e não
        transborda para uma 2ª folha em branco */
-    .etq{width:96mm;margin:0 auto}
+    .etq{width:92mm;padding:1mm 1mm 0;margin:0}
     .barra{display:none}
     .folhas{display:block;padding:0}
   }
