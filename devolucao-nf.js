@@ -246,7 +246,8 @@ function criar({ D, ml, mlArquivo, bling }) {
     if (!/^\d{6,20}$/.test(pedido) || (inv && !/^\d{3,20}$/.test(inv))) throw erro('pedido/invoice inválidos');
     const forma = (n) => (n ? { id: n.id, status: n.status, tipo: n.fiscal_data?.transaction_type, invoice_type: n.attributes?.invoice_type,
       envio: n.shipment?.id ?? null, logistica: n.shipment?.logistic_type ?? null, numero: n.invoice_number, serie: n.invoice_series, refs: n.attributes?.reference_invoices, ref: n.attributes?.reference_invoice,
-      itens_ref: (n.items || []).map((i) => i.reference_item || null), chaves: Object.keys(n) } : null);
+      itens_ref: (n.items || []).map((i) => i.reference_item || null), pedidos_itens: (n.items || []).map((i) => i.external_order_id ?? null), pack: n.pack_id ?? null,
+      chaves: Object.keys(n) } : null);
     const out = {};
     for (const c of D.contasListar()) {
       const u = String(c.ml_user_id);
