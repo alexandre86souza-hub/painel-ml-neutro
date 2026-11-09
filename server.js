@@ -2429,6 +2429,9 @@ const blingMod = require('./bling.js').criar({ D, urlPublica, novoEstadoOAuth, c
   shopee: (...a) => shopeeMod.daLoja(...a), portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
   pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, blingMod.rotas);
+// Nota de devolução (entrada) pelo Bling a partir da nota de venda de qualquer loja (devolucao-nf.js). Só o administrador; nada no MCP.
+const devolucaoNfMod = require('./devolucao-nf.js').criar({ D, ml, mlArquivo, bling: blingMod.bling });
+Object.assign(routes, devolucaoNfMod.rotas);
 
 // ---------- Financeiro: o dinheiro das vendas pelo Mercado Pago (financeiro.js) ----------
 // ---------- Cópia de segurança do banco (backup.js): rotas da Configuração; a cópia diária é

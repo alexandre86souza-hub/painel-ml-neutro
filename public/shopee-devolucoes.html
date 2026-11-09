@@ -65,6 +65,7 @@
 <script src="/comum.js?v=10"></script>
 <script src="/defeito-pecas.js?v=4"></script>
 <script src="/devolucao-acomp.js?v=1"></script>
+<script src="/nota-devolucao.js?v=1"></script>
 <script>
 const LOJA = (/^shopee-(\d+)$/.exec(new URLSearchParams(location.search).get('conta') || '') || [])[1];
 let dias = periodoInicial('segDias', 90), dados = null;
@@ -93,6 +94,8 @@ function pintarLista(){
     if(d.prazo_vendedor && !['ACCEPTED', 'CANCELLED', 'CLOSED'].includes(d.status)) t3.appendChild(el('span', 'pequeno', `responder até ${new Date(d.prazo_vendedor).toLocaleString('pt-BR')}`));
     const t4 = el('td', 'dinheiro'); t4.appendChild(document.createTextNode(real(d.reembolso))); if(d.valor_original != null && d.valor_original !== d.reembolso) t4.appendChild(el('span', 'pequeno', `de ${real(d.valor_original)}`));
     const t5 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t5.appendChild(a);
+    // nota de devolução (entrada) pelo Bling, a partir da nota de venda do pedido
+    if(d.pedido){ t5.appendChild(document.createElement('br')); t5.appendChild(botaoNotaDevolucao({ canal: 'shopee', pedido: String(d.pedido) })); }
     tr.append(t0, el('td', null, dataBR(d.data)), t2, t3, t4, t5); tb.appendChild(tr);
     // peças com defeito (a mesma marcação das devoluções do ML): o que não estiver marcado volta ao estoque
     if(d.pecas?.length){

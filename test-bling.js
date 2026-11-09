@@ -125,4 +125,41 @@ assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js nã
   assert.ok(!/\/api\/ml-notas/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/ml-notas');
 }
 
+// Nota de devolução pelo Bling (devolucao-nf.js)
+{
+  const { vendaDoXml, escolhidosValidos, corpoDevolucao } = require('./devolucao-nf.js');
+  const ch = '35251112345678000199550010000716521000000017';
+  const xml = `<nfeProc><NFe><infNFe Id="NFe${ch}"><ide><nNF>71652</nNF><serie>1</serie><dhEmi>2026-11-09T10:00:00-03:00</dhEmi><tpNF>1</tpNF></ide>
+    <emit><CNPJ>12345678000199</CNPJ><xNome>AMG</xNome></emit>
+    <dest><CPF>12345678909</CPF><xNome>Fulano &amp; Cia</xNome><enderDest><xLgr>Rua X</xLgr><nro>10</nro><xBairro>Centro</xBairro><xMun>Campinas</xMun><UF>SP</UF><CEP>13000-000</CEP></enderDest><indIEDest>9</indIEDest></dest>
+    <det nItem="1"><prod><cProd>CFOP5102</cProd><cEAN>SEM GTIN</cEAN><xProd>Ducha 20x20</xProd><NCM>84818019</NCM><CEST>1007900</CEST><CFOP>5102</CFOP><uCom>UN</uCom><qCom>2.0000</qCom><vUnCom>60.00</vUnCom><vProd>120.00</vProd><vDesc>0.58</vDesc></prod>
+      <imposto><ICMS><ICMSSN102><orig>2</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto></det>
+    <det nItem="2"><prod><cProd>NI-831</cProd><cEAN>7891234567895</cEAN><xProd>Niple</xProd><NCM>73079900</NCM><CFOP>5102</CFOP><uCom>UN</uCom><qCom>1</qCom><vUnCom>5.00</vUnCom><vProd>5.00</vProd></prod>
+      <imposto><ICMS><ICMSSN102><orig>0</orig></ICMSSN102></ICMS></imposto></det>
+  </infNFe></NFe><protNFe><infProt><chNFe>${ch}</chNFe><nProt>135250000000001</nProt></infProt></protNFe></nfeProc>`;
+  const v = vendaDoXml(xml);
+  assert.strictEqual(v.chave, ch); assert.strictEqual(v.numero, '71652'); assert.strictEqual(v.emissao, '2026-11-09');
+  assert.strictEqual(v.emitente_cnpj, '12345678000199');
+  assert.strictEqual(v.destinatario.nome, 'Fulano & Cia'); assert.strictEqual(v.destinatario.endereco.cep, '13000000');
+  assert.strictEqual(v.itens.length, 2);
+  assert.strictEqual(v.itens[0].unitario, 59.71, 'valor unitário líquido do desconto');
+  assert.strictEqual(v.itens[0].origem, '2'); assert.strictEqual(v.itens[0].gtin, null); assert.strictEqual(v.itens[1].gtin, '7891234567895');
+  assert.throws(() => vendaDoXml(xml.replace('<nProt>135250000000001</nProt>', '')), /autorizada/);
+  assert.throws(() => vendaDoXml(xml.replace('<tpNF>1</tpNF>', '<tpNF>0</tpNF>')), /saída/);
+  assert.throws(() => escolhidosValidos(v, [{ n: 1, quantidade: 3 }]), /vendido com 2/);
+  assert.throws(() => escolhidosValidos(v, [{ n: 1, quantidade: 0 }]), /pelo menos um/);
+  assert.throws(() => escolhidosValidos(v, [{ n: 9, quantidade: 1 }]), /inválido/);
+  const esc = escolhidosValidos(v, [{ n: 1, quantidade: 1 }, { n: 2, quantidade: 0 }]);
+  const c = corpoDevolucao(v, esc, '777', '2026-11-09 15:00:00', 'Pedido Mercado Livre 2000019340356416');
+  assert.strictEqual(c.tipo, 0); assert.strictEqual(c.finalidade, 4); assert.strictEqual(c.naturezaOperacao.id, 777);
+  assert.deepStrictEqual(c.documentoReferenciado, { modelo: '55', chaveAcesso: ch, numero: '71652', serie: '1', data: '2026-11-09' });
+  assert.strictEqual(c.contato.tipoPessoa, 'F'); assert.strictEqual(c.contato.numeroDocumento, '12345678909'); assert.strictEqual(c.contato.contribuinte, 9);
+  assert.strictEqual(c.itens.length, 1);
+  assert.deepStrictEqual(c.itens[0].documentoReferenciado, { chaveAcesso: ch, numeroItem: '1' });
+  assert.strictEqual(c.itens[0].quantidade, 1); assert.strictEqual(c.itens[0].valor, 59.71); assert.strictEqual(c.itens[0].origem, 2);
+  assert.strictEqual(c.itens[0].classificacaoFiscal, '84818019'); assert.strictEqual(c.itens[0].cest, '1007900');
+  assert.ok(c.observacoes.includes(ch) && c.observacoes.includes('09/11/2026'));
+  assert.ok(!/\/api\/devolucao-nf/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/devolucao-nf');
+}
+
 console.log('test-bling: ok');

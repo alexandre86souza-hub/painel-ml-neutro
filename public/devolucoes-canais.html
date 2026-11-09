@@ -86,6 +86,7 @@
 <script src="/comum.js?v=10"></script>
 <script src="/defeito-pecas.js?v=4"></script>
 <script src="/devolucao-acomp.js?v=1"></script>
+<script src="/nota-devolucao.js?v=1"></script>
 <script>
 // Devoluções da Amazon, Leroy e Magalu (?conta=amazon|leroy|magalu): GET /api/{canal}/devolucoes, todas no mesmo formato.
 // Nada desta tela vai para o MCP.
@@ -136,6 +137,8 @@ function pintarLista(){
     }
     p.append(im, cx); t0.appendChild(p);
     const t9 = el('td'); const a = el('a', null, 'Ver'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener'; t9.appendChild(a);
+    // nota de devolução (entrada) pelo Bling; FBA volta ao armazém da Amazon
+    if(d.canal !== 'FBA' && d.pedido){ t9.appendChild(document.createElement('br')); t9.appendChild(botaoNotaDevolucao({ canal: CANAL, pedido: String(d.pedido) })); }
     tr.append(t0, el('td', null, dataBR(d.data_venda)), el('td', null, d.data ? dataBR(d.data) : '—'), el('td', null, d.envio || (d.canal === 'FBA' ? 'FBA' : 'envio próprio')),
       el('td', 'dinheiro', d.valor_venda == null ? 'fora do período lido' : real(d.valor_venda)), el('td', 'dinheiro', d.aguardando_reembolso ? 'ainda não' : real(d.devolvido)),
       el('td', 'dinheiro', d.tarifas_venda == null ? '—' : real((d.tarifas_venda || 0) + (d.frete_venda || 0)) + (d.frete_desconhecido ? ' (sem o frete)' : '')),

@@ -393,6 +393,15 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   ajuste no painel); antes relê o envio (tem de seguir invoice_pending) e GET /users/{id}/invoices/orders/{order} (já tem nota = não emite);
   sem "authorized" relê /users/{id}/invoices/{id} por ~25 s; erro = message + error_code -> /users/invoices/errors/MLB/{code}. Depois
   `comandas.esquecerEnvio` faz a fila reler o envio (a etiqueta libera). A resposta leva só número, série, chave e situação; nada no MCP.
+- Nota de DEVOLUÇÃO pelo Bling (`devolucao-nf.js`, botão "Nota de devolução" de `public/nota-devolucao.js` nas telas de devoluções do ML,
+  Shopee, Amazon/Leroy/Magalu; só o administrador; pedido do dono 09/11/2026). O Faturador do ML NÃO emite devolução pela API (só consulta).
+  Venda: ML = XML do Faturador (`/users/{id}/invoices/orders/{pedido}` -> xml_location, `mlArquivo`); outras = nota do Bling por
+  `/nfe?numeroLoja=` nas duas contas; sem achar, o vendedor cola a chave (`/nfe?chaveAcesso=`). Conta do Bling = a do CNPJ do emitente
+  (`/empresas/me/dados-basicos`: ML AMG -> Bling AMG, Primor -> Primor). Gerar (`POST /api/devolucao-nf/gerar`) = POST /nfe tipo 0,
+  finalidade 4, natureza escolhida (lembrada em `devolucao_natureza_{n}`; CFOP e impostos vêm dela), contato = destinatário da venda,
+  documentoReferenciado (55 + chave) e item a item (chave + nItem), valor unitário = (vProd − vDesc) ÷ qCom, quantidade que voltou;
+  fica PENDENTE. Emitir (`POST /api/devolucao-nf/emitir`) só a gerada pelo painel (tipo 0, finalidade 4, pendente). Uma por pedido
+  (`estado` devolucao_nf; apagada no Bling = esquece; cancelada = pode outra); trava por pedido. Nada no MCP (`test-bling.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
   libera depois da nota fiscal, em PDF para a térmica 10×15 (pelo driver da impressora; sem ZPL). Lista = a fila das comandas
   (`comandas.js#fila`) com o número da comanda. ML: substatus ready_to_print/printed, `GET /shipment_labels?shipment_ids=&response_type=pdf`

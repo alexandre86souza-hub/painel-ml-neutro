@@ -260,6 +260,7 @@
 </div>
 
 <script src="/devolucao-acomp.js?v=1"></script>
+<script src="/nota-devolucao.js?v=1"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const real = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }));
@@ -623,6 +624,8 @@ function pintarLista(){
       // pedi reembolso ao ML (em aberto) / resposta (fechada), com observação
       b3.appendChild(blocoAcomp('ml:' + x.id, x.acomp, { aoSalvar: () => carregar(true) }));
     }
+    // nota de devolução (entrada) pelo Bling, a partir da nota de venda do Faturador do ML
+    if(x.pedido) b3.appendChild(botaoNotaDevolucao({ canal: 'ml', pedido: String(x.pedido) }));
     const a = el('a', 'rec-link', 'Abrir no Mercado Livre ↗'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener';
     b3.appendChild(a);
 
