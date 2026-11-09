@@ -25,6 +25,12 @@
   .abas button.ativa{color:var(--brand);border-bottom-color:var(--brand)}
   .abas button span{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef2f7;color:#344054;font-size:12px}
   .lista{display:grid;gap:12px}
+  .grupo{display:grid;gap:12px}
+  .grupo h2{margin:6px 0 0;font-size:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .grupo h2 .etq{font-size:12px}
+  .abas.tipos{border-bottom:0;margin-top:-6px}
+  .abas.tipos button{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;margin:0}
+  .abas.tipos button.ativa{border-color:var(--brand)}
   .envio{border:1px solid var(--line);border-left:5px solid #f79009;border-radius:12px;padding:12px 14px;background:#fff;min-width:0}
   .envio.ok{border-left-color:#12b76a}
   .envio.rej{border-left-color:#d92d20}
@@ -80,6 +86,7 @@
   </ol>
 
   <div class="abas" id="abas" role="tablist" aria-label="Conta do Mercado Livre"></div>
+  <div class="abas tipos" id="tipos" role="tablist" aria-label="Tipo de envio"></div>
   <div class="barra">
     <button type="button" class="bt" id="btAtualizar">Atualizar</button>
     <span class="sub" id="lidoEm"></span>
@@ -108,7 +115,10 @@ const resultado = new Map();   // chave -> { tipo: ok|rej|info, txt }
 const marcadas = new Set();
 // aba: '' = todas as contas, ou o apelido da conta (lembrada neste navegador)
 let aba = (() => { try{ return localStorage.getItem('mlnotas_aba') || ''; }catch{ return ''; } })();
-const daAba = () => envios.filter((e) => !aba || e.loja === aba);
+// tipo de envio: '' = todos, 'Mercado Envios' ou 'Flex' (lembrado neste navegador)
+let tipo = (() => { try{ return localStorage.getItem('mlnotas_tipo') || ''; }catch{ return ''; } })();
+const TIPOS = ['Mercado Envios', 'Flex'];
+const daAba = () => envios.filter((e) => (!aba || e.loja === aba) && (!tipo || e.categoria === tipo));
 const pendente = (e) => resultado.get(e.chave)?.tipo !== 'ok';
 
 async function ler(recarregar){
@@ -131,9 +141,16 @@ function desenharAbas(){
   const box = $('abas'); box.innerHTML = '';
   for(const [v, rot] of [['', 'Todas'], ...lojas.map((l) => [l, l])]){
     const b = el('button', v === aba ? 'ativa' : null, rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', v === aba);
-    b.appendChild(el('span', null, String(envios.filter((e) => (!v || e.loja === v) && pendente(e)).length)));
+    b.appendChild(el('span', null, String(envios.filter((e) => (!v || e.loja === v) && (!tipo || e.categoria === tipo) && pendente(e)).length)));
     b.onclick = () => { aba = v; try{ localStorage.setItem('mlnotas_aba', v); }catch{} desenhar(); };
     box.appendChild(b);
+  }
+  const bt = $('tipos'); bt.innerHTML = '';
+  for(const [v, rot] of [['', 'Todos os envios'], ...TIPOS.map((t) => [t, t])]){
+    const b = el('button', v === tipo ? 'ativa' : null, rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', v === tipo);
+    b.appendChild(el('span', null, String(envios.filter((e) => (!aba || e.loja === aba) && (!v || e.categoria === v) && pendente(e)).length)));
+    b.onclick = () => { tipo = v; try{ localStorage.setItem('mlnotas_tipo', v); }catch{} desenhar(); };
+    bt.appendChild(b);
   }
 }
 
@@ -146,7 +163,17 @@ function desenhar(){
     v.appendChild(el('span', null, 'Venda nova do Mercado Envios aparece aqui quando o ML pedir a nota. Clique em Atualizar.'));
     box.appendChild(v);
   }
-  for(const e of lista) box.appendChild(cartao(e));
+  // separado por loja e, dentro dela, por tipo de envio (Flex primeiro: sai antes)
+  const lojas = [...new Set(lista.map((e) => e.loja))].sort();
+  for(const loja of lojas) for(const t of ['Flex', 'Mercado Envios', ...new Set(lista.map((e) => e.categoria))].filter((x, i, a) => a.indexOf(x) === i)){
+    const doGrupo = lista.filter((e) => e.loja === loja && e.categoria === t);
+    if(!doGrupo.length) continue;
+    const g = el('section', 'grupo'), h = el('h2', null, `${loja} · ${t}`);
+    h.appendChild(el('span', 'etq', `${doGrupo.filter(pendente).length} aguardando nota`));
+    g.appendChild(h);
+    for(const e of doGrupo) g.appendChild(cartao(e));
+    box.appendChild(g);
+  }
   barraLote();
 }
 
