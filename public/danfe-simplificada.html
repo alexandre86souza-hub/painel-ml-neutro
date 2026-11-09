@@ -13,7 +13,7 @@
   .barra button{font:inherit;font-weight:700;padding:7px 14px;border:0;border-radius:8px;background:#c96f50;color:#fff;cursor:pointer}
   .barra .erro{color:#fecaca}
   .folhas{display:flex;flex-wrap:wrap;gap:12px;padding:14px;justify-content:center}
-  .etq{width:100mm;height:149mm;background:#fff;padding:3mm 3mm 2mm;display:flex;flex-direction:column;overflow:hidden;font-size:8.3pt;line-height:1.2}
+  .etq{width:100mm;height:auto;max-height:144mm;background:#fff;padding:3mm 3mm 2mm;display:flex;flex-direction:column;overflow:hidden;font-size:8.3pt;line-height:1.2}
   .sec{border-bottom:.35mm dashed #000;padding:1.3mm 0}
   .sec:first-child{border-top:.35mm dashed #000}
   .sec:last-child{border-bottom:0}
@@ -38,6 +38,9 @@
   .etq + .etq{page-break-before:always;break-before:page}
   @media print{
     html,body{margin:0;padding:0;height:auto;background:#fff}
+    /* a impressora reserva margem (Elgin: ~1 mm em cima, 0,5 mm embaixo): a etiqueta fica abaixo da área útil e não
+       transborda para uma 2ª folha em branco */
+    .etq{width:96mm;margin:0 auto}
     .barra{display:none}
     .folhas{display:block;padding:0}
   }
