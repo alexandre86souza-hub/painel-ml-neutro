@@ -120,6 +120,7 @@
     <span class="sub" id="lidoEm"></span>
   </div>
   <div class="barra lote" id="lote">
+    <button type="button" class="bt primario" id="btEmitirTodas" disabled>Emitir todas as ajustadas</button>
     <b id="loteN">Nenhuma marcada</b>
     <button type="button" class="bt" id="btMarcarTodas">Marcar todas da lista</button>
     <button type="button" class="bt primario" id="btLotePreparar" disabled>Gerar / ajustar marcadas</button>
@@ -278,6 +279,8 @@ function barraLote(){
   $('btLotePreparar').textContent = `Gerar / ajustar marcadas (${prep})`; $('btLotePreparar').disabled = !prep;
   $('btLoteEmitir').textContent = `Emitir marcadas (${emit})`; $('btLoteEmitir').disabled = !emit;
   $('btMarcarTodas').disabled = !acoesLote.size;
+  const prontas = notas.filter((n) => (!aba || n.conta === aba) && ['emitir', 'pronto'].includes(estado(n))).length;
+  $('btEmitirTodas').textContent = `Emitir todas as ajustadas (${prontas})`; $('btEmitirTodas').disabled = !prontas;
 }
 
 async function rodarLote(emitir){
@@ -300,6 +303,12 @@ async function rodarLote(emitir){
   aviso([feitos.length ? `✓ ${feitos.join(' · ')}` : '', falhas.length ? `✗ Não ${emitir ? 'emitiu' : 'gerou/ajustou'}: ${falhas.join(' · ')}` : ''].filter(Boolean).join('  —  '), falhas.length ? '' : 'ok');
 }
 $('btLotePreparar').onclick = () => rodarLote(false);
+// todas as de "ajustados · falta emitir" da aba: mostra todas (para ter os cartões), marca só elas e emite
+$('btEmitirTodas').onclick = () => {
+  filtro = null; marcadas.clear(); desenhar();
+  for(const [k, a] of acoesLote) if(GRUPO[a.est] === 'emitir') marcadas.add(k);
+  desenhar(); rodarLote(true);
+};
 $('btLoteEmitir').onclick = () => rodarLote(true);
 $('btMarcarTodas').onclick = () => { for(const k of acoesLote.keys()) marcadas.add(k); desenhar(); };
 $('btLimpar').onclick = () => { marcadas.clear(); desenhar(); };
