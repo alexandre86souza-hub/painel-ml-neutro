@@ -483,6 +483,15 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
     },
     // Diagnóstico (só leitura): pedidos de venda e notas de saída recentes. Mostra a FORMA, as situações e lojas
     // (ids), e dos itens só o que é do produto: descrição, código, NCM e se está ligado a um produto do Bling.
+    // Só leitura: produtos do cadastro do Bling com estes códigos (ex.: CFOP6108) — o Bling liga o item da nota ao produto pelo código.
+    'GET /api/bling/produtos-codigo': async (url) => {
+      const n = contaValida(url.searchParams.get('conta'));
+      const cods = String(url.searchParams.get('codigos') || '').split(',').map((c) => c.trim()).filter((c) => /^[\w.\-]{1,60}$/.test(c)).slice(0, 10);
+      if (!cods.length) throw erro('Informe os códigos.');
+      const qs = cods.map((c) => `codigos[]=${encodeURIComponent(c)}`).join('&');
+      const r = (await bling(n, `/produtos?pagina=1&limite=100&${qs}`)).data || [];
+      return { conta: publica(n), produtos: r.map((p) => ({ id: p.id, codigo: p.codigo ?? null, nome: p.nome ?? null, situacao: p.situacao ?? null, tipo: p.tipo ?? null })) };
+    },
     'GET /api/bling/diagnostico': async (url) => {
       const n = contaValida(url.searchParams.get('conta'));
       const passo = async (fn) => { try { return await fn(); } catch (e) { return { erro: e.message }; } };
