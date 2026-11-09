@@ -260,6 +260,13 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       if (sku && !semCodigo(sku)) s[sku] = { descricao: m.descricao, ncm: m.ncm, cest: m.cest, nacional: m.nacional, em: new Date().toISOString() };
     }
     D.configGravar('bling_itens', JSON.stringify(s));
+    // o nome que o vendedor escolheu, por nota: a emissão confere de novo (o Bling troca o nome pelo do produto do cadastro
+    // que tem o mesmo código — medido 09/11/2026: produtos "CFOP6108"/"CFOP5102" no cadastro, 8 notas saíram com o nome deles)
+    const aj = ajustesFeitos();
+    aj[id] = mudancas.map((m) => ({ i: m.i, descricao: m.descricao }));
+    const ks = Object.keys(aj);
+    for (const k of ks.slice(0, Math.max(0, ks.length - 300))) delete aj[k];
+    D.configGravar('bling_ajustes', JSON.stringify(aj));
     // relê para conferir o que o Bling gravou. Logo depois do PUT o GET às vezes ainda devolve a nota antiga (medido 09/11/2026:
     // 6 notas "não bateram" e estavam certas um minuto depois): relê até 3 vezes, com 2 s e 4 s de espera, antes de dizer que não bateu.
     const conferir = (depois) => mudancas.map((m) => {
@@ -318,6 +325,7 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
     } catch (e) { return { aplica: true, enviada: false, pedido, motivo: e.message }; }
   }
 
+  const ajustesFeitos = () => { try { return JSON.parse(D.configLer('bling_ajustes') || '{}') || {}; } catch { return {}; } };
   const enviadasShopee = () => { try { return JSON.parse(D.configLer('bling_shopee_enviadas') || '{}') || {}; } catch { return {}; } };
 
   // notas autorizadas dos últimos dias (lista da tela "emitidas"); o detalhe de cada uma é lido (3/s), então fica 5 min em memória
@@ -386,6 +394,13 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
       if (Number(nota.situacao) !== 1) throw erro(`Essa nota não está pendente no Bling (situação: ${SITUACAO_NF[nota.situacao] || nota.situacao}): nada foi enviado.`, 409);
       const tela = notaDaTela(n, nota, salvos());
       if (!tela.ajustada) throw erro('Ajuste os itens antes de emitir (código, NCM, CEST e origem).', 409);
+      // nome do produto: tem de ser o que foi escolhido no ajuste pelo painel (o Bling pode ter trocado pelo do cadastro)
+      const esperado = ajustesFeitos()[id];
+      if (!esperado) throw erro('Esta nota não foi ajustada pelo painel: clique em "Ajustar de novo" antes de emitir.', 409);
+      for (const e of esperado) {
+        const atual = String(nota.itens?.[e.i]?.descricao || '').trim();
+        if (atual !== e.descricao) throw erro(`O Bling trocou o nome do item ${e.i + 1} para "${atual}" (o escolhido foi "${e.descricao}"). Nada foi emitido: o código ${nota.itens?.[e.i]?.codigo || ''} está ligado a um produto do cadastro do Bling.`, 409);
+      }
       await bling(n, `/nfe/${id}/enviar?enviarEmail=false`, { metodo: 'POST' });
       let d = nota;
       for (let k = 0; k < 8; k++) {
