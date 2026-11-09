@@ -215,19 +215,8 @@ function desenharFeitas(box){
     tr.appendChild(el('td', null, reais(n.valor)));
     tr.appendChild(el('td', null, n.situacao_nome));
     const tdS = el('td');
-    if(n.amazon){
-      // a Amazon não recebe pelo painel nem sozinha pelo Bling: enviar no Bling e marcar aqui
-      if(n.amazon_enviada) tdS.appendChild(el('span', 'ok', '✓ enviada no Bling '));
-      else tdS.appendChild(el('span', 'res erro', 'Enviar no Bling ("Enviar dados para loja virtual") '));
-      const b = el('button', 'bt', n.amazon_enviada ? 'Desmarcar' : 'Já enviei'); b.type = 'button';
-      b.onclick = async () => {
-        b.disabled = true;
-        try{ await enviar('POST', '/api/bling/notas/amazon-enviada', { conta: n.conta, id: n.id, enviada: !n.amazon_enviada });
-          n.amazon_enviada = n.amazon_enviada ? null : { em: new Date().toISOString() }; desenhar(); }
-        catch(e){ aviso(e.message); b.disabled = false; }
-      };
-      tdS.appendChild(b);
-    }
+    // Amazon, Magalu e Leroy: o Bling manda a nota sozinho depois da autorização (Amazon conferida no Seller Central em 09/11/2026)
+    if(n.amazon) tdS.appendChild(el('span', 'sub', 'o Bling envia sozinho'));
     else if(!n.shopee) tdS.textContent = '—';
     else if(n.shopee_enviada) tdS.appendChild(el('span', 'ok', '✓ enviada pelo painel'));
     else{
@@ -275,9 +264,6 @@ function desenhar(){
   $('nAjustar').textContent = conta.ajustar; $('nEmitir').textContent = conta.emitir; $('nRej').textContent = conta.rej;
   for(const b of document.querySelectorAll('.num')) b.classList.toggle('ativo', b.dataset.f === filtro);
   $('nFeitas').textContent = feitas ? feitas.filter((n) => !n.erro && (!aba || n.conta === aba)).length : '…';
-  const amzFalta = feitas ? feitas.filter((n) => !n.erro && n.amazon && !n.amazon_enviada && (!aba || n.conta === aba)).length : 0;
-  $('nFeitasSub').textContent = amzFalta ? `emitidas · últimos 3 dias · ${amzFalta} da Amazon a enviar no Bling` : 'emitidas · últimos 3 dias';
-  document.querySelector('.num.feitas').classList.toggle('alerta', amzFalta > 0);
   const box = $('lista'); box.innerHTML = '';
   acoesLote.clear();
   if(filtro === 'feitas'){ barraLote(); desenharFeitas(box); return; }
