@@ -287,22 +287,43 @@ function barraLote(){
   $('btMarcarTodas').disabled = !acoesLote.size;
   const prontas = notas.filter((n) => (!aba || n.conta === aba) && ['emitir', 'pronto'].includes(estado(n))).length;
   $('btEmitirTodas').textContent = `Emitir todas as ajustadas (${prontas})`; $('btEmitirTodas').disabled = !prontas;
+  if(rodando) for(const b of document.querySelectorAll('#lote button')) b.disabled = true;
+  else if(loteEmOutraAba()){
+    for(const b of document.querySelectorAll('#lote button, .nota .acoes button')) b.disabled = true;
+    $('loteInfo').textContent = 'Emissão das marcadas em andamento em outra aba: os botões voltam quando ela terminar.';
+  } else if(/outra aba/.test($('loteInfo').textContent)){ $('loteInfo').textContent = ''; desenhar(); }
 }
 
+// trava das marcadas: nesta aba (rodando) e nas outras (localStorage com batida a cada 5 s; o servidor também trava cada nota/pedido)
+let rodando = false;
+const LOTE_CHAVE = 'bling_lote_em';
+const loteEmOutraAba = () => { try{ return !rodando && Date.now() - (Number(localStorage.getItem(LOTE_CHAVE)) || 0) < 20000; }catch{ return false; } };
+window.addEventListener('storage', (e) => { if(e.key === LOTE_CHAVE) barraLote(); });
+setInterval(() => { if(!rodando) barraLote(); }, 5000);
+
 async function rodarLote(emitir){
+  if(rodando || loteEmOutraAba()){ aviso('Já tem uma emissão das marcadas em andamento (nesta ou em outra aba): espere terminar.'); return; }
   const alvo = [...acoesLote.entries()].filter(([k, a]) => marcadas.has(k) && GRUPO[a.est] === (emitir ? 'emitir' : 'ajustar'));
   if(!alvo.length) return;
   const lista = alvo.map(([, a]) => '• ' + a.rotulo).join('\n');
   if(!confirm(emitir
     ? `EMITIR ${alvo.length} nota(s)?\n\n${lista}\n\nPedido sem nota ainda: a nota é gerada com o ajuste guardado e emitida. O Bling envia cada uma para a Sefaz, uma de cada vez. Nota autorizada não volta atrás: só com cancelamento.\n\nConferiu cliente, valores, frete e itens de todas?`
     : `Gerar / ajustar ${alvo.length} nota(s) no Bling com o nome, NCM, CEST e origem que estão na tela?\n\n${lista}\n\nAs notas ficam PENDENTES: a emissão é no botão "Emitir marcadas".`)) return;
-  for(const b of document.querySelectorAll('#lote button')) b.disabled = true;
+  rodando = true;
+  const bate = () => { try{ localStorage.setItem(LOTE_CHAVE, String(Date.now())); }catch{} };
+  bate(); const batida = setInterval(bate, 5000);
+  for(const b of document.querySelectorAll('#lote button, .nota .acoes button')) b.disabled = true;
   const feitos = [], falhas = [];
   let i = 0;
-  for(const [k, a] of alvo){
-    $('loteInfo').textContent = `${++i} de ${alvo.length}: ${a.rotulo}…`;
-    try{ feitos.push(await a.fazer(true)); marcadas.delete(k); }
-    catch(e){ falhas.push(`${a.rotulo}: ${e.message}`); }
+  try{
+    for(const [k, a] of alvo){
+      $('loteInfo').textContent = `${++i} de ${alvo.length}: ${a.rotulo}…`;
+      try{ feitos.push(await a.fazer(true)); marcadas.delete(k); }
+      catch(e){ falhas.push(`${a.rotulo}: ${e.message}`); }
+    }
+  } finally {
+    clearInterval(batida); rodando = false;
+    try{ localStorage.removeItem(LOTE_CHAVE); }catch{}
   }
   $('loteInfo').textContent = '';
   desenhar();

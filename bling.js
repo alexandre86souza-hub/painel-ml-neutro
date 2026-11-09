@@ -583,6 +583,20 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
     } catch (e) { return falha('O Bling não entregou o acesso', e.message, 502); }
   }
 
+  // Uma escrita por vez em cada nota/pedido (outra aba, outro computador, clique duplo): sem isto o mesmo pedido podia gerar
+  // duas notas e a mesma nota ser emitida em paralelo (visto 09/11/2026: duas rodadas de "Emitir" ao mesmo tempo).
+  const travas = new Set();
+  const TRAVA = { 'POST /api/bling/notas/emitir': 'nota', 'POST /api/bling/notas/corrigir': 'nota', 'POST /api/bling/notas/enviar-shopee': 'nota', 'POST /api/bling/pedidos/gerar': 'pedido' };
+  for (const [rota, tipo] of Object.entries(TRAVA)) {
+    const f = rotas[rota];
+    rotas[rota] = async (u, body) => {
+      const k = `${tipo}:${String(body?.conta ?? '')}:${String(body?.id ?? '')}`;
+      if (travas.has(k)) throw erro(`Esse ${tipo === 'nota' ? 'nota' : 'pedido'} já está sendo processado (outra aba ou outro clique): espere terminar e clique em Atualizar.`, 409);
+      travas.add(k);
+      try { return await f(u, body); } finally { travas.delete(k); }
+    };
+  }
+
   return { rotas, rotasParam: [], callback, bling };
 }
 
