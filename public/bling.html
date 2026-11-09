@@ -61,6 +61,9 @@
   .res{font-size:13px}
   .res.erro{color:#b42318}
   .res.ok{color:#0b6b33;font-weight:600}
+  .nota header input.marca{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--brand)}
+  .lote{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .lote b{font-size:14px}
   .vazio-grande{border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--muted)}
   .vazio-grande b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
   /* como funciona */
@@ -106,6 +109,14 @@
     <button type="button" class="bt" id="btTodas">Mostrar todas</button>
     <span class="sub" id="lidoEm"></span>
   </div>
+  <div class="barra lote" id="lote">
+    <b id="loteN">Nenhuma marcada</b>
+    <button type="button" class="bt" id="btMarcarTodas">Marcar todas da lista</button>
+    <button type="button" class="bt primario" id="btLotePreparar" disabled>Gerar / ajustar marcadas</button>
+    <button type="button" class="bt primario" id="btLoteEmitir" disabled>Emitir marcadas</button>
+    <button type="button" class="bt" id="btLimpar">Desmarcar</button>
+    <span class="sub" id="loteInfo"></span>
+  </div>
   <div class="lista" id="lista"><p class="carregando">Lendo as notas no Bling…</p></div>
 
 </main>
@@ -129,9 +140,12 @@ const lojaPeloPedido = (p) => { const s = String(p || '').trim();
   return null; };
 
 let cfg = null, notas = [], filtro = null;
+// seleção para fazer várias de uma vez: chave conta:tipo:id -> marcada; acoesLote = o que cada cartão desenhado sabe fazer
+const marcadas = new Set(), acoesLote = new Map();
+const chaveDe = (n) => `${n.conta}:${n.tipo}:${n.id}`;
 // aba: '' = as duas contas, '1' = AMG, '2' = Primor (lembrada neste navegador)
 let aba = (() => { try{ return localStorage.getItem('bling_aba') || ''; }catch{ return ''; } })();
-const estado = (n) => (n.tipo === 'pedido' ? 'gerar' : Number(n.situacao) === 4 ? 'rej' : n.ajustada ? 'emitir' : 'ajustar');
+const estado = (n) => (n.shopeePendente ? 'shopee' : n.tipo === 'pedido' ? 'gerar' : Number(n.situacao) === 4 ? 'rej' : n.ajustada ? 'emitir' : 'ajustar');
 
 // ---------- notas das duas contas ----------
 async function lerNotas(){
@@ -171,27 +185,70 @@ function desenharAbas(){
 function desenhar(){
   desenharAbas();
   const daAba = notas.filter((n) => !aba || n.conta === aba);
-  const conta = { gerar: 0, ajustar: 0, emitir: 0, rej: 0 };
+  const conta = { gerar: 0, ajustar: 0, emitir: 0, rej: 0, shopee: 0 };
   for(const n of daAba) conta[estado(n)]++;
   $('nGerar').textContent = conta.gerar;
   $('nAjustar').textContent = conta.ajustar; $('nEmitir').textContent = conta.emitir; $('nRej').textContent = conta.rej;
   for(const b of document.querySelectorAll('.num')) b.classList.toggle('ativo', b.dataset.f === filtro);
   const box = $('lista'); box.innerHTML = '';
+  acoesLote.clear();
   const mostrar = daAba.filter((n) => !filtro || estado(n) === filtro);
-  if(!daAba.length){ box.appendChild(vazio('Tudo em dia ✓', 'Nenhum pedido sem nota e nenhuma nota pendente no Bling. Pedido novo aparece aqui depois de importado no Bling: clique em Atualizar.')); return; }
-  if(!mostrar.length){ box.appendChild(vazio('Nada neste filtro', 'Clique em "Mostrar todas".')); return; }
+  if(!daAba.length){ barraLote(); box.appendChild(vazio('Tudo em dia ✓', 'Nenhum pedido sem nota e nenhuma nota pendente no Bling. Pedido novo aparece aqui depois de importado no Bling: clique em Atualizar.')); return; }
+  if(!mostrar.length){ barraLote(); box.appendChild(vazio('Nada neste filtro', 'Clique em "Mostrar todas".')); return; }
   // as que faltam ajustar primeiro
-  const ordem = { gerar: 0, ajustar: 1, rej: 2, emitir: 3 };
+  const ordem = { shopee: 0, gerar: 1, ajustar: 2, rej: 3, emitir: 4 };
   for(const n of mostrar.slice().sort((a, b) => ordem[estado(a)] - ordem[estado(b)])) box.appendChild(cartaoNota(n));
+  barraLote();
 }
+
+// ---------- várias de uma vez ----------
+function barraLote(){
+  for(const k of [...marcadas]) if(!acoesLote.has(k)) marcadas.delete(k);   // só o que está na tela
+  const sel = [...acoesLote.entries()].filter(([k]) => marcadas.has(k));
+  const prep = sel.filter(([, a]) => a.est !== 'emitir').length, emit = sel.filter(([, a]) => a.est === 'emitir').length;
+  $('loteN').textContent = sel.length ? `${sel.length} marcada${sel.length > 1 ? 's' : ''}` : 'Nenhuma marcada';
+  $('btLotePreparar').textContent = `Gerar / ajustar marcadas (${prep})`; $('btLotePreparar').disabled = !prep;
+  $('btLoteEmitir').textContent = `Emitir marcadas (${emit})`; $('btLoteEmitir').disabled = !emit;
+  $('btMarcarTodas').disabled = !acoesLote.size;
+}
+
+async function rodarLote(emitir){
+  const alvo = [...acoesLote.entries()].filter(([k, a]) => marcadas.has(k) && (emitir ? a.est === 'emitir' : a.est !== 'emitir'));
+  if(!alvo.length) return;
+  const lista = alvo.map(([, a]) => '• ' + a.rotulo).join('\n');
+  if(!confirm(emitir
+    ? `EMITIR ${alvo.length} nota(s)?\n\n${lista}\n\nO Bling envia cada uma para a Sefaz, uma de cada vez. Nota autorizada não volta atrás: só com cancelamento.\n\nConferiu cliente, valores, frete e itens de todas?`
+    : `Gerar / ajustar ${alvo.length} nota(s) no Bling com o nome, NCM, CEST e origem que estão na tela?\n\n${lista}\n\nAs notas ficam PENDENTES: a emissão é no botão "Emitir marcadas".`)) return;
+  for(const b of document.querySelectorAll('#lote button')) b.disabled = true;
+  const feitos = [], falhas = [];
+  let i = 0;
+  for(const [k, a] of alvo){
+    $('loteInfo').textContent = `${++i} de ${alvo.length}: ${a.rotulo}…`;
+    try{ feitos.push(await a.fazer(true)); marcadas.delete(k); }
+    catch(e){ falhas.push(`${a.rotulo}: ${e.message}`); }
+  }
+  $('loteInfo').textContent = '';
+  desenhar();
+  aviso([feitos.length ? `✓ ${feitos.join(' · ')}` : '', falhas.length ? `✗ Não ${emitir ? 'emitiu' : 'gerou/ajustou'}: ${falhas.join(' · ')}` : ''].filter(Boolean).join('  —  '), falhas.length ? '' : 'ok');
+}
+$('btLotePreparar').onclick = () => rodarLote(false);
+$('btLoteEmitir').onclick = () => rodarLote(true);
+$('btMarcarTodas').onclick = () => { for(const k of acoesLote.keys()) marcadas.add(k); desenhar(); };
+$('btLimpar').onclick = () => { marcadas.clear(); desenhar(); };
 
 function cartaoNota(n){
   const est = estado(n);
   const ped = n.tipo === 'pedido';
   const d = el('article', 'nota' + (est === 'emitir' ? ' ok' : est === 'rej' ? ' rej' : ped ? ' ped' : ''));
-  const cab = el('header');
+  const cab = el('header'), chave = chaveDe(n);
+  if(['gerar', 'ajustar', 'emitir'].includes(est)){
+    const cb = el('input', 'marca'); cb.type = 'checkbox'; cb.checked = marcadas.has(chave); cb.title = 'Marcar para fazer várias de uma vez';
+    cb.setAttribute('aria-label', 'Marcar ' + (ped ? 'pedido ' : 'nota ') + (n.numero || ''));
+    cb.onchange = () => { if(cb.checked) marcadas.add(chave); else marcadas.delete(chave); barraLote(); };
+    cab.appendChild(cb);
+  }
   cab.appendChild(el('h3', null, ped ? `Pedido ${n.numero || ''}` : `Nota ${n.numero || '(sem número)'}`));
-  cab.appendChild(el('span', 'etq ' + (est === 'rej' ? 'rej' : est), ped ? 'Sem nota · gerar' : est === 'ajustar' ? 'Falta ajustar' : est === 'emitir' ? 'Ajustada · falta emitir' : 'Rejeitada · corrigir no Bling'));
+  cab.appendChild(el('span', 'etq ' + (est === 'rej' ? 'rej' : est), ped ? 'Sem nota · gerar' : est === 'shopee' ? 'Autorizada · falta enviar à Shopee' : est === 'ajustar' ? 'Falta ajustar' : est === 'emitir' ? 'Ajustada · falta emitir' : 'Rejeitada · corrigir no Bling'));
   cab.appendChild(el('span', 'etq', n.nomeConta));
   const loja = n.loja_nome || lojaPeloPedido(n.pedido_loja);
   cab.appendChild(el('span', 'info', [loja, n.pedido_loja ? 'pedido ' + n.pedido_loja : null, dia(n.data), reais(n.valor)].filter(Boolean).join(' · ')));
@@ -224,78 +281,86 @@ function cartaoNota(n){
   rolar.appendChild(t); d.appendChild(rolar);
 
   const acoes = el('div', 'acoes'), res = el('div', 'res');
-  if(ped){
+  const itensDaTela = () => campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));
+  const listaItens = (itens) => itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — CEST ${x.cest.trim() || 'sem'} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
+  const rotulo = `${ped ? 'Pedido' : 'Nota'} ${n.numero || ''} (${n.nomeConta}, ${reais(n.valor)})`;
+  const falhou = (bts, prefixo, e) => { res.className = 'res erro'; res.textContent = prefixo + e.message; for(const b of bts) b.disabled = false; throw e; };
+
+  if(est === 'shopee'){
+    res.className = 'res erro'; res.textContent = `Nota autorizada, mas a Shopee NÃO recebeu: ${n.shopeePendente} `;
+    const de = el('button', 'bt primario', 'Enviar nota para a Shopee'); de.type = 'button';
+    de.onclick = async () => {
+      de.disabled = true;
+      try{ const x = await enviar('POST', '/api/bling/notas/enviar-shopee', { conta: n.conta, id: n.id });
+        if(x.enviada){ aviso(`✓ Nota ${n.numero || ''} enviada ao pedido ${x.pedido} da Shopee.`, 'ok'); notas = notas.filter((y) => y !== n); desenhar(); }
+        else{ n.shopeePendente = x.motivo || 'erro'; desenhar(); } }
+      catch(e){ n.shopeePendente = e.message; desenhar(); }
+    };
+    acoes.appendChild(de);
+  } else if(ped){
     const g = el('button', 'bt primario', 'Gerar nota no Bling'); g.type = 'button';
-    g.onclick = async () => {
-      const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));
-      const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — CEST ${x.cest.trim() || 'sem'} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
-      if(!confirm(`Gerar a nota do pedido ${n.numero || ''} no Bling (${n.nomeConta}, ${reais(n.valor)})?\n\n${lista}\n\nA nota é gerada já ajustada e fica PENDENTE: a emissão é no próximo botão.`)) return;
+    const fazerGerar = async (lote) => {
       g.disabled = true; res.className = 'res'; res.textContent = 'Gerando a nota no Bling…';
       try{
-        const r = await enviar('POST', '/api/bling/pedidos/gerar', { conta: n.conta, id: n.id, itens });
+        const r = await enviar('POST', '/api/bling/pedidos/gerar', { conta: n.conta, id: n.id, itens: itensDaTela() });
         const nova = { ...r.nota, tipo: 'nota', conta: n.conta, nomeConta: n.nomeConta };
         notas = notas.map((x) => (x === n ? nova : x));
-        if(r.tudo_certo) aviso(`Nota ${nova.numero || ''} gerada e ajustada. Confira e emita.`, 'ok');
-        else aviso(`Nota ${nova.numero || ''} gerada, mas na releitura algo não bateu: confira os itens e clique em "Ajustar de novo".`);
-        desenhar();
-      }catch(e){ res.className = 'res erro'; res.textContent = 'Não gerou: ' + e.message; g.disabled = false; }
+        const txt = r.tudo_certo ? `Nota ${nova.numero || ''} gerada e ajustada` : `Nota ${nova.numero || ''} gerada, mas na releitura algo não bateu: confira e clique em "Ajustar de novo"`;
+        if(!lote){ aviso(txt + (r.tudo_certo ? '. Confira e emita.' : '.'), r.tudo_certo ? 'ok' : ''); desenhar(); }
+        return txt;
+      }catch(e){ falhou([g], 'Não gerou: ', e); }
     };
+    g.onclick = async () => { if(!confirm(`Gerar a nota do pedido ${rotulo} no Bling?\n\n${listaItens(itensDaTela())}\n\nA nota é gerada já ajustada e fica PENDENTE: a emissão é no próximo botão.`)) return; try{ await fazerGerar(false); }catch{} };
+    acoesLote.set(chave, { est, rotulo, fazer: fazerGerar });
     acoes.appendChild(g);
   } else if(editavel){
     const bt = el('button', 'bt primario', est === 'emitir' ? 'Ajustar de novo' : 'Ajustar no Bling'); bt.type = 'button';
-    bt.onclick = async () => {
-      const itens = campos.map((c) => ({ i: c.i, descricao: c.nome.value, ncm: c.ncm.value, cest: c.cest.value, nacional: c.sel.value === '1' }));
-      const lista = itens.map((x) => `• ${x.descricao.trim()} — NCM ${x.ncm.trim()} — CEST ${x.cest.trim() || 'sem'} — origem ${origemDe(n.conta, x.nacional)}`).join('\n');
-      if(!confirm(`Ajustar a nota ${n.numero || ''} no Bling (${n.nomeConta})?\n\n${lista}\n\nNo lugar do SKU vai CFOP + o número do CFOP (como o Bling faz quando o código é apagado). A nota NÃO é emitida: emita no Bling depois de conferir.`)) return;
+    const fazerAjustar = async (lote) => {
       bt.disabled = true; res.className = 'res'; res.textContent = 'Ajustando no Bling…';
       try{
-        const r = await enviar('POST', '/api/bling/notas/corrigir', { conta: n.conta, id: n.id, itens });
-        if(r.tudo_certo){
-          Object.assign(n, r.nota, { conta: n.conta, nomeConta: n.nomeConta });
-          aviso(`Nota ${n.numero || ''} ajustada e conferida. Falta emitir no Bling.`, 'ok');
-          desenhar();
-        } else {
-          res.className = 'res erro';
-          res.textContent = 'O Bling aceitou, mas na releitura não bateu: ' + r.conferencia.filter((c) => !c.tudo)
+        const r = await enviar('POST', '/api/bling/notas/corrigir', { conta: n.conta, id: n.id, itens: itensDaTela() });
+        if(!r.tudo_certo){
+          const txt = 'O Bling aceitou, mas na releitura não bateu: ' + r.conferencia.filter((c) => !c.tudo)
             .map((c) => `item ${c.i + 1} (${['nome', 'codigo', 'ncm', 'cest', 'origem'].filter((k) => !c[k]).join(', ')})`).join('; ') + '. Confira a nota no Bling.';
-          bt.disabled = false;
+          falhou([bt], '', new Error(txt));
         }
-      }catch(e){ res.className = 'res erro'; res.textContent = 'Não ajustou: ' + e.message; bt.disabled = false; }
+        Object.assign(n, r.nota, { conta: n.conta, nomeConta: n.nomeConta });
+        if(!lote){ aviso(`Nota ${n.numero || ''} ajustada e conferida. Falta emitir.`, 'ok'); desenhar(); }
+        return `Nota ${n.numero || ''} ajustada`;
+      }catch(e){ if(e.message.startsWith('O Bling aceitou')) throw e; falhou([bt], 'Não ajustou: ', e); }
     };
+    bt.onclick = async () => { if(!confirm(`Ajustar a nota ${rotulo} no Bling?\n\n${listaItens(itensDaTela())}\n\nNo lugar do SKU vai CFOP + o número do CFOP (como o Bling faz quando o código é apagado). A nota NÃO é emitida.`)) return; try{ await fazerAjustar(false); }catch{} };
     acoes.appendChild(bt);
+    if(est !== 'emitir') acoesLote.set(chave, { est, rotulo, fazer: fazerAjustar });
     if(est === 'emitir'){
       const em = el('button', 'bt primario', 'Emitir nota'); em.type = 'button';
-      em.onclick = async () => {
-        if(!confirm(`EMITIR a nota ${n.numero || ''} (${n.nomeConta}, ${reais(n.valor)})?
-
-O Bling envia a nota para a Sefaz. Nota autorizada não volta atrás: só com cancelamento.
-
-Conferiu cliente, valores, frete e itens?`)) return;
+      const fazerEmitir = async (lote) => {
         em.disabled = true; bt.disabled = true; res.className = 'res'; res.textContent = 'Enviando para a Sefaz pelo Bling… (até 30 s)';
-        try{
-          const r = await enviar('POST', '/api/bling/notas/emitir', { conta: n.conta, id: n.id });
-          if(r.autorizada){
-            const ok = `✓ Nota ${r.numero || n.numero} ${r.situacao_nome.toLowerCase()} pela Sefaz.`;
-            if(r.shopee && !r.shopee.enviada){
-              // autorizada, mas a Shopee não recebeu: fica o botão para tentar de novo
-              res.className = 'res erro'; res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${r.shopee.motivo || 'erro'} `;
-              const de = el('button', 'bt', 'Enviar nota para a Shopee'); de.type = 'button';
-              de.onclick = async () => {
-                de.disabled = true;
-                try{ const x = await enviar('POST', '/api/bling/notas/enviar-shopee', { conta: n.conta, id: n.id });
-                  if(x.enviada){ aviso(`✓ Nota ${r.numero || n.numero} enviada ao pedido ${x.pedido} da Shopee.`, 'ok'); notas = notas.filter((y) => y !== n); desenhar(); }
-                  else{ res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${x.motivo || 'erro'} `; res.appendChild(de); de.disabled = false; } }
-                catch(e){ res.textContent = `${ok} A Shopee NÃO recebeu a nota: ${e.message} `; res.appendChild(de); de.disabled = false; }
-              };
-              res.appendChild(de); return;
-            }
-            aviso(r.shopee?.enviada ? `${ok} Enviada também ao pedido ${r.shopee.pedido} da Shopee.` : ok, 'ok');
-            notas = notas.filter((x) => x !== n); desenhar(); return;
+        let r;
+        try{ r = await enviar('POST', '/api/bling/notas/emitir', { conta: n.conta, id: n.id }); }
+        catch(e){ falhou([em, bt], 'Não emitiu: ', e); }
+        const num = r.numero || n.numero || '';
+        if(r.autorizada){
+          if(r.shopee && !r.shopee.enviada){
+            // autorizada, mas a Shopee não recebeu: a nota fica na lista com o botão para tentar de novo
+            n.shopeePendente = r.shopee.motivo || 'erro';
+            if(!lote){ aviso(`✓ Nota ${num} ${r.situacao_nome.toLowerCase()} pela Sefaz, mas a Shopee não recebeu: use "Enviar nota para a Shopee".`); desenhar(); }
+            return `Nota ${num} autorizada (a Shopee NÃO recebeu: reenviar no cartão)`;
           }
-          if(r.rejeitada){ n.situacao = 4; aviso(`A Sefaz rejeitou a nota ${r.numero || n.numero}: abra no Bling para ver o motivo.`); desenhar(); return; }
-          res.className = 'res'; res.textContent = `Enviada. Situação no Bling: ${r.situacao_nome}. Clique em Atualizar daqui a pouco.`;
-        }catch(e){ res.className = 'res erro'; res.textContent = 'Não emitiu: ' + e.message; em.disabled = false; bt.disabled = false; }
+          notas = notas.filter((x) => x !== n);
+          const txt = `Nota ${num} ${r.situacao_nome.toLowerCase()}` + (r.shopee?.enviada ? ` e enviada à Shopee (pedido ${r.shopee.pedido})` : '');
+          if(!lote){ aviso('✓ ' + txt + '.', 'ok'); desenhar(); }
+          return txt;
+        }
+        if(r.rejeitada){ n.situacao = 4; if(!lote){ aviso(`A Sefaz rejeitou a nota ${num}: abra no Bling para ver o motivo.`); desenhar(); } throw new Error(`a Sefaz rejeitou a nota ${num} (motivo no Bling)`); }
+        res.className = 'res'; res.textContent = `Enviada. Situação no Bling: ${r.situacao_nome}. Clique em Atualizar daqui a pouco.`;
+        return `Nota ${num} enviada, ainda ${r.situacao_nome.toLowerCase()} (clique em Atualizar daqui a pouco)`;
       };
+      em.onclick = async () => {
+        if(!confirm(`EMITIR a nota ${rotulo}?\n\nO Bling envia a nota para a Sefaz. Nota autorizada não volta atrás: só com cancelamento.\n\nConferiu cliente, valores, frete e itens?`)) return;
+        try{ await fazerEmitir(false); }catch{}
+      };
+      acoesLote.set(chave, { est, rotulo, fazer: fazerEmitir });
       acoes.appendChild(em);
       acoes.appendChild(el('span', 'res ok', '✓ Ajustada: confira e emita.'));
     }

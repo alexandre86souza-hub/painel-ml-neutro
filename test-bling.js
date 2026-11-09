@@ -56,6 +56,11 @@ assert.ok(!('id' in cp) && cp.contato.nome === 'x' && cp.numero === '1', 'a nota
 assert.deepStrictEqual(cp.itens[0], { codigo: 'CFOP6108', descricao: 'Curto', classificacaoFiscal: '8481.80.19', cest: '10.079.00', origem: 2, valor: 10, cfop: '6108', impostos: { icms: { st: 102, origem: 2 } } });
 assert.deepStrictEqual(cp.itens[1], nota.itens[1], 'item não mudado vai como veio');
 assert.strictEqual(nota.itens[0].codigo, 'AMG-1', 'não mexe na nota lida');
+// frete do GET (valorFrete) volta em transporte.frete, que é o que o Bling grava; desconto conta o frete
+const comFrete = B.corpoCorrigido({ valorNota: 509.7, valorFrete: 8, transporte: { fretePorConta: 0 }, itens: [{ cfop: '5405', valor: 137.58, valorTotal: 550.32, quantidade: 4 }] }, '1', []);
+assert.strictEqual(comFrete.transporte.frete, 8);
+assert.strictEqual(comFrete.transporte.fretePorConta, 0);
+assert.strictEqual(comFrete.desconto, 48.62);
 // desconto que o GET não traz volta pela diferença entre itens + frete e o valor da nota
 const comCupom = B.corpoCorrigido({ valorNota: 26.8, valorFrete: 0, itens: [{ codigo: 'AMG-750.831', cfop: '5405', valor: 28.81, quantidade: 1 }] }, '1',
   [{ i: 0, descricao: 'Ducha', ncm: '8481.80.19', cest: '10.079.00', nacional: false }]);

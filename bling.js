@@ -111,6 +111,9 @@ function corpoCorrigido(nota, conta, mudancas) {
   // O GET da nota não traz o desconto (nem outras despesas), só o valorNota: devolvido sem ele, o Bling soma os itens e recusa
   // "Total das parcelas difere do total da nota" (medido 06/11/2026: item 28,81, nota e parcelas 26,80 = cupom de 2,01).
   // A diferença entre itens + frete e o valor da nota volta como desconto (ou despesas, se for para mais).
+  // O frete o GET dá em valorFrete, mas a gravação lê transporte.frete (POST/PUT): sem ele o Bling zera o frete e a nota
+  // fica menor que as parcelas (medido 09/11/2026: itens 550,32 + frete 8 − desconto 48,62 = 509,70; sem o frete, 501,70).
+  if (Number(nota.valorFrete) > 0 && b.transporte?.frete == null) b.transporte = { ...(b.transporte || {}), frete: Number(nota.valorFrete) };
   if (b.desconto == null && b.despesas == null && nota.valorNota != null) {
     const itens = (nota.itens || []).reduce((t, i) => t + (Number(i.valorTotal) || Number(i.valor) * Number(i.quantidade) || 0), 0);
     const dif = Math.round((itens + (Number(nota.valorFrete) || 0) - Number(nota.valorNota)) * 100) / 100;
