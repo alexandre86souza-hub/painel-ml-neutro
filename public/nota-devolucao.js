@@ -4,6 +4,9 @@
 (function(){
   const css = document.createElement('style');
   css.textContent = `
+    .nfdev-box{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .nfdev-chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--acento-suave);color:var(--ink);white-space:nowrap}
+    .nfdev-chip.ok{background:var(--ok-suave);color:var(--ok)}
     .nfdev-bt{font:inherit;font-size:12px;font-weight:600;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--ink);cursor:pointer}
     dialog.nfdev{width:min(760px,calc(100vw - 32px));padding:18px 20px}
     dialog.nfdev h2{margin:0 0 4px;font-size:18px}
@@ -140,10 +143,26 @@
     carregar(null);
   }
 
+  // devoluções que já têm nota (ML pelos avisos do Faturador; Bling pelas notas de entrada): uma leitura por tela
+  let feitas = null;
+  const lerFeitas = () => (feitas = feitas || fetch('/api/devolucao-nf/feitas').then((r) => (r.ok ? r.json() : { pedidos: {} })).catch(() => ({ pedidos: {} })));
+  window.notasDevolucaoFeitas = lerFeitas;
+
   window.botaoNotaDevolucao = function(alvo){
+    const box = mk('span', 'nfdev-box');
     const b = mk('button', 'nfdev-bt', 'Nota de devolução'); b.type = 'button';
     b.title = 'Gerar e emitir a nota fiscal de devolução (entrada) pelo Bling';
     b.onclick = () => abrir(alvo);
-    return b;
+    box.appendChild(b);
+    lerFeitas().then((f) => {
+      const notas = f.pedidos?.[String(alvo.pedido)] || [];
+      for(const n of notas){
+        const c = mk('span', 'nfdev-chip' + (n.autorizada ? ' ok' : ''), `${n.autorizada ? '✓ ' : ''}NF devolução nº ${n.numero || '?'}${n.autorizada ? '' : ' (' + n.situacao + ')'}`);
+        c.title = `${n.origem}${n.emitida_em ? ' · ' + dataBr(n.emitida_em) : ''}`;
+        box.insertBefore(c, b);
+      }
+      if(notas.some((n) => n.autorizada)) b.textContent = 'Ver nota de devolução';
+    });
+    return box;
   };
 })();

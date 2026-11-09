@@ -83,6 +83,30 @@ function corpoDevolucao(venda, escolhidos, naturezaId, agora, ref) {
   };
 }
 
+// Nota do Faturador do ML (GET /users/{id}/invoices/{id}) -> a devolução e os pedidos dela; null = não é devolução.
+// Medido 09/11/2026: a devolução emitida no site do ML não aparece em /invoices/orders/{pedido} (só a venda) nem tem envio;
+// chega pelo aviso "invoices" e traz o pedido em items[].external_order_id. Função pura: testada.
+const TIPOS_DEV_ML = ['devolution', 'sale_return', 'credit_note'];
+function devolucaoDaNotaMl(n) {
+  const tipo = String(n?.fiscal_data?.transaction_type || '').toLowerCase();
+  if (!TIPOS_DEV_ML.includes(tipo)) return null;
+  const pedidos = [...new Set((n.items || []).map((i) => String(i.external_order_id ?? '')).filter((x) => /^\d{6,20}$/.test(x)))];
+  return { origem: 'Mercado Livre', tipo, pedidos, numero: n.invoice_number ?? null, serie: n.invoice_series ?? null,
+    status: String(n.status || '').toLowerCase() || null, emitida_em: n.issued_date || n.attributes?.authorization_date || null };
+}
+
+// Nota de ENTRADA do Bling -> a devolução e a chave da venda (documento referenciado ou a chave nas observações); null = não é
+// devolução. Função pura: testada.
+function devolucaoDaNotaBling(d) {
+  if (Number(d?.tipo) !== 0 || Number(d?.finalidade) !== 4) return null;
+  const refs = [d.documentoReferenciado, ...(Array.isArray(d.documentosReferenciados) ? d.documentosReferenciados : [])].map((x) => soDig(x?.chaveAcesso)).filter((x) => x.length === 44);
+  const obs = String(d.observacoes || '');
+  const chave = refs[0] || (obs.match(/\b(\d{44})\b/) || [])[1] || null;
+  const pedidoObs = (obs.match(/Pedido (?:Mercado Livre|Shopee|Amazon|Leroy Merlin|Magalu) ([\w-]+(?:\.[\w-]+)*)/) || [])[1] || null;
+  return { origem: 'Bling', chave_venda: chave, pedido_obs: pedidoObs, numero: d.numero ?? null, serie: d.serie ?? null,
+    situacao: Number(d.situacao) || null, emitida_em: d.dataEmissao || null };
+}
+
 function criar({ D, ml, mlArquivo, bling }) {
   const contasBling = ['1', '2'];
   const cnpjs = {};
@@ -211,6 +235,7 @@ function criar({ D, ml, mlArquivo, bling }) {
       if (!id) throw erro('O Bling não devolveu o id da nota criada: confira no Bling antes de tentar de novo.', 502);
       D.configGravar(`devolucao_natureza_${conta}`, natId);
       const d = (await bling(conta, `/nfe/${id}`)).data || {};
+      feitasCache = null;
       gravarGerada(e.k, { conta, id: String(id), numero: d.numero ?? null, chave_venda: venda.chave, em: new Date().toISOString() });
       return { conta_bling: conta, id: String(id), numero: d.numero ?? null, situacao: Number(d.situacao) || 1, situacao_nome: SITUACAO[d.situacao] || 'Pendente',
         valor: d.valorNota ?? null };
@@ -266,7 +291,75 @@ function criar({ D, ml, mlArquivo, bling }) {
     return out;
   }
 
+  // ---- devoluções que já têm nota (as telas de devoluções mostram o selo) ----
+  const lerJson = (k) => { try { return JSON.parse(D.configLer(k) || '{}') || {}; } catch { return {}; } };
+  const aparar = (o, max) => { const ks = Object.keys(o); for (const x of ks.slice(0, Math.max(0, ks.length - max))) delete o[x]; return o; };
+  // ML: os avisos "invoices" (30 dias guardados) — cada nota lida uma vez; a devolução fica guardada por id
+  async function devolucoesMl() {
+    const lidas = lerJson('nfdev_ml_lidas');
+    const avisos = D.db.prepare("SELECT DISTINCT resource, ml_user_id FROM notificacoes WHERE topic = 'invoices' ORDER BY id DESC LIMIT 2000").all();
+    let novas = 0;
+    for (const a of avisos) {
+      const m = String(a.resource || '').match(/^\/users\/(\d+)\/invoices\/(\d+)$/);
+      if (!m || m[2] in lidas || novas >= 150) continue;
+      try { lidas[m[2]] = devolucaoDaNotaMl(await ml(`/users/${m[1]}/invoices/${m[2]}`, {}, m[1])); novas++; }
+      catch (e) { if (e.status === 404 || e.status === 403) lidas[m[2]] = null; }
+    }
+    if (novas) D.configGravar('nfdev_ml_lidas', JSON.stringify(aparar(lidas, 5000)));
+    return Object.values(lidas).filter(Boolean);
+  }
+  // Bling: notas de entrada dos últimos 90 dias nas duas contas; o pedido pela venda referenciada (GET /nfe?chaveAcesso=) ou
+  // pelo "Pedido …" das observações (as geradas pelo painel). Pendente/aguardando é relida até sair do estado.
+  async function devolucoesBling() {
+    const lidas = lerJson('nfdev_bling_lidas');
+    const desde = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+    let mudou = false;
+    for (const n of contasBling) {
+      let lista = [];
+      try { for (let p = 1; p <= 3; p++) { const d = (await bling(n, `/nfe?pagina=${p}&limite=100&tipo=0&dataEmissaoInicial=${desde}`)).data || []; lista.push(...d); if (d.length < 100) break; } }
+      catch { continue; }
+      for (const x of lista) {
+        const k = `${n}:${x.id}`, ja = lidas[k];
+        if (ja === null || (ja && [2, 4, 5, 6, 7, 9].includes(ja.situacao) && Number(x.situacao) === ja.situacao)) continue;
+        try {
+          const d = (await bling(n, `/nfe/${x.id}`)).data;
+          const dev = devolucaoDaNotaBling(d);
+          if (dev && !ja?.pedido) {
+            let pedido = dev.pedido_obs;
+            if (!pedido && dev.chave_venda) {
+              for (const c of contasBling) {
+                try { const v = ((await bling(c, `/nfe?pagina=1&limite=5&chaveAcesso=${dev.chave_venda}`)).data || [])[0];
+                  if (v) { pedido = (await bling(c, `/nfe/${v.id}`)).data?.numeroPedidoLoja || null; break; } } catch { /* outra conta */ }
+              }
+            }
+            dev.pedido = pedido ? String(pedido) : null;
+          } else if (dev) dev.pedido = ja.pedido;
+          lidas[k] = dev ? { ...dev, conta: n, id: String(x.id) } : null;
+          mudou = true;
+        } catch { /* tenta na próxima leitura */ }
+      }
+    }
+    if (mudou) D.configGravar('nfdev_bling_lidas', JSON.stringify(aparar(lidas, 3000)));
+    return Object.values(lidas).filter(Boolean);
+  }
+  let feitasCache = null;
+  async function feitas(recarregar) {
+    if (!recarregar && feitasCache && Date.now() - feitasCache.em < 5 * 60e3) return feitasCache.r;
+    const pedidos = {}, erros = [];
+    const por = (p, x) => { if (!p) return; (pedidos[p] = pedidos[p] || []).push(x); };
+    try { for (const d of await devolucoesMl()) for (const p of d.pedidos) por(p, { origem: d.origem, numero: d.numero, serie: d.serie, autorizada: d.status === 'authorized', situacao: d.status, emitida_em: d.emitida_em }); }
+    catch (e) { erros.push(`Mercado Livre: ${e.message}`); }
+    try { for (const d of await devolucoesBling()) por(d.pedido, { origem: `Bling ${d.conta === '1' ? 'AMG' : 'Primor'}`, numero: d.numero, serie: d.serie,
+      autorizada: [5, 6, 7].includes(d.situacao), situacao: SITUACAO[d.situacao] || String(d.situacao), emitida_em: d.emitida_em }); }
+    catch (e) { erros.push(`Bling: ${e.message}`); }
+    const r = { pedidos, erros, em: new Date().toISOString() };
+    feitasCache = { em: Date.now(), r };
+    return r;
+  }
+
   const rotas = {
+    // pedido -> notas de devolução já feitas (ML pelos avisos do Faturador; Bling pelas notas de entrada). Só leitura.
+    'GET /api/devolucao-nf/feitas': async (url) => feitas(url.searchParams.get('recarregar') === '1'),
     'GET /api/devolucao-nf/diagnostico-ml': async (url) => diagnosticoMl(Object.fromEntries(url.searchParams)),
     // ?canal=&pedido=[&chave=] — a nota de venda (itens) e as naturezas da conta do Bling; só leitura
     'GET /api/devolucao-nf/previa': async (url) => previa(Object.fromEntries(url.searchParams)),
@@ -278,4 +371,4 @@ function criar({ D, ml, mlArquivo, bling }) {
   return { rotas };
 }
 
-module.exports = { criar, vendaDoXml, escolhidosValidos, corpoDevolucao };
+module.exports = { criar, vendaDoXml, escolhidosValidos, corpoDevolucao, devolucaoDaNotaMl, devolucaoDaNotaBling };

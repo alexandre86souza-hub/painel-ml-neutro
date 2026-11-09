@@ -398,6 +398,10 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   O botão "Emitir NF-e de devolução" do site do ML usa um GraphQL interno do site (vendedores.mercadolivre.com.br/invoices/api/v2, sessão do
   navegador, visto 09/11/2026): para venda do ML a janela leva direto à tela do ML (`ml_emitir` = /invoices/order/{pedido}/devolution/{id da
   nota de venda}?source=ml) e o Bling fica como alternativa.
+  Devoluções que JÁ têm nota (`GET /api/devolucao-nf/feitas`, selo "NF devolução nº" ao lado do botão): ML = avisos `invoices` da tabela
+  notificacoes (a devolução do site NÃO aparece em /invoices/orders/{pedido} nem tem envio; GET /users/{id}/invoices/{id} traz o pedido em
+  items[].external_order_id — medido 09/11/2026), cada nota lida uma vez (`nfdev_ml_lidas`); Bling = notas tipo 0 finalidade 4 de 90 dias,
+  pedido pela venda referenciada (/nfe?chaveAcesso=) ou "Pedido …" das observações (`nfdev_bling_lidas`). Cache 5 min.
   Venda: ML = XML do Faturador (`/users/{id}/invoices/orders/{pedido}` -> xml_location, `mlArquivo`); outras = nota do Bling por
   `/nfe?numeroLoja=` nas duas contas; sem achar, o vendedor cola a chave (`/nfe?chaveAcesso=`). Conta do Bling = a do CNPJ do emitente
   (`/empresas/me/dados-basicos`: ML AMG -> Bling AMG, Primor -> Primor). Gerar (`POST /api/devolucao-nf/gerar`) = POST /nfe tipo 0,

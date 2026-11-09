@@ -161,5 +161,20 @@ assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js nã
   assert.ok(c.observacoes.includes(ch) && c.observacoes.includes('09/11/2026'));
   assert.ok(!/\/api\/devolucao-nf/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js não pode apontar para /api/devolucao-nf');
 }
+{
+  const { devolucaoDaNotaMl, devolucaoDaNotaBling } = require('./devolucao-nf.js');
+  // devolução emitida no site do ML (medido 09/11/2026): o pedido vem em items[].external_order_id
+  const d = devolucaoDaNotaMl({ id: '7426347947', status: 'authorized', invoice_number: 71816, invoice_series: '2', issued_date: '2026-11-09T17:20:00Z',
+    fiscal_data: { transaction_type: 'devolution' }, items: [{ external_order_id: '2000019340356416' }, { external_order_id: '2000019340356416' }] });
+  assert.deepStrictEqual(d.pedidos, ['2000019340356416']); assert.strictEqual(d.numero, 71816); assert.strictEqual(d.status, 'authorized');
+  assert.strictEqual(devolucaoDaNotaMl({ fiscal_data: { transaction_type: 'sale' }, items: [] }), null);
+  const b = devolucaoDaNotaBling({ tipo: 0, finalidade: 4, numero: '1234', situacao: 5,
+    observacoes: 'Devolução de venda referente à NF-e nº 13179 série 1 de 05/11/2026, chave 35251112345678000199550010000131791000000017. Pedido Shopee 251105ABC123XY.' });
+  assert.strictEqual(b.chave_venda, '35251112345678000199550010000131791000000017'); assert.strictEqual(b.pedido_obs, '251105ABC123XY');
+  assert.strictEqual(devolucaoDaNotaBling({ tipo: 0, finalidade: 4, documentoReferenciado: { chaveAcesso: '3525 1112 3456 7800 0199 5500 1000 0131 7910 0000 0017' } }).chave_venda,
+    '35251112345678000199550010000131791000000017');
+  assert.strictEqual(devolucaoDaNotaBling({ tipo: 1, finalidade: 1 }), null);
+  assert.strictEqual(devolucaoDaNotaBling({ tipo: 0, finalidade: 1 }), null, 'entrada que não é devolução');
+}
 
 console.log('test-bling: ok');
