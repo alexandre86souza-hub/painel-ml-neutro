@@ -13,7 +13,7 @@
   .barra button{font:inherit;font-weight:700;padding:7px 14px;border:0;border-radius:8px;background:#c96f50;color:#fff;cursor:pointer}
   .barra .erro{color:#fecaca}
   .folhas{display:flex;flex-wrap:wrap;gap:12px;padding:14px;justify-content:center}
-  .etq{width:100mm;height:150mm;background:#fff;padding:3mm 3mm 2mm;display:flex;flex-direction:column;overflow:hidden;page-break-after:always;break-after:page;font-size:8.3pt;line-height:1.2}
+  .etq{width:100mm;height:149mm;background:#fff;padding:3mm 3mm 2mm;display:flex;flex-direction:column;overflow:hidden;font-size:8.3pt;line-height:1.2}
   .sec{border-bottom:.35mm dashed #000;padding:1.3mm 0}
   .sec:first-child{border-top:.35mm dashed #000}
   .sec:last-child{border-bottom:0}
@@ -34,8 +34,10 @@
   .info{font-size:7.6pt}
   .forte{font-weight:700}
   .sub{font-weight:700;text-align:center}
+  /* quebra só ENTRE as etiquetas: a quebra depois da última criava uma folha em branco */
+  .etq + .etq{page-break-before:always;break-before:page}
   @media print{
-    body{background:#fff}
+    html,body{margin:0;padding:0;height:auto;background:#fff}
     .barra{display:none}
     .folhas{display:block;padding:0}
   }
