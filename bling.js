@@ -469,7 +469,10 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
         const k = cod ? itensN.findIndex((x) => x.codigo === cod) : -1;
         return { ...m, i: k >= 0 ? k : Number(m?.i) };
       });
-      const r = await ajustarNota(n, nota, mud);
+      // a nota JÁ foi gerada: se o ajuste falhar, diz isso (ela fica em "falta ajustar"), não "não gerou"
+      let r;
+      try { r = await ajustarNota(n, nota, mud); }
+      catch (e) { throw erro(`Nota ${nota.numero || ''} GERADA no Bling, mas o ajuste foi recusado: ${e.message}. Ela está em "falta ajustar" (clique em Atualizar).`, e.status || 502); }
       return { ...r, gerada: true };
     },
     'GET /api/bling/config': async () => ({ retorno: retorno(), contas: CONTAS.map(publica) }),
