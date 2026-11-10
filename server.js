@@ -2509,6 +2509,8 @@ const estoqueMod = require('./estoque.js').criar({ D, sincronizarMl: (c, dias) =
   atualizarDevolucoes: (c, de) => devolucoesMod.atualizarDevolucoes(c, de),
   amazon: amazonMod, leroy: leroyMod, magalu: magaluMod, quem: () => CTX.atual()?.usuario?.login || null });
 Object.assign(routes, estoqueMod.rotas);
+// Diagnósticos SÓ LEITURA da auditoria técnica (diagnosticos.js): /api/diagnostico/*, só o administrador, fora do MCP.
+Object.assign(routes, require('./diagnosticos.js').criar({ D, routes, CTX, adsDaJanela, estoque: () => estoqueMod }).rotas);
 // Estoque nos anúncios (etapa 1 do estoque sincronizado: SÓ comparação, nada vai às lojas). Junta os anúncios de todas as
 // lojas com o estoque de cada um — ML das duas contas (lista de anúncios, Full fora), Shopee e Magalu pelas cópias locais,
 // Leroy e Amazon pelas telas de anúncios (FBA fora) — e compara com o saldo do painel (estoque.js#estoqueDosAnuncios).

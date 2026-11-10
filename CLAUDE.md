@@ -548,6 +548,12 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   127.0.0.1/localhost e, com `SCRAPER_CHAVE` (gerada a cada partida, passada pelo iniciar.js), o cabeçalho `X-Scraper-Chave`
   (contra DNS rebinding). `/webhook` (público) só grava a notificação do app (`ml_client_id`) para conta conectada, no
   formato do ML, até 300/min por IP; a tabela guarda 30 dias / 5.000 linhas.
+- Diagnósticos da auditoria técnica (`diagnosticos.js`, Fase 2 aprovada 10/11/2026): `GET /api/diagnostico/{composicao-estoque |
+  amazon-frete[?sku=&dias=] | ads-ml?conta=&dias= | magalu-frete[?dias=]}` — SÓ leitura, só o administrador (fora de todo módulo), fora do
+  MCP, Amazon só agregada por SKU. composicao-estoque = `estoque.js#baixasForaDaComposicao`: baixa de venda/devolução em produto que a
+  composição de HOJE não tem (a composição não tem data: mudar a composição baixa o produto novo de novo nas vendas antigas). `test-diagnosticos.js`.
+  Decisões do dono (10/11/2026) para as próximas etapas: trocas de composição em lote (755→697, 487→830, 747→101…) são INTENCIONAIS;
+  faturamento da Leroy deve conter o frete pago pelo cliente e o frete = custo efetivo da entrega; imposto que vale = % da tela Empresa.
 - `mcp.js` expõe as MESMAS rotas do painel como ferramentas MCP (stdio, sem porta, sem OAuth:
   usa a conta já conectada). Ferramenta nova = uma linha na tabela `FERRAMENTAS` apontando
   para a rota; `server.js#despachar` é o único caminho, e `test-mcp.js` reprova ferramenta

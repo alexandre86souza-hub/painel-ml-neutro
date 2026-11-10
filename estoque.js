@@ -204,6 +204,46 @@ function diferencas(linhas, jaLancado, porSku) {
   return { lancar, pendentes };
 }
 
+// DIAGNÓSTICO só leitura (Fase 2 da auditoria, 10/11/2026): baixas de uma venda/devolução em produto que a composição
+// de HOJE não tem mais. A composição não tem data e diferencas() só olha o que a composição de hoje pede: o produto
+// antigo já baixado fica, e o novo é baixado de novo (baixa em dobro). Por SKU, sem ref/pedido na saída (a Amazon não
+// pode sair por pedido): quantas linhas, unidades a mais por produto antigo, se o produto novo já foi baixado ou ainda
+// vai ser na próxima rodada, e o período. Não lança nada. Função pura: testada.
+function baixasForaDaComposicao(linhas, jaLancado, porSku) {
+  const porRef = new Map();
+  for (const [k, q] of jaLancado) {
+    const i = k.lastIndexOf('|');
+    const ref = k.slice(0, i), numero = Number(k.slice(i + 1));
+    if (!q) continue;
+    if (!porRef.has(ref)) porRef.set(ref, new Map());
+    porRef.get(ref).set(numero, (porRef.get(ref).get(numero) || 0) + q);
+  }
+  const porSkuOut = new Map();
+  for (const l of linhas) {
+    const ja = porRef.get(l.ref);
+    if (!ja) continue;
+    const quer = new Map();
+    // os produtos que a composição de HOJE dá à linha (válida ou não: cancelada que só falta estornar não é problema de composição)
+    for (const m of diferencas([{ ...l, valida: true }], new Map(), porSku).lancar) quer.set(m.numero, (quer.get(m.numero) || 0) + m.qtd);
+    const sobra = [...ja].filter(([n]) => !quer.has(n));
+    if (!sobra.length) continue;
+    const canal = String(l.ref).split(':')[1] || '?';
+    const k = `${l.sku || ''}`;
+    const x = porSkuOut.get(k) || { sku: l.sku || null, linhas: 0, por_loja: {}, sobra: new Map(), novo_ja_baixado: 0, novo_falta_baixar: 0,
+      produtos_hoje: [...quer.keys()], de: l.data, ate: l.data };
+    x.linhas++;
+    x.por_loja[canal] = (x.por_loja[canal] || 0) + 1;
+    for (const [n, q] of sobra) x.sobra.set(n, (x.sobra.get(n) || 0) + q);
+    if ([...quer.keys()].every((n) => ja.has(n))) x.novo_ja_baixado++; else x.novo_falta_baixar++;
+    if (l.data && (!x.de || l.data < x.de)) x.de = l.data;
+    if (l.data && (!x.ate || l.data > x.ate)) x.ate = l.data;
+    porSkuOut.set(k, x);
+  }
+  return [...porSkuOut.values()].map((x) => ({ ...x,
+    sobra: [...x.sobra].map(([numero, qtd]) => ({ numero, unidades: -qtd })).sort((a, b) => b.unidades - a.unidades) }))
+    .sort((a, b) => b.linhas - a.linhas);
+}
+
 // Estoque de peças com defeito para a troca com o fornecedor (pedido do dono, 19/10/2026). Entram: a saída "defeito" do
 // estoque, as peças com defeito das devoluções conferidas (as MESMAS linhas da volta ao estoque: sem = posições com defeito,
 // defeituosos = quantas) e a entrada direta; saem: recolhidas pelo fornecedor e descartadas (manuais com qtd < 0).
@@ -581,6 +621,23 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       return { lancados: lancar.length };
     })().finally(() => { baixando = null; });
     return baixando;
+  }
+  // DIAGNÓSTICO só leitura: as mesmas linhas da baixa automática, comparadas com o que já foi lançado (nada é gravado).
+  function diagnosticoComposicao() {
+    const desde = inicio();
+    if (!desde) return { inicio: null, vendas: [], devolucoes: [], nota: 'A baixa automática ainda não começou (sem 1ª contagem).' };
+    const cat = catalogo();
+    const nomes = (l) => l.map((x) => ({ ...x, sobra: x.sobra.map((s) => ({ ...s, sku: cat.porNumero.get(s.numero)?.sku || null })),
+      produtos_hoje: x.produtos_hoje.map((n) => cat.porNumero.get(n)?.sku || String(n)) }));
+    const vendas = nomes(baixasForaDaComposicao(linhasDeVenda(desde), D.estoqueSomaPorRef('venda:'), cat.porSku));
+    const devolucoes = nomes(baixasForaDaComposicao(linhasDeDevolucao(desde), D.estoqueSomaPorRef('devolucao:'), cat.porSku));
+    const total = (l) => l.reduce((s, x) => s + x.sobra.reduce((a, y) => a + y.unidades, 0), 0);
+    return { inicio: desde, lido_em: new Date().toISOString(),
+      resumo: { skus_vendas: vendas.length, linhas_vendas: vendas.reduce((s, x) => s + x.linhas, 0), unidades_a_mais_vendas: total(vendas),
+        skus_devolucoes: devolucoes.length, linhas_devolucoes: devolucoes.reduce((s, x) => s + x.linhas, 0), unidades_devolucoes: total(devolucoes) },
+      vendas, devolucoes,
+      nota: 'Só leitura. "sobra" = o que a venda baixou de um produto que a composição de HOJE não tem (unidades positivas = saiu a mais do '
+        + 'estoque, se o produto que saiu de verdade foi o de hoje). Nenhum estorno foi feito.' };
   }
   const timer = setInterval(() => { if (inicio()) baixar().catch(() => null); }, 10 * 60e3);
   timer.unref?.();
@@ -964,7 +1021,7 @@ function criar({ D, sincronizarMl, atualizarDevolucoes, shopeeVendas, amazon, le
       compras: dados.compras.length, avisos: { ...dados.avisos, sem_produto: dados.movimentos.length - movs.length } };
   }
 
-  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe };
+  return { rotas, rotasParam: [], importar, baixar, lancarVendaManual, estornarRef, catalogo, expandir, visao, segurancaDe, diagnosticoComposicao };
 }
 
-module.exports = { criar, comprasDe, mesesDaBase, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, defeitosDe, estoqueDosAnuncios, precisaEnviar, fecharPendentes, planoEnvioMl, chaveMl, chaveZerado, comZerados, custoMovel, TIPO_NOME };
+module.exports = { criar, comprasDe, mesesDaBase, numerosDoCodigo, reposicao, importacaoDe, relatorio, periodoDe, diferencas, baixasForaDaComposicao, defeitosDe, estoqueDosAnuncios, precisaEnviar, fecharPendentes, planoEnvioMl, chaveMl, chaveZerado, comZerados, custoMovel, TIPO_NOME };
