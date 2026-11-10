@@ -26,6 +26,16 @@ const r2 = (v) => Math.round(v * 100) / 100;
 const CATEGORIAS = ['Flex', 'Mercado Envios', 'Magalu', 'Melhor Envios', 'Shopee', 'Amazon', 'Venda direta'];
 const diaLocal = (ms = Date.now()) => new Date(ms - 3 * 3600e3).toISOString().slice(0, 10);
 
+// SKU que a comanda imprime para a composição do painel ("KIT-101" ou "KIT-524.408"): um produto só = o SKU dele no catálogo
+// ("GA-101", não parece kit); dois ou mais = o código do kit. Sem composição: null (fica o SKU do canal). Função pura: testada.
+function skuDaComposicao(kit, catalogo) {
+  const m = /^KIT-(.+)$/.exec(String(kit || ''));
+  if (!m) return kit || null;
+  const ns = m[1].split('.');
+  if (ns.length !== 1) return kit;
+  return (catalogo && catalogo.get(Number(ns[0]))) || kit;
+}
+
 // Categoria e o nome do tipo de envio impresso. null = não entra (ex.: Full). Função pura: testada.
 function categoriaDe(canal, tipo) {
   const t = String(tipo || '');
@@ -282,10 +292,11 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
     // composição escolhida no painel (Produtos, sku_vinculos 'composicao'): a comanda mostra os produtos certos ("KIT-524.408"),
     // não o SKU do canal ("KIT-524.1" = 524 + produto 001, que não existe) — o mesmo que já vale para custo e estoque
     const compo = D.skuVinculos('composicao');
+    const catalogo = new Map(D.catalogoListar().map((p) => [p.numero, p.sku]));
     for (const x of lista) x.itens = (x.itens || []).map((i) => {
       if (!i.sku) return i;
       const s = C.skuNaData(trocas[x.canal], x.canal === 'magalu' ? (vincMg.get(i.sku) || i.sku) : i.sku);
-      return { ...i, sku: compo.get(s) || s };
+      return { ...i, sku: skuDaComposicao(compo.get(s), catalogo) || s };
     });
     // numeração: o envio novo ganha o próximo número da categoria no dia de hoje; o que já tinha, mantém —
     // menos o que ficou de um dia anterior sem imprimir, que entra junto na numeração de hoje (pelo prazo)
@@ -452,4 +463,4 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
   return { rotas, rotasParam: [], resumoFila, fila, esquecerEnvio };
 }
 
-module.exports = { criar, categoriaDe, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, prazoDoDia, CATEGORIAS };
+module.exports = { criar, categoriaDe, skuDaComposicao, numerar, atrasadasDaFila, jaSaiuMl, situacaoPrazo, prazoDoDia, CATEGORIAS };

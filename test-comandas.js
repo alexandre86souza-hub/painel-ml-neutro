@@ -94,3 +94,12 @@ assert.strictEqual(ET.tipoShopee({ suggest_shipping_document_type: 'NORMAL_AIR_W
   assert.throws(() => ET.soZpl(Buffer.from('{"message":"envio sem etiqueta"}'), 'Mercado Livre'), /Mercado Livre: envio sem etiqueta/); }
 assert.ok(!/\/api\/etiquetas/.test(mcp), 'etiquetas fora do MCP');
 console.log('Comandas: categorias, numeração do dia, prazo, código de barras, etiquetas de envio e fora do MCP: ok');
+
+// composição do painel na comanda: produto só = SKU do catálogo (não parece kit); kit = o código do kit
+{
+  const cat = new Map([[101, 'GA-101'], [524, 'DQ-524']]);
+  assert.strictEqual(K.skuDaComposicao('KIT-101', cat), 'GA-101');
+  assert.strictEqual(K.skuDaComposicao('KIT-524.408', cat), 'KIT-524.408');
+  assert.strictEqual(K.skuDaComposicao('KIT-999', cat), 'KIT-999');
+  assert.strictEqual(K.skuDaComposicao(undefined, cat), null);
+}
