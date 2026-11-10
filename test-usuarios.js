@@ -42,11 +42,26 @@ assert.throws(() => U.validarUsuario({ login: 'Jo', nome: 'X' }), /3 a 30/);
 assert.deepStrictEqual(U.validarUsuario({ login: ' Maria.S ', nome: ' Maria ', modulos: ['expedicao'] }), { login: 'maria.s', nome: 'Maria', modulos: ['expedicao'] });
 for (let i = 0; i < 50; i++) assert.strictEqual(SEG.problemaSenha(U.senhaTemporaria()), null, 'senha temporária passa pela política');
 
+// módulo Notas fiscais: emite, mas a conexão do Bling e os diagnósticos seguem do administrador
+{
+  const n = { admin: false, modulos: ['notas'] };
+  for (const [mt, r] of [['POST', '/api/bling/notas/emitir'], ['POST', '/api/ml-notas/emitir'], ['POST', '/api/devolucao-nf/gerar'], ['GET', '/api/bling/notas'], ['GET', '/bling.html']]) {
+    assert.ok(U.permitido(n, mt, r), `notas libera ${mt} ${r}`);
+  }
+  for (const [mt, r] of [['PUT', '/api/bling/config'], ['POST', '/api/bling/conectar'], ['POST', '/api/bling/remover'], ['GET', '/api/bling/diagnostico'],
+    ['GET', '/api/devolucao-nf/diagnostico-ml'], ['GET', '/bling-conexao.html']]) {
+    assert.ok(!U.permitido(n, mt, r), `notas NÃO libera ${mt} ${r}`);
+  }
+  assert.ok(!U.permitido({ admin: false, modulos: ['vendas'] }, 'POST', '/api/devolucao-nf/emitir'), 'vendas sozinho não emite devolução');
+}
+
 // ---------- cada tela de um módulo só chama rotas liberadas para o módulo ----------
 // (o que a tela tem só para o administrador — conexão e diagnóstico — fica na lista abaixo)
 const SO_ADMIN = { '/leroy.html': [/^\/api\/leroy\/(diagnostico|remover)/], '/anuncios.html': [/^\/api\/(produtos-custo|empresa|imposto)$/],
   // Central de comando: Ads por campanha e estoque parado só são lidos se a pessoa tiver os módulos Ads / Estoque
   '/central.html': [/^\/api\/(ads\/historico|estoque\/capital)$/],
+  // notas fiscais: /api/bling/${rota} = notas|pedidos (liberadas no módulo)
+  '/bling.html': [/^\/api\/bling\/X$/],
   '/vendas.html': [], '/produtos.html': [], '/estoque.html': [/^\/api\/estoque\/importar$/] };
 for (const m of U.MODULOS) {
   const quem = { admin: false, modulos: [m.id] };
@@ -66,7 +81,7 @@ for (const m of U.MODULOS) {
   }
 }
 // toda tela do painel está num módulo ou é de administrador (de propósito)
-const ADMIN = ['/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/bling.html', '/ml-notas.html', '/bling-conexao.html', '/danfe-simplificada.html', '/integracoes.html', '/navegador.html', '/usuarios.html'];
+const ADMIN = ['/configuracao.html', '/empresa.html', '/shopee.html', '/amazon.html', '/magalu.html', '/amazon-ads.html', '/bling-conexao.html', '/integracoes.html', '/navegador.html', '/usuarios.html'];
 for (const f of fs.readdirSync(path.join(__dirname, 'public')).filter((x) => x.endsWith('.html'))) {
   const pg = '/' + f;
   assert.ok(ADMIN.includes(pg) || U.MODULOS.some((m) => m.paginas.includes(pg)), `${pg}: ponha num módulo de usuarios.js ou na lista de administrador`);

@@ -1,6 +1,6 @@
 'use strict';
 // Nota fiscal de DEVOLUÇÃO (entrada) pelo Bling, a partir da nota de venda de QUALQUER loja (pedido do dono 09/11/2026; botão
-// "Nota de devolução" nas telas de devoluções: ML, Shopee, Amazon, Leroy e Magalu; só o administrador).
+// "Nota de devolução" nas telas de devoluções: ML, Shopee, Amazon, Leroy e Magalu; módulo "Notas fiscais" dos usuários).
 //   Nota de venda: ML = a do Faturador do ML (GET /users/{id}/invoices/orders/{pedido} -> XML em attributes.xml_location; o
 //   Faturador NÃO emite devolução pela API — doc "Gestão e Consulta de Notas Fiscais" lida 09/11/2026, só consulta);
 //   outras lojas = a nota do Bling com aquele número de pedido (GET /nfe?numeroLoja=), nas duas contas. Sem achar: o vendedor

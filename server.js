@@ -2429,7 +2429,7 @@ const blingMod = require('./bling.js').criar({ D, urlPublica, novoEstadoOAuth, c
   shopee: (...a) => shopeeMod.daLoja(...a), portaPainel: () => portaPainel, enviarHtml: (...a) => enviarHtml(...a), redirecionar: (...a) => redirecionar(...a),
   pagina: (...a) => pagina(...a), esc: (s) => esc(s) });
 Object.assign(routes, blingMod.rotas);
-// Nota de devolução (entrada) pelo Bling a partir da nota de venda de qualquer loja (devolucao-nf.js). Só o administrador; nada no MCP.
+// Nota de devolução (entrada) pelo Bling a partir da nota de venda de qualquer loja (devolucao-nf.js). Módulo "Notas fiscais" (usuarios.js); nada no MCP.
 const devolucaoNfMod = require('./devolucao-nf.js').criar({ D, ml, mlArquivo, bling: blingMod.bling });
 Object.assign(routes, devolucaoNfMod.rotas);
 
@@ -3372,7 +3372,7 @@ Object.assign(routes, comandasMod.rotas);
 // Etiquetas de envio (etiquetas.js): a etiqueta liberada pelo ML e pela Shopee, em PDF para a térmica 10×15.
 const etiquetasMod = require('./etiquetas.js').criar({ D, mlArquivo, daLoja: shopeeMod.daLoja, comandas: comandasMod });
 Object.assign(routes, etiquetasMod.rotas);
-// Notas fiscais do ML pelo Faturador do ML (ml-notas.js): envios aguardando nota, emitir pelo clique. Só o administrador; nada no MCP.
+// Notas fiscais do ML pelo Faturador do ML (ml-notas.js): envios aguardando nota, emitir pelo clique. Módulo "Notas fiscais" (usuarios.js); nada no MCP.
 const mlNotasMod = require('./ml-notas.js').criar({ D, ml, comandas: comandasMod });
 Object.assign(routes, mlNotasMod.rotas);
 // "Precisa de atenção" da tela Todas as contas: resumo do estoque (situação de reposição) e da fila de

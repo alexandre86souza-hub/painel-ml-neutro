@@ -28,6 +28,11 @@ const MODULOS = [
     paginas: ['/metas.html'], rotas: ['(GET|POST|PUT) /api/metas(/.*)?'] },
   { id: 'expedicao', nome: 'Expedição', descricao: 'Comandas de separação (imprimir, comanda manual de venda direta) e etiquetas de envio',
     paginas: ['/comandas.html', '/etiquetas.html'], rotas: ['(GET|POST) /api/(comandas|etiquetas)(/.*)?'] },
+  // Conexão do Bling (aplicativo, conectar, diagnóstico) segue só do administrador
+  { id: 'notas', nome: 'Notas fiscais', descricao: 'Emitir notas pelo Bling (ajustar, gerar, emitir, enviar à Shopee, DANFE etiqueta), notas do Mercado Livre pelo Faturador e notas de devolução',
+    paginas: ['/bling.html', '/ml-notas.html', '/danfe-simplificada.html'],
+    rotas: ['GET /api/bling/(config|notas|pedidos|emitidas|produtos-cfop)', 'POST /api/bling/(notas/(corrigir|emitir|enviar-shopee)|pedidos/gerar|danfe-simplificada)',
+      '(GET|POST) /api/ml-notas/(pendentes|emitir)', 'GET /api/devolucao-nf/(feitas|previa)', 'POST /api/devolucao-nf/(gerar|emitir)'] },
   { id: 'estoque', nome: 'Estoque', descricao: 'Saldo, entradas e saídas, contagem, compras (e capital parado), fornecedores e relatórios',
     paginas: ['/estoque.html', '/compras.html'], rotas: ['(GET|POST|PUT) /api/estoque(?!/importar)(/.*)?',
       'GET /api/produtos/composicao', 'PUT /api/produtos/composicoes', 'GET /api/produtos-custo'] },

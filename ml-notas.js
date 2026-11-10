@@ -1,5 +1,5 @@
 'use strict';
-// Notas fiscais do Mercado Livre pelo Faturador do ML (tela public/ml-notas.html, menu Expedição; só o administrador;
+// Notas fiscais do Mercado Livre pelo Faturador do ML (tela public/ml-notas.html, menu Expedição; módulo "Notas fiscais" dos usuários;
 // pedido do dono 09/11/2026). O vendedor emitia a nota de cada venda do Mercado Envios no site do ML; aqui é igual, pelo
 // painel: os produtos ficam com a configuração fiscal que já está no ML (nada é ajustado aqui).
 //   Lista = envios da fila das comandas (comandas.js#fila, as duas contas) com substatus invoice_pending (o ML segura a

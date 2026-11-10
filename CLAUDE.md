@@ -562,7 +562,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
 - Usuários do escritório (`usuarios.js`, tela `public/usuarios.html`, só o administrador): o ADMINISTRADOR é a senha
   do primeiro acesso (login `admin` ou vazio; só ele conecta contas e abre Configurações, Empresa, conexões e Usuários).
   Cada pessoa tem login, senha e 2FA próprios (tabela `usuarios`; 2FA cifrado) e só os MÓDULOS marcados (vendas,
-  expedicao, anuncios, campanhas, ads, financeiro, mensagens). Permissão NEGADA por padrão (`permitido`): tela ou rota
+  expedicao, notas, anuncios, campanhas, ads, financeiro, mensagens; "notas" = telas Bling e ML das notas, DANFE e nota de devolução — conexão e diagnósticos do Bling seguem só do administrador). Permissão NEGADA por padrão (`permitido`): tela ou rota
   fora de um módulo é só do administrador — rota nova nasce fechada; `test-usuarios.js` confere que cada tela de um
   módulo só chama rotas liberadas e que toda tela está num módulo ou na lista de administrador. O administrador cria
   o usuário e recebe UMA senha temporária (72 h; o 1º login manda trocar e ativar o 2FA). Bloquear/remover derruba a

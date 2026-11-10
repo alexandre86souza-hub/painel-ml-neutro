@@ -1,6 +1,6 @@
 // Botão "Nota de devolução" das telas de devoluções (ML, Shopee, Amazon, Leroy, Magalu): abre uma janela com a nota de venda
 // (itens), a natureza de operação e as quantidades que voltaram; gera a devolução PENDENTE no Bling e depois emite. Rotas em
-// devolucao-nf.js (só o administrador). Uso: elemento.appendChild(botaoNotaDevolucao({ canal: 'ml', pedido: '200…' }))
+// devolucao-nf.js (módulo "Notas fiscais" de usuarios.js; sem ele o botão some). Uso: elemento.appendChild(botaoNotaDevolucao({ canal: 'ml', pedido: '200…' }))
 (function(){
   const css = document.createElement('style');
   css.textContent = `
@@ -145,7 +145,7 @@
 
   // devoluções que já têm nota (ML pelos avisos do Faturador; Bling pelas notas de entrada): uma leitura por tela
   let feitas = null;
-  const lerFeitas = () => (feitas = feitas || fetch('/api/devolucao-nf/feitas').then((r) => (r.ok ? r.json() : { pedidos: {} })).catch(() => ({ pedidos: {} })));
+  const lerFeitas = () => (feitas = feitas || fetch('/api/devolucao-nf/feitas').then((r) => (r.ok ? r.json() : { pedidos: {}, negado: r.status === 403 })).catch(() => ({ pedidos: {} })));
   window.notasDevolucaoFeitas = lerFeitas;
 
   window.botaoNotaDevolucao = function(alvo){
@@ -155,6 +155,7 @@
     b.onclick = () => abrir(alvo);
     box.appendChild(b);
     lerFeitas().then((f) => {
+      if(f.negado){ box.hidden = true; return; }   // usuário sem o módulo "Notas fiscais"
       const notas = f.pedidos?.[String(alvo.pedido)] || [];
       for(const n of notas){
         const c = mk('span', 'nfdev-chip' + (n.autorizada ? ' ok' : ''), `${n.autorizada ? '✓ ' : ''}NF devolução nº ${n.numero || '?'}${n.autorizada ? '' : ' (' + n.situacao + ')'}`);
