@@ -384,7 +384,30 @@ function criar({ D, urlPublica, novoEstadoOAuth, consumirEstadoOAuth, shopee, po
     return notas;
   }
 
+  // Produto do cadastro com código CFOP{cfop} (o mesmo que o painel põe no lugar do SKU): com ele o Bling troca o nome do item pelo do
+  // cadastro e a emissão é barrada. Visto 09 e 10/11/2026: o Bling recriou CFOP5102/CFOP6108 sozinho ("Cadastrar automaticamente produtos a
+  // partir de vendas" ligado). A tela de notas avisa no topo. Só leitura, 5 min em memória.
+  const CFOPS_COMUNS = ['5101', '5102', '5106', '5403', '5405', '5949', '6101', '6102', '6106', '6107', '6108', '6403', '6404', '6949'];
+  const cfopCache = {};
+  async function produtosCfop(n, extras = []) {
+    const c = cfopCache[n];
+    if (c && Date.now() - c.em < 5 * 60e3) return c.lista;
+    const cods = [...new Set([...CFOPS_COMUNS.map((x) => `CFOP${x}`), ...extras.filter((x) => /^CFOP\d{4}$/.test(x))])];
+    const qs = cods.map((x) => `codigos[]=${x}`).join('&');
+    const lista = ((await bling(n, `/produtos?pagina=1&limite=100&${qs}`)).data || [])
+      .filter((p) => /^CFOP\d{4}$/i.test(String(p.codigo || '')))
+      .map((p) => ({ id: p.id, codigo: p.codigo, nome: p.nome ?? null }));
+    cfopCache[n] = { em: Date.now(), lista };
+    return lista;
+  }
+
   const rotas = {
+    // Produtos do cadastro com código CFOP (aviso da tela). Só leitura.
+    'GET /api/bling/produtos-cfop': async (url) => {
+      const n = contaValida(url.searchParams.get('conta'));
+      if (url.searchParams.get('recarregar')) delete cfopCache[n];
+      return { conta: publica(n), produtos: await produtosCfop(n) };
+    },
     // { notas: [{ conta, id }] } — dados da DANFE Simplificado – Etiqueta de notas AUTORIZADAS, lidos do XML na hora (não guarda).
     // Tem dado do destinatário (nome, CPF): só para imprimir na tela; nada do Bling no MCP.
     'POST /api/bling/danfe-simplificada': async (_u, body) => {

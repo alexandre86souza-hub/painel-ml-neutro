@@ -76,6 +76,9 @@
   .nota header input.marca{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--brand)}
   .lote{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
   .lote b{font-size:14px}
+  .aviso-cfop{border:1px solid #f04438;background:#fef3f2;color:#912018;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px;display:grid;gap:6px}
+  .aviso-cfop ul{margin:0;padding-left:18px}
+  .aviso-cfop a{color:inherit;font-weight:700}
   .vazio-grande{border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--muted)}
   .vazio-grande b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
   /* como funciona */
@@ -102,6 +105,7 @@
 </header>
 <main>
   <div id="msg" role="status" aria-live="polite"></div>
+  <div id="avisoCfop" class="aviso-cfop" role="alert" hidden></div>
 
   <ol class="passos">
     <li>Os <b>pedidos sem nota</b> do Bling aparecem aqui sozinhos. Produto que você já ajustou antes vai direto para <b>ajustados · falta emitir</b>: é só <b>Gerar e emitir</b>.</li>
@@ -177,10 +181,33 @@ async function lerNotas(){
   })));
   notas = partes.flat().sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
   aviso(erros.length ? 'Não consegui ler: ' + erros.join(' · ') : '');
+  avisoCfop(contas);
   $('lidoEm').textContent = 'Lido às ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   desenhar();
   $('btAtualizar').disabled = false;
   lerFeitas(contas, false);
+}
+
+// produto do cadastro do Bling com código CFOP (o que o painel põe no lugar do SKU): o Bling troca o nome do item pelo do cadastro e a
+// emissão é barrada. Avisa no topo, com o link para apagar.
+async function avisoCfop(contas){
+  const box = $('avisoCfop'); box.innerHTML = ''; box.hidden = true;
+  const achados = [];
+  await Promise.all(contas.map(async (c) => {
+    try{ const r = await api(`/api/bling/produtos-cfop?conta=${c.conta}&recarregar=1`); for(const p of r.produtos) achados.push({ ...p, nomeConta: c.nome || ('Conta ' + c.conta) }); }
+    catch{ /* sem o aviso: a emissão continua conferindo o nome */ }
+  }));
+  if(!achados.length) return;
+  box.appendChild(el('b', null, `⚠ O Bling tem ${achados.length === 1 ? 'um produto cadastrado' : achados.length + ' produtos cadastrados'} com código CFOP: com ${achados.length === 1 ? 'ele' : 'eles'} o Bling troca o nome do produto na nota e o painel NÃO emite.`));
+  const ul = el('ul');
+  for(const p of achados){
+    const li = el('li'); li.appendChild(document.createTextNode(`${p.nomeConta}: ${p.codigo} — "${p.nome || ''}" `));
+    const a = el('a', null, 'abrir no Bling para apagar ↗'); a.href = `https://www.bling.com.br/produtos.php#edit/${encodeURIComponent(p.id)}`; a.target = '_blank'; a.rel = 'noopener';
+    li.appendChild(a); ul.appendChild(li);
+  }
+  box.appendChild(ul);
+  box.appendChild(el('div', null, 'Apague no Bling (Cadastros → Produtos) e confira em Preferências → Configurações de produtos que "Cadastrar automaticamente produtos a partir de vendas (saídas)" e "Utilizar descrição do cadastro ao criar pedido / nota…" estão DESLIGADAS. Depois clique em Atualizar e em "Ajustar de novo" nas notas.'));
+  box.hidden = false;
 }
 
 // notas já emitidas (autorizadas) dos últimos 3 dias, das contas conectadas

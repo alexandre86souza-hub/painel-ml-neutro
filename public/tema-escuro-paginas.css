@@ -149,6 +149,7 @@ html[data-tema="escuro"][data-pagina="bling"] .salvo{color:hsl(145,81%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .codigo s{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .res.erro{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="bling"] .res.ok{color:hsl(145,81%,72%)}
+html[data-tema="escuro"][data-pagina="bling"] .aviso-cfop{background:hsla(5,86%,60%,.14);color:hsl(4,72%,72%)}
 /* caixa.html */
 html[data-tema="escuro"][data-pagina="caixa"] td.neg{color:hsl(4,76%,72%)}
 html[data-tema="escuro"][data-pagina="caixa"] .agenda div{border:1px solid var(--line)}
