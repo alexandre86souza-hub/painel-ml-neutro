@@ -481,3 +481,19 @@ console.log('custo médio móvel: ok');
   }
   console.log('Entregas não realizadas: ok');
 }
+
+// Escritor de .xlsx do navegador (public/xlsx-escrever.js, usado no "Pedir orçamento"): o leitor do painel lê de volta o que ele grava.
+{
+  const { xlsxDe } = require('./public/xlsx-escrever.js');
+  const b = Buffer.from(xlsxDe({ aba: 'Orçamento', linhas: [[{ v: 'Solicitação de orçamento', e: 'neg' }], ['Data', '11/11/2026'], [],
+    ['Item', 'Referência de compra', 'Descrição', 'Quantidade desejada'].map((v) => ({ v, e: 'cab' })),
+    [{ v: 1, e: 'borda' }, { v: 'AB-12 & <x>', e: 'borda' }, { v: 'Gatilho "Black"', e: 'borda' }, { v: 250, e: 'borda' }, null, { v: '', e: 'borda' }]], larguras: [7, 26, 54, 20] }));
+  const w = X.lerXlsx(b);
+  assert.deepStrictEqual(w.abas, ['Orçamento']);
+  const l = w.aba('Orçamento');
+  assert.strictEqual(l[0][0], 'Solicitação de orçamento');
+  assert.deepStrictEqual(l[1], ['Data', '11/11/2026']);
+  assert.deepStrictEqual(l[3], ['Item', 'Referência de compra', 'Descrição', 'Quantidade desejada']);
+  assert.deepStrictEqual(l[4].slice(0, 4), [1, 'AB-12 & <x>', 'Gatilho "Black"', 250]);
+  console.log('ok xlsx-escrever');
+}

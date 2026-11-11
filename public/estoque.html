@@ -121,6 +121,7 @@
     <button type="button" role="tab" data-aba="rel" aria-selected="false">Relatórios</button>
     <button type="button" role="tab" data-aba="contagem" aria-selected="false">Contagem</button>
     <span class="aba-sep" aria-hidden="true"></span>
+    <button type="button" role="tab" data-aba="orcamento" aria-selected="false">Pedir orçamento</button>
     <button type="button" role="tab" data-aba="compras" aria-selected="false">Compras</button>
     <button type="button" role="tab" data-aba="cadastro" aria-selected="false">Cadastro e fornecedores</button>
     <button type="button" role="tab" data-aba="importar" aria-selected="false" id="abaImportar">Importar planilha</button>
@@ -261,6 +262,22 @@
   </section>
 
   <!-- COMPRAS -->
+  <!-- PEDIR ORÇAMENTO -->
+  <section class="bloco escondido" data-painel="orcamento">
+    <h2>Pedir orçamento ao fornecedor</h2>
+    <p class="sub">Marque os produtos e digite a quantidade desejada. A previsão usa o custo de hoje de cada produto e é só para você: o arquivo do fornecedor leva a data, a referência de compra, a descrição e a quantidade, sem o nosso custo.</p>
+    <div class="filtros">
+      <select id="oForn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
+      <input type="search" id="oBusca" placeholder="Buscar SKU, produto ou referência de compra">
+      <label><input type="checkbox" id="oAtivos" checked> Só ativos</label>
+      <label><input type="checkbox" id="oSug"> Só com sugestão de compra</label>
+      <button type="button" class="bt" id="oSugerir" title="Põe a sugestão da reposição como quantidade nos produtos que aparecem na lista">Preencher com a sugestão</button>
+      <button type="button" class="bt" id="oLimpar">Limpar seleção</button>
+    </div>
+    <div id="oPedidos"></div>
+    <div class="tabela-rolagem" id="oLista"><p class="carregando">Lendo o estoque…</p></div>
+  </section>
+
   <section class="bloco escondido" data-painel="compras">
     <h2>Novo pedido ao fornecedor</h2>
     <form id="fCompra" autocomplete="off">
@@ -324,6 +341,7 @@
 
 <script src="/comum.js?v=10"></script>
 <script src="/composicao.js?v=3"></script>
+<script src="/xlsx-escrever.js?v=1"></script>
 <script>
 // Na aba Compras a tela fica parada onde estava (pedido do dono, 22/10/2026): o aviso fica preso no topo da tela em vez de rolar até ele.
 function aviso(t, tipo){ const m = $('msg'); m.className = tipo === 'ok' ? 'ok' : ''; m.textContent = t; m.style.display = t ? 'block' : 'none';
@@ -358,7 +376,7 @@ function abrir(nome){
   for(const s of document.querySelectorAll('[data-painel]')) s.classList.toggle('escondido', s.dataset.painel !== nome);
   aviso('');
   ({ saldo: carregarSaldo, movs: () => carregadas.movs || buscarMovs(), rel: () => carregadas.rel || gerarRel(), contagem: carregarContagem,
-    compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar, defeitos: carregarDefeitos, anuncios: () => carregarEstAnuncios(false) })[nome]?.();
+    orcamento: carregarOrcamento, compras: carregarCompras, cadastro: carregarCadastro, lancar: prepararLancar, defeitos: carregarDefeitos, anuncios: () => carregarEstAnuncios(false) })[nome]?.();
   try{ history.replaceState(null, '', '#' + nome); }catch{}
 }
 $('abas').onclick = (ev) => { const b = ev.target.closest('button'); if(b) abrir(b.dataset.aba); };
@@ -1142,6 +1160,127 @@ $('fCompra').onsubmit = async (ev) => {
   try{ const r = await post('/api/estoque/compras', { fornecedor: $('pForn').value, pedido: $('pNum').value, data: $('pData').value, obs: $('pObs').value, itens });
     aviso(`Pedido ${r.pedido} criado.`, 'ok'); $('pLinhas').innerHTML = ''; $('pNum').value = ''; $('pObs').value = ''; visao = null; carregarCompras(); }
   catch(e){ aviso(e.message); }
+};
+
+// ---------- PEDIR ORÇAMENTO ----------
+// Seleção (número do produto -> quantidade) guardada no navegador. A previsão usa o custo de hoje (visao.produtos[].custo_medio);
+// o arquivo do fornecedor (Excel ou impressão/PDF) NÃO leva custo: data, fornecedor, referência de compra, descrição e quantidade.
+const orc = new Map();
+try{ for(const [n, q] of JSON.parse(localStorage.getItem('painel.estoque.orcamento') || '[]')) if(q > 0) orc.set(Number(n), Number(q)); }catch{ /* sem armazenamento */ }
+const orcSalvar = () => { try{ localStorage.setItem('painel.estoque.orcamento', JSON.stringify([...orc])); }catch{ /* idem */ } };
+const SEM_FORN = 'Sem fornecedor';
+async function carregarOrcamento(){
+  if(!visao) await carregarSaldo();
+  if(!visao) return;
+  const fs = $('oForn'), atual = fs.value; fs.innerHTML = '<option value="">Todos os fornecedores</option>';
+  for(const f of [...new Set(visao.produtos.map((p) => p.fornecedor).filter(Boolean))].sort()){ const o = el('option', null, f); o.value = f; o.selected = f === atual; fs.appendChild(o); }
+  pintarOrcamento();
+}
+const orcProduto = (n) => visao.produtos.find((p) => p.numero === n);
+// Pedidos a gerar: um por fornecedor entre os produtos selecionados (a seleção continua mesmo com o filtro da lista mudando).
+function orcGrupos(){
+  const g = new Map();
+  for(const [n, q] of orc){
+    const p = orcProduto(n); if(!p) continue;
+    const k = p.fornecedor || SEM_FORN;
+    const x = g.get(k) || { fornecedor: k, itens: [], pecas: 0, valor: 0, sem_custo: 0, sem_ref: 0 };
+    x.itens.push({ ...p, qtd: q }); x.pecas += q;
+    if(p.custo_medio != null) x.valor += q * p.custo_medio; else x.sem_custo++;
+    if(!p.ref_compra) x.sem_ref++;
+    g.set(k, x);
+  }
+  const ord = (a, b) => String(a || '￿').localeCompare(String(b || '￿'), 'pt-BR', { numeric: true });
+  for(const x of g.values()) x.itens.sort((a, b) => ord(a.ref_compra, b.ref_compra) || ord(a.sku, b.sku));
+  return [...g.values()].sort((a, b) => a.fornecedor.localeCompare(b.fornecedor, 'pt-BR'));
+}
+const orcNomeArq = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .-]+/g, '-').replace(/\s+/g, ' ').trim();
+function orcLinhasArquivo(g){
+  const obs = (g.obs || '').trim();
+  const l = [[{ v: 'Solicitação de orçamento', e: 'neg' }], ['Data', diaBR(hoje())], ['Fornecedor', g.fornecedor === SEM_FORN ? '' : g.fornecedor]];
+  if(obs) l.push(['Observação', obs]);
+  l.push([], ['Item', 'Referência de compra', 'Descrição', 'Quantidade desejada', 'Preço unitário (fornecedor)'].map((v) => ({ v, e: 'cab' })));
+  g.itens.forEach((i, k) => l.push([{ v: k + 1, e: 'borda' }, { v: i.ref_compra || '', e: 'borda' }, { v: i.nome || '', e: 'borda' }, { v: i.qtd, e: 'borda' }, { v: '', e: 'borda' }]));
+  l.push([], [null, null, { v: 'Total de peças', e: 'neg' }, { v: g.pecas, e: 'neg' }]);
+  return l;
+}
+function orcExcel(g){
+  const bytes = window.xlsxDe({ aba: 'Orçamento', linhas: orcLinhasArquivo(g), larguras: [7, 26, 54, 20, 26] });
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = `Orcamento - ${orcNomeArq(g.fornecedor === SEM_FORN ? 'fornecedor' : g.fornecedor)} - ${hoje()}.xlsx`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function orcImprimir(g){
+  const area = $('impressaoPedido'); area.innerHTML = '';
+  area.append(el('h2', null, 'Solicitação de orçamento'), el('p', null, `Data: ${diaBR(hoje())}${g.fornecedor === SEM_FORN ? '' : ' · Fornecedor: ' + g.fornecedor}`));
+  if((g.obs || '').trim()) area.appendChild(el('p', null, 'Observação: ' + g.obs.trim()));
+  area.appendChild(tabela([['Item'], ['Referência de compra'], ['Descrição'], ['Quantidade desejada', 'n'], ['Preço unitário']], g.itens.map((i, k) => { const tr = el('tr'); tr.append(td(String(k + 1)), td(i.ref_compra || ''), td(i.nome || ''), td(n0(i.qtd), 'n'), td('')); return tr; })));
+  area.appendChild(el('p', null, `Total: ${n0(g.pecas)} peças`));
+  window.print();
+}
+const orcObs = {};   // observação por fornecedor (só nesta tela)
+function pintarOrcamentoPedidos(){
+  const box = $('oPedidos'); box.innerHTML = '';
+  const gs = orcGrupos();
+  if(!gs.length){ box.appendChild(el('p', 'sub', 'Nenhum produto marcado ainda. Marque na lista abaixo ou use "Preencher com a sugestão".')); return; }
+  for(const g of gs){
+    g.obs = orcObs[g.fornecedor] || '';
+    const c = el('section', 'pedido'), h = el('header');
+    const tit = el('div'); tit.append(el('b', null, g.fornecedor), el('span', 'pequeno', ` ${n0(g.itens.length)} produto(s) · ${n0(g.pecas)} peça(s) · previsão ${real(g.valor)} (custo de hoje)`
+      + (g.sem_custo ? ` · ${g.sem_custo} sem custo` : '') + (g.sem_ref ? ` · ${g.sem_ref} sem referência de compra (sai só a descrição)` : '')));
+    const ob = el('input'); ob.type = 'text'; ob.maxLength = 200; ob.placeholder = 'Observação para o fornecedor (opcional)'; ob.value = g.obs; ob.style.minWidth = '240px';
+    ob.setAttribute('aria-label', `Observação para ${g.fornecedor}`); ob.oninput = () => { orcObs[g.fornecedor] = ob.value; g.obs = ob.value; };
+    const bX = el('button', 'bt forte', 'Baixar Excel (.xlsx)'); bX.type = 'button'; bX.onclick = () => { g.obs = ob.value; orcExcel(g); };
+    const bP = el('button', 'bt', 'Imprimir / salvar PDF'); bP.type = 'button'; bP.onclick = () => { g.obs = ob.value; orcImprimir(g); };
+    const ac = el('div', 'acoes'); ac.append(ob, bX, bP);
+    h.append(tit, ac); c.appendChild(h); box.appendChild(c);
+  }
+  const tot = gs.reduce((s2, g) => ({ pecas: s2.pecas + g.pecas, valor: s2.valor + g.valor }), { pecas: 0, valor: 0 });
+  if(gs.length > 1) box.appendChild(el('p', 'sub', `Total da seleção: ${n0(tot.pecas)} peças · previsão ${real(tot.valor)}. Cada fornecedor tem o seu arquivo.`));
+}
+function pintarOrcamento(){
+  if(!visao) return;
+  pintarOrcamentoPedidos();
+  const q = $('oBusca').value.trim().toLowerCase(), f = $('oForn').value, at = $('oAtivos').checked, sg = $('oSug').checked;
+  const ls = visao.produtos.filter((p) => (!f || p.fornecedor === f) && (!at || p.situacao === 'Ativo') && (!sg || p.sugestao > 0)
+    && (!q || `${p.sku || ''} ${p.numero} ${p.nome || ''} ${p.ref_compra || ''} ${p.fornecedor || ''}`.toLowerCase().includes(q)))
+    .sort((a, b) => String(a.sku).localeCompare(String(b.sku), 'pt-BR', { numeric: true }));
+  const box = $('oLista'); box.innerHTML = '';
+  if(!ls.length){ box.appendChild(el('p', 'vazio', 'Nenhum produto com esse filtro.')); return; }
+  box.appendChild(tabela([[''], ['Produto'], ['Ref. de compra'], ['Fornecedor'], ['Saldo', 'n'], ['Sugestão', 'n'], ['Quantidade', 'n'], ['Custo hoje', 'n'], ['Previsão', 'n']], ls.slice(0, 400).map((p) => {
+    const tr = el('tr');
+    const ck = el('input'); ck.type = 'checkbox'; ck.checked = orc.has(p.numero); ck.setAttribute('aria-label', `Marcar ${p.sku}`);
+    const qi = el('input'); qi.type = 'number'; qi.min = '0'; qi.max = '100000'; qi.step = '1'; qi.className = 'def-qtd'; qi.value = orc.has(p.numero) ? String(orc.get(p.numero)) : '';
+    qi.setAttribute('aria-label', `Quantidade de ${p.sku}`);
+    const prev = () => (p.custo_medio != null && orc.has(p.numero) ? real(orc.get(p.numero) * p.custo_medio) : '—');
+    const tV = td(prev(), 'n');
+    const aplicar = (v) => {
+      const n = Math.floor(Number(v));
+      if(Number.isFinite(n) && n > 0) orc.set(p.numero, Math.min(n, 100000)); else orc.delete(p.numero);
+      ck.checked = orc.has(p.numero); qi.value = orc.has(p.numero) ? String(orc.get(p.numero)) : ''; tV.textContent = prev();
+      orcSalvar(); pintarOrcamentoPedidos();
+    };
+    ck.onchange = () => aplicar(ck.checked ? (p.sugestao > 0 ? p.sugestao : 1) : 0);
+    qi.onchange = () => aplicar(qi.value);
+    const tP = el('td'); tP.append(el('b', null, p.sku || p.numero), el('span', 'pequeno', p.nome || ''));
+    const tK = el('td'); tK.appendChild(ck);
+    const tQ = el('td', 'n'); tQ.appendChild(qi);
+    tr.append(tK, tP, td(p.ref_compra || '—'), td(p.fornecedor || '—'), td(n0(p.saldo), 'n'), td(p.sugestao > 0 ? n0(p.sugestao) : '—', 'n'), tQ, td(p.custo_medio != null ? real(p.custo_medio) : 'sem custo', 'n'), tV);
+    return tr;
+  })));
+  if(ls.length > 400) box.appendChild(el('p', 'sub', `Mostrando 400 de ${ls.length}: refine a busca ou escolha um fornecedor.`));
+}
+$('oForn').onchange = pintarOrcamento; $('oBusca').oninput = pintarOrcamento; $('oAtivos').onchange = pintarOrcamento; $('oSug').onchange = pintarOrcamento;
+$('oLimpar').onclick = () => { orc.clear(); orcSalvar(); pintarOrcamento(); };
+$('oSugerir').onclick = () => {
+  const q = $('oBusca').value.trim().toLowerCase(), f = $('oForn').value, at = $('oAtivos').checked;
+  let n = 0;
+  for(const p of visao.produtos){
+    if(!(p.sugestao > 0) || (f && p.fornecedor !== f) || (at && p.situacao !== 'Ativo')) continue;
+    if(q && !`${p.sku || ''} ${p.numero} ${p.nome || ''} ${p.ref_compra || ''} ${p.fornecedor || ''}`.toLowerCase().includes(q)) continue;
+    orc.set(p.numero, Math.min(p.sugestao, 100000)); n++;
+  }
+  orcSalvar(); pintarOrcamento();
+  aviso(n ? `${n} produto(s) preenchidos com a sugestão da reposição. Ajuste as quantidades antes de gerar o arquivo.` : 'Nenhum produto da lista tem sugestão de compra agora.', n ? 'ok' : '');
 };
 
 // ---------- CADASTRO ----------
