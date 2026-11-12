@@ -120,6 +120,16 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
       } catch { /* sem foto: a comanda sai sem */ }
     }
   }
+  const cacheNota = new Map();   // conta:pedido -> { numero, em }
+  async function numeroDaNota(contaId, orderId) {
+    const k = contaId + ':' + orderId, c = cacheNota.get(k);
+    if (c && (c.numero || Date.now() - c.em < 3 * 60e3)) return c.numero;
+    let numero = null;
+    try { const n = await ml(`/users/${contaId}/invoices/orders/${orderId}`, {}, contaId); numero = n?.invoice_number != null ? String(n.invoice_number) : null; }
+    catch { /* sem nota ainda (404) ou erro passageiro: a comanda sai sem o número */ }
+    cacheNota.set(k, { numero, em: Date.now() });
+    return numero;
+  }
   // envio do ML que não deu para ler: antes sumia da fila em silêncio (15/10/2026: vendas sem comanda); agora vira aviso na tela
   let falhasEnvioMl = [];
   async function pendentesMl() {
@@ -145,13 +155,16 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
         .catch((e) => { falhasEnvioMl.push(`${conta.nickname}: envio ${id} (${String(e.message).slice(0, 80)})`); return null; }) }));
       await fotosDoMl([...porEnvio.values()].flatMap((x) => x.itens.map((i) => i.item_id)), conta.ml_user_id);
       for (const x of porEnvio.values()) for (const i of x.itens) { i.foto = fotosMl.get(i.item_id) || null; delete i.item_id; }
+      // número da nota fiscal (Faturador) dos envios do Mercado Envios: achou, fica guardado; sem nota ainda, tenta de novo a cada 3 min
+      const notas = new Map();
+      await lotes([...porEnvio.entries()], 5, async ([id, x]) => { const e = envios.find((v) => v.id === id)?.s; if (!e || e.saiu || categoriaDe('ml', e.tipo)?.categoria !== 'Mercado Envios') return; notas.set(id, await numeroDaNota(conta.ml_user_id, x.pedidos[0].id)); });
       for (const { id, s } of envios) {
         if (!s || s.saiu) continue;
         const cat = categoriaDe('ml', s.tipo);
         if (!cat) continue;
         const x = porEnvio.get(id);
         const p0 = x.pedidos[0];
-        out.push({ chave: `ml:${id}`, canal: 'ml', loja: conta.nickname, pedido: String(p0.id),
+        out.push({ chave: `ml:${id}`, canal: 'ml', loja: conta.nickname, pedido: String(p0.pack_id || p0.id), envio_id: String(id), nota: notas.get(id) ?? null,
           pedidos: x.pedidos.map((p) => String(p.id)), ...cat, cliente: s.cliente, prazo: s.prazo, itens: x.itens, etapa: s.sub,
           comprado_em: compraMaisAntiga(x.pedidos) });
       }
@@ -376,7 +389,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           let env = null;
           if (id) { try { const x = await ml(`/shipments/${id}`, {}, conta.ml_user_id); env = { status: x.status, substatus: x.substatus || null, tipo: x.logistic_type || null }; }
             catch (e) { env = { erro: String(e.message).slice(0, 120) }; } }
-          vendas.push({ pedido: String(p.id), criado: p.date_created, envio: id || null, ...(env || {}),
+          vendas.push({ pedido: String(p.pack_id || p.id), criado: p.date_created, envio: id || null, ...(env || {}),
             na_fila: !!(cache?.chaves || []).includes(`ml:${id}`), itens: (p.order_items || []).map((i) => i.item?.seller_sku || i.item?.id).join(', ') });
         }
         contas.push({ conta: conta.nickname, total: r.paging?.total ?? vendas.length, vendas });

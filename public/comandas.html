@@ -432,7 +432,7 @@ function comandaEl(c){
   if(c.envio && c.envio.toLowerCase() !== c.categoria.toLowerCase()) d.appendChild(el('div', 'c-sub', c.envio));   // ex.: Flex · Shopee Entrega Direta
   d.appendChild(el('div', 'c-cliente', c.cliente || (c.canal === 'amazon' ? 'NOME NA ETIQUETA DA AMAZON' : 'CLIENTE NÃO INFORMADO')));
   const linha = (a, b) => { const l = el('div', 'c-linha'); l.append(el('span', null, a), el('span', null, b)); return l; };
-  d.append(linha('LOJA', c.loja), linha('COMPRA', c.comprado_em ? horaBR(c.comprado_em) : '—'), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), linha('ITENS', `${c.unidades} UN.`), el('hr'));
+  d.append(linha('LOJA', c.loja), linha('COMPRA', c.comprado_em ? horaBR(c.comprado_em) : '—'), linha('PRAZO', c.prazo ? horaBR(c.prazo) : '—'), ...(c.envio_id ? [linha('ENVIO', c.envio_id)] : []), ...(c.categoria === 'Mercado Envios' ? [linha('NOTA FISCAL', c.nota || 'ainda sem nota')] : []), linha('ITENS', `${c.unidades} UN.`), el('hr'));
   d.appendChild(el('div', 'c-rot', 'ITENS A SEPARAR'));
   for(const i of c.itens){
     // foto de capa e nome do anúncio lado a lado; quantidade e SKU embaixo, na largura toda

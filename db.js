@@ -2051,7 +2051,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS comandas_dia ON comandas(dia, categoria);
 `);
-const COMANDA_DADOS = ['canal', 'loja', 'pedido', 'pedidos', 'envio', 'cliente', 'prazo', 'itens', 'etapa', 'comprado_em'];
+const COMANDA_DADOS = ['canal', 'loja', 'pedido', 'pedidos', 'envio', 'envio_id', 'nota', 'cliente', 'prazo', 'itens', 'etapa', 'comprado_em'];
 const dadosComanda = (x) => JSON.stringify(Object.fromEntries(COMANDA_DADOS.map((k) => [k, x[k] ?? null])));
 function comandasDe(chaves) {
   const st = db.prepare('SELECT 1 FROM comandas WHERE chave=?');
