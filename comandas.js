@@ -151,7 +151,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
         if (!cat) continue;
         const x = porEnvio.get(id);
         const p0 = x.pedidos[0];
-        out.push({ chave: `ml:${id}`, canal: 'ml', loja: conta.nickname, pedido: String(p0.pack_id || p0.id),
+        out.push({ chave: `ml:${id}`, canal: 'ml', loja: conta.nickname, pedido: String(p0.id),
           pedidos: x.pedidos.map((p) => String(p.id)), ...cat, cliente: s.cliente, prazo: s.prazo, itens: x.itens, etapa: s.sub,
           comprado_em: compraMaisAntiga(x.pedidos) });
       }
@@ -376,7 +376,7 @@ function criar({ D, ml, daLoja, leroy, magalu, amazon, estoque }) {
           let env = null;
           if (id) { try { const x = await ml(`/shipments/${id}`, {}, conta.ml_user_id); env = { status: x.status, substatus: x.substatus || null, tipo: x.logistic_type || null }; }
             catch (e) { env = { erro: String(e.message).slice(0, 120) }; } }
-          vendas.push({ pedido: String(p.pack_id || p.id), criado: p.date_created, envio: id || null, ...(env || {}),
+          vendas.push({ pedido: String(p.id), criado: p.date_created, envio: id || null, ...(env || {}),
             na_fila: !!(cache?.chaves || []).includes(`ml:${id}`), itens: (p.order_items || []).map((i) => i.item?.seller_sku || i.item?.id).join(', ') });
         }
         contas.push({ conta: conta.nickname, total: r.paging?.total ?? vendas.length, vendas });
