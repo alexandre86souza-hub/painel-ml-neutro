@@ -42,6 +42,14 @@
   .abas button.ativa{color:var(--brand);border-bottom-color:var(--brand)}
   .abas button span{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef2f7;color:#344054;font-size:12px}
   .abas button span.tem{background:#fef0c7;color:#93370d}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .chips .rot{font-size:12px;color:var(--muted);margin-right:2px}
+  .chips button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--ink);cursor:pointer}
+  .chips button.ativa{background:var(--brand);border-color:var(--brand);color:#fff}
+  .chips button span{margin-left:6px;opacity:.75;font-size:12px}
+  .grupo-conta{margin:6px 0 0;font-size:16px;padding-bottom:6px;border-bottom:2px solid var(--brand)}
+  .grupo-conta span{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+  .feitas-tab tr.grupo td{background:#eef2f7;font-weight:700;font-size:13px;color:#344054}
   .barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   .barra .sub{font-size:12px;color:var(--muted)}
   /* notas */
@@ -115,6 +123,7 @@
   </ol>
 
   <div class="abas" id="abas" role="tablist" aria-label="Conta do Bling"></div>
+  <div class="chips" id="lojas" aria-label="Filtrar por loja"></div>
   <div class="resumo" id="resumo">
     <button type="button" class="num ajustar" data-f="ajustar"><b id="nAjustar">—</b><span>falta ajustar · produto novo ou nota sem ajuste</span></button>
     <button type="button" class="num emitir" data-f="emitir"><b id="nEmitir">—</b><span>ajustados · falta emitir</span></button>
@@ -166,6 +175,11 @@ const chaveDe = (n) => `${n.conta}:${n.tipo}:${n.id}`;
 // aba: '' = as duas contas, '1' = AMG, '2' = Primor (lembrada neste navegador)
 let aba = (() => { try{ return localStorage.getItem('bling_aba') || ''; }catch{ return ''; } })();
 // pedido com todos os produtos já guardados (nome, NCM, CEST e origem de uma nota anterior) = 'pronto': gera e emite direto
+// loja da nota/pedido (nome do Bling ou pelo formato do pedido), com o mesmo nome para filtrar; '' = todas (lembrado neste navegador)
+const lojaDe = (n) => { const s = String(n.loja_nome || '') || lojaPeloPedido(n.pedido_loja) || '';
+  if(/amazon/i.test(s)) return 'Amazon'; if(/shopee/i.test(s)) return 'Shopee'; if(/leroy/i.test(s)) return 'Leroy'; if(/magalu|magazine/i.test(s)) return 'Magalu';
+  if(/mercado ?livre|^ml\b/i.test(s)) return 'Mercado Livre'; return s || 'Sem loja'; };
+let lojaSel = (() => { try{ return localStorage.getItem('bling_loja') || ''; }catch{ return ''; } })();
 const pronto = (n) => n.tipo === 'pedido' && n.itens.length > 0 && n.itens.every((i) => i.sugestao?.salvo);
 const estado = (n) => (n.shopeePendente ? 'shopee' : n.tipo === 'pedido' ? (pronto(n) ? 'pronto' : 'gerar') : Number(n.situacao) === 4 ? 'rej' : n.ajustada ? 'emitir' : 'ajustar');
 
@@ -226,7 +240,10 @@ function desenharFeitas(box){
   if(!feitas){ box.appendChild(el('p', 'carregando', 'Lendo as notas emitidas no Bling…')); return; }
   const daAba = feitas.filter((n) => !aba || n.conta === aba);
   for(const e of daAba.filter((n) => n.erro)) box.appendChild(el('p', 'res erro', 'Não consegui ler: ' + e.erro));
-  const lista = daAba.filter((n) => !n.erro);
+  // por conta do Bling (AMG Metais, depois Primor), a data mais nova primeiro dentro de cada uma; filtro de loja
+  const ordemConta = (cfg?.contas || []).map((c) => c.conta);
+  const lista = daAba.filter((n) => !n.erro && (!lojaSel || lojaDe(n) === lojaSel))
+    .sort((a, b) => ordemConta.indexOf(a.conta) - ordemConta.indexOf(b.conta) || String(b.data || '').localeCompare(String(a.data || '')) || String(b.numero || '').localeCompare(String(a.numero || '')));
   if(!lista.length){ box.appendChild(vazio('Nenhuma nota emitida nos últimos 3 dias', '')); return; }
   // DANFE simplificada (etiqueta 10×15): marcar e abrir a página de impressão
   const chaveF = (n) => `${n.conta}:${n.id}`;
@@ -247,12 +264,17 @@ function desenharFeitas(box){
   tr0.appendChild(el('th', null, ''));
   for(const h of ['Nota', 'Cliente · produtos', 'Loja · pedido', 'Emitida', 'Valor', 'Situação', 'Envio à loja']) tr0.appendChild(el('th', null, h));
   t.appendChild(tr0);
+  let contaAnterior = null;
   for(const n of lista){
+    if(!aba && n.conta !== contaAnterior){
+      contaAnterior = n.conta;
+      const g = el('tr', 'grupo'), tdG = el('td', null, `Bling ${n.nomeConta} · ${lista.filter((x) => x.conta === n.conta).length} nota(s)`); tdG.colSpan = 8; g.appendChild(tdG); t.appendChild(g);
+    }
     const tr = el('tr');
     const tdM = el('td'), cb = el('input'); cb.type = 'checkbox'; cb.checked = danfeSel.has(chaveF(n)); cb.setAttribute('aria-label', 'Marcar a nota ' + (n.numero || ''));
     cb.onchange = () => { if(cb.checked) danfeSel.add(chaveF(n)); else danfeSel.delete(chaveF(n)); btD.textContent = `Imprimir DANFE simplificada (${danfeSel.size})`; btD.disabled = !danfeSel.size; btT.textContent = danfeSel.size ? 'Desmarcar' : 'Marcar todas'; };
     tdM.appendChild(cb); tr.appendChild(tdM);
-    tr.appendChild(el('td', null, `${n.numero || '—'}${aba ? '' : ' · ' + n.nomeConta}`));
+    tr.appendChild(el('td', null, n.numero || '—'));
     const tdC = el('td'); tdC.appendChild(el('div', null, n.cliente || '—'));
     for(const i of n.itens || []) tdC.appendChild(el('div', 'antes', `${i.quantidade ?? ''}× ${i.descricao}`));
     tr.appendChild(tdC);
@@ -304,14 +326,31 @@ function desenharAbas(){
   }
 }
 
+// filtro por loja (Amazon, Shopee…): só as lojas que aparecem nas notas, pedidos e emitidas da conta escolhida
+function desenharLojas(){
+  const box = $('lojas'); box.innerHTML = '';
+  const base = [...notas, ...(feitas || []).filter((n) => !n.erro)].filter((n) => !aba || n.conta === aba);
+  const cont = {}; for(const n of base){ const l = lojaDe(n); cont[l] = (cont[l] || 0) + 1; }
+  if(lojaSel && !cont[lojaSel]) lojaSel = '';
+  const nomes = Object.keys(cont).sort((a, b) => cont[b] - cont[a]);
+  if(nomes.length < 2 && !lojaSel) return;
+  box.appendChild(el('span', 'rot', 'Loja:'));
+  for(const [v, rot, q] of [['', 'Todas', base.length], ...nomes.map((l) => [l, l, cont[l]])]){
+    const b = el('button', v === lojaSel ? 'ativa' : null, rot); b.type = 'button'; b.appendChild(el('span', null, String(q)));
+    b.onclick = () => { lojaSel = v; try{ localStorage.setItem('bling_loja', v); }catch{} desenhar(); };
+    box.appendChild(b);
+  }
+}
+
 function desenhar(){
-  desenharAbas();
-  const daAba = notas.filter((n) => !aba || n.conta === aba);
+  desenharAbas(); desenharLojas();
+  const daConta = notas.filter((n) => !aba || n.conta === aba);
+  const daAba = daConta.filter((n) => !lojaSel || lojaDe(n) === lojaSel);
   const conta = { ajustar: 0, emitir: 0, rej: 0 };
   for(const n of daAba) conta[GRUPO[estado(n)]]++;
   $('nAjustar').textContent = conta.ajustar; $('nEmitir').textContent = conta.emitir; $('nRej').textContent = conta.rej;
   for(const b of document.querySelectorAll('.num')) b.classList.toggle('ativo', b.dataset.f === filtro);
-  $('nFeitas').textContent = feitas ? feitas.filter((n) => !n.erro && (!aba || n.conta === aba)).length : '…';
+  $('nFeitas').textContent = feitas ? feitas.filter((n) => !n.erro && (!aba || n.conta === aba) && (!lojaSel || lojaDe(n) === lojaSel)).length : '…';
   const box = $('lista'); box.innerHTML = '';
   acoesLote.clear();
   if(filtro === 'feitas'){ barraLote(); desenharFeitas(box); return; }
@@ -320,7 +359,16 @@ function desenhar(){
   if(!mostrar.length){ barraLote(); box.appendChild(vazio('Nada neste filtro', 'Clique em "Mostrar todas".')); return; }
   // as que faltam ajustar primeiro
   const ordem = { shopee: 0, gerar: 1, ajustar: 2, rej: 3, pronto: 4, emitir: 5 };
-  for(const n of mostrar.slice().sort((a, b) => ordem[estado(a)] - ordem[estado(b)])) box.appendChild(cartaoNota(n));
+  const ordemConta = (cfg?.contas || []).map((c) => c.conta);
+  // "Todas": separado por Bling AMG Metais e Bling Primor; dentro de cada um, as que faltam ajustar primeiro
+  let contaAnterior = null;
+  for(const n of mostrar.slice().sort((a, b) => (aba ? 0 : ordemConta.indexOf(a.conta) - ordemConta.indexOf(b.conta)) || ordem[estado(a)] - ordem[estado(b)])){
+    if(!aba && n.conta !== contaAnterior){
+      contaAnterior = n.conta;
+      const h = el('h2', 'grupo-conta', 'Bling ' + n.nomeConta); h.appendChild(el('span', null, `${mostrar.filter((x) => x.conta === n.conta).length} para fazer`)); box.appendChild(h);
+    }
+    box.appendChild(cartaoNota(n));
+  }
   barraLote();
 }
 
@@ -333,7 +381,7 @@ function barraLote(){
   $('btLotePreparar').textContent = `Gerar / ajustar marcadas (${prep})`; $('btLotePreparar').disabled = !prep;
   $('btLoteEmitir').textContent = `Emitir marcadas (${emit})`; $('btLoteEmitir').disabled = !emit;
   $('btMarcarTodas').disabled = !acoesLote.size;
-  const prontas = notas.filter((n) => (!aba || n.conta === aba) && ['emitir', 'pronto'].includes(estado(n))).length;
+  const prontas = notas.filter((n) => (!aba || n.conta === aba) && (!lojaSel || lojaDe(n) === lojaSel) && ['emitir', 'pronto'].includes(estado(n))).length;
   $('btEmitirTodas').textContent = `Emitir todas as ajustadas (${prontas})`; $('btEmitirTodas').disabled = !prontas;
   if(rodando) for(const b of document.querySelectorAll('#lote button')) b.disabled = true;
   else if(loteEmOutraAba()){
