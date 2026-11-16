@@ -225,7 +225,7 @@ selConta.onchange = async () => {
 };
 
 // Vendas Hoje = esta tela com ?dias=1 (menu); Pedidos = a mesma tela no período.
-let dias = periodoInicial('segDias', 30), dados = null, filtro = 'todas', mostrar = 100;
+let dias = periodoInicial('segDias', 30), dados = null, dados90 = null, buscando = false, tBusca = null, filtro = 'todas', mostrar = 100;
 if(dias === 1){ document.title = 'Vendas Hoje'; }
 function tituloTela(){ $('tituloPagina').textContent = (dias === 1 ? 'Vendas de hoje' : 'Pedidos') + (NA_EXT ? ' — ' + NOME_CANAL : ''); }
 tituloTela();
@@ -233,7 +233,18 @@ for(const b of document.querySelectorAll('#segDias button')) b.setAttribute('ari
 const marcar = (seg, attr, v) => { for(const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[attr] === String(v))); };
 $('segDias').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; dias = Number(b.dataset.dias); marcar($('segDias'), 'dias', dias); guardarPeriodo(dias); tituloTela(); carregar(); };
 $('segFiltro').onclick = (ev) => { const b = ev.target.closest('button'); if(!b) return; filtro = b.dataset.f; marcar($('segFiltro'), 'f', filtro); mostrar = 100; pintarLista(); };
-$('busca').oninput = () => { mostrar = 100; pintarLista(); };
+// Com texto na busca a lista olha os últimos 90 dias (o máximo do painel), não só o período escolhido: a venda procurada pode ser mais antiga.
+function urlPedidos(d){
+  return NA_AMAZON ? `/api/amazon/pedidos?dias=${d}` : NA_LEROY ? `/api/leroy/pedidos?dias=${d}` : NA_MAGALU ? `/api/magalu/pedidos?dias=${d}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${d}` : `/api/vendas?dias=${d}`;
+}
+function buscaTexto(){ return $('busca').value.trim().replace(/^#/, ''); }
+async function carregarBusca90(){
+  if(dados90 || buscando || !buscaTexto() || dias >= 90) return;
+  buscando = true; pintarLista();
+  try{ dados90 = await api(urlPedidos(90)); }catch(e){ $('msg').textContent = e.message; $('msg').style.display = 'block'; }
+  buscando = false; pintarLista();
+}
+$('busca').oninput = () => { mostrar = 100; pintarLista(); clearTimeout(tBusca); tBusca = setTimeout(carregarBusca90, 350); };
 $('btMais').onclick = () => { mostrar += 200; pintarLista(); };
 $('btDetalhar').setAttribute('aria-pressed', String(detalhado()));
 $('btDetalhar').onclick = () => { const novo = !detalhado(); try{ localStorage.setItem('painel.pedidos.detalhado', novo ? '1' : '0'); }catch{}
@@ -339,7 +350,9 @@ function detalhado(){
   let v = null; try{ v = localStorage.getItem('painel.pedidos.detalhado'); }catch{}
   return v == null ? !!NA_LEROY : v === '1';
 }
+function baseDaBusca(){ return buscaTexto() && dias < 90 && dados90 ? dados90 : dados; }
 function contarFiltros(q){
+  const dados = baseDaBusca();
   if(!dados) return;
   const casa = (v) => !q || [v.titulo, v.sku, v.item_id, String(v.pedido), v.pacote && String(v.pacote), v.envio && String(v.envio), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q));
   const vs = dados.vendas.filter(casa);
@@ -352,6 +365,7 @@ function contarFiltros(q){
 }
 function pintarLista(){
   const box = $('lista'); box.innerHTML = '';
+  const dados = baseDaBusca();
   if(!dados) return;
   // "#2000…" copiado do ML: sem o #; o ML mostra o nº do PACOTE e do envio, que também valem na busca
   const q = $('busca').value.trim().toLowerCase().replace(/^#/, '');
@@ -364,7 +378,7 @@ function pintarLista(){
     if(q && ![v.titulo, v.sku, v.item_id, String(v.pedido), v.pacote && String(v.pacote), v.envio && String(v.envio), v.comprador, v.comprador_nome].some((t) => (t || '').toLowerCase().includes(q))) return false;
     return true;
   });
-  if(!itens.length){ contarFiltros(q); box.appendChild(el('p', 'vazio', 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
+  if(!itens.length){ contarFiltros(q); box.appendChild(el('p', 'vazio', buscando ? 'Buscando nos últimos 90 dias…' : q && dias < 90 ? 'Nenhuma venda com esse filtro nos últimos 90 dias.' : 'Nenhuma venda com esse filtro.')); $('btMais').hidden = true; return; }
   const cab = el('tr');
   // contagem de cada filtro rápido (sobre a busca de agora)
   contarFiltros(q);
@@ -440,6 +454,7 @@ async function carregar({ quieto = false } = {}){
     return;
   }
   $('msg').style.display = 'none';
+  dados90 = null;
   $('composicao').innerHTML = '';
   $('composicao').appendChild(el('p', 'carregando', NA_MAGALU ? 'Carregando os pedidos da Magalu… Na primeira vez o painel lê 5 meses de pedidos e do financeiro.'
     : NA_LEROY ? 'Carregando os pedidos da Leroy Merlin… Na primeira vez o painel lê 5 meses de pedidos e repasses.'
@@ -448,7 +463,7 @@ async function carregar({ quieto = false } = {}){
     : 'Carregando… Na primeira vez o frete de cada envio é consultado no Mercado Livre e pode levar alguns minutos.'));
   $('lista').innerHTML = '';
   try{
-    const r = await api(NA_AMAZON ? `/api/amazon/pedidos?dias=${dias}` : NA_LEROY ? `/api/leroy/pedidos?dias=${dias}` : NA_MAGALU ? `/api/magalu/pedidos?dias=${dias}` : NA_SHOPEE ? `/api/shopee/pedidos?loja=${LOJA_SHOPEE}&dias=${dias}` : `/api/vendas?dias=${dias}`);
+    const r = await api(urlPedidos(dias));
     dados = r;
     const d = (iso) => new Date(iso).toLocaleDateString('pt-BR');
     $('periodoTxt').textContent = dias === 1 ? 'Vendas de hoje, com todos os custos.'
