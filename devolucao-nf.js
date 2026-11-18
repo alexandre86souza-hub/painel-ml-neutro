@@ -7,8 +7,8 @@
 //   cola a chave de acesso da venda (GET /nfe?chaveAcesso=).
 //   Conta do Bling = a do MESMO CNPJ do emitente da venda (GET /empresas/me/dados-basicos): AMG na AMG, Primor na Primor.
 //   Gerar = POST /nfe: tipo 0 (entrada), finalidade 4 (devolução), natureza escolhida (a de devolução do Bling dá CFOP e
-//   impostos), contato = o destinatário da venda, documento referenciado SÓ nos itens (a chave e o nº do
-//   item de origem; na nota o Bling recusa junto); itens com NCM, CEST, origem, unidade e o valor unitário líquido da venda ((vProd − vDesc) ÷ qCom), na
+//   impostos), contato = o destinatário da venda, documento referenciado SÓ na nota (modelo 55 + chave; nos itens junto o
+//   Bling recusa); itens com NCM, CEST, origem, unidade e o valor unitário líquido da venda ((vProd − vDesc) ÷ qCom), na
 //   quantidade que voltou. Fica PENDENTE no Bling (pode conferir e apagar lá). Emitir = POST /nfe/{id}/enviar e relê ~25 s.
 // Escrita só pelo clique, com confirmação; trava por pedido; uma devolução por pedido (estado devolucao_nf). A nota tem dado do
 // comprador: a resposta à tela leva só o nome; nada guardado além de ids; nada no MCP.
@@ -73,13 +73,14 @@ function corpoDevolucao(venda, escolhidos, naturezaId, agora, ref) {
     tipo: 0, finalidade: 4, dataOperacao: agora, naturezaOperacao: { id: Number(naturezaId) },
     contato: { nome: d.nome, tipoPessoa: d.cnpj ? 'J' : 'F', numeroDocumento: d.cnpj || d.cpf || '', ...(d.ie ? { ie: d.ie } : {}), contribuinte: cont,
       endereco: Object.fromEntries(Object.entries(d.endereco).filter(([, v]) => v)) },
-    // A venda é referenciada SÓ em cada item (chave + nº do item): com documentoReferenciado também na nota o Bling recusa ("Não é permitido
-    // informar documentos referenciados na nota quando há documentos referenciados nos itens", visto 18/11/2026, Shopee AMG).
+    // A venda é referenciada SÓ NA NOTA (o "Documento referenciado" da tela do Bling): com documentoReferenciado também nos itens o Bling recusa
+    // ("Não é permitido informar documentos referenciados na nota quando há documentos referenciados nos itens"), e só nos itens a nota
+    // fica com o Documento referenciado "Nenhum" (visto 18/11/2026, nota 028876, Shopee AMG).
+    documentoReferenciado: { modelo: '55', chaveAcesso: venda.chave, numero: String(venda.numero || ''), serie: String(venda.serie || ''), data: venda.emissao },
     itens: escolhidos.map(({ it, quantidade }) => ({
       codigo: it.codigo || '', descricao: it.descricao, unidade: it.unidade || 'UN', quantidade, valor: it.unitario, tipo: 'P',
       classificacaoFiscal: it.ncm || '', ...(it.cest ? { cest: it.cest } : {}), ...(it.gtin ? { gtin: it.gtin } : {}),
-      ...(it.origem != null ? { origem: Number(it.origem) } : {}),
-      documentoReferenciado: { chaveAcesso: venda.chave, numeroItem: String(it.n) } })),
+      ...(it.origem != null ? { origem: Number(it.origem) } : {}) })),
     observacoes: `Devolução de venda referente à NF-e nº ${venda.numero} série ${venda.serie} de ${dataBr}, chave ${venda.chave}.${ref ? ` ${ref}.` : ''}`,
   };
 }

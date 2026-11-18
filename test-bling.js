@@ -152,11 +152,11 @@ assert.ok(!/\/api\/bling/.test(fs.readFileSync('./mcp.js', 'utf8')), 'mcp.js nã
   const esc = escolhidosValidos(v, [{ n: 1, quantidade: 1 }, { n: 2, quantidade: 0 }]);
   const c = corpoDevolucao(v, esc, '777', '2026-11-09 15:00:00', 'Pedido Mercado Livre 2000019340356416');
   assert.strictEqual(c.tipo, 0); assert.strictEqual(c.finalidade, 4); assert.strictEqual(c.naturezaOperacao.id, 777);
-  assert.strictEqual(c.documentoReferenciado, undefined);   // o Bling recusa o documento na nota quando os itens já o trazem
-  assert.ok(c.observacoes.includes(ch));   // a chave segue nas observações (o selo "NF devolução" a lê de lá)
+  assert.deepStrictEqual(c.documentoReferenciado, { modelo: '55', chaveAcesso: ch, numero: '71652', serie: '1', data: '2026-11-09' });
+  assert.ok(c.observacoes.includes(ch));
   assert.strictEqual(c.contato.tipoPessoa, 'F'); assert.strictEqual(c.contato.numeroDocumento, '12345678909'); assert.strictEqual(c.contato.contribuinte, 9);
   assert.strictEqual(c.itens.length, 1);
-  assert.deepStrictEqual(c.itens[0].documentoReferenciado, { chaveAcesso: ch, numeroItem: '1' });
+  assert.strictEqual(c.itens[0].documentoReferenciado, undefined);   // junto com o da nota o Bling recusa
   assert.strictEqual(c.itens[0].quantidade, 1); assert.strictEqual(c.itens[0].valor, 59.71); assert.strictEqual(c.itens[0].origem, 2);
   assert.strictEqual(c.itens[0].classificacaoFiscal, '84818019'); assert.strictEqual(c.itens[0].cest, '1007900');
   assert.ok(c.observacoes.includes(ch) && c.observacoes.includes('09/11/2026'));
