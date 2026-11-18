@@ -409,7 +409,7 @@ Responda em português do Brasil. Instalação do zero: siga `PRD-INSTALACAO.md`
   `/nfe?numeroLoja=` nas duas contas; sem achar, o vendedor cola a chave (`/nfe?chaveAcesso=`). Conta do Bling = a do CNPJ do emitente
   (`/empresas/me/dados-basicos`: ML AMG -> Bling AMG, Primor -> Primor). Gerar (`POST /api/devolucao-nf/gerar`) = POST /nfe tipo 0,
   finalidade 4, natureza escolhida (lembrada em `devolucao_natureza_{n}`; CFOP e impostos vêm dela), contato = destinatário da venda,
-  documentoReferenciado (55 + chave) e item a item (chave + nItem), valor unitário = (vProd − vDesc) ÷ qCom, quantidade que voltou;
+  documento referenciado SÓ nos itens (chave + nItem; na nota junto o Bling recusa: "Não é permitido informar documentos referenciados na nota quando há documentos referenciados nos itens", 18/11/2026), valor unitário = (vProd − vDesc) ÷ qCom, quantidade que voltou;
   fica PENDENTE. Emitir (`POST /api/devolucao-nf/emitir`) só a gerada pelo painel (tipo 0, finalidade 4, pendente). Uma por pedido
   (`estado` devolucao_nf; apagada no Bling = esquece; cancelada = pode outra); trava por pedido. Nada no MCP (`test-bling.js`).
 - Etiquetas de envio (`etiquetas.js`, tela `public/etiquetas.html`, menu logo abaixo de Comandas, módulo expedicao): a etiqueta que a loja
