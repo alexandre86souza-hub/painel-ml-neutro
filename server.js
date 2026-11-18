@@ -3175,6 +3175,35 @@ async function enviarEstoqueAmazon(skus, quem, linhasProntas = null) {
   }
   return registrarEnvioAtrasado('amazon', quem, enviar, fora);
 }
+// SKU HÍBRIDO da Amazon (FBA + envio próprio no mesmo SKU; pedido do dono 18/11/2026: AMG-756.758.829.698 vendia pelo envio próprio com 470 no
+// cadastro). O envio comum recusa FBA; aqui só a quantidade do ENVIO PRÓPRIO muda (o FBA fica intacto) e só por ordem explícita, com a
+// quantidade digitada. SKU só FBA (sem linha DEFAULT) é recusado em amazon.js#mudarEstoque. Confere relendo os atributos.
+routes['POST /api/estoque/anuncios/amazon/proprio'] = async (_u, b) => {
+  soAdministrador();
+  if (!amazonEstoqueLiberada()) throw Object.assign(new Error('Envio de estoque não liberado para a Amazon.'), { status: 400 });
+  const skus = [...new Set((Array.isArray(b?.chaves) ? b.chaves : []).map((s) => String(s ?? '').trim()).filter((s) => s && s.length <= 80))];
+  if (!skus.length || skus.length > 20) throw Object.assign(new Error('Escolha de 1 a 20 SKUs.'), { status: 400 });
+  const q = Number(b?.quantidade);
+  if (!Number.isInteger(q) || q < 0 || q > 100000) throw Object.assign(new Error('Informe a quantidade do envio próprio (inteiro de 0 a 100000).'), { status: 400 });
+  const resultado = [];
+  for (const sku of skus) {
+    const r = { sku, antes: null, depois: q, lido: null, ok: false, erro: null };
+    try {
+      r.antes = await amazonMod.estoqueAgora(sku, { hibrido: true });
+      await amazonMod.mudarEstoque(sku, q, { hibrido: true });
+    } catch (e) { r.erro = e.message; }
+    resultado.push(r);
+    await esperar(220);
+  }
+  for (const espera of [8000, 20000, 40000]) {
+    const faltam = resultado.filter((r) => !r.erro && r.lido !== q);
+    if (!faltam.length) break;
+    await esperar(espera);
+    for (const r of faltam) { r.lido = await amazonMod.estoqueAgora(r.sku, { hibrido: true }).catch(() => r.lido); await esperar(220); }
+  }
+  for (const r of resultado) r.ok = !r.erro && r.lido === q;
+  return { quantidade: q, enviadas: resultado.filter((r) => r.ok).length, resultado };
+};
 routes['GET /api/estoque/anuncios/amazon/diagnostico'] = async (url) => { soAdministrador(); return amazonMod.estoqueDiagnostico(String(url.searchParams.get('sku') || '')); };
 routes['PUT /api/estoque/anuncios/amazon/liberar'] = async (_u, b) => {
   soAdministrador();

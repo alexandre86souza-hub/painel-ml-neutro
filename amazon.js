@@ -1163,7 +1163,8 @@ function criar({ D, janela, quem = () => null }) {
   // Estoque do envio próprio (MFN) de um SKU: PATCH de /attributes/fulfillment_availability lido na hora, trocando só a
   // quantity da linha DEFAULT (prazo de manuseio e o resto ficam). FBA é recusado (o estoque é o do armazém da Amazon).
   // A Amazon aceita (ACCEPTED) e aplica em segundo plano: quem chama relê depois para conferir.
-  async function mudarEstoque(sku, quantidade) {
+  // hibrido: SKU com FBA e envio próprio ao mesmo tempo (a linha DEFAULT existe nos atributos): só a quantidade do envio próprio muda, o FBA fica como está.
+  async function mudarEstoque(sku, quantidade, { hibrido = false } = {}) {
     const q = Math.round(Number(quantidade));
     if (!Number.isInteger(q) || q < 0 || q > 100000) throw erro(`${sku}: quantidade inválida.`);
     const vendedor = await idVendedor();
@@ -1171,9 +1172,12 @@ function criar({ D, janela, quem = () => null }) {
     const atual = await sp(caminho, { marketplaceIds: BR, includedData: 'summaries,attributes,fulfillmentAvailability' });
     const tipo = (atual.summaries || []).find((x) => x.marketplaceId === BR)?.productType || atual.summaries?.[0]?.productType;
     if (!tipo) throw erro(`${sku}: a Amazon não informou o tipo de produto.`, 502);
-    if ((atual.fulfillmentAvailability || []).some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT')) throw erro(`${sku}: é FBA (o estoque é o do armazém da Amazon).`, 409);
     const fa = atual.attributes?.fulfillment_availability || [];
     const proprio = fa.find((x) => !x.fulfillment_channel_code || x.fulfillment_channel_code === 'DEFAULT');
+    if ((atual.fulfillmentAvailability || []).some((d) => d.fulfillmentChannelCode && d.fulfillmentChannelCode !== 'DEFAULT')) {
+      if (!hibrido) throw erro(`${sku}: é FBA (o estoque é o do armazém da Amazon).`, 409);
+      if (!proprio) throw erro(`${sku}: é só FBA, sem estoque de envio próprio para mudar.`, 409);
+    }
     const valor = proprio ? fa.map((x) => (x === proprio ? { ...x, quantity: q } : x)) : [...fa, { fulfillment_channel_code: 'DEFAULT', quantity: q }];
     const r = await spEscrever('PATCH', caminho, { marketplaceIds: BR }, {
       productType: tipo, patches: [{ op: 'replace', path: '/attributes/fulfillment_availability', value: valor }] });
@@ -1191,11 +1195,14 @@ function criar({ D, janela, quem = () => null }) {
       status: (a.summaries || [])[0]?.status || null, atualizado: (a.summaries || [])[0]?.lastUpdatedDate || null };
   }
   // Estoque do envio próprio lido agora (para conferir um envio); null = sem linha DEFAULT.
-  async function estoqueAgora(sku) {
+  async function estoqueAgora(sku, { hibrido = false } = {}) {
     const vendedor = await idVendedor();
-    const atual = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`, { marketplaceIds: BR, includedData: 'fulfillmentAvailability' });
+    const atual = await sp(`/listings/2021-08-01/items/${encodeURIComponent(vendedor)}/${encodeURIComponent(sku)}`, { marketplaceIds: BR, includedData: hibrido ? 'fulfillmentAvailability,attributes' : 'fulfillmentAvailability' });
     const d = (atual.fulfillmentAvailability || []).find((x) => !x.fulfillmentChannelCode || x.fulfillmentChannelCode === 'DEFAULT');
-    return d ? Number(d.quantity) || 0 : null;
+    if (d) return Number(d.quantity) || 0;
+    // híbrido (FBA + envio próprio): a linha DEFAULT só aparece nos atributos
+    const p = hibrido ? (atual.attributes?.fulfillment_availability || []).find((x) => !x.fulfillment_channel_code || x.fulfillment_channel_code === 'DEFAULT') : null;
+    return p ? Number(p.quantity) || 0 : null;
   }
 
   // Concorrentes de um ASIN (Product Pricing API, getItemOffers): até 20 ofertas novas, com
