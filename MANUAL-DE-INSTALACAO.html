@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do Vendedor — Manual de instalação</title>
+<style>
+  :root { --fg:#1c2733; --mudo:#5b6b7b; --linha:#d9e0e7; --azul:#1f5fbf; --fundo:#fff; --caixa:#f3f6fa; --aviso:#fff6e0; --aviso-borda:#e0b34a; --erro:#fdecec; --erro-borda:#d66; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 "Segoe UI", Arial, sans-serif; color:var(--fg); background:var(--fundo); }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  h2 { font-size: 22px; margin: 40px 0 8px; padding-top: 12px; border-top: 2px solid var(--linha); color: var(--azul); }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p, li { max-width: 70ch; }
+  .sub { color: var(--mudo); margin: 0 0 24px; }
+  .passo { display:flex; gap:14px; margin: 16px 0; }
+  .num { flex:0 0 34px; height:34px; border-radius:50%; background:var(--azul); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .passo > div { min-width:0; }
+  .caixa { background:var(--caixa); border:1px solid var(--linha); border-radius:8px; padding:12px 16px; margin:14px 0; }
+  .aviso { background:var(--aviso); border:1px solid var(--aviso-borda); border-radius:8px; padding:12px 16px; margin:14px 0; }
+  .erro { background:var(--erro); border:1px solid var(--erro-borda); border-radius:8px; padding:12px 16px; margin:14px 0; }
+  code, kbd { background:#eef2f6; border:1px solid var(--linha); border-radius:4px; padding:1px 6px; font-family: Consolas, monospace; font-size: 0.95em; }
+  table { border-collapse: collapse; width:100%; margin:12px 0; }
+  th, td { border:1px solid var(--linha); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--caixa); }
+  .tabela { overflow-x:auto; }
+  ul, ol { padding-left: 22px; }
+  @media print { main { padding: 0; } h2 { break-after: avoid; } .passo, .caixa, .aviso, .erro, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Painel do Vendedor</h1>
+<p class="sub">Manual de instalação e uso no computador (Windows)</p>
+
+<div class="caixa">
+<strong>Como funciona, em uma frase:</strong> o painel é um programa que fica <em>dentro do seu computador</em>. Você liga uma janela preta (o <code>INICIAR.bat</code>), abre o navegador em <code>http://localhost:3100</code> e usa. Os dados das suas lojas ficam só nesse computador.
+</div>
+
+<h2>0. O que você precisa antes de começar</h2>
+<ul>
+  <li>Um computador com <strong>Windows 10 ou 11</strong>, internet e uns <strong>3 GB livres</strong> no disco.</li>
+  <li>Permissão para instalar programas no computador.</li>
+  <li>O <strong>celular com um aplicativo autenticador</strong> (Google Authenticator ou Microsoft Authenticator). O painel exige um código desse aplicativo a cada login.</li>
+  <li>O acesso às suas contas das lojas (Mercado Livre, Shopee, Amazon…). As chaves de cada loja são pedidas depois, dentro do painel — veja o capítulo 6.</li>
+  <li>O arquivo <code>Painel-do-Vendedor.zip</code> que você recebeu.</li>
+</ul>
+
+<h2>1. Instalar o Node.js (uma vez só)</h2>
+<div class="passo"><div class="num">1</div><div>
+  Abra <code>https://nodejs.org</code> e baixe a versão <strong>LTS</strong> (botão verde da esquerda). A versão precisa ser <strong>22.13 ou mais nova</strong>.
+</div></div>
+<div class="passo"><div class="num">2</div><div>
+  Abra o arquivo baixado e clique em <strong>Next</strong> até o fim, deixando tudo como está. Clique em <strong>Install</strong> e depois em <strong>Finish</strong>.
+</div></div>
+<div class="passo"><div class="num">3</div><div>
+  <strong>Reinicie o computador.</strong> Isso evita o erro "Node não encontrado" no próximo passo.
+</div></div>
+
+<h2>2. Colocar o painel numa pasta</h2>
+<div class="passo"><div class="num">1</div><div>
+  Crie uma pasta com um nome simples, <strong>sem acentos e sem espaços</strong>, direto no disco C:, por exemplo <code>C:\PainelVendedor</code>.
+</div></div>
+<div class="passo"><div class="num">2</div><div>
+  Clique com o botão direito em <code>Painel-do-Vendedor.zip</code> e escolha <strong>Extrair tudo…</strong>. Escolha a pasta criada. Ao terminar, dentro de <code>C:\PainelVendedor</code> deve aparecer o arquivo <code>INSTALAR.bat</code> junto com várias outras coisas.
+</div></div>
+<div class="aviso">
+  <strong>Não coloque a pasta no OneDrive, na Área de Trabalho nem em "Documentos".</strong> O OneDrive tenta sincronizar o banco de dados enquanto ele está em uso e pode corromper os dados.
+</div>
+
+<h2>3. Instalar o painel (uma vez só)</h2>
+<div class="passo"><div class="num">1</div><div>
+  Dê <strong>dois cliques em <code>INSTALAR.bat</code></strong>. Se o Windows mostrar "O Windows protegeu o computador", clique em <strong>Mais informações</strong> e depois em <strong>Executar assim mesmo</strong>.
+</div></div>
+<div class="passo"><div class="num">2</div><div>
+  Abre uma janela preta e começa a instalar sozinha: baixa as peças que faltam (Python e um navegador interno). <strong>Na primeira vez leva de 10 a 20 minutos.</strong> Não feche a janela.
+</div></div>
+<div class="passo"><div class="num">3</div><div>
+  No fim aparece um <strong>Resumo</strong> com <code>[ok]</code> em cada item e a frase <em>"Tudo pronto"</em>. Aperte qualquer tecla para fechar.
+</div></div>
+<div class="erro">
+  Se algum item aparecer com <code>[x]</code>, leia a dica escrita logo abaixo dele, resolva e dê dois cliques em <code>INSTALAR.bat</code> de novo. Ele pode rodar quantas vezes precisar. Se não resolver, fotografe a tela e mande para quem te passou o painel.
+</div>
+
+<h2>4. Ligar o painel e criar a senha</h2>
+<div class="passo"><div class="num">1</div><div>
+  Dê dois cliques em <strong><code>INICIAR.bat</code></strong>. Abre uma janela preta com o título "Painel do Vendedor - ligado". <strong>Essa janela precisa ficar aberta</strong> enquanto você usa o painel (pode minimizar, mas não feche).
+</div></div>
+<div class="passo"><div class="num">2</div><div>
+  Em até 1 minuto o navegador abre sozinho no painel. Se não abrir, digite na barra do navegador: <code>http://localhost:3100</code>
+</div></div>
+<div class="passo"><div class="num">3</div><div>
+  <strong>Criar a senha.</strong> Na primeira tela, crie uma senha com <strong>pelo menos 12 caracteres</strong>, com letra, número e um caractere especial (por exemplo <code>!</code> ou <code>#</code>). <strong>Anote a senha em lugar seguro:</strong> não existe "esqueci minha senha" por e-mail.
+</div></div>
+<div class="passo"><div class="num">4</div><div>
+  <strong>Ativar a verificação em duas etapas.</strong> O painel mostra um QR code. No celular, abra o aplicativo autenticador, escolha adicionar conta, aponte para o QR code e digite no painel o código de 6 números que aparecer. Guarde bem o celular: a cada login será pedido um código novo.
+</div></div>
+<div class="caixa">
+  Perdeu o celular? Dá para desligar a verificação no próprio computador do painel (precisa de quem te passou o sistema). Por isso o ideal é registrar o QR code também em outro aparelho de confiança.
+</div>
+
+<h2>5. Dia a dia</h2>
+<table>
+<tr><th>Para…</th><th>Faça</th></tr>
+<tr><td>Ligar o painel</td><td>Dois cliques em <code>INICIAR.bat</code> e espere o navegador abrir (ou entre em <code>http://localhost:3100</code>).</td></tr>
+<tr><td>Usar</td><td>Navegador no endereço acima. Entre com a senha e o código do celular.</td></tr>
+<tr><td>Desligar</td><td>Na janela preta, aperte <kbd>Ctrl</kbd> + <kbd>C</kbd> (ou feche a janela).</td></tr>
+<tr><td>Reiniciar (se algo travar)</td><td>Desligue como acima e dê dois cliques em <code>INICIAR.bat</code> de novo.</td></tr>
+<tr><td>Atalho na Área de Trabalho</td><td>Botão direito em <code>INICIAR.bat</code> → <strong>Enviar para</strong> → <strong>Área de trabalho (criar atalho)</strong>.</td></tr>
+</table>
+<div class="aviso">
+  O painel só atualiza vendas, estoque e avisos <strong>enquanto estiver ligado</strong>. Computador desligado ou em suspensão = painel parado. Se quiser que ele trabalhe o dia todo, configure o Windows para não suspender enquanto estiver na tomada (Configurações → Sistema → Energia).
+</div>
+
+<h2>6. Conectar as lojas</h2>
+<p>Com o painel aberto, vá em <strong>Configurações</strong>. Cada loja tem a sua própria tela, que explica o passo a passo e mostra o endereço que precisa ser copiado para o site da loja.</p>
+
+<h3>Mercado Livre</h3>
+<ol>
+  <li>Na tela <strong>Configurações</strong> estão duas URLs com botão de copiar: uma termina em <code>/callback</code> e outra em <code>/webhook</code>.</li>
+  <li>Abra o DevCenter do Mercado Livre (<code>https://developers.mercadolivre.com.br/devcenter</code>), entre com a conta da loja e crie um aplicativo. Cole a URL <code>/callback</code> em <em>URIs de redirect</em> e a <code>/webhook</code> em <em>URL de notificações</em>.</li>
+  <li>Marque os fluxos <strong>Authorization Code</strong>, <strong>Client Credentials</strong> e <strong>Refresh Token</strong> e permissão de leitura e escrita em <em>Publicação e sincronização</em>. Salve.</li>
+  <li>Copie o <strong>App ID</strong> e a <strong>chave secreta</strong> do aplicativo e cole <strong>no painel</strong> (na própria tela Configurações). Não mande essas chaves por mensagem para ninguém.</li>
+  <li>Clique no botão de conectar a conta, entre no Mercado Livre e volte ao painel.</li>
+</ol>
+
+<div class="erro">
+  <strong>Se aparecer "A URL PÚBLICA MUDOU":</strong> o endereço <code>/callback</code> e <code>/webhook</code> muda quando o painel é fechado por completo ou quando o computador reinicia. Volte na tela <strong>Configurações</strong>, copie as URLs novas e cole de novo no seu aplicativo no DevCenter. Para reiniciar sem mudar o endereço, use só <kbd>Ctrl</kbd> + <kbd>C</kbd> na janela e <code>INICIAR.bat</code> de novo.
+</div>
+
+<h3>Outras lojas (opcional)</h3>
+<table>
+<tr><th>Loja</th><th>O que costuma ser pedido</th></tr>
+<tr><td>Shopee</td><td>Partner ID e Partner Key do aplicativo da Shopee Open Platform. A autorização é feita pelo botão de conectar da tela da Shopee.</td></tr>
+<tr><td>Amazon</td><td>Client ID, Client Secret e Refresh Token do aplicativo privado criado no Seller Central.</td></tr>
+<tr><td>Magalu</td><td>Client ID e Client Secret do aplicativo criado no ID Magalu.</td></tr>
+<tr><td>Leroy Merlin</td><td>Endereço do portal e chave de API de um usuário da loja.</td></tr>
+<tr><td>Bling</td><td>Client Id e Secret do aplicativo da Área do Integrador, para emitir notas.</td></tr>
+</table>
+<p>Se alguma dessas lojas não for usada, ignore a tela dela. O painel funciona só com o Mercado Livre.</p>
+
+<h3>Preencher a empresa (importante para o lucro)</h3>
+<ul>
+  <li><strong>Empresa:</strong> nome, logo, imposto e embalagem padrão. O lucro de cada venda só fica certo com isso preenchido.</li>
+  <li><strong>Produtos:</strong> cole a planilha com o custo de cada produto. Anúncio sem custo aparece como "sem custo" e não tem lucro calculado.</li>
+</ul>
+
+<h2>7. Segurança e cópia dos dados</h2>
+<ul>
+  <li>Todos os dados ficam no arquivo <code>dados.sqlite</code> e as chaves de cifra no arquivo <code>.env</code>, dentro da pasta do painel. <strong>Nunca envie esses dois arquivos para ninguém.</strong></li>
+  <li>O painel faz sozinho uma <strong>cópia de segurança por dia</strong> na pasta <code>backups</code>. De tempos em tempos copie essa pasta para um pen drive ou para a nuvem. Se o computador estragar, é essa cópia que recupera tudo.</li>
+  <li>Não compartilhe a senha do painel, o QR code do autenticador nem as chaves das lojas.</li>
+  <li>Use o painel só no computador onde ele está instalado. Ele não deve ser deixado aberto em computador de outras pessoas.</li>
+</ul>
+
+<h2>8. Receber uma versão nova</h2>
+<ol>
+  <li>Desligue o painel (<kbd>Ctrl</kbd> + <kbd>C</kbd>).</li>
+  <li>Extraia o novo <code>.zip</code> <strong>por cima</strong> da pasta atual, aceitando substituir os arquivos. Isso <strong>não</strong> apaga <code>dados.sqlite</code>, <code>.env</code> nem <code>backups</code>, porque o zip não leva esses arquivos.</li>
+  <li>Dê dois cliques em <code>INSTALAR.bat</code> de novo e depois em <code>INICIAR.bat</code>.</li>
+</ol>
+
+<h2>9. Problemas comuns</h2>
+<div class="tabela">
+<table>
+<tr><th>O que aparece</th><th>O que fazer</th></tr>
+<tr><td>"Node.js não está instalado" ao abrir o <code>INSTALAR.bat</code></td><td>Refaça o capítulo 1 e reinicie o computador.</td></tr>
+<tr><td>Janela fecha sozinha ou o navegador mostra "não foi possível acessar"</td><td>A janela do <code>INICIAR.bat</code> não está aberta. Dê dois cliques nele e espere 1 minuto.</td></tr>
+<tr><td>O endereço <code>localhost:3100</code> não abre, mas o painel diz outra porta</td><td>Leia na janela preta a linha "painel no ar". Use o endereço que ela mostrar.</td></tr>
+<tr><td>"O painel já está rodando"</td><td>Ele já estava ligado. Só abra o navegador em <code>http://localhost:3100</code>.</td></tr>
+<tr><td>Mercado Livre: "não foi possível conectar o aplicativo"</td><td>Confira se o aplicativo foi <strong>salvo</strong> no DevCenter, se as URLs são as atuais da tela Configurações e se a conta usada é a do dono da loja (conta de colaborador não autoriza).</td></tr>
+<tr><td>Código do autenticador não é aceito</td><td>Confira a hora do celular (precisa estar em horário automático) e use o código mais novo.</td></tr>
+<tr><td>Esqueci a senha</td><td>Não há recuperação por e-mail. Peça ajuda a quem instalou o painel.</td></tr>
+<tr><td>Navegador do painel (aba "Navegador") pede login de novo</td><td>Entre de novo pelo botão da aba. A senha do Mercado Livre é digitada só na tela do próprio Mercado Livre.</td></tr>
+<tr><td>Outro erro</td><td>Procure o arquivo <code>logs\scraper.log</code> e <code>logs\tunel.log</code> dentro da pasta do painel, fotografe a mensagem e envie para quem te passou o painel.</td></tr>
+</table>
+</div>
+
+<p class="sub" style="margin-top:36px">Licença MIT (arquivo <code>LICENSE</code>). Mantenha o aviso de copyright.</p>
+
+</main>
+</body>
+</html>
